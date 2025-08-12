@@ -2111,4 +2111,6 @@ def delete_expense_invoice(invoice_id):
     return redirect(url_for('expenses'))
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=8000, debug=True)
+    import os
+    port = int(os.environ.get('PORT', 8000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
