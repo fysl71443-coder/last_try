@@ -2,6 +2,7 @@ import eventlet
 eventlet.monkey_patch()
 
 import os
+import sys
 import logging
 from datetime import datetime, timedelta
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
@@ -93,8 +94,8 @@ bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Basic error logging to file (errors only)
-logging.basicConfig(filename='app.log', level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
+# Basic error logging to stdout so Render Live Tail shows errors
+logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
 
 
 def save_to_db(instance):
