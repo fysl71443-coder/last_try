@@ -8,6 +8,7 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from flask_bcrypt import Bcrypt
 from flask_babel import Babel, gettext as _
 from flask_socketio import SocketIO
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,11 +19,54 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 instance_dir = os.path.join(basedir, 'instance')
 os.makedirs(instance_dir, exist_ok=True)
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
+
+# Production DB (Render) support — override sqlite if DATABASE_URL provided
+_db_url = os.getenv('DATABASE_URL')
+if _db_url:
+    app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Babel / i18n
 app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
 babel = Babel()
+# CSRF protection for forms and APIs (for APIs, use JSON + header in future)
+# Trust proxy headers (Render)
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# Secure cookies config
+app.config.update(
+    REMEMBER_COOKIE_SECURE=True,
+    REMEMBER_COOKIE_HTTPONLY=True,
+    PREFERRED_URL_SCHEME='https'
+)
+
+csrf = CSRFProtect(app)
+
+
+
+# --- Security hardening (cookies, headers, CORS) ---
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
+
+# tighten SocketIO CORS in production (Render sets RENDER to true)
+allowed_origins = os.getenv('ALLOWED_ORIGINS') or os.getenv('RENDER_EXTERNAL_URL') or '*'
+socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
+
+# security headers
+@app.after_request
+def set_security_headers(resp):
+    resp.headers['X-Frame-Options'] = 'DENY'
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    resp.headers['Referrer-Policy'] = 'no-referrer-when-downgrade'
+    # basic CSP allowing self; adjust as needed for CDNs
+    resp.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com"
+    return resp
 
 # Create instance directory if it doesn't exist
 os.makedirs('instance', exist_ok=True)
@@ -49,7 +93,6 @@ def save_to_db(instance):
         logging.error('Database Error: %s', e, exc_info=True)
         return False
 
-socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Rate limiting for login attempts
 login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
@@ -74,6 +117,11 @@ def get_locale():
     except Exception:
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
+
+# Disable Flask debug by default when running under Gunicorn/Render
+if os.getenv('RENDER') or os.getenv('GUNICORN_CMD_ARGS'):
+    app.config['DEBUG'] = False
+
 @app.context_processor
 def inject_settings():
     try:
@@ -82,6 +130,12 @@ def inject_settings():
         return dict(settings=s)
     except Exception:
         return dict(settings=None)
+
+# Make CSRF token generator available in templates for forms and JS
+@app.context_processor
+def inject_csrf_token():
+    from flask_wtf.csrf import generate_csrf
+    return dict(csrf_token=generate_csrf)
 
 @app.route('/toggle_theme', methods=['POST'])
 @login_required
@@ -1534,6 +1588,7 @@ def can_perm(screen:str, perm:str)->bool:
     return False
 
 # ---------------------- Users API ----------------------
+@csrf.exempt
 @app.route('/api/users', methods=['GET'])
 @login_required
 def api_users_list():
@@ -1555,6 +1610,7 @@ def api_users_list():
     ]
     return jsonify({'items':data,'page':pag.page,'pages':pag.pages,'total':pag.total})
 
+@csrf.exempt
 @app.route('/api/users', methods=['POST'])
 @login_required
 def api_users_create():
@@ -1575,6 +1631,7 @@ def api_users_create():
     db.session.commit()
     return jsonify({'status':'ok','id':u.id})
 
+@csrf.exempt
 @app.route('/api/users/<int:uid>', methods=['PATCH'])
 @login_required
 def api_users_update(uid):
@@ -1590,6 +1647,7 @@ def api_users_update(uid):
     db.session.commit()
     return jsonify({'status':'ok'})
 
+@csrf.exempt
 @app.route('/api/users', methods=['DELETE'])
 @login_required
 def api_users_delete():
@@ -1645,6 +1703,7 @@ def inject_can():
 # ---------------------- Permissions API ----------------------
 from models import UserPermission
 
+@csrf.exempt
 @app.route('/api/users/<int:uid>/permissions', methods=['GET'])
 @login_required
 def api_user_permissions_get(uid):
@@ -1669,6 +1728,7 @@ def api_user_permissions_get(uid):
     ]
     return jsonify({'items': out})
 
+@csrf.exempt
 @app.route('/api/users/<int:uid>/permissions', methods=['POST'])
 @login_required
 def api_user_permissions_save(uid):
