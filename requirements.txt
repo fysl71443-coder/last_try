@@ -1,3 +1,6 @@
+# Pin Werkzeug to avoid known breaks in 3.x with some extensions
+Werkzeug==2.3.4
+
 Flask==2.3.3
 Flask-Login==0.6.3
 Flask-WTF==1.1.1
