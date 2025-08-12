@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% set back_url = url_for('employees') %}
+
+{% block title %}{{ _('Monthly Salaries / رواتب شهرية') }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">💼 {{ _('Monthly Salaries / رواتب شهرية') }}</h3>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+  </div>
+
+  <!-- اختيار السنة والشهر -->
+  <form method="GET" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+      <label class="form-label">{{ _('Year / السنة') }}</label>
+      <input type="number" name="year" class="form-control" value="{{ year }}">
+    </div>
+    <div class="col-auto">
+      <label class="form-label">{{ _('Month / الشهر') }}</label>
+      <select name="month" class="form-select">
+        {% for m in range(1,13) %}
+          <option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-secondary">{{ _('Show / عرض') }}</button>
+    </div>
+  </form>
+
+  <form method="POST" action="{{ url_for('salaries_monthly_save') }}">
+    {{ csrf_token() if csrf_token is defined else '' }}
+    <input type="hidden" name="year" value="{{ year }}">
+    <input type="hidden" name="month" value="{{ month }}">
+
+    <div class="card">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead class="table-dark">
+              <tr>
+                <th>#</th>
+                <th>{{ _('Employee / الموظف') }}</th>
+                <th>{{ _('Basic / الأساسي') }}</th>
+                <th>{{ _('Allowances / البدلات') }}</th>
+                <th>{{ _('Deductions / الاستقطاعات') }}</th>
+                <th>{{ _('Prev Due / سابقة') }}</th>
+                <th>{{ _('Total / الإجمالي') }}</th>
+                <th>{{ _('Paid / المدفوع') }}</th>
+                <th>{{ _('Remaining / المتبقي') }}</th>
+                <th>{{ _('Pay / دفع') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ r.employee_name }}</td>
+                <td><input type="number" step="0.01" name="basic_salary_{{ r.id }}" class="form-control form-control-sm" value="{{ '%.2f'|format(r.basic_salary) }}"></td>
+                <td><input type="number" step="0.01" name="allowances_{{ r.id }}" class="form-control form-control-sm" value="{{ '%.2f'|format(r.allowances) }}"></td>
+                <td><input type="number" step="0.01" name="deductions_{{ r.id }}" class="form-control form-control-sm" value="{{ '%.2f'|format(r.deductions) }}"></td>
+                <td><input type="number" step="0.01" name="previous_salary_due_{{ r.id }}" class="form-control form-control-sm" value="{{ '%.2f'|format(r.previous_salary_due) }}"></td>
+                <td><span class="badge bg-secondary">{{ '%.2f'|format(r.total_salary) }}</span></td>
+                <td><span class="badge bg-info">{{ '%.2f'|format(r.paid) }}</span></td>
+                <td><span class="badge bg-warning text-dark">{{ '%.2f'|format(r.remaining) }}</span></td>
+                <td>
+                  <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-success" onclick="payFull('{{ r.id }}','{{ r.remaining }}')">{{ _('Pay Full') }}</button>
+                    <button type="button" class="btn btn-outline-success" onclick="payCustom('{{ r.id }}','{{ r.remaining }}')">{{ _('Enter Amount') }}</button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-end mt-3">
+          <button class="btn btn-primary">💾 {{ _('Save Changes / حفظ التعديلات') }}</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+function sendSalaryPayment(id, amount){
+  if(!amount || parseFloat(amount)<=0){ alert('{{ _('Invalid amount / مبلغ غير صالح') }}'); return; }
+  const form = new FormData();
+  form.append('invoice_id', id);
+  form.append('invoice_type', 'salary');
+  form.append('amount', amount);
+  const csrf = document.querySelector('input[name="csrf_token"]');
+  if (csrf) form.append('csrf_token', csrf.value);
+  fetch('{{ url_for('register_payment_ajax') }}', { method:'POST', body: form, credentials:'same-origin' })
+    .then(r=>r.json()).then(d=>{ if(d.status==='success') location.reload(); else alert('Error'); })
+    .catch(()=>alert('Network error'));
+}
+function payFull(id, remaining){
+  const amt = parseFloat(remaining||0);
+  if(!amt || amt<=0){ alert('{{ _('Nothing to pay / لا يوجد متبقي للدفع') }}'); return; }
+  if(!confirm('{{ _('Confirm full payment / تأكيد دفع كامل') }}: '+amt)) return;
+  sendSalaryPayment(id, amt);
+}
+function payCustom(id, remaining){
+  const input = prompt("{{ _('Enter amount to pay / ادخل مبلغ الدفع') }}\n{{ _('Remaining / المتبقي') }}: "+remaining);
+  if(!input) return;
+  const amt = parseFloat((input||'').toString().replace(',', '.'));
+  if(!amt || isNaN(amt) || amt<=0){ alert('{{ _('Invalid amount / مبلغ غير صالح') }}'); return; }
+  sendSalaryPayment(id, amt);
+}
+</script>
+{% endblock %}
+

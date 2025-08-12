@@ -1,0 +1,348 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Sales / المبيعات') }}{% endblock %}
+{% block content %}
+
+<style>
+body {
+  background: #f4f6f9;
+}
+.sales-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+.branch-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+.branch-place-india { background: #74b9ff; color: white; }
+.branch-china-town { background: #fd79a8; color: white; }
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+.status-unpaid { background: #ffeaa7; color: #2d3436; }
+.status-partial { background: #fab1a0; color: #2d3436; }
+.status-paid { background: #00b894; color: white; }
+.item-row {
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  background: #f8f9fa;
+}
+</style>
+
+<div class="container py-4">
+    <!-- شريط التنقل السريع -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <h3 class="mb-0">💰 {{ _('Sales / المبيعات') }}</h3>
+        </div>
+        <div class="col-md-6 text-end">
+            <a href="{{ url_for('inventory') }}" class="btn btn-outline-info me-2">
+                📦 {{ _('Inventory / المخزون') }}
+            </a>
+            <a href="{{ url_for('purchases') }}" class="btn btn-outline-warning me-2">
+                🛒 {{ _('Purchases / المشتريات') }}
+            </a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                🏠 {{ _('Dashboard / لوحة التحكم') }}
+            </a>
+        </div>
+    </div>
+
+    <!-- نموذج إنشاء فاتورة جديدة -->
+    <div class="sales-card">
+        <h5 class="mb-3">{{ _('Create New Invoice / إنشاء فاتورة جديدة') }}</h5>
+
+        <div class="alert alert-info">
+            <strong>💡 {{ _('Note / ملاحظة') }}:</strong>
+            {{ _('Meals are automatically loaded from Cost Management system with calculated prices / الوجبات يتم تحميلها تلقائياً من نظام إدارة التكاليف مع الأسعار المحسوبة') }}
+            <a href="{{ url_for('inventory') }}" class="alert-link">{{ _('Manage Meals / إدارة الوجبات') }}</a>
+        </div>
+        
+        <form method="POST" id="sales-form">
+            {{ form.hidden_tag() }}
+            
+            <!-- معلومات الفاتورة الأساسية -->
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    {{ form.date.label(class_='form-label') }}
+                    {{ form.date(class_='form-control') }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.payment_method.label(class_='form-label') }}
+                    {{ form.payment_method(class_='form-select') }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.branch.label(class_='form-label') }}
+                    {{ form.branch(class_='form-select') }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.customer_name.label(class_='form-label') }}
+                    {{ form.customer_name(class_='form-control') }}
+                </div>
+            </div>
+
+            <!-- عناصر الفاتورة -->
+            <h6 class="mb-3">{{ _('Invoice Items (Ready Meals) / عناصر الفاتورة (الوجبات الجاهزة)') }}</h6>
+            <div id="items-container">
+                {% for item_form in form.items %}
+                <div class="row g-3 mb-2 item-row">
+                    <div class="col-md-3">
+                        {{ item_form.product_id.label(class_='form-label') }}
+                        {{ item_form.product_id(class_='form-select') }}
+                    </div>
+                    <div class="col-md-1">
+                        {{ item_form.quantity.label(class_='form-label') }}
+                        {{ item_form.quantity(class_='form-control') }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ item_form.price_before_tax.label(class_='form-label') }}
+                        {{ item_form.price_before_tax(class_='form-control') }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ item_form.tax_amount.label(class_='form-label') }}
+                        {{ item_form.tax_amount(class_='form-control') }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ item_form.discount.label(class_='form-label') }}
+                        {{ item_form.discount(class_='form-control', step='0.01') }}
+                    </div>
+                    <div class="col-md-1">
+                        {{ item_form.total_price.label(class_='form-label') }}
+                        {{ item_form.total_price(class_='form-control') }}
+                    </div>
+                    <div class="col-md-1 d-flex align-items-end">
+                        <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <button type="button" class="btn btn-secondary" id="add-item">
+                        ➕ {{ _('Add Meal / إضافة وجبة') }}
+                    </button>
+                </div>
+                <div class="col-md-6 text-end">
+                    {{ form.submit(class_='btn btn-primary btn-lg') }}
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- قائمة الفواتير السابقة -->
+    {% if invoices %}
+    <div class="sales-card">
+        <h5 class="mb-3">{{ _('Previous Invoices / الفواتير السابقة') }}</h5>
+        
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>{{ _('Invoice No / رقم الفاتورة') }}</th>
+                        <th>{{ _('Date / التاريخ') }}</th>
+                        <th>{{ _('Branch / الفرع') }}</th>
+                        <th>{{ _('Customer / العميل') }}</th>
+                        <th>{{ _('Payment Method / طريقة الدفع') }}</th>
+                        <th>{{ _('Total / الإجمالي') }}</th>
+                        <th>{{ _('Status / الحالة') }}</th>
+                        <th>{{ _('Actions / الإجراءات') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in invoices %}
+                    <tr>
+                        <td><strong>{{ invoice.invoice_number }}</strong></td>
+                        <td>{{ invoice.date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            <span class="branch-badge branch-{{ invoice.branch.replace('_', '-') }}">
+                                {% if invoice.branch == 'place_india' %}
+                                    Place India
+                                {% elif invoice.branch == 'china_town' %}
+                                    China Town
+                                {% else %}
+                                    {{ invoice.branch }}
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>{{ invoice.customer_name or '-' }}</td>
+                        <td>
+                            {% if invoice.payment_method == 'cash' %}
+                                💰 {{ _('Cash / نقداً') }}
+                            {% elif invoice.payment_method == 'card' %}
+                                💳 {{ _('Card / بطاقة') }}
+                            {% elif invoice.payment_method == 'bank_transfer' %}
+                                🏦 {{ _('Bank Transfer / تحويل بنكي') }}
+                            {% elif invoice.payment_method == 'check' %}
+                                📝 {{ _('Check / شيك') }}
+                            {% else %}
+                                {{ invoice.payment_method }}
+                            {% endif %}
+                        </td>
+                        <td>${{ "%.2f"|format(invoice.total_after_tax_discount) }}</td>
+                        <td>
+                            <span class="status-badge status-{{ invoice.status }}">
+                                {% if invoice.status == 'paid' %}
+                                    {{ _('Paid / مدفوع') }}
+                                {% elif invoice.status == 'partial' %}
+                                    {{ _('Partial / جزئي') }}
+                                {% else %}
+                                    {{ _('Unpaid / غير مدفوع') }}
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info me-1" onclick="viewInvoice({{ invoice.id }})">
+                                👁 {{ _('View / عرض') }}
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSalesInvoice({{ invoice.id }}, '{{ invoice.invoice_number }}')">
+                                🗑️ {{ _('Delete / حذف') }}
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- SocketIO and JavaScript -->
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+    // SocketIO for real-time updates
+    var socket = io();
+    socket.on('sales_update', function(data) {
+        console.log('Sales updated:', data);
+        // Show notification
+        alert('New invoice created: ' + data.invoice_number + ' - $' + data.total);
+        // Reload page to show updates
+        location.reload();
+    });
+
+    // Products data for calculations
+    const products = {{ products_json | safe }};
+
+    // Auto-calculation functionality
+    document.addEventListener('change', e => {
+        if(e.target.matches('select[name^="items-"][name$="-product_id"], input[name^="items-"][name$="-quantity"], input[name^="items-"][name$="-discount"]')) {
+            const row = e.target.closest('.item-row');
+            const productSelect = row.querySelector('select[name$="-product_id"]');
+            const quantityInput = row.querySelector('input[name$="-quantity"]');
+            const discountInput = row.querySelector('input[name$="-discount"]');
+            const priceInput = row.querySelector('input[name$="-price_before_tax"]');
+            const taxInput = row.querySelector('input[name$="-tax_amount"]');
+            const totalInput = row.querySelector('input[name$="-total_price"]');
+
+            const productId = parseInt(productSelect.value);
+            const quantity = parseInt(quantityInput.value) || 0;
+            const discount = parseFloat(discountInput.value) || 0;
+
+            const product = products.find(p => p.id === productId);
+            if(product && quantity > 0) {
+                const price = product.price_before_tax * quantity;
+                const tax = price * 0.15; // 15% tax
+                const total = price + tax - discount;
+
+                priceInput.value = price.toFixed(2);
+                taxInput.value = tax.toFixed(2);
+                totalInput.value = total.toFixed(2);
+            } else {
+                // Clear fields if no valid product/quantity
+                priceInput.value = '0.00';
+                taxInput.value = '0.00';
+                totalInput.value = '0.00';
+            }
+        }
+    });
+
+    // Add new item functionality
+    let itemIndex = {{ form.items|length }};
+
+    document.getElementById('add-item').addEventListener('click', function() {
+        const itemsContainer = document.getElementById('items-container');
+        const newItem = document.createElement('div');
+        newItem.className = 'row g-3 mb-2 item-row';
+        newItem.innerHTML = `
+            <div class="col-md-3">
+                <label class="form-label">{{ _('Meal / الوجبة') }}</label>
+                <select class="form-select" name="items-${itemIndex}-product_id">
+                    <option value="0">{{ _('Select Meal / اختر الوجبة') }}</option>
+                    ${products.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">{{ _('Quantity / الكمية') }}</label>
+                <input class="form-control" name="items-${itemIndex}-quantity" type="number" value="1">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">{{ _('Price / السعر') }}</label>
+                <input class="form-control" name="items-${itemIndex}-price_before_tax" readonly>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">{{ _('Tax / الضريبة') }}</label>
+                <input class="form-control" name="items-${itemIndex}-tax_amount" readonly>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">{{ _('Discount / الخصم') }}</label>
+                <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" value="0">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">{{ _('Total / الإجمالي') }}</label>
+                <input class="form-control" name="items-${itemIndex}-total_price" readonly>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
+            </div>
+        `;
+        itemsContainer.appendChild(newItem);
+        itemIndex++;
+    });
+
+    // Remove item functionality
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-item-btn')) {
+            e.target.closest('.item-row').remove();
+        }
+    });
+
+    // View invoice details
+    function viewInvoice(invoiceId) {
+        alert('Invoice details for ID: ' + invoiceId + ' (Feature coming soon)');
+    }
+
+    function deleteSalesInvoice(invoiceId, invoiceNumber) {
+        if (confirm('{{ _("Are you sure you want to delete sales invoice") }} "' + invoiceNumber + '"?\n\n{{ _("This action cannot be undone.") }}')) {
+            // Create a form and submit it
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/delete_sales_invoice/' + invoiceId;
+
+            // Add CSRF token if available
+            const csrfToken = document.querySelector('input[name="csrf_token"]');
+            if (csrfToken) {
+                const tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = 'csrf_token';
+                tokenInput.value = csrfToken.value;
+                form.appendChild(tokenInput);
+            }
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+</script>
+
+{% endblock %}

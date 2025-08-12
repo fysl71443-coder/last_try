@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}ضريبة القيمة المضافة{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3>ضريبة القيمة المضافة (VAT)</h3>
+
+  <form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+      <label>السنة</label>
+      <input type="number" name="year" class="form-control" value="{{ data.year }}">
+    </div>
+    <div class="col-auto">
+      <label>الربع</label>
+      <select name="quarter" class="form-select">
+        <option value="1" {% if data.quarter==1 %}selected{% endif %}>الربع 1 (يناير - مارس)</option>
+        <option value="2" {% if data.quarter==2 %}selected{% endif %}>الربع 2 (أبريل - يونيو)</option>
+        <option value="3" {% if data.quarter==3 %}selected{% endif %}>الربع 3 (يوليو - سبتمبر)</option>
+        <option value="4" {% if data.quarter==4 %}selected{% endif %}>الربع 4 (أكتوبر - ديسمبر)</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary">عرض</button>
+    </div>
+    <div class="col-auto">
+      <a href="{{ url_for('vat.vat_print') }}?year={{ data.year }}&quarter={{ data.quarter }}" class="btn btn-success" target="_blank">طباعة الإقرار للربع</a>
+    </div>
+  </form>
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="card p-3">
+        <h6>إجمالي المبيعات - Place India</h6>
+        <h4>{{ data.sales_place_india | round(2) }}</h4>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card p-3">
+        <h6>إجمالي المبيعات - China Town</h6>
+        <h4>{{ data.sales_china_town | round(2) }}</h4>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card p-3">
+        <h6>الإجمالي الكلي للمبيعات</h6>
+        <h4>{{ data.sales_total | round(2) }}</h4>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card p-3">
+        <h6>إجمالي المشتريات قبل الضريبة</h6>
+        <h4>{{ data.purchases_total | round(2) }}</h4>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card p-3">
+        <h6>إجمالي المصروفات قبل الضريبة</h6>
+        <h4>{{ data.expenses_total | round(2) }}</h4>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card p-3">
+        <h6>إجمالي ضريبة المخرجات (Output VAT)</h6>
+        <h4>{{ data.output_vat | round(2) }}</h4>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card p-3">
+        <h6>إجمالي ضريبة المدخلات (Input VAT)</h6>
+        <h4>{{ data.input_vat | round(2) }}</h4>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card p-3">
+        <h6>صافي الضريبة (Output - Input)</h6>
+        <h4>{{ data.net_vat | round(2) }}</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4">
+    <small>الفترة: {{ data.start_date }} إلى {{ data.end_date }}</small>
+  </div>
+</div>
+{% endblock %}

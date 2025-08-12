@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Login / تسجيل الدخول') }}{% endblock %}
+{% block content %}
+
+<style>
+  body {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .login-card {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0px 0px 20px rgba(0,0,0,0.2);
+    padding: 2rem;
+    width: 100%;
+    max-width: 380px;
+    color: white;
+  }
+  .form-control {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+  }
+  .form-control::placeholder {
+    color: rgba(255,255,255,0.7);
+  }
+  .btn-primary {
+    background: #ff8c00;
+    border: none;
+  }
+  .btn-primary:hover {
+    background: #ff6600;
+  }
+  .lang-switch {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+  }
+</style>
+
+<div class="lang-switch">
+  <a href="?lang=en" class="btn btn-light btn-sm">EN</a>
+  <a href="?lang=ar" class="btn btn-light btn-sm">AR</a>
+</div>
+
+<div class="login-card">
+  <div class="text-center mb-4">
+    <img src="/static/logo.png" alt="logo" style="max-width:100px;">
+    <h5 style="margin-top:8px; font-weight:700;">{{ (settings.company_name if settings and settings.company_name else 'Company') }}</h5>
+    <h4>{{ _('Welcome / مرحباً') }}</h4>
+    <p style="font-size:0.9rem; opacity:0.8;">{{ _('Please sign in to continue / الرجاء تسجيل الدخول للمتابعة') }}</p>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} text-dark">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <form method="POST" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="mb-3 input-group">
+      <span class="input-group-text bg-transparent border-0 text-white">👤</span>
+      {{ form.username(class_='form-control', placeholder=_('Username / اسم المستخدم')) }}
+    </div>
+    <div class="mb-3 input-group">
+      <span class="input-group-text bg-transparent border-0 text-white">🔒</span>
+      {{ form.password(class_='form-control', id='password', placeholder=_('Password / كلمة المرور')) }}
+      <button type="button" class="btn btn-outline-light" onclick="togglePassword()">👁</button>
+    </div>
+    <div class="mb-3 form-check">
+      {{ form.remember(class_='form-check-input') }}
+      {{ form.remember.label(class_='form-check-label') }}
+    </div>
+    <div class="d-grid">
+      {{ form.submit(class_='btn btn-primary btn-lg') }}
+    </div>
+  </form>
+</div>
+
+<script>
+function togglePassword() {
+  var pwd = document.getElementById("password");
+  pwd.type = (pwd.type === "password") ? "text" : "password";
+}
+</script>
+
+{% endblock %}

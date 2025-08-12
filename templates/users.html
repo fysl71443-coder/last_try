@@ -1,0 +1,422 @@
+{% extends 'base.html' %}
+
+
+{% block title %}إدارة المستخدمين والصلاحيات{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0"><i class="fa fa-users me-2"></i> إدارة المستخدمين والصلاحيات</h3>
+    <div class="btn-toolbar gap-2">
+      {% if can('users','add') %}
+      <button class="btn btn-success shadow-sm" id="btnAdd"><i class="fa fa-user-plus me-1"></i> إضافة مستخدم</button>
+      {% endif %}
+      {% if can('users','edit') %}
+      <button class="btn btn-primary shadow-sm" id="btnEdit" disabled><i class="fa fa-pen me-1"></i> تعديل مستخدم</button>
+      {% endif %}
+      {% if can('users','delete') %}
+      <button class="btn btn-danger shadow-sm" id="btnDelete" disabled><i class="fa fa-trash me-1"></i> حذف مستخدم</button>
+      {% endif %}
+      {% if can('users','edit') %}
+      <button class="btn btn-warning shadow-sm" id="btnPerms" disabled><i class="fa fa-shield-halved me-1"></i> إدارة الصلاحيات</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-2 align-items-center mb-2">
+        <div class="col-md-4">
+          <input type="text" class="form-control" id="searchBox" placeholder="بحث...">
+        </div>
+        <div class="col-md-8 text-end">
+          <small class="text-muted">تلميح: استخدم البحث والترتيب لتسهيل الوصول</small>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table" id="usersTable">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="selAll"></th>
+              <th>الاسم</th>
+              <th>اسم الدخول</th>
+              <th>البريد</th>
+              <th>الدور/Role</th>
+              <th>الحالة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr data-id="{{ u.id }}" data-active="{{ 1 if u.active else 0 }}">
+              <td><input type="checkbox" class="rowSel"></td>
+              <td>{{ u.username }}</td>
+              <td>{{ u.username }}</td>
+              <td>{{ u.email or '-' }}</td>
+              <td>{{ u.role or '-' }}</td>
+              <td>
+                {% if u.active %}
+                <span class="badge text-bg-success">نشط</span>
+                {% else %}
+                <span class="badge text-bg-secondary">غير نشط</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center">لا يوجد مستخدمون</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="d-flex justify-content-between align-items-center mt-2">
+        <div>
+          <button class="btn btn-outline-secondary btn-sm" id="prevPage">السابق</button>
+          <button class="btn btn-outline-secondary btn-sm" id="nextPage">التالي</button>
+          <span class="ms-2" id="pageInfo"></span>
+        </div>
+        <div>
+          <small class="text-muted">ترتيب بالضغط على رأس العمود</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: إدارة الصلاحيات -->
+<div class="modal fade" id="permsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa fa-shield-halved me-2"></i> إدارة الصلاحيات</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <button class="btn btn-outline-secondary btn-sm" id="checkAll">تحديد الكل</button>
+            <button class="btn btn-outline-secondary btn-sm" id="uncheckAll">إلغاء الكل</button>
+          </div>
+          <div class="d-flex gap-2">
+            <select id="branchSelect" class="form-select form-select-sm">
+              <option value="all">جميع الفروع</option>
+              <option value="place">فرع Place India</option>
+              <option value="china">فرع China Town</option>
+            </select>
+          </div>
+        </div>
+        <div id="screensList" class="list-group">
+          <!-- سيتم ملؤها جافاسكربت -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+        <button class="btn btn-success" id="savePerms">حفظ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: إضافة/تعديل مستخدم -->
+<div class="modal fade" id="userModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="userModalTitle">مستخدم جديد</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="userFormAlert" class="alert alert-danger d-none"></div>
+        <form id="userForm">
+          <div class="mb-2">
+            <label class="form-label">اسم المستخدم</label>
+            <input type="text" class="form-control" id="uf_username" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">البريد الإلكتروني</label>
+            <input type="email" class="form-control" id="uf_email" placeholder="اختياري" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">الدور</label>
+            <select class="form-select" id="uf_role">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="mb-2" id="pwGroup">
+            <label class="form-label">كلمة المرور</label>
+            <input type="password" class="form-control" id="uf_password" placeholder="••••••" minlength="4" />
+            <div class="form-text" id="pwHelp">سيُطلب في حالة الإضافة فقط</div>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="uf_active" checked />
+            <label class="form-check-label" for="uf_active">نشط</label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+        <button class="btn btn-primary" id="userFormSubmit">حفظ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+
+{% block scripts %}
+<script>
+// Users page JS (bound after Bootstrap loaded)
+(function(){
+  const table = document.getElementById('usersTable');
+  if(!table) return;
+  const rows = Array.from(table.querySelectorAll('tbody tr'));
+  const searchBox = document.getElementById('searchBox');
+  const selAll = document.getElementById('selAll');
+  const pageInfo = document.getElementById('pageInfo');
+  const btnAdd = document.getElementById('btnAdd');
+  const btnEdit = document.getElementById('btnEdit');
+  const btnDelete = document.getElementById('btnDelete');
+  const btnPerms = document.getElementById('btnPerms');
+
+  // pagination + search
+  let page=1, perPage=10;
+  function render(){
+    const q = searchBox.value.toLowerCase();
+    let vis=0, start=(page-1)*perPage, end=start+perPage;
+    rows.forEach((tr)=>{
+      const txt = tr.innerText.toLowerCase();
+      const match = txt.includes(q);
+      tr.style.display = match? '' : 'none';
+      if(match){
+        if(vis>=start && vis<end){ tr.style.display=''; } else { tr.style.display='none'; }
+        vis++;
+      }
+    });
+    const total = rows.filter(r=>r.innerText.toLowerCase().includes(q)).length;
+    const totalPages = Math.max(1, Math.ceil(total/perPage));
+    if(page>totalPages){ page=totalPages; render(); return; }
+    pageInfo.textContent = `صفحة ${page} من ${totalPages}`;
+  }
+  render();
+  document.getElementById('prevPage').onclick=()=>{ if(page>1){ page--; render(); }};
+  document.getElementById('nextPage').onclick=()=>{ page++; render(); };
+  searchBox.addEventListener('input', ()=>{ page=1; render(); });
+
+  // selection
+  function updateToolbar(){
+    const selected = table.querySelectorAll('.rowSel:checked');
+    const any = selected.length>0; const single = selected.length===1;
+    btnEdit.disabled = !single; btnDelete.disabled = !any; btnPerms.disabled = !any;
+  }
+  selAll.addEventListener('change', ()=>{
+    table.querySelectorAll('.rowSel').forEach(cb=>{ cb.checked=selAll.checked; });
+    updateToolbar();
+  });
+  table.addEventListener('change', (e)=>{ if(e.target.classList.contains('rowSel')) updateToolbar(); });
+
+  // helpers
+  async function api(method, url, body){
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: body?JSON.stringify(body):undefined });
+    if(!res.ok){ const t=await res.text(); throw new Error(t||res.status); }
+    return res.json();
+  }
+  function selectedIds(){ return Array.from(table.querySelectorAll('.rowSel:checked')).map(cb=>cb.closest('tr').dataset.id); }
+
+  // actions
+  const userModal = new bootstrap.Modal(document.getElementById('userModal'));
+  const userForm = document.getElementById('userForm');
+  const userFormSubmit = document.getElementById('userFormSubmit');
+  const userFormAlert = document.getElementById('userFormAlert');
+  const uf_username = document.getElementById('uf_username');
+  const uf_email = document.getElementById('uf_email');
+  const uf_role = document.getElementById('uf_role');
+  const uf_password = document.getElementById('uf_password');
+  const uf_active = document.getElementById('uf_active');
+  const pwGroup = document.getElementById('pwGroup');
+  const userModalTitle = document.getElementById('userModalTitle');
+  let editId = null;
+
+  btnAdd?.addEventListener('click', ()=>{
+    editId = null; userModalTitle.textContent='مستخدم جديد';
+    userForm.reset(); uf_active.checked=true; pwGroup.classList.remove('d-none');
+    userFormAlert.classList.add('d-none');
+    userModal.show();
+  });
+
+  btnEdit?.addEventListener('click', ()=>{
+    const ids = selectedIds(); if(ids.length!==1) return; editId = ids[0];
+    const row = table.querySelector(`tr[data-id="${editId}"]`);
+    userModalTitle.textContent='تعديل مستخدم';
+    uf_username.value = row.children[1].innerText; // readonly in update
+    uf_username.readOnly = true;
+    uf_email.value = row.children[3].innerText==='-'?'':row.children[3].innerText;
+    uf_role.value = row.children[4].innerText || 'user';
+    uf_active.checked = (row.dataset.active==='1');
+    pwGroup.classList.add('d-none');
+    userFormAlert.classList.add('d-none');
+    userModal.show();
+  });
+
+  userFormSubmit.addEventListener('click', async ()=>{
+    userFormAlert.classList.add('d-none');
+    const payload = {
+      username: uf_username.value.trim(),
+      email: uf_email.value.trim()||null,
+      role: uf_role.value,
+      active: uf_active.checked
+    };
+    try{
+      if(editId===null){
+        if(!uf_password.value.trim()) throw new Error('كلمة المرور مطلوبة');
+        payload.password = uf_password.value.trim();
+        await api('POST','/api/users', payload);
+      }else{
+        await api('PATCH', `/api/users/${editId}`, payload);
+      }
+      location.reload();
+    }catch(e){
+      userFormAlert.textContent = e.message || 'حدث خطأ';
+      userFormAlert.classList.remove('d-none');
+    }
+  });
+  btnDelete?.addEventListener('click', async ()=>{
+    const ids = selectedIds(); if(ids.length===0) return;
+    if(!confirm('تأكيد حذف المستخدمين المختارين؟')) return;
+    try{ await api('DELETE','/api/users',{ids}); location.reload(); }catch(e){ alert('خطأ: '+e.message); }
+  });
+
+  // permissions modal
+  const screens = [
+    {key:'dashboard', name:'لوحة التحكم'},
+    {key:'sales', name:'المبيعات'},
+    {key:'purchases', name:'المشتريات'},
+    {key:'inventory', name:'المخزون'},
+    {key:'expenses', name:'المصروفات'},
+    {key:'salaries', name:'الرواتب'},
+    {key:'financials', name:'القوائم المالية'},
+    {key:'vat', name:'VAT'},
+    {key:'reports', name:'التقارير'},
+    {key:'settings', name:'الإعدادات'}
+  ];
+  function permRow(scr){
+    return `<div class="list-group-item">
+      <div class="form-check">
+        <input class="form-check-input screenCheck" type="checkbox" data-key="${scr.key}" id="sc_${scr.key}">
+        <label class="form-check-label" for="sc_${scr.key}"><i class="fa fa-window-maximize me-1"></i> ${scr.name}</label>
+      </div>
+      <div class="row g-2 ms-4 mt-2">
+        ${['view','add','edit','delete','print'].map(p=>`
+          <div class='col-auto'>
+            <div class='form-check form-check-inline'>
+              <input class='form-check-input permCheck' type='checkbox' data-key='${scr.key}' data-perm='${p}' id='${scr.key}_${p}'>
+              <label class='form-check-label' for='${scr.key}_${p}'>${p}</label>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+  const list = document.getElementById('screensList');
+  list.innerHTML = screens.map(permRow).join('');
+  document.getElementById('checkAll').onclick=()=>{ list.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=true); };
+  document.getElementById('uncheckAll').onclick=()=>{ list.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=false); };
+
+  const permsModal = new bootstrap.Modal(document.getElementById('permsModal'));
+  btnPerms.onclick=async ()=>{
+    const ids = selectedIds(); if(ids.length!==1) return;
+    const uid = ids[0];
+    // fetch existing permissions for branch scope
+    try{
+      const scope = document.getElementById('branchSelect').value;
+      const res = await fetch(`/api/users/${uid}/permissions?branch_scope=${scope}`);
+      const data = await res.json();
+      // reset all first
+      list.querySelectorAll('.permCheck, .screenCheck').forEach(cb=>cb.checked=false);
+      data.items.forEach(p=>{
+        // tick screen if any permission
+        const hasAny = p.view||p.add||p.edit||p.delete||p.print;
+  // toggle all perms when screen checkbox changes, and keep header in sync
+  list.addEventListener('change', (e)=>{
+    const t = e.target;
+    // screen header toggles its perms
+    if(t.classList.contains('screenCheck')){
+      const key = t.dataset.key;
+      const row = document.getElementById(`sc_${key}`).closest('.list-group-item');
+      row.querySelectorAll('.permCheck').forEach(cb=> cb.checked = t.checked);
+    }
+    // any perm change updates header state
+    if(t.classList.contains('permCheck')){
+      const key = t.id.split('_')[0];
+      const row = document.getElementById(`sc_${key}`).closest('.list-group-item');
+      const any = Array.from(row.querySelectorAll('.permCheck')).some(cb=>cb.checked);
+      const header = document.getElementById(`sc_${key}`);
+      if(header) header.checked = any;
+    }
+  });
+
+  // branch change reloads perms if modal is open
+  document.getElementById('branchSelect')?.addEventListener('change', async ()=>{
+    const bsModalEl = document.getElementById('permsModal');
+    if(!bsModalEl.classList.contains('show')) return;
+    const ids = selectedIds(); if(ids.length!==1) return;
+    const uid = ids[0];
+    try{
+      const scope = document.getElementById('branchSelect').value;
+      const res = await fetch(`/api/users/${uid}/permissions?branch_scope=${scope}`);
+      const data = await res.json();
+      list.querySelectorAll('.permCheck, .screenCheck').forEach(cb=>cb.checked=false);
+      data.items.forEach(p=>{
+        const hasAny = p.view||p.add||p.edit||p.delete||p.print;
+        const scrCb = document.getElementById(`sc_${p.screen_key}`);
+        if(scrCb) scrCb.checked = hasAny;
+        ['view','add','edit','delete','print'].forEach(k=>{
+          const el = document.getElementById(`${p.screen_key}_${k}`);
+          if(el) el.checked = !!p[k];
+        });
+      });
+    }catch(e){ console.warn('reload perms failed', e); }
+  });
+        const scrCb = document.getElementById(`sc_${p.screen_key}`);
+        if(scrCb) scrCb.checked = hasAny;
+        ['view','add','edit','delete','print'].forEach(k=>{
+          const el = document.getElementById(`${p.screen_key}_${k}`);
+          if(el) el.checked = !!p[k];
+        });
+      });
+    }catch(e){ console.warn('load perms failed', e); }
+    permsModal.show();
+  // save permissions (bind once)
+  document.getElementById('savePerms')?.addEventListener('click', async ()=>{
+    const ids = selectedIds(); if(ids.length!==1){ alert('اختر مستخدماً واحداً'); return; }
+    const uid = ids[0];
+    const scope = document.getElementById('branchSelect').value;
+    const items = [];
+    document.querySelectorAll('#screensList .list-group-item').forEach(item=>{
+      const key = item.querySelector('.screenCheck').dataset.key;
+      const obj = { screen_key:key };
+      item.querySelectorAll('.permCheck').forEach(p=> obj[p.dataset.perm] = p.checked );
+      items.push(obj);
+    });
+    try{
+      const res = await fetch(`/api/users/${uid}/permissions`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items, branch_scope: scope }) });
+      if(!res.ok){ throw new Error(await res.text()); }
+      // re-fetch to reflect saved values
+      const res2 = await fetch(`/api/users/${uid}/permissions?branch_scope=${scope}`);
+      const data = await res2.json();
+      list.querySelectorAll('.permCheck, .screenCheck').forEach(cb=>cb.checked=false);
+      data.items.forEach(p=>{
+        const hasAny = p.view||p.add||p.edit||p.delete||p.print;
+        const scrCb = document.getElementById(`sc_${p.screen_key}`);
+        if(scrCb) scrCb.checked = hasAny;
+        ['view','add','edit','delete','print'].forEach(k=>{
+          const el = document.getElementById(`${p.screen_key}_${k}`);
+          if(el) el.checked = !!p[k];
+        });
+      });
+      alert('تم حفظ الصلاحيات');
+    }catch(e){ alert('تعذر الحفظ: '+(e.message||e)); }
+  });
+
+  };
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('VAT Return / الإقرار الضريبي') }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">🧾 {{ _('VAT Return / الإقرار الضريبي') }}</h3>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+  </div>
+
+  <form method="GET" class="row g-2 mb-4">
+    <div class="col-md-3">
+      <label class="form-label">{{ _('Year / السنة') }}</label>
+      <select name="year" class="form-select">
+        {% for y in range(2020, 2036) %}
+        <option value="{{ y }}" {{ 'selected' if y==year }}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">{{ _('Quarter / الربع') }}</label>
+      <select name="quarter" class="form-select">
+        <option value="Q1" {{ 'selected' if quarter=='Q1' }}>Q1 (Jan-Mar)</option>
+        <option value="Q2" {{ 'selected' if quarter=='Q2' }}>Q2 (Apr-Jun)</option>
+        <option value="Q3" {{ 'selected' if quarter=='Q3' }}>Q3 (Jul-Sep)</option>
+        <option value="Q4" {{ 'selected' if quarter=='Q4' }}>Q4 (Oct-Dec)</option>
+      </select>
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+      <button class="btn btn-secondary w-100">{{ _('Show / عرض') }}</button>
+    </div>
+  </form>
+
+  <div class="card mb-4"><div class="card-body">
+    <h5 class="mb-3">{{ _('Period / الفترة') }}: {{ start_date }} → {{ end_date }}</h5>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="border rounded p-3 h-100">
+          <h6>{{ _('Sales (Before VAT) / المبيعات قبل الضريبة') }}</h6>
+          <div class="fs-5">{{ '%.2f'|format(sales_before) }}</div>
+          <small class="text-muted">{{ _('Output VAT (recorded) / ضريبة المخرجات') }}: {{ '%.2f'|format(output_vat) }}</small>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="border rounded p-3 h-100">
+          <h6>{{ _('Purchases (Before VAT) / المشتريات قبل الضريبة') }}</h6>
+          <div class="fs-5">{{ '%.2f'|format(purchases_before) }}</div>
+          <small class="text-muted">{{ _('Input VAT (recorded) / ضريبة المدخلات') }}: {{ '%.2f'|format(input_vat) }}</small>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="border rounded p-3 h-100">
+          <h6>{{ _('Expenses (Before VAT) / المصروفات قبل الضريبة') }}</h6>
+          <div class="fs-5">{{ '%.2f'|format(expenses_before) }}</div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="card mb-4"><div class="card-body">
+    <h5 class="mb-3">{{ _('VAT Summary / ملخص الضريبة') }}</h5>
+    <div class="row g-3">
+      <div class="col-md-4"><div class="border rounded p-3"><div>{{ _('Output VAT / ضريبة المخرجات') }}</div><div class="fs-5">{{ '%.2f'|format(output_vat) }}</div></div></div>
+      <div class="col-md-4"><div class="border rounded p-3"><div>{{ _('Input VAT / ضريبة المدخلات') }}</div><div class="fs-5">{{ '%.2f'|format(input_vat) }}</div></div></div>
+      <div class="col-md-4"><div class="border rounded p-3"><div>{{ _('Net VAT / الضريبة المستحقة') }}</div><div class="fs-5">{{ '%.2f'|format(net_vat) }}</div></div></div>
+    </div>
+    <small class="text-muted">{{ _('Zero-rated and exempt amounts require item-level tagging for precise reporting.') }}</small>
+  </div></div>
+
+  <div class="d-flex justify-content-end gap-2">
+    <a href="#" class="btn btn-outline-primary" onclick="window.print();return false;">🖨️ {{ _('Print / طباعة') }}</a>
+    <a href="{{ url_for('reports') }}" class="btn btn-outline-secondary">📊 {{ _('Go to Reports / الانتقال للتقارير') }}</a>
+  </div>
+</div>
+{% endblock %}
