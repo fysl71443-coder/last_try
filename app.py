@@ -26,6 +26,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 
 # Production DB (Render) support — override sqlite if DATABASE_URL provided
 _db_url = os.getenv('DATABASE_URL')
 if _db_url:
+    if _db_url.startswith('postgres://'):
+        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
     app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
