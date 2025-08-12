@@ -1,5 +1,5 @@
-# Allow newer Werkzeug
-Werkzeug>=2.3.7
+# Pin Werkzeug to a Flask-WTF compatible version
+Werkzeug==2.2.3
 
 Flask==2.3.3
 Flask-Login==0.6.3
