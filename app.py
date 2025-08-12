@@ -5,7 +5,7 @@ import os
 import sys
 import logging
 from datetime import datetime, timedelta
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
 from extensions import db
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
@@ -1360,13 +1360,35 @@ def salaries_statements_print():
         w, h = A4
         ar = register_ar_font()
         # Header with logo
+        # Header with logo
+        def _get_logo_imagereader():
+            import io as _io
+            import os as _os2
+            try:
+                from reportlab.lib.utils import ImageReader as _IR
+            except Exception:
+                return None
+            png_logo = _os2.path.join(_os2.path.dirname(__file__), 'static', 'logo.png')
+            if _os2.path.exists(png_logo):
+                try:
+                    return _IR(png_logo)
+                except Exception:
+                    pass
+            svg_logo = _os2.path.join(_os2.path.dirname(__file__), 'static', 'logo.svg')
+            if _os2.path.exists(svg_logo):
+                try:
+                    import cairosvg
+                    with open(svg_logo, 'rb') as f:
+                        svg_data = f.read()
+                    png_bytes = cairosvg.svg2png(bytestring=svg_data, output_width=256, output_height=256)
+                    return _IR(_io.BytesIO(png_bytes))
+                except Exception:
+                    return None
+            return None
         try:
-            from reportlab.lib.utils import ImageReader
-            logo_path = _os.path.join(_os.path.dirname(__file__), 'static', 'logo.svg')
-            # reportlab does not render svg directly, so skip if svg; could add raster fallback
-            png_logo = _os.path.join(_os.path.dirname(__file__), 'static', 'logo.png')
-            if _os.path.exists(png_logo):
-                p.drawImage(ImageReader(png_logo), 20*mm, h-28*mm, width=16*mm, preserveAspectRatio=True, mask='auto')
+            logo_ir = _get_logo_imagereader()
+            if logo_ir:
+                p.drawImage(logo_ir, 20*mm, h-28*mm, width=16*mm, preserveAspectRatio=True, mask='auto')
         except Exception:
             pass
         if ar:
@@ -1814,12 +1836,34 @@ def print_invoices(section):
     from reportlab.lib.units import mm
     y = 800
     # Header with logo & title
+    def _get_logo_imagereader():
+        import io as _io
+        import os as _os2
+        try:
+            from reportlab.lib.utils import ImageReader as _IR
+        except Exception:
+            return None
+        png_logo = _os2.path.join(_os2.path.dirname(__file__), 'static', 'logo.png')
+        if _os2.path.exists(png_logo):
+            try:
+                return _IR(png_logo)
+            except Exception:
+                pass
+        svg_logo = _os2.path.join(_os2.path.dirname(__file__), 'static', 'logo.svg')
+        if _os2.path.exists(svg_logo):
+            try:
+                import cairosvg
+                with open(svg_logo, 'rb') as f:
+                    svg_data = f.read()
+                png_bytes = cairosvg.svg2png(bytestring=svg_data, output_width=256, output_height=256)
+                return _IR(_io.BytesIO(png_bytes))
+            except Exception:
+                return None
+        return None
     try:
-        from reportlab.lib.utils import ImageReader
-        import os as _os
-        png_logo = _os.path.join(_os.path.dirname(__file__), 'static', 'logo.png')
-        if _os.path.exists(png_logo):
-            p.drawImage(ImageReader(png_logo), 20*mm, 800, width=16*mm, preserveAspectRatio=True, mask='auto')
+        logo_ir = _get_logo_imagereader()
+        if logo_ir:
+            p.drawImage(logo_ir, 20*mm, 800, width=16*mm, preserveAspectRatio=True, mask='auto')
     except Exception:
         pass
     p.setFont("Helvetica-Bold", 14)
