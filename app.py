@@ -118,6 +118,11 @@ def get_locale():
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
 
+# Health check endpoint for Render
+@app.route('/healthz')
+def healthz():
+    return jsonify(status='ok'), 200
+
 # Disable Flask debug by default when running under Gunicorn/Render
 if os.getenv('RENDER') or os.getenv('GUNICORN_CMD_ARGS'):
     app.config['DEBUG'] = False
