@@ -204,28 +204,33 @@ def login():
             flash(_('Too many attempts. Try again later. / عدد المحاولات كبير، حاول لاحقاً.'), 'danger')
             return render_template('login.html', form=form)
 
-    if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        if user and bcrypt.check_password_hash(user.password_hash, form.password.data):
-            if not user.active:
-                flash(_('حسابك غير مفعل / Your account is not active.'), 'danger')
-                return render_template('login.html', form=form)
+    try:
+        if form.validate_on_submit():
+            user = User.query.filter_by(username=form.username.data).first()
+            if user and bcrypt.check_password_hash(user.password_hash, form.password.data):
+                if not user.active:
+                    flash(_('حسابك غير مفعل / Your account is not active.'), 'danger')
+                    return render_template('login.html', form=form)
 
-            login_user(user, remember=form.remember.data)
-            user.last_login()
-            db.session.commit()
-            login_attempts.pop(client_ip, None)  # reset attempts
-            flash(_('تم تسجيل الدخول بنجاح / Logged in successfully.'), 'success')
-            return redirect(url_for('dashboard'))
+                login_user(user, remember=form.remember.data)
+                user.last_login()
+                db.session.commit()
+                login_attempts.pop(client_ip, None)  # reset attempts
+                flash(_('تم تسجيل الدخول بنجاح / Logged in successfully.'), 'success')
+                return redirect(url_for('dashboard'))
 
-        # Wrong credentials — increment counter
-        if client_ip not in login_attempts:
-            login_attempts[client_ip] = {"count": 1, "last_attempt": datetime.utcnow()}
-        else:
-            login_attempts[client_ip]["count"] += 1
-            login_attempts[client_ip]["last_attempt"] = datetime.utcnow()
+            # Wrong credentials — increment counter
+            if client_ip not in login_attempts:
+                login_attempts[client_ip] = {"count": 1, "last_attempt": datetime.utcnow()}
+            else:
+                login_attempts[client_ip]["count"] += 1
+                login_attempts[client_ip]["last_attempt"] = datetime.utcnow()
 
-        flash(_('اسم المستخدم أو كلمة المرور غير صحيحة / Invalid credentials.'), 'danger')
+            flash(_('اسم المستخدم أو كلمة المرور غير صحيحة / Invalid credentials.'), 'danger')
+    except Exception as e:
+        logging.exception('Login error: %s', e)
+        flash(_('حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى.'), 'danger')
+        return render_template('login.html', form=form)
 
     return render_template('login.html', form=form)
 
