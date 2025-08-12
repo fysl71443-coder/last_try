@@ -51,6 +51,15 @@ csrf = CSRFProtect(app)
 
 
 
+# Handle CSRF errors gracefully instead of 500
+from flask_wtf.csrf import CSRFError
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    logging.exception("CSRF error: %s", getattr(e, 'description', str(e)))
+    flash(_("Security check failed. Please try again."), "danger")
+    return redirect(url_for("login"))
+
+
 # --- Security hardening (cookies, headers, CORS) ---
 app.config.update(
     SESSION_COOKIE_SECURE=True,
