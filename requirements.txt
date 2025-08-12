@@ -1,5 +1,5 @@
-# Pin Werkzeug to avoid known breaks in 3.x with some extensions
-Werkzeug==2.3.4
+# Allow newer Werkzeug
+Werkzeug>=2.3.7
 
 Flask==2.3.3
 Flask-Login==0.6.3
