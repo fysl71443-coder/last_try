@@ -1359,17 +1359,26 @@ def salaries_statements_print():
         p = canvas.Canvas(buf, pagesize=A4)
         w, h = A4
         ar = register_ar_font()
-        # Header
+        # Header with logo
+        try:
+            from reportlab.lib.utils import ImageReader
+            logo_path = _os.path.join(_os.path.dirname(__file__), 'static', 'logo.svg')
+            # reportlab does not render svg directly, so skip if svg; could add raster fallback
+            png_logo = _os.path.join(_os.path.dirname(__file__), 'static', 'logo.png')
+            if _os.path.exists(png_logo):
+                p.drawImage(ImageReader(png_logo), 20*mm, h-28*mm, width=16*mm, preserveAspectRatio=True, mask='auto')
+        except Exception:
+            pass
         if ar:
             p.setFont(ar, 14)
-            p.drawString(20*mm, h-20*mm, shape_ar(company_name))
+            p.drawString(40*mm, h-20*mm, shape_ar(company_name))
             p.setFont(ar, 11)
-            p.drawString(20*mm, h-28*mm, shape_ar(f"كشف الرواتب لشهر {year}-{month:02d}"))
+            p.drawString(40*mm, h-28*mm, shape_ar(f"كشف الرواتب لشهر {year}-{month:02d}"))
         else:
             p.setFont("Helvetica-Bold", 14)
-            p.drawString(20*mm, h-20*mm, company_name)
+            p.drawString(40*mm, h-20*mm, company_name)
             p.setFont("Helvetica", 11)
-            p.drawString(20*mm, h-28*mm, f"Payroll Statement {year}-{month:02d}")
+            p.drawString(40*mm, h-28*mm, f"Payroll Statement {year}-{month:02d}")
 
         # Table header
         y = h - 40*mm
@@ -1802,7 +1811,19 @@ def print_invoices(section):
 
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
+    from reportlab.lib.units import mm
     y = 800
+    # Header with logo & title
+    try:
+        from reportlab.lib.utils import ImageReader
+        import os as _os
+        png_logo = _os.path.join(_os.path.dirname(__file__), 'static', 'logo.png')
+        if _os.path.exists(png_logo):
+            p.drawImage(ImageReader(png_logo), 20*mm, 800, width=16*mm, preserveAspectRatio=True, mask='auto')
+    except Exception:
+        pass
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(40*mm, 810, "Invoices Report")
 
     # Helpers: register Arabic-capable font and shape Arabic text if libs exist
     def register_ar_font():
