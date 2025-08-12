@@ -1,6 +1,6 @@
 # Core framework and server
 Flask==2.3.3
-Werkzeug==2.2.3
+Werkzeug>=2.3.7
 Flask-WTF==1.1.1
 Flask-Login==0.6.3
 Flask-Bcrypt==1.0.1
