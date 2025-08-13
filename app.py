@@ -1524,6 +1524,30 @@ def settings():
         return redirect(url_for('settings'))
     return render_template('settings.html', s=s or Settings())
 
+@app.route('/change_password', methods=['POST'])
+@login_required
+def change_password():
+    current = request.form.get('current_password','')
+    new = request.form.get('new_password','')
+    confirm = request.form.get('confirm_password','')
+    # Validate
+    if not current or not new or not confirm:
+        flash(_('Please fill all fields / الرجاء تعبئة جميع الحقول'), 'danger')
+        return redirect(url_for('settings'))
+    if new != confirm:
+        flash(_('New passwords do not match / كلمتا المرور غير متطابقتين'), 'danger')
+        return redirect(url_for('settings'))
+    # Verify current
+    if not bcrypt.check_password_hash(current_user.password_hash, current):
+        flash(_('Current password is incorrect / كلمة المرور الحالية غير صحيحة'), 'danger')
+        return redirect(url_for('settings'))
+    # Update
+    current_user.set_password(new, bcrypt)
+    db.session.commit()
+    flash(_('Password updated successfully / تم تحديث كلمة المرور بنجاح'), 'success')
+    return redirect(url_for('settings'))
+
+
 # ---- Simple permission checker usable in routes (Python scope)
 from models import UserPermission
 

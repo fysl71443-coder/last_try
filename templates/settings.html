@@ -54,5 +54,26 @@
       <button class="btn btn-primary" type="submit">حفظ</button>
     </div>
   </form>
+
+  <hr class="my-4">
+  <h3>تغيير كلمة المرور</h3>
+  <form method="post" action="{{ url_for('change_password') }}" class="row g-3" onsubmit="return confirm('{{ _('Are you sure you want to change your password? / هل أنت متأكد من تغيير كلمة المرور؟') }}');">
+    <div class="col-md-4">
+      <label class="form-label">كلمة المرور الحالية</label>
+      <input type="password" name="current_password" class="form-control" required>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">كلمة المرور الجديدة</label>
+      <input type="password" name="new_password" class="form-control" minlength="6" required>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">تأكيد كلمة المرور الجديدة</label>
+      <input type="password" name="confirm_password" class="form-control" minlength="6" required>
+    </div>
+    <div class="col-12 d-flex justify-content-end gap-2">
+      <button class="btn btn-primary" type="submit">تغيير كلمة المرور</button>
+    </div>
+  </form>
+
 </div>
 {% endblock %}
