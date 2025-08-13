@@ -24,7 +24,7 @@ def create_sample_sales():
             'Mixed Spices', 'Red Lentils', 'Chickpeas', 'Fava Beans', 'Bulgur'
         ]
         
-        payment_methods = ['cash', 'card', 'bank_transfer', 'check']
+        payment_methods = ['MADA','BANK','CASH','VISA','MASTERCARD','AKS','GCC','آجل']
         branches = ['place_india', 'china_town']
         
         # Create sample sales invoices
