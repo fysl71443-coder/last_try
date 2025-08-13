@@ -28,8 +28,8 @@ def create_sample_purchases():
             'Premium Ingredients Ltd.'
         ]
         
-        payment_methods = ['cash', 'card', 'bank_transfer', 'check']
-        
+        payment_methods = ['MADA','BANK','CASH','VISA','MASTERCARD','AKS','GCC','آجل']
+
         # Create sample purchase invoices
         sample_invoices = []
         
