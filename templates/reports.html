@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Reports / التقارير') }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0">📊 {{ _('Reports / التقارير') }}</h3>
+      <small class="text-muted">{{ place_lbl }} / {{ china_lbl }} — {{ currency }}</small>
+    </div>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+  </div>
+
+  <!-- Period Filters -->
+  <form method="GET" class="row g-2 mb-4">
+    <div class="col-md-3">
+      <label class="form-label">{{ _('Period / الفترة') }}</label>
+      <select class="form-select" name="period" onchange="toggleCustom(this.value)">
+        <option value="today" {{ 'selected' if period=='today' }}> {{ _('Today / اليوم') }} </option>
+        <option value="this_week" {{ 'selected' if period=='this_week' }}> {{ _('This Week / هذا الأسبوع') }} </option>
+        <option value="this_month" {{ 'selected' if period=='this_month' }}> {{ _('This Month / هذا الشهر') }} </option>
+        <option value="this_year" {{ 'selected' if period=='this_year' }}> {{ _('This Year / هذه السنة') }} </option>
+        <option value="custom" {{ 'selected' if period=='custom' }}> {{ _('Custom / مخصص') }} </option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">{{ _('From / من') }}</label>
+      <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">{{ _('To / إلى') }}</label>
+      <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+      <button class="btn btn-secondary w-100">{{ _('Show Report / عرض التقرير') }}</button>
+    </div>
+  </form>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card text-bg-success"><div class="card-body">
+        <div class="d-flex justify-content-between"><div>{{ _('Sales Place India') }}</div><div>{{ '%.2f'|format(sales_place) }}</div></div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-bg-success"><div class="card-body">
+        <div class="d-flex justify-content-between"><div>{{ _('Sales China Town') }}</div><div>{{ '%.2f'|format(sales_china) }}</div></div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-bg-primary"><div class="card-body">
+        <div class="d-flex justify-content-between"><div>{{ _('Total Sales / إجمالي المبيعات') }}</div><div>{{ '%.2f'|format(total_sales) }}</div></div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-bg-warning"><div class="card-body">
+        <div class="d-flex justify-content-between"><div>{{ _('Profit / الربح') }}</div><div>{{ '%.2f'|format(profit) }}</div></div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between mb-1"><div>{{ _('Purchases / المشتريات') }}</div><div>{{ '%.2f'|format(total_purchases) }}</div></div>
+      <div class="d-flex justify-content-between"><div>{{ _('Expenses / المصروفات') }}</div><div>{{ '%.2f'|format(total_expenses) }}</div></div>
+      <div class="d-flex justify-content-between mt-2"><div>{{ _('Salaries / الرواتب') }}</div><div>{{ '%.2f'|format(total_salaries) }}</div></div>
+    </div></div></div>
+    <div class="col-md-8"><div class="card"><div class="card-body">
+      <canvas id="lineChart" height="80"></canvas>
+    </div></div></div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-6"><div class="card"><div class="card-body">
+      <canvas id="pieChart" height="120"></canvas>
+    </div></div></div>
+    <div class="col-md-6"><div class="card"><div class="card-body">
+      <canvas id="barChart" height="120"></canvas>
+    </div></div></div>
+  </div>
+
+  <div class="card mb-4"><div class="card-body">
+    <h5 class="mb-3">{{ _('Top Selling Products / الأكثر مبيعاً') }}</h5>
+    <ul class="list-group list-group-flush">
+      {% for name in top_labels %}
+      <li class="list-group-item d-flex justify-content-between"><span>{{ name }}</span><span>{{ '%.2f'|format(top_values[loop.index0]) }}</span></li>
+      {% else %}
+      <li class="list-group-item">{{ _('No data / لا توجد بيانات') }}</li>
+      {% endfor %}
+    </ul>
+  </div></div>
+
+  <div class="card mb-4"><div class="card-body">
+    <h5 class="mb-3">{{ _('Low Stock / المخزون المنخفض') }}</h5>
+    <ul class="list-group list-group-flush">
+      {% for m in low_stock %}
+      <li class="list-group-item d-flex justify-content-between"><span>{{ m.display_name }}</span><span>{{ m.stock_quantity }}</span></li>
+      {% else %}
+      <li class="list-group-item">{{ _('No data / لا توجد بيانات') }}</li>
+      {% endfor %}
+    </ul>
+  </div></div>
+
+  <div class="d-flex justify-content-end">
+    <a href="{{ url_for('payments') }}" class="btn btn-outline-primary">💳 {{ _('Go to Payments / الانتقال للمستحقات') }}</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+  const lineCtx = document.getElementById('lineChart');
+  new Chart(lineCtx, { type: 'line', data: { labels: {{ line_labels|tojson }}, datasets: [{ label: 'Sales', data: {{ line_values|tojson }}, borderColor: '#0d6efd', fill: false }] }, options:{ responsive:true, plugins:{ legend:{ display:true }}}});
+
+  const pieCtx = document.getElementById('pieChart');
+  new Chart(pieCtx, { type: 'pie', data: { labels: {{ pm_labels|tojson }}, datasets: [{ data: {{ pm_values|tojson }}, backgroundColor: ['#198754','#0d6efd','#ffc107','#dc3545','#20c997','#6f42c1','#fd7e14','#0dcaf0'] }] }, options:{ responsive:true }});
+
+  const barCtx = document.getElementById('barChart');
+  new Chart(barCtx, { type: 'bar', data: { labels: {{ comp_labels|tojson }}, datasets: [{ label: 'Totals', data: {{ comp_values|tojson }}, backgroundColor: ['#0d6efd','#dc3545','#ffc107'] }] }, options:{ responsive:true, scales:{ y:{ beginAtZero:true }}}});
+})();
+
+function toggleCustom(val){
+  const sd = document.querySelector('[name="start_date"]');
+  const ed = document.querySelector('[name="end_date"]');
+  const enable = (val==='custom');
+  sd.disabled = !enable; ed.disabled = !enable;
+}
+
+document.addEventListener('DOMContentLoaded', function(){ toggleCustom('{{ period }}'); });
+</script>
+{% endblock %}

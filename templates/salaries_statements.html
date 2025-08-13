@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% set back_url = url_for('employees') %}
+
+{% block title %}{{ _('Payroll Statements / كشوفات الرواتب') }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</h3>
+    <div class="d-flex gap-2">
+      <a class="btn btn-success" target="_blank" href="{{ url_for('salaries_statements_print', year=year, month=month) }}">🖨 {{ _('Print Month / طباعة الشهر') }}</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('salaries_monthly', year=year, month=month) }}">{{ _('Edit Monthly / تحرير الشهري') }}</a>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <form method="GET" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+      <label class="form-label">{{ _('Year / السنة') }}</label>
+      <input type="number" class="form-control" name="year" value="{{ year }}">
+    </div>
+    <div class="col-auto">
+      <label class="form-label">{{ _('Month / الشهر') }}</label>
+      <select name="month" class="form-select">
+        {% for m in range(1,13) %}
+        <option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-secondary">{{ _('Show / عرض') }}</button>
+    </div>
+  </form>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>{{ _('Employee / الموظف') }}</th>
+              <th>{{ _('Basic / الأساسي') }}</th>
+              <th>{{ _('Allowances / البدلات') }}</th>
+              <th>{{ _('Deductions / الاستقطاعات') }}</th>
+              <th>{{ _('Prev Due / سابقة') }}</th>
+              <th>{{ _('Total / الإجمالي') }}</th>
+              <th>{{ _('Paid / المدفوع') }}</th>
+              <th>{{ _('Remaining / المتبقي') }}</th>
+              <th>{{ _('Status / الحالة') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ r.employee_name }}</td>
+              <td>{{ '%.2f'|format(r.basic) }}</td>
+              <td>{{ '%.2f'|format(r.allow) }}</td>
+              <td>{{ '%.2f'|format(r.ded) }}</td>
+              <td>{{ '%.2f'|format(r.prev) }}</td>
+              <td>{{ '%.2f'|format(r.total) }}</td>
+              <td>{{ '%.2f'|format(r.paid) }}</td>
+              <td>{{ '%.2f'|format(r.remaining) }}</td>
+              <td>{{ r.status }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% if totals %}
+          <tfoot>
+            <tr>
+              <th colspan="2">{{ _('Totals / الإجماليات') }}</th>
+              <th>{{ '%.2f'|format(totals.basic) }}</th>
+              <th>{{ '%.2f'|format(totals.allow) }}</th>
+              <th>{{ '%.2f'|format(totals.ded) }}</th>
+              <th>{{ '%.2f'|format(totals.prev) }}</th>
+              <th>{{ '%.2f'|format(totals.total) }}</th>
+              <th>{{ '%.2f'|format(totals.paid) }}</th>
+              <th>{{ '%.2f'|format(totals.remaining) }}</th>
+              <th></th>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

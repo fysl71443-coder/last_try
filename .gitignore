@@ -1,3 +1,4 @@
+# Compressed / archive files
 *.tar
 *.tar.*
 *.jar
@@ -6,9 +7,37 @@
 *.deb
 *.zip
 *.tgz
+*.sig
 *.log
 *.log.*
-*.sig
 
+# Packages / build directories
 pkg/
 src/
+dist/
+build/
+static/dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.env.*
+.venv/
+venv/
+env/
+
+# Flask
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

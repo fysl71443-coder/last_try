@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8">
+  <title>VAT Return</title>
+  <style>
+    body{font-family:Arial, sans-serif;}
+    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .title{font-weight:bold;font-size:18px}
+    .meta{color:#555;font-size:12px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{border:1px solid #ccc;padding:6px;text-align:right}
+    th{text-align:center;background:#f7f7f7}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="title">{{ company_name or 'Company' }}</div>
+      <div class="meta">إقرار ضريبة القيمة المضافة — VAT: {{ tax_number }} — {{ currency }}</div>
+    </div>
+    <div class="meta">الفترة: {{ start_date }} إلى {{ end_date }}</div>
+  </div>
+
+  <table>
+    <tr>
+      <th>البند</th>
+      <th>{{ place_lbl }}</th>
+      <th>{{ china_lbl }}</th>
+      <th>الإجمالي</th>
+    </tr>
+    <tr>
+      <td>إجمالي المبيعات قبل الضريبة</td>
+      <td>{{ '%.2f'|format(sales_place_india) }}</td>
+      <td>{{ '%.2f'|format(sales_china_town) }}</td>
+      <td>{{ '%.2f'|format(sales_total) }}</td>
+    </tr>
+    <tr>
+      <td>إجمالي المشتريات قبل الضريبة</td>
+      <td colspan="2"></td>
+      <td>{{ '%.2f'|format(purchases_total) }}</td>
+    </tr>
+    <tr>
+      <td>إجمالي المصروفات قبل الضريبة</td>
+      <td colspan="2"></td>
+      <td>{{ '%.2f'|format(expenses_total) }}</td>
+    </tr>
+    <tr>
+      <td>Output VAT @ {{ (vat_rate*100)|round(0) }}%</td>
+      <td colspan="2"></td>
+      <td>{{ '%.2f'|format(output_vat) }}</td>
+    </tr>
+    <tr>
+      <td>Input VAT</td>
+      <td colspan="2"></td>
+      <td>{{ '%.2f'|format(input_vat) }}</td>
+    </tr>
+    <tr>
+      <td>صافي الضريبة</td>
+      <td colspan="2"></td>
+      <td>{{ '%.2f'|format(net_vat) }}</td>
+    </tr>
+  </table>
+</body>
+</html>

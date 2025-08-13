@@ -1,0 +1,340 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Meals Management / إدارة الوجبات') }}{% endblock %}
+{% block content %}
+
+<style>
+body {
+  background: #f4f6f9;
+}
+.meals-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+.ingredient-row {
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  background: #f8f9fa;
+}
+.cost-display {
+  background: #e8f5e8;
+  border: 1px solid #4caf50;
+  border-radius: 5px;
+  padding: 0.5rem;
+  text-align: center;
+  font-weight: bold;
+  color: #2e7d32;
+}
+.profit-margin {
+  background: #fff3e0;
+  border: 1px solid #ff9800;
+  border-radius: 5px;
+  padding: 0.5rem;
+  text-align: center;
+  font-weight: bold;
+  color: #f57c00;
+}
+.selling-price {
+  background: #e3f2fd;
+  border: 1px solid #2196f3;
+  border-radius: 5px;
+  padding: 0.5rem;
+  text-align: center;
+  font-weight: bold;
+  color: #1976d2;
+}
+</style>
+
+<div class="container py-4">
+    <!-- شريط التنقل السريع -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <h3 class="mb-0">🍽️ {{ _('Meals Management / إدارة الوجبات') }}</h3>
+        </div>
+        <div class="col-md-6 text-end">
+            <a href="{{ url_for('raw_materials') }}" class="btn btn-outline-success me-2">
+                🥘 {{ _('Raw Materials / المواد الخام') }}
+            </a>
+            <a href="{{ url_for('sales') }}" class="btn btn-outline-info me-2">
+                💰 {{ _('Sales / المبيعات') }}
+            </a>
+            <a href="{{ url_for('inventory') }}" class="btn btn-outline-warning me-2">
+                📦 {{ _('Inventory / المخزون') }}
+            </a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                🏠 {{ _('Dashboard / لوحة التحكم') }}
+            </a>
+        </div>
+    </div>
+
+    <!-- نموذج إنشاء وجبة جديدة -->
+    <div class="meals-card">
+        <h5 class="mb-3">{{ _('Create New Meal / إنشاء وجبة جديدة') }}</h5>
+        
+        <form method="POST" id="meal-form">
+            {{ form.hidden_tag() }}
+            
+            <!-- معلومات الوجبة الأساسية -->
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    {{ form.name.label(class_='form-label') }}
+                    {{ form.name(class_='form-control') }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.name_ar.label(class_='form-label') }}
+                    {{ form.name_ar(class_='form-control') }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.category.label(class_='form-label') }}
+                    {{ form.category(class_='form-control') }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.profit_margin_percent.label(class_='form-label') }}
+                    {{ form.profit_margin_percent(class_='form-control', step='0.01') }}
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    {{ form.description.label(class_='form-label') }}
+                    {{ form.description(class_='form-control') }}
+                </div>
+            </div>
+
+            <!-- مكونات الوجبة -->
+            <h6 class="mb-3">{{ _('Meal Ingredients / مكونات الوجبة') }}</h6>
+            <div id="ingredients-container">
+                {% for ingredient_form in form.ingredients %}
+                <div class="ingredient-row">
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ ingredient_form.raw_material_id.label(class_='form-label') }}
+                            {{ ingredient_form.raw_material_id(class_='form-select') }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ ingredient_form.quantity.label(class_='form-label') }}
+                            {{ ingredient_form.quantity(class_='form-control', step='0.0001') }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">{{ _('Cost / التكلفة') }}</label>
+                            <div class="cost-display ingredient-cost">$0.0000</div>
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button type="button" class="btn btn-danger btn-sm remove-ingredient-btn">−</button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- ملخص التكاليف -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">{{ _('Total Cost / إجمالي التكلفة') }}</label>
+                    <div class="cost-display" id="total-cost">$0.00</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{{ _('Profit Margin / هامش الربح') }}</label>
+                    <div class="profit-margin" id="profit-amount">$0.00</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{{ _('Selling Price / سعر البيع') }}</label>
+                    <div class="selling-price" id="selling-price">$0.00</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <button type="button" class="btn btn-secondary" id="add-ingredient">
+                        ➕ {{ _('Add Ingredient / إضافة مكون') }}
+                    </button>
+                </div>
+                <div class="col-md-6 text-end">
+                    {{ form.submit(class_='btn btn-primary btn-lg') }}
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- قائمة الوجبات الموجودة -->
+    {% if meals %}
+    <div class="meals-card">
+        <h5 class="mb-3">{{ _('Existing Meals / الوجبات الموجودة') }}</h5>
+        
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>{{ _('Meal Name / اسم الوجبة') }}</th>
+                        <th>{{ _('Category / الفئة') }}</th>
+                        <th>{{ _('Total Cost / إجمالي التكلفة') }}</th>
+                        <th>{{ _('Profit Margin / هامش الربح') }}</th>
+                        <th>{{ _('Selling Price / سعر البيع') }}</th>
+                        <th>{{ _('Ingredients / المكونات') }}</th>
+                        <th>{{ _('Actions / الإجراءات') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for meal in meals %}
+                    <tr>
+                        <td><strong>{{ meal.display_name }}</strong></td>
+                        <td>{{ meal.category or '-' }}</td>
+                        <td class="cost-highlight">${{ "%.2f"|format(meal.total_cost) }}</td>
+                        <td>{{ "%.1f"|format(meal.profit_margin_percent) }}%</td>
+                        <td class="selling-price"><strong>${{ "%.2f"|format(meal.selling_price) }}</strong></td>
+                        <td>
+                            <small>{{ meal.ingredients|length }} {{ _('ingredients / مكونات') }}</small>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info me-1" onclick="viewMeal({{ meal.id }})">
+                                👁 {{ _('View / عرض') }}
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteMeal({{ meal.id }}, '{{ meal.display_name }}')">
+                                🗑️ {{ _('Delete / حذف') }}
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- SocketIO and JavaScript -->
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+    // Materials data for calculations
+    const materials = {{ materials_json | safe }};
+    
+    // SocketIO for real-time updates
+    var socket = io();
+    socket.on('meal_update', function(data) {
+        console.log('Meal updated:', data);
+        alert('New meal created: ' + data.meal_name + ' - Cost: $' + data.total_cost + ' - Price: $' + data.selling_price);
+        location.reload();
+    });
+
+    // Auto-calculation functionality
+    function calculateCosts() {
+        let totalCost = 0;
+        
+        document.querySelectorAll('.ingredient-row').forEach(row => {
+            const materialSelect = row.querySelector('select[name$="-raw_material_id"]');
+            const quantityInput = row.querySelector('input[name$="-quantity"]');
+            const costDisplay = row.querySelector('.ingredient-cost');
+            
+            const materialId = parseInt(materialSelect.value);
+            const quantity = parseFloat(quantityInput.value) || 0;
+            
+            const material = materials.find(m => m.id === materialId);
+            let ingredientCost = 0;
+            
+            if (material && quantity > 0) {
+                ingredientCost = material.cost_per_unit * quantity;
+                costDisplay.textContent = '$' + ingredientCost.toFixed(4);
+                totalCost += ingredientCost;
+            } else {
+                costDisplay.textContent = '$0.0000';
+            }
+        });
+        
+        // Update total cost
+        document.getElementById('total-cost').textContent = '$' + totalCost.toFixed(2);
+        
+        // Calculate profit and selling price
+        const profitMargin = parseFloat(document.querySelector('input[name="profit_margin_percent"]').value) || 0;
+        const profitAmount = totalCost * (profitMargin / 100);
+        const sellingPrice = totalCost + profitAmount;
+        
+        document.getElementById('profit-amount').textContent = '$' + profitAmount.toFixed(2);
+        document.getElementById('selling-price').textContent = '$' + sellingPrice.toFixed(2);
+    }
+
+    // Event listeners for auto-calculation
+    document.addEventListener('change', e => {
+        if (e.target.matches('select[name$="-raw_material_id"], input[name$="-quantity"], input[name="profit_margin_percent"]')) {
+            calculateCosts();
+        }
+    });
+
+    // Add new ingredient functionality
+    let ingredientIndex = {{ form.ingredients|length }};
+    
+    document.getElementById('add-ingredient').addEventListener('click', function() {
+        const container = document.getElementById('ingredients-container');
+        const newIngredient = document.createElement('div');
+        newIngredient.className = 'ingredient-row';
+        newIngredient.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="form-label">{{ _('Ingredient / المكون') }}</label>
+                    <select class="form-select" name="ingredients-${ingredientIndex}-raw_material_id">
+                        <option value="0">{{ _('Select Ingredient / اختر المكون') }}</option>
+                        ${materials.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ _('Quantity / الكمية') }}</label>
+                    <input class="form-control" name="ingredients-${ingredientIndex}-quantity" step="0.0001" type="number">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">{{ _('Cost / التكلفة') }}</label>
+                    <div class="cost-display ingredient-cost">$0.0000</div>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="button" class="btn btn-danger btn-sm remove-ingredient-btn">−</button>
+                </div>
+            </div>
+        `;
+        container.appendChild(newIngredient);
+        ingredientIndex++;
+    });
+
+    // Remove ingredient functionality
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-ingredient-btn')) {
+            e.target.closest('.ingredient-row').remove();
+            calculateCosts();
+        }
+    });
+
+    // View meal details
+    function viewMeal(mealId) {
+        alert('Meal details for ID: ' + mealId + ' (Feature coming soon)');
+    }
+
+    function deleteMeal(mealId, mealName) {
+        if (confirm('{{ _("Are you sure you want to delete") }} "' + mealName + '"?\n\n{{ _("This action cannot be undone. If the meal has sales history, it will be deactivated instead.") }}')) {
+            // Create a form and submit it
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/delete_meal/' + mealId;
+
+            // Add CSRF token if available
+            const csrfToken = document.querySelector('input[name="csrf_token"]');
+            if (csrfToken) {
+                const tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = 'csrf_token';
+                tokenInput.value = csrfToken.value;
+                form.appendChild(tokenInput);
+            }
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    // Initial calculation
+    document.addEventListener('DOMContentLoaded', function() {
+        calculateCosts();
+    });
+</script>
+
+{% endblock %}

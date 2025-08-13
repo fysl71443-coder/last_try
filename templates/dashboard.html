@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Dashboard / لوحة التحكم') }}{% endblock %}
+{% block content %}
+
+<style>
+body {
+  background: #f4f6f9;
+}
+.dashboard-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
+  transition: all 0.2s ease-in-out;
+  padding: 1.5rem;
+  text-align: center;
+}
+.dashboard-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0px 6px 14px rgba(0,0,0,0.1);
+}
+.dashboard-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: #2a5298;
+}
+</style>
+
+<div class="container py-4">
+  <h3 class="mb-4">{{ _('Dashboard / لوحة التحكم') }}</h3>
+
+  <!-- شريط التنقل السريع -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="card-title mb-3">🚀 {{ _('Quick Access / الوصول السريع') }}</h6>
+          <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('sales') }}" class="btn btn-primary btn-sm">
+              💰 {{ _('New Sale / مبيعة جديدة') }}
+            </a>
+            <a href="{{ url_for('purchases') }}" class="btn btn-warning btn-sm">
+              🛒 {{ _('New Purchase / شراء جديد') }}
+            </a>
+            <a href="{{ url_for('raw_materials') }}" class="btn btn-success btn-sm">
+              🥘 {{ _('Add Material / إضافة مادة') }}
+            </a>
+            <a href="{{ url_for('meals') }}" class="btn btn-info btn-sm">
+              🍽️ {{ _('Create Meal / إنشاء وجبة') }}
+            </a>
+            <a href="{{ url_for('inventory') }}" class="btn btn-secondary btn-sm">
+              📦 {{ _('View Inventory / عرض المخزون') }}
+            </a>
+            <a href="{{ url_for('expenses') }}" class="btn btn-danger btn-sm">
+              💸 {{ _('Add Expense / إضافة مصروف') }}
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('sales') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">💰</div>
+          <h6>{{ _('Sales / المبيعات') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('purchases') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">🛒</div>
+          <h6>{{ _('Purchases / المشتريات') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('expenses') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">💸</div>
+          <h6>{{ _('Expenses / المصروفات') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('invoices') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">📄</div>
+          <h6>{{ _('All Invoices / كل الفواتير') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('inventory') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">📦</div>
+          <h6>{{ _('Inventory & Costs / المخزون وادارة التكاليف') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('employees') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">👨‍💼</div>
+          <h6>{{ _('Employees & Salaries / الموظفين والرواتب') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('payments') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">💳</div>
+          <h6>{{ _('Payments & Receivables / المدفوعات والمستحقات') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('reports') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">📊</div>
+          <h6>{{ _('Reports / التقارير') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('vat.vat_dashboard') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">🧾</div>
+          <h6>{{ _('VAT / ضريبة القيمة المضافة') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('financials.income_statement') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">📚</div>
+          <h6>{{ _('Financial Statements / القوائم المالية') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('settings') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">⚙️</div>
+          <h6>{{ _('Settings / الإعدادات') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('users') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">🔑</div>
+          <h6>{{ _('Users & Permissions / إدارة المستخدمين والصلاحيات') }}</h6>
+        </div>
+      </a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

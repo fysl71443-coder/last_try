@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}المركز المالي{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3>قائمة المركز المالي (Balance Sheet)</h3>
+  <form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+      <label>حتى تاريخ</label>
+      <input type="date" name="date" class="form-control" value="{{ data.date }}">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary">عرض</button>
+    </div>
+  </form>
+  <div class="row g-3">
+    <div class="col-md-4"><div class="card p-3"><h6>الأصول</h6><h4>{{ '%.2f'|format(data.assets) }}</h4></div></div>
+    <div class="col-md-4"><div class="card p-3"><h6>الخصوم</h6><h4>{{ '%.2f'|format(data.liabilities) }}</h4></div></div>
+    <div class="col-md-4"><div class="card p-3"><h6>حقوق الملكية (محسوبة)</h6><h4>{{ '%.2f'|format(data.equity) }}</h4></div></div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}ميزان المراجعة{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3>ميزان المراجعة (Trial Balance)</h3>
+  <form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+      <label>حتى تاريخ</label>
+      <input type="date" name="date" class="form-control" value="{{ data.date }}">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary">عرض</button>
+    </div>
+  </form>
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-striped mb-0">
+        <thead>
+          <tr>
+            <th>الكود</th>
+            <th>الحساب</th>
+            <th class="text-end">مدين</th>
+            <th class="text-end">دائن</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in data.rows %}
+          <tr>
+            <td>{{ r.code }}</td>
+            <td>{{ r.name }}</td>
+            <td class="text-end">{{ '%.2f'|format(r.debit or 0) }}</td>
+            <td class="text-end">{{ '%.2f'|format(r.credit or 0) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center">لا توجد بيانات</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th colspan="2" class="text-end">الإجمالي</th>
+            <th class="text-end">{{ '%.2f'|format(data.total_debit) }}</th>
+            <th class="text-end">{{ '%.2f'|format(data.total_credit) }}</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
