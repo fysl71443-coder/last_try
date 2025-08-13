@@ -14,13 +14,14 @@ RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir
 # copy app
 COPY . /app
 
+ENV FLASK_APP=app.py
 ENV FLASK_RUN_HOST=0.0.0.0
 ENV PYTHONUNBUFFERED=1
 
-# expose port
+# Render provides PORT env var
 EXPOSE 8000
 
-# Use start script to apply migrations then start server
+# Use start script to apply migrations then start server (bind to Render PORT)
 COPY scripts/start.sh /app/scripts/start.sh
 RUN chmod +x /app/scripts/start.sh
 CMD ["/app/scripts/start.sh"]
