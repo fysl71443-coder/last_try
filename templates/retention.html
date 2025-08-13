@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <h4>{{ _('Invoices older than 12 months / الفواتير الأقدم من 12 شهراً') }}</h4>
+  <p class="text-muted">{{ _('Cutoff date / تاريخ القطع') }}: {{ cutoff }}</p>
+
+  <div class="mb-3">
+    <a class="btn btn-sm btn-primary" href="{{ url_for('invoices_retention_export') }}">📄 {{ _('Export All (PDF) / تصدير الكل (PDF)') }}</a>
+    <a class="btn btn-sm btn-secondary" href="{{ url_for('invoices_retention_export', type='sales') }}">📄 {{ _('Export Sales / تصدير المبيعات') }}</a>
+    <a class="btn btn-sm btn-secondary" href="{{ url_for('invoices_retention_export', type='purchases') }}">📄 {{ _('Export Purchases / تصدير المشتريات') }}</a>
+    <a class="btn btn-sm btn-secondary" href="{{ url_for('invoices_retention_export', type='expenses') }}">📄 {{ _('Export Expenses / تصدير المصروفات') }}</a>
+  </div>
+
+  <div class="row">
+    <div class="col-md-4">
+      <div class="card mb-3">
+        <div class="card-header">{{ _('Old Sales / مبيعات قديمة') }} ({{ sales|length }})</div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-striped mb-0">
+            <thead>
+              <tr>
+                <th>{{ _('No') }}</th>
+                <th>{{ _('Date') }}</th>
+                <th>{{ _('PM') }}</th>
+                <th>{{ _('Total') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for inv in sales %}
+              <tr>
+                <td>{{ inv.invoice_number }}</td>
+                <td>{{ inv.date }}</td>
+                <td>{{ inv.payment_method }}</td>
+                <td>{{ '%.2f'|format(inv.total_after_tax_discount or 0) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-center text-muted">{{ _('No records / لا توجد سجلات') }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card mb-3">
+        <div class="card-header">{{ _('Old Purchases / مشتريات قديمة') }} ({{ purchases|length }})</div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-striped mb-0">
+            <thead>
+              <tr>
+                <th>{{ _('No') }}</th>
+                <th>{{ _('Date') }}</th>
+                <th>{{ _('Supplier') }}</th>
+                <th>{{ _('Total') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for inv in purchases %}
+              <tr>
+                <td>{{ inv.invoice_number }}</td>
+                <td>{{ inv.date }}</td>
+                <td>{{ inv.supplier_name or '-' }}</td>
+                <td>{{ '%.2f'|format(inv.total_after_tax_discount or 0) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-center text-muted">{{ _('No records / لا توجد سجلات') }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card mb-3">
+        <div class="card-header">{{ _('Old Expenses / مصروفات قديمة') }} ({{ expenses|length }})</div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-striped mb-0">
+            <thead>
+              <tr>
+                <th>{{ _('No') }}</th>
+                <th>{{ _('Date') }}</th>
+                <th>{{ _('PM') }}</th>
+                <th>{{ _('Total') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for inv in expenses %}
+              <tr>
+                <td>{{ inv.invoice_number }}</td>
+                <td>{{ inv.date }}</td>
+                <td>{{ inv.payment_method }}</td>
+                <td>{{ '%.2f'|format(inv.total_after_tax_discount or 0) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-center text-muted">{{ _('No records / لا توجد سجلات') }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

@@ -8,7 +8,11 @@
     <h3 class="mb-0">🧾 {{ _(title) }} — {{ inv.invoice_number }}</h3>
     <div class="d-flex gap-2">
       <a href="{{ url_for('invoices', type=kind) }}" class="btn btn-outline-secondary">⬅️ {{ _('Back / رجوع') }}</a>
+      {% if kind=='sales' %}
+      <a href="{{ url_for('print_sales_receipt', invoice_id=inv.id) }}" target="_blank" class="btn btn-success">🖨 {{ _('Print Receipt / طباعة إيصال') }}</a>
+      {% else %}
       <a href="{{ url_for('print_invoices', section=kind) }}" target="_blank" class="btn btn-success">🖨 {{ _('Print / طباعة') }}</a>
+      {% endif %}
     </div>
   </div>
 

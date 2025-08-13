@@ -1,0 +1,55 @@
+{% set is_rtl = (get_locale() or 'en').startswith('ar') %}
+<!doctype html>
+<html lang="{{ get_locale() }}" dir="{{ 'rtl' if is_rtl else 'ltr' }}">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title or 'Print' }}</title>
+  <style>
+    :root{
+      --primary:#D32F2F;
+      --accent:#E67E22;
+      --text:#333;
+      --muted:#777;
+      --border:#e0e0e0;
+    }
+    html,body{ margin:0; padding:0; color:var(--text); font: 14px/1.5 "Tajawal", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .print-header{ position: fixed; top: 0; left: 0; right: 0; padding: 16px 20px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:14px; }
+    .logo{ width:42px; height:42px; object-fit:contain; }
+    .brand{ font-weight:800; font-size:18px; color:var(--primary); }
+    .sub{ color:var(--muted); font-size:12px; }
+    .title{ margin-top:64px; padding: 8px 20px; font-size:18px; font-weight:800; color:#111; }
+    .meta{ padding: 0 20px 10px 20px; color:var(--muted); font-size:12px; }
+    .content{ padding: 0 20px 20px 20px; }
+    table{ width:100%; border-collapse: collapse; }
+    thead th{ background: var(--accent); color:#fff; font-weight:800; }
+    th, td{ padding:10px 8px; border-bottom:1px solid var(--border); text-align: {{ 'right' if is_rtl else 'left' }}; }
+    tfoot th, tfoot td{ font-weight:800; background:#fafafa; }
+    .num{ text-align: {{ 'left' if is_rtl else 'right' }}; white-space:nowrap; }
+    .badge{ display:inline-block; padding:2px 8px; border-radius:12px; font-size:12px; color:#fff; }
+    .paid{ background:#2e7d32; }
+    .partial{ background:#f9a825; }
+    .unpaid{ background:#c62828; }
+    @media print{
+      .print-header{ position: fixed; top:0; }
+      .title{ margin-top:70px; }
+      .no-print{ display:none !important; }
+      @page{ size: A4; margin: 16mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="print-header">
+    {% if logo_url %}<img class="logo" src="{{ logo_url }}" alt="logo">{% endif %}
+    <div>
+      <div class="brand">{{ company_name or 'Company' }}</div>
+      {% if header_note %}<div class="sub">{{ header_note }}</div>{% endif %}
+    </div>
+  </div>
+  <div class="title">{{ title }}</div>
+  {% if meta %}<div class="meta">{{ meta }}</div>{% endif %}
+  <div class="content">
+    {% block print_content %}{% endblock %}
+  </div>
+</body>
+</html>
+

@@ -67,10 +67,10 @@ body {
             {{ _('Meals are automatically loaded from Cost Management system with calculated prices / الوجبات يتم تحميلها تلقائياً من نظام إدارة التكاليف مع الأسعار المحسوبة') }}
             <a href="{{ url_for('inventory') }}" class="alert-link">{{ _('Manage Meals / إدارة الوجبات') }}</a>
         </div>
-        
+
         <form method="POST" id="sales-form">
             {{ form.hidden_tag() }}
-            
+
             <!-- معلومات الفاتورة الأساسية -->
             <div class="row mb-3">
                 <div class="col-md-3">
@@ -82,8 +82,16 @@ body {
                     {{ form.payment_method(class_='form-select') }}
                 </div>
                 <div class="col-md-3">
+                    {% if fixed_branch %}
+                    {{ form.branch.label(class_='form-label') }}
+                    <input type="hidden" name="branch" value="{{ fixed_branch }}">
+                    <div class="form-control-plaintext">
+                        <span class="branch-badge branch-{{ fixed_branch.replace('_','-') }}">{{ branch_label(fixed_branch) }}</span>
+                    </div>
+                    {% else %}
                     {{ form.branch.label(class_='form-label') }}
                     {{ form.branch(class_='form-select') }}
+                    {% endif %}
                 </div>
                 <div class="col-md-3">
                     {{ form.customer_name.label(class_='form-label') }}
@@ -144,7 +152,7 @@ body {
     {% if invoices %}
     <div class="sales-card">
         <h5 class="mb-3">{{ _('Previous Invoices / الفواتير السابقة') }}</h5>
-        
+
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead class="table-dark">
@@ -177,14 +185,22 @@ body {
                         </td>
                         <td>{{ invoice.customer_name or '-' }}</td>
                         <td>
-                            {% if invoice.payment_method == 'cash' %}
-                                💰 {{ _('Cash / نقداً') }}
-                            {% elif invoice.payment_method == 'card' %}
-                                💳 {{ _('Card / بطاقة') }}
-                            {% elif invoice.payment_method == 'bank_transfer' %}
-                                🏦 {{ _('Bank Transfer / تحويل بنكي') }}
-                            {% elif invoice.payment_method == 'check' %}
-                                📝 {{ _('Check / شيك') }}
+                            {% if invoice.payment_method == 'CASH' %}
+                                💰 {{ _('CASH / نقداً') }}
+                            {% elif invoice.payment_method == 'MADA' %}
+                                💳 {{ _('MADA / مدى') }}
+                            {% elif invoice.payment_method == 'BANK' %}
+                                🏦 {{ _('BANK / بنك') }}
+                            {% elif invoice.payment_method == 'VISA' %}
+                                💳 {{ _('VISA / فيزا') }}
+                            {% elif invoice.payment_method == 'MASTERCARD' %}
+                                💳 {{ _('MASTERCARD / ماستركارد') }}
+                            {% elif invoice.payment_method == 'AKS' %}
+                                💳 {{ _('AKS') }}
+                            {% elif invoice.payment_method == 'GCC' %}
+                                💳 {{ _('GCC') }}
+                            {% elif invoice.payment_method == 'آجل' %}
+                                📝 {{ _('آجل / Credit') }}
                             {% else %}
                                 {{ invoice.payment_method }}
                             {% endif %}
@@ -202,6 +218,28 @@ body {
                             </span>
                         </td>
                         <td>
+
+                </tbody>
+            </table>
+            {% if pagination and pagination.pages > 1 %}
+            <nav aria-label="pagination">
+                <ul class="pagination">
+                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                        <a class="page-link" href="?page={{ pagination.prev_num }}" aria-label="Previous">&laquo;</a>
+                    </li>
+                    {% for p in range(1, pagination.pages + 1) %}
+                    <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="?page={{ p }}">{{ p }}</a></li>
+                    {% endfor %}
+                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                        <a class="page-link" href="?page={{ pagination.next_num }}" aria-label="Next">&raquo;</a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
                             <button class="btn btn-sm btn-info me-1" onclick="viewInvoice({{ invoice.id }})">
                                 👁 {{ _('View / عرض') }}
                             </button>
@@ -253,7 +291,8 @@ body {
             if(product && quantity > 0) {
                 const price = product.price_before_tax * quantity;
                 const tax = price * 0.15; // 15% tax
-                const total = price + tax - discount;
+                const discountValue = (price + tax) * (discount/100.0);
+                const total = price + tax - discountValue;
 
                 priceInput.value = price.toFixed(2);
                 taxInput.value = tax.toFixed(2);
@@ -295,8 +334,8 @@ body {
                 <input class="form-control" name="items-${itemIndex}-tax_amount" readonly>
             </div>
             <div class="col-md-2">
-                <label class="form-label">{{ _('Discount / الخصم') }}</label>
-                <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" value="0">
+                <label class="form-label">{{ _('Discount %% / نسبة الخصم %%') }}</label>
+                <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" value="">
             </div>
             <div class="col-md-1">
                 <label class="form-label">{{ _('Total / الإجمالي') }}</label>

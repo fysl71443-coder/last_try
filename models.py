@@ -328,6 +328,16 @@ class Settings(db.Model):
     china_town_label = db.Column(db.String(100), default='China Town')
     currency = db.Column(db.String(10), default='SAR')
     default_theme = db.Column(db.String(10), default='light')  # 'light' or 'dark'
+    # Receipt print settings (sales invoices only)
+    receipt_paper_width = db.Column(db.String(4), default='80')  # '80' or '58'
+    receipt_margin_top_mm = db.Column(db.Integer, default=5)
+    receipt_margin_bottom_mm = db.Column(db.Integer, default=5)
+    receipt_margin_left_mm = db.Column(db.Integer, default=3)
+    receipt_margin_right_mm = db.Column(db.Integer, default=3)
+    receipt_font_size = db.Column(db.Integer, default=12)
+    receipt_show_logo = db.Column(db.Boolean, default=True)
+    receipt_show_tax_number = db.Column(db.Boolean, default=True)
+    receipt_footer_text = db.Column(db.String(300), default='')
 
     def __repr__(self):
         return f'<Settings {self.company_name or "Settings"}>'

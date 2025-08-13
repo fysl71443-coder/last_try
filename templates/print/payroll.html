@@ -1,0 +1,53 @@
+{% extends 'print/print_base.html' %}
+{% block print_content %}
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>{{ _('Employee / الموظف') }}</th>
+      <th class="num">{{ _('Basic / الأساسي') }}</th>
+      <th class="num">{{ _('Allowances / البدلات') }}</th>
+      <th class="num">{{ _('Deductions / الاستقطاعات') }}</th>
+      <th class="num">{{ _('Prev Due / سابقة') }}</th>
+      <th class="num">{{ _('Total / الإجمالي') }}</th>
+      <th class="num">{{ _('Paid / المدفوع') }}</th>
+      <th class="num">{{ _('Remaining / المتبقي') }}</th>
+      <th>{{ _('Status / الحالة') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ r.employee_name }}</td>
+      <td class="num">{{ '%.2f'|format(r.basic) }}</td>
+      <td class="num">{{ '%.2f'|format(r.allow) }}</td>
+      <td class="num">{{ '%.2f'|format(r.ded) }}</td>
+      <td class="num">{{ '%.2f'|format(r.prev) }}</td>
+      <td class="num">{{ '%.2f'|format(r.total) }}</td>
+      <td class="num">{{ '%.2f'|format(r.paid) }}</td>
+      <td class="num">{{ '%.2f'|format(r.remaining) }}</td>
+      <td>
+        <span class="badge {{ r.status }}">{{ r.status }}</span>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% if totals %}
+  <tfoot>
+    <tr>
+      <th colspan="2">{{ _('Totals / الإجماليات') }}</th>
+      <th class="num">{{ '%.2f'|format(totals.basic) }}</th>
+      <th class="num">{{ '%.2f'|format(totals.allow) }}</th>
+      <th class="num">{{ '%.2f'|format(totals.ded) }}</th>
+      <th class="num">{{ '%.2f'|format(totals.prev) }}</th>
+      <th class="num">{{ '%.2f'|format(totals.total) }}</th>
+      <th class="num">{{ '%.2f'|format(totals.paid) }}</th>
+      <th class="num">{{ '%.2f'|format(totals.remaining) }}</th>
+      <th></th>
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+{% endblock %}
+

@@ -1,0 +1,97 @@
+{% set is_rtl = (get_locale() or 'en').startswith('ar') %}
+<!doctype html>
+<html lang="{{ get_locale() }}" dir="{{ 'rtl' if is_rtl else 'ltr' }}">
+<head>
+  <meta charset="utf-8">
+  <title>{{ _('Sales Receipt / إيصال مبيعات') }} - {{ inv.invoice_number }}</title>
+  <style>
+    :root{ --w: {{ '58mm' if (settings and settings.receipt_paper_width=='58') else '80mm' }}; }
+    html,body{ margin:0; padding:0; font: {{ (settings.receipt_font_size if settings else 12) }}px/1.45 "Tajawal", system-ui, -apple-system, Segoe UI, Arial, sans-serif; }
+    .page{ width: var(--w); margin: 0 auto; padding:
+      {{ (settings.receipt_margin_top_mm if settings else 5) }}mm
+      {{ (settings.receipt_margin_right_mm if settings else 3) }}mm
+      {{ (settings.receipt_margin_bottom_mm if settings else 5) }}mm
+      {{ (settings.receipt_margin_left_mm if settings else 3) }}mm;
+    }
+    .center{ text-align:center; }
+    .logo{ width: 36px; height:36px; object-fit:contain; display:block; margin: 0 auto 4px; }
+    .brand{ font-weight:800; font-size: 1.1em; }
+    .muted{ color:#666; font-size:.9em; }
+    hr{ border:none; border-top:1px dashed #999; margin:6px 0; }
+    table{ width:100%; border-collapse: collapse; }
+    th,td{ padding:4px 0; }
+    .num{ text-align: {{ 'left' if is_rtl else 'right' }}; white-space:nowrap; }
+    .totals td{ padding: 2px 0; }
+    @media print{
+      @page{ size: var(--w) auto; margin: 0; }
+      body{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    {% if settings and settings.receipt_show_logo %}
+      {% if logo_url %}<img class="logo" src="{{ logo_url }}" alt="logo">{% endif %}
+    {% endif %}
+    <div class="center brand">{{ company_name }}</div>
+    {% if settings and settings.receipt_show_tax_number and tax_number %}
+      <div class="center muted">{{ _('Tax No / الرقم الضريبي') }}: {{ tax_number }}</div>
+    {% endif %}
+    {% if phone %}<div class="center muted">{{ phone }}</div>{% endif %}
+    <hr>
+
+    <div>
+      <div>{{ _('Invoice / فاتورة') }}: {{ inv.invoice_number }}</div>
+      <div>{{ _('Date / التاريخ') }}: {{ inv.date }}</div>
+      <div>{{ _('Payment Method / طريقة الدفع') }}:
+        {% if inv.payment_method == 'CASH' %}{{ _('CASH / نقداً') }}
+        {% elif inv.payment_method == 'MADA' %}{{ _('MADA / مدى') }}
+        {% elif inv.payment_method == 'BANK' %}{{ _('BANK / بنك') }}
+        {% elif inv.payment_method == 'VISA' %}{{ _('VISA / فيزا') }}
+        {% elif inv.payment_method == 'MASTERCARD' %}{{ _('MASTERCARD / ماستركارد') }}
+        {% elif inv.payment_method == 'AKS' %}{{ _('AKS') }}
+        {% elif inv.payment_method == 'GCC' %}{{ _('GCC') }}
+        {% elif inv.payment_method == 'آجل' %}{{ _('آجل / Credit') }}
+        {% else %}{{ inv.payment_method }}{% endif %}
+      </div>
+      {% if inv.customer_name %}<div>{{ _('Customer / العميل') }}: {{ inv.customer_name }}</div>{% endif %}
+    </div>
+
+    <hr>
+    <table>
+      <thead>
+        <tr>
+          <th>{{ _('Item / الصنف') }}</th>
+          <th class="num">{{ _('Qty / الكمية') }}</th>
+          <th class="num">{{ _('Price / السعر') }}</th>
+          <th class="num">{{ _('Total / الإجمالي') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td>{{ it.product_name }}</td>
+          <td class="num">{{ '%.2f'|format(it.quantity) }}</td>
+          <td class="num">{{ '%.2f'|format(it.price_before_tax) }}</td>
+          <td class="num">{{ '%.2f'|format(it.total_price) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <hr>
+    <table class="totals">
+      <tr><td>{{ _('Subtotal / المجموع') }}</td><td class="num">{{ '%.2f'|format(inv.total_before_tax) }}</td></tr>
+      <tr><td>{{ _('Tax / الضريبة') }}</td><td class="num">{{ '%.2f'|format(inv.tax_amount) }}</td></tr>
+      <tr><td>{{ _('Discount / الخصم') }}</td><td class="num">{{ '%.2f'|format(inv.discount_amount) }}</td></tr>
+      <tr><td><strong>{{ _('Total / الإجمالي') }}</strong></td><td class="num"><strong>{{ '%.2f'|format(inv.total_after_tax_discount) }}</strong></td></tr>
+    </table>
+
+    {% if settings and settings.receipt_footer_text %}
+      <hr>
+      <div class="center muted">{{ settings.receipt_footer_text }}</div>
+    {% endif %}
+  </div>
+</body>
+</html>
+

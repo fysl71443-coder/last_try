@@ -41,3 +41,8 @@ instance/
 Thumbs.db
 .idea/
 .vscode/
+
+
+# Logs and local backups
+app.log
+instance/*.bak

@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y build-essential libpq-dev --no-install-
 
 # copy requirements
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir eventlet gunicorn
 
 # copy app
 COPY . /app
@@ -20,4 +20,7 @@ ENV PYTHONUNBUFFERED=1
 # expose port
 EXPOSE 8000
 
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "app:app"]
+# Use start script to apply migrations then start server
+COPY scripts/start.sh /app/scripts/start.sh
+RUN chmod +x /app/scripts/start.sh
+CMD ["/app/scripts/start.sh"]

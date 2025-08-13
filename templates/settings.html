@@ -56,6 +56,52 @@
   </form>
 
   <hr class="my-4">
+  <h3>إعدادات الطباعة (فواتير المبيعات)</h3>
+  <form method="post" action="{{ url_for('settings_print_save') }}" class="row g-3">
+    <div class="col-md-3">
+      <label class="form-label">عرض الورق</label>
+      <select name="receipt_paper_width" class="form-select">
+        <option value="80" {% if s.receipt_paper_width!='58' %}selected{% endif %}>80mm</option>
+        <option value="58" {% if s.receipt_paper_width=='58' %}selected{% endif %}>58mm</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Margin Top (mm)</label>
+      <input type="number" name="receipt_margin_top_mm" class="form-control" value="{{ s.receipt_margin_top_mm or 5 }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Margin Bottom (mm)</label>
+      <input type="number" name="receipt_margin_bottom_mm" class="form-control" value="{{ s.receipt_margin_bottom_mm or 5 }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Margin Left (mm)</label>
+      <input type="number" name="receipt_margin_left_mm" class="form-control" value="{{ s.receipt_margin_left_mm or 3 }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Margin Right (mm)</label>
+      <input type="number" name="receipt_margin_right_mm" class="form-control" value="{{ s.receipt_margin_right_mm or 3 }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">حجم الخط</label>
+      <input type="number" name="receipt_font_size" class="form-control" min="9" max="18" value="{{ s.receipt_font_size or 12 }}">
+    </div>
+    <div class="col-md-3 form-check mt-4">
+      <input type="checkbox" class="form-check-input" id="show_logo" name="receipt_show_logo" {% if s.receipt_show_logo %}checked{% endif %}>
+      <label class="form-check-label" for="show_logo">عرض الشعار</label>
+    </div>
+    <div class="col-md-3 form-check mt-4">
+      <input type="checkbox" class="form-check-input" id="show_tax" name="receipt_show_tax_number" {% if s.receipt_show_tax_number %}checked{% endif %}>
+      <label class="form-check-label" for="show_tax">عرض الرقم الضريبي</label>
+    </div>
+    <div class="col-md-12">
+      <label class="form-label">نص التذييل</label>
+      <input type="text" name="receipt_footer_text" class="form-control" value="{{ s.receipt_footer_text or '' }}" placeholder="مثال: شكراً لزيارتكم">
+    </div>
+    <div class="col-12 d-flex justify-content-end gap-2">
+      <button class="btn btn-primary" type="submit">حفظ إعدادات الطباعة</button>
+    </div>
+  </form>
+
   <h3>تغيير كلمة المرور</h3>
   <form method="post" action="{{ url_for('change_password') }}" class="row g-3" onsubmit="return confirm('{{ _('Are you sure you want to change your password? / هل أنت متأكد من تغيير كلمة المرور؟') }}');">
     <div class="col-md-4">
