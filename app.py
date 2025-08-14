@@ -19,9 +19,6 @@ load_dotenv()
 
 # 4️⃣ Flask & extensions
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
-from flask_sqlalchemy import SQLAlchemy
-
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
 from extensions import db
 
 from flask_migrate import Migrate
@@ -68,7 +65,7 @@ csrf = CSRFProtect(app)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # Initialize other extensions
-db = SQLAlchemy(app)
+db.init_app(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 bcrypt = Bcrypt(app)
@@ -104,14 +101,12 @@ def save_to_db(instance):
         logging.error('Database Error: %s', e, exc_info=True)
         return False
 
-socketio = SocketIO(app, cors_allowed_origins="*")
+
 
 # Rate limiting for login attempts
 login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
 
 # Import models after db created
-import models
-models.db = db
 from models import User, Invoice, SalesInvoice, SalesInvoiceItem, Product, RawMaterial, Meal, MealIngredient, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Employee, Salary, Payment, Account, LedgerEntry
 
 @login_manager.user_loader
