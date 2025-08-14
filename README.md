@@ -15,4 +15,3 @@ This repo contains a starter Flask app implementing a bilingual (Arabic/English)
 ## Notes
 - Use Render's PostgreSQL add-on and set `DATABASE_URL` in Render environment variables.
 - For production, change `SECRET_KEY` and enable HTTPS.
-# RESTAURANT-SYSTEM

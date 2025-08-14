@@ -52,8 +52,8 @@ def create_sample_expenses():
             {'description': 'Staff Training / تدريب الموظفين', 'price_range': (200, 1000), 'quantity': 1},
         ]
         
-        payment_methods = ['cash', 'bank', 'visa', 'mada', 'mastercard']
-        
+        payment_methods = ['MADA','BANK','CASH','VISA','MASTERCARD','AKS','GCC','آجل']
+
         # Create sample expense invoices
         sample_invoices = []
         

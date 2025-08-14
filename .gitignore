@@ -1,3 +1,23 @@
+# Compressed / archive files
+*.tar
+*.tar.*
+*.jar
+*.exe
+*.msi
+*.deb
+*.zip
+*.tgz
+*.sig
+*.log
+*.log.*
+
+# Packages / build directories
+pkg/
+src/
+dist/
+build/
+static/dist/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -15,7 +35,6 @@ instance/
 *.db
 *.sqlite
 *.sqlite3
-*.log
 
 # OS / IDE
 .DS_Store
@@ -23,9 +42,7 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Build / Node
-node_modules/
-dist/
-build/
-static/dist/
 
+# Logs and local backups
+app.log
+instance/*.bak

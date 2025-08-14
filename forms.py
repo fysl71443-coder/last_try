@@ -4,10 +4,14 @@ from wtforms.validators import DataRequired, Length, NumberRange, Optional
 from flask_babel import lazy_gettext as _l
 
 PAYMENT_METHODS = [
-    ('cash', 'نقداً / Cash'),
-    ('card', 'بطاقة / Card'),
-    ('bank_transfer', 'تحويل بنكي / Bank Transfer'),
-    ('check', 'شيك / Check'),
+    ('MADA', 'مدى / MADA'),
+    ('BANK', 'بنك / BANK'),
+    ('CASH', 'نقداً / CASH'),
+    ('VISA', 'فيزا / VISA'),
+    ('MASTERCARD', 'ماستركارد / MASTERCARD'),
+    ('AKS', 'AKS / AKS'),
+    ('GCC', 'GCC / GCC'),
+    ('آجل', 'آجل / Credit'),
 ]
 
 BRANCHES = [
@@ -22,14 +26,18 @@ class LoginForm(FlaskForm):
     submit = SubmitField(_l('Login / تسجيل الدخول'))
 
 class InvoiceItemForm(FlaskForm):
+    class Meta:
+        csrf = False  # disable CSRF for nested subform
     product_id = SelectField(_l('Meal / الوجبة'), coerce=int, validators=[DataRequired()])
     quantity = IntegerField(_l('Quantity / الكمية'), validators=[DataRequired(), NumberRange(min=1)], default=1)
-    discount = DecimalField(_l('Discount / الخصم'), validators=[Optional()], places=2, default=0)
+    discount = DecimalField(_l('Discount %% / نسبة الخصم %%'), validators=[Optional(), NumberRange(min=0, max=100)], places=2)
     price_before_tax = DecimalField(_l('Price / السعر'), places=2, render_kw={'readonly': True})
     tax_amount = DecimalField(_l('Tax / الضريبة'), places=2, render_kw={'readonly': True})
     total_price = DecimalField(_l('Total / الإجمالي'), places=2, render_kw={'readonly': True})
 
 class SalesInvoiceForm(FlaskForm):
+    class Meta:
+        csrf = False
     date = DateField(_l('Date / التاريخ'), validators=[DataRequired()], format='%Y-%m-%d')
     payment_method = SelectField(_l('Payment Method / طريقة الدفع'), choices=PAYMENT_METHODS, validators=[DataRequired()])
     branch = SelectField(_l('Branch / الفرع'), choices=BRANCHES, validators=[DataRequired()])
@@ -57,6 +65,8 @@ class RawMaterialForm(FlaskForm):
 
 # Meal Ingredient Form (for adding ingredients to meals)
 class MealIngredientForm(FlaskForm):
+    class Meta:
+        csrf = False
     raw_material_id = SelectField(_l('Ingredient / المكون'), coerce=int, validators=[DataRequired()])
     quantity = DecimalField(_l('Quantity / الكمية'), validators=[DataRequired(), NumberRange(min=0.0001)], places=4)
 
@@ -66,19 +76,23 @@ class MealForm(FlaskForm):
     name_ar = StringField(_l('Arabic Name / الاسم بالعربية'))
     description = StringField(_l('Description / الوصف'))
     category = StringField(_l('Category / الفئة'))
-    profit_margin_percent = DecimalField(_l('Profit Margin % / هامش الربح %'), validators=[DataRequired(), NumberRange(min=0, max=1000)], places=2, default=30)
+    profit_margin_percent = DecimalField(_l('Profit Margin %% / هامش الربح %%'), validators=[DataRequired(), NumberRange(min=0, max=1000)], places=2, default=30)
     ingredients = FieldList(FormField(MealIngredientForm), min_entries=1)
     submit = SubmitField(_l('Save Meal / حفظ الوجبة'))
 
 # Purchase Invoice Item Form
 class PurchaseInvoiceItemForm(FlaskForm):
+    class Meta:
+        csrf = False
     raw_material_id = SelectField(_l('Raw Material / المادة الخام'), coerce=int, validators=[DataRequired()])
     quantity = DecimalField(_l('Quantity / الكمية'), validators=[DataRequired(), NumberRange(min=0.0001)], places=4)
     price_before_tax = DecimalField(_l('Unit Price / سعر الوحدة'), validators=[DataRequired(), NumberRange(min=0)], places=4)
-    discount = DecimalField(_l('Discount / الخصم'), validators=[Optional()], places=2, default=0)
+    discount = DecimalField(_l('Discount %% / نسبة الخصم %%'), validators=[Optional(), NumberRange(min=0, max=100)], places=2)
 
 # Purchase Invoice Form
 class PurchaseInvoiceForm(FlaskForm):
+    class Meta:
+        csrf = False
     date = DateField(_l('Date / التاريخ'), validators=[DataRequired()], format='%Y-%m-%d')
     supplier_name = StringField(_l('Supplier Name / اسم المورد'))
     payment_method = SelectField(_l('Payment Method / طريقة الدفع'), choices=PAYMENT_METHODS, validators=[DataRequired()])
@@ -87,14 +101,18 @@ class PurchaseInvoiceForm(FlaskForm):
 
 # Expense Invoice Item Form
 class ExpenseInvoiceItemForm(FlaskForm):
+    class Meta:
+        csrf = False
     description = StringField(_l('Description / الوصف'), validators=[DataRequired()])
     quantity = DecimalField(_l('Quantity / الكمية'), default=1, validators=[DataRequired(), NumberRange(min=0.01)], places=2)
     price_before_tax = DecimalField(_l('Unit Price / سعر الوحدة'), validators=[DataRequired(), NumberRange(min=0)], places=2)
-    tax = DecimalField(_l('Tax / الضريبة'), default=0, validators=[Optional(), NumberRange(min=0)], places=2)
-    discount = DecimalField(_l('Discount / الخصم'), default=0, validators=[Optional(), NumberRange(min=0)], places=2)
+    tax = DecimalField(_l('Tax / الضريبة'), validators=[Optional(), NumberRange(min=0)], places=2)
+    discount = DecimalField(_l('Discount %% / نسبة الخصم %%'), validators=[Optional(), NumberRange(min=0, max=100)], places=2)
 
 # Expense Invoice Form
 class ExpenseInvoiceForm(FlaskForm):
+    class Meta:
+        csrf = False
     date = DateField(_l('Date / التاريخ'), validators=[DataRequired()], format='%Y-%m-%d')
     payment_method = SelectField(_l('Payment Method / طريقة الدفع'), choices=PAYMENT_METHODS, validators=[DataRequired()])
     items = FieldList(FormField(ExpenseInvoiceItemForm), min_entries=1)
@@ -118,9 +136,9 @@ class SalaryForm(FlaskForm):
     year = IntegerField(_l('Year / السنة'), validators=[DataRequired(), NumberRange(min=2000, max=2100)])
     month = SelectField(_l('Month / الشهر'), choices=[(i, str(i)) for i in range(1, 13)], coerce=int, validators=[DataRequired()])
     basic_salary = DecimalField(_l('Basic Salary / الراتب الأساسي'), validators=[DataRequired(), NumberRange(min=0)])
-    allowances = DecimalField(_l('Allowances / البدلات'), default=0, validators=[Optional(), NumberRange(min=0)])
-    deductions = DecimalField(_l('Deductions / الاستقطاعات'), default=0, validators=[Optional(), NumberRange(min=0)])
-    previous_salary_due = DecimalField(_l('Previous Salary Due / رواتب سابقة'), default=0, validators=[Optional(), NumberRange(min=0)])
+    allowances = DecimalField(_l('Allowances / البدلات'), validators=[Optional(), NumberRange(min=0)])
+    deductions = DecimalField(_l('Deductions / الاستقطاعات'), validators=[Optional(), NumberRange(min=0)])
+    previous_salary_due = DecimalField(_l('Previous Salary Due / رواتب سابقة'), validators=[Optional(), NumberRange(min=0)])
     total_salary = DecimalField(_l('Total / الإجمالي'), validators=[DataRequired()])
     status = SelectField(_l('Status / الحالة'), choices=[('paid', _l('Paid / مدفوع')), ('due', _l('Due / مستحق')), ('partial', _l('Partial / مدفوع جزئياً'))], default='due')
     submit = SubmitField(_l('Save Salary / حفظ الراتب'))
