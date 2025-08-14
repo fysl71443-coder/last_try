@@ -2081,9 +2081,6 @@ def api_user_permissions_save(uid):
     return jsonify({'status':'ok','count':len(items)})
 
 
-@app.route('/users')
-@login_required
-
 # Retention: 12 months with PDF export
 @app.route('/invoices/retention', methods=['GET'])
 @login_required
