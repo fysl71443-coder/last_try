@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Menu Management / إدارة القائمة') }}{% endblock %}
+{% block content %}
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>{{ _('Menu Management / إدارة القائمة') }}</h4>
+    <div class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('dashboard') }}">🏠 {{ _('Dashboard') }}</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('pos_home', branch_code='place_india') }}">🧾 {{ _('Go to POS') }}</a>
+    </div>
+  </div>
+
+  <style>
+    .sec-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:12px}
+    .sec-tab{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;border:2px solid transparent;border-radius:14px;background:#f0f2f5;font-weight:700;font-size:14px;cursor:pointer;transition:transform .1s, border-color .1s;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+    .sec-tab:hover{transform:scale(1.01)}
+    .sec-badge{position:absolute;top:6px;right:6px;background:#0d6efd;color:#fff;border-radius:999px;font-size:12px;line-height:1;padding:4px 7px}
+    .meal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+    .meal{border:1px solid #eee;border-radius:14px;padding:12px;background:#fafafa}
+    .meal .thumb{aspect-ratio:4/3;background:#e9ecef;border-radius:10px;background-size:cover;background-position:center;margin-bottom:8px}
+  </style>
+
+  <div class="card p-3 mb-3">
+    <div class="sec-tabs">
+      {% for s in sections %}
+        <a class="sec-tab {% if current_section and s.id==current_section.id %}active{% endif %}"
+           href="{{ url_for('menu_admin', section_id=s.id, focus='add_item') }}"
+           style="background:url('{{ (s.image_url or section_image_for(s.name)) }}') center/cover no-repeat">
+          <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.55),rgba(0,0,0,.05)); border-radius:14px"></div>
+          <span style="position:relative;z-index:1">{{ s.name }}</span>
+          <span class="sec-badge">{{ item_counts.get(s.id, 0) }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- Sections simplified: remove table, keep quick add form only -->
+    <div class="col-lg-5">
+      <div class="card p-3">
+        <h6 class="mb-2">{{ _('Add Section / إضافة قسم') }}</h6>
+        <form method="post" action="{{ url_for('menu_section_add') }}" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <div class="col-md-6">
+            <input type="text" name="name" class="form-control form-control-sm" placeholder="{{ _('Name') }}" required/>
+          </div>
+          <div class="col-md-3">
+            <select name="branch" class="form-select form-select-sm">
+              <option value="">{{ _('All branches / جميع الفروع') }}</option>
+              <option value="place_india">Place India</option>
+              <option value="china_town">China Town</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <input type="number" name="display_order" class="form-control form-control-sm" placeholder="#"/>
+          </div>
+          <div class="col-12">
+            <input type="url" name="image_url" class="form-control form-control-sm" placeholder="Image URL (optional)"/>
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-xs btn-success" style="padding:4px 8px; font-size:12px">ADD</button>
+            {% if current_section %}
+              <a class="btn btn-xs btn-outline-secondary" style="padding:4px 8px; font-size:12px" href="{{ url_for('menu_admin') }}">{{ _('All sections / جميع الأقسام') }}</a>
+              <a class="btn btn-xs btn-outline-info" style="padding:4px 8px; font-size:12px" href="{{ url_for('menu_section_delete', section_id=current_section.id) }}" onclick="return confirm('{{ _('Delete this section? / حذف هذا القسم؟') }}')">{{ _('Delete section') }}</a>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Items column -->
+    <div class="col-lg-7">
+      <div class="card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">{{ _('Section Items / عناصر القسم') }}</h6>
+          {% if current_section %}
+          <div class="small text-muted">{{ _('Current Section') }}: <strong>{{ current_section.name }}</strong></div>
+          {% endif %}
+        </div>
+
+        {% if current_section %}
+        <form method="post" action="{{ url_for('menu_item_add') }}" class="row g-2 align-items-end mb-3" id="addItemForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <input type="hidden" name="section_id" value="{{ current_section.id }}"/>
+          <div class="col-md-6">
+            <label class="form-label form-label-sm">{{ _('Meal / الوجبة') }}</label>
+            <select name="meal_id" class="form-select form-select-sm">
+              {% for m in meals %}
+                <option value="{{ m.id }}">{{ m.display_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label form-label-sm">{{ _('Price') }}</label>
+            <input type="number" step="0.01" name="price_override" class="form-control form-control-sm" placeholder="{{ _('Optional') }}"/>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label form-label-sm">{{ _('#') }}</label>
+            <input type="number" name="display_order" class="form-control form-control-sm"/>
+          </div>
+          <div class="col-md-12">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" name="branches" value="place_india" id="b1">
+              <label class="form-check-label" for="b1">Place India</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" name="branches" value="china_town" id="b2">
+              <label class="form-check-label" for="b2">China Town</label>
+            </div>
+            <div class="form-text">{{ _('Select branches to apply this item (both if needed) / اختر الفروع لتطبيق هذا الصنف') }}</div>
+          </div>
+          <div class="col-md-1 d-grid">
+            <button class="btn btn-xs btn-primary" style="padding:4px 8px; font-size:12px">ADD</button>
+          </div>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>{{ _('Meal') }}</th>
+                <th>{{ _('Price') }}</th>
+                <th>{{ _('# Order') }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in items %}
+              {% set lv = it.price_override if it.price_override is not none else it.meal.selling_price %}
+              <tr>
+                <td>{{ it.id }}</td>
+                <td>{{ it.meal.display_name }}</td>
+                <td>
+                  <form method="post" action="{{ url_for('menu_item_update', item_id=it.id) }}" class="d-flex gap-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <input type="number" step="0.01" name="price_override" value="{{ '%.2f'|format(lv or 0) }}" class="form-control form-control-sm" style="max-width:120px"/>
+                    <input type="number" name="display_order" value="{{ it.display_order or 0 }}" class="form-control form-control-sm" style="max-width:90px"/>
+                    <button class="btn btn-xs btn-outline-primary" style="padding:4px 8px; font-size:12px">{{ _('Save') }}</button>
+                  </form>
+                </td>
+                <td></td>
+                <td class="text-nowrap">
+                  <form method="post" action="{{ url_for('menu_item_delete', item_id=it.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button class="btn btn-xs btn-outline-danger" style="padding:4px 8px; font-size:12px" onclick="return confirm('{{ _('Remove item? / حذف العنصر؟') }}')">{{ _('Delete') }}</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-muted">{{ _('No items / لا توجد عناصر') }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+          <div class="text-muted">{{ _('Add a section then select it to manage items / أضف قسماً ثم اختره لإدارة العناصر') }}</div>
+        {% endif %}
+      </div>
+
+<script>
+  // تركيز تلقائي على نموذج إضافة عنصر عند الضغط على "إضافة أصناف" في جدول الأقسام
+  (function(){
+    const urlParams = new URLSearchParams(window.location.search);
+    if((urlParams.get('focus')||'').toLowerCase()==='add_item'){
+      const el = document.getElementById('addItemForm');
+      if(el){ el.scrollIntoView({behavior:'smooth', block:'start'}); el.querySelector('select[name=meal_id]')?.focus(); }
+    }
+  })();
+</script>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

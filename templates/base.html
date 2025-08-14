@@ -86,7 +86,10 @@
     {% if request.endpoint != 'login' %}
     <nav class="navbar navbar-expand-lg" style="background: var(--bg); border-bottom:1px solid #eee;">
       <div class="container-fluid">
-        <a class="navbar-brand" href="{{ url_for('dashboard') }}">{{ (settings.company_name if settings and settings.company_name else 'Company') }}</a>
+        <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('dashboard') }}">
+          <img src="/static/logo.svg" alt="logo" style="width:32px;height:32px;"/>
+          <span>{{ (settings.company_name if settings and settings.company_name else 'Company') }}</span>
+        </a>
         <div class="d-flex align-items-center gap-2">
           {% if current_user.is_authenticated %}
             <span class="me-3 text-muted">{{ _('Welcome') }} {{ current_user.username }}</span>

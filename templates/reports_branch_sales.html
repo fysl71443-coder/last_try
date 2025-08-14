@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Branch Sales by Day / مبيعات الفرع حسب اليوم') }}{% endblock %}
+{% block content %}
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>{{ _('Branch Sales by Day / مبيعات الفرع حسب اليوم') }}</h4>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('reports_branch_sales_print', year=year, month=month, branch=branch) }}">🖨️ {{ _('Print') }}</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('dashboard') }}">🏠 {{ _('Dashboard') }}</a>
+    </div>
+  </div>
+
+  <form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+      <label class="form-label form-label-sm">{{ _('Year') }}</label>
+      <input type="number" name="year" class="form-control form-control-sm" value="{{ year }}"/>
+    </div>
+    <div class="col-auto">
+      <label class="form-label form-label-sm">{{ _('Month') }}</label>
+      <input type="number" name="month" class="form-control form-control-sm" value="{{ month }}" min="1" max="12"/>
+    </div>
+    <div class="col-auto">
+      <label class="form-label form-label-sm">{{ _('Branch') }}</label>
+      <select name="branch" class="form-select form-select-sm">
+        <option value="all" {{ 'selected' if branch=='all' }}>{{ _('All') }}</option>
+        <option value="place_india" {{ 'selected' if branch=='place_india' }}>{{ _('Place India') }}</option>
+        <option value="china_town" {{ 'selected' if branch=='china_town' }}>{{ _('China Town') }}</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-sm btn-primary">{{ _('Apply / تطبيق') }}</button>
+    </div>
+  </form>
+
+  <div class="card p-3">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>{{ _('Date / التاريخ') }}</th>
+            <th class="text-end">{{ _('Invoices / الفواتير') }}</th>
+            <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+            <th class="text-end">{{ _('Average / المتوسط') }}</th>
+            <th>{{ _('Payment Methods / طرق الدفع') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.date }}</td>
+            <td class="text-end">{{ r.count }}</td>
+            <td class="text-end">{{ '%.2f'|format(r.total) }}</td>
+            <td class="text-end">{{ '%.2f'|format(r.avg) }}</td>
+            <td>
+              {% if r.methods %}
+                {% for k,v in r.methods.items() %}
+                  <span class="badge bg-secondary me-1">{{ k }}: {{ '%.2f'|format(v) }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted">{{ _('No data') }}</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th>{{ _('Totals') }}</th>
+            <th class="text-end">{{ total_count }}</th>
+            <th class="text-end">{{ '%.2f'|format(grand_total) }}</th>
+            <th></th>
+            <th></th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

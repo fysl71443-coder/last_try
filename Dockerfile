@@ -14,10 +14,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # copy app
 COPY . /app
 
+ENV FLASK_APP=app.py
 ENV FLASK_RUN_HOST=0.0.0.0
 ENV PYTHONUNBUFFERED=1
 
-# expose port
+# Render provides PORT env var
 EXPOSE 8000
 
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "app:app"]
+# run migrations then start gunicorn with eventlet worker and dynamic port
+CMD sh -c "flask db upgrade && gunicorn -k eventlet -w 1 -b 0.0.0.0:${PORT:-8000} app:app"

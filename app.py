@@ -1,14 +1,103 @@
+# =========================
+# START OF APP.PY (Top)
+# =========================
+
+# 1️⃣ Eventlet monkey patch must be first
+import eventlet
+eventlet.monkey_patch()
+
+# 2️⃣ Standard libraries
 import os
+import sys
 import logging
 from datetime import datetime, timedelta
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
-from extensions import db
+
+# 3️⃣ Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
+# 4️⃣ Flask & extensions
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
+from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from flask_bcrypt import Bcrypt
 from flask_babel import Babel, gettext as _
 from flask_socketio import SocketIO
+from flask_wtf.csrf import CSRFProtect, CSRFError
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+# =========================
+# Flask App Configuration
+# =========================
+app = Flask(__name__)
+
+# Secret key
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key')
+
+# Instance folder for SQLite (fallback)
+basedir = os.path.abspath(os.path.dirname(__file__))
+instance_dir = os.path.join(basedir, 'instance')
+os.makedirs(instance_dir, exist_ok=True)
+
+# Default DB: SQLite
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
+
+# Override with production DB if available
+_db_url = os.getenv('DATABASE_URL')
+if _db_url:
+    if _db_url.startswith('postgres://'):
+        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Babel / i18n
+app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
+babel = Babel(app)
+
+# CSRF protection
+csrf = CSRFProtect(app)
+
+# Proxy fix (Render)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# Initialize other extensions
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+login_manager = LoginManager(app)
+bcrypt = Bcrypt(app)
+socketio = SocketIO(app)
+
+# =========================
+# END OF INITIALIZATION
+# =========================
+
+# Routes and rest of app.py remain unchanged
+
+# =========================
+# Monkey patch Eventlet
+# =========================
+import eventlet
+eventlet.monkey_patch()
+
+# =========================
+# Imports أساسية
+# =========================
+import os
+import sys
+import logging
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
+
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
+from extensions import db
+from flask_migrate import Migrate, upgrade
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from flask_bcrypt import Bcrypt
+from flask_babel import Babel, gettext as _
+from flask_socketio import SocketIO
+from flask_wtf.csrf import CSRFProtect, CSRFError
 
 load_dotenv()
 
@@ -18,11 +107,65 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 instance_dir = os.path.join(basedir, 'instance')
 os.makedirs(instance_dir, exist_ok=True)
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
+
+# Production DB (Render) support — override sqlite if DATABASE_URL provided
+_db_url = os.getenv('DATABASE_URL')
+if _db_url:
+    if _db_url.startswith('postgres://'):
+        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Babel / i18n
 app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
 babel = Babel()
+# CSRF protection for forms and APIs (for APIs, use JSON + header in future)
+# Trust proxy headers (Render)
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# Secure cookies config
+app.config.update(
+    REMEMBER_COOKIE_SECURE=True,
+    REMEMBER_COOKIE_HTTPONLY=True,
+    PREFERRED_URL_SCHEME='https'
+)
+
+csrf = CSRFProtect(app)
+
+
+
+# Handle CSRF errors gracefully instead of 500
+from flask_wtf.csrf import CSRFError
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    logging.exception("CSRF error: %s", getattr(e, 'description', str(e)))
+    flash(_("Security check failed. Please try again."), "danger")
+    return redirect(url_for("login"))
+
+
+# --- Security hardening (cookies, headers, CORS) ---
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
+
+# tighten SocketIO CORS in production (Render sets RENDER to true)
+allowed_origins = os.getenv('ALLOWED_ORIGINS') or os.getenv('RENDER_EXTERNAL_URL') or '*'
+socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
+
+# security headers
+@app.after_request
+def set_security_headers(resp):
+    resp.headers['X-Frame-Options'] = 'DENY'
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    resp.headers['Referrer-Policy'] = 'no-referrer-when-downgrade'
+    # basic CSP allowing self; adjust as needed for CDNs
+    resp.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com"
+    return resp
 
 # Create instance directory if it doesn't exist
 os.makedirs('instance', exist_ok=True)
@@ -35,8 +178,8 @@ bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Basic error logging to file (errors only)
-logging.basicConfig(filename='app.log', level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
+# Basic error logging to stdout so Render Live Tail shows errors
+logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
 
 
 def save_to_db(instance):
@@ -49,7 +192,6 @@ def save_to_db(instance):
         logging.error('Database Error: %s', e, exc_info=True)
         return False
 
-socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Rate limiting for login attempts
 login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
@@ -74,6 +216,16 @@ def get_locale():
     except Exception:
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
+
+# Health check endpoint for Render
+@app.route('/healthz')
+def healthz():
+    return jsonify(status='ok'), 200
+
+# Disable Flask debug by default when running under Gunicorn/Render
+if os.getenv('RENDER') or os.getenv('GUNICORN_CMD_ARGS'):
+    app.config['DEBUG'] = False
+
 @app.context_processor
 def inject_settings():
     try:
@@ -82,6 +234,12 @@ def inject_settings():
         return dict(settings=s)
     except Exception:
         return dict(settings=None)
+
+# Make CSRF token generator available in templates for forms and JS
+@app.context_processor
+def inject_csrf_token():
+    from flask_wtf.csrf import generate_csrf
+    return dict(csrf_token=generate_csrf)
 
 @app.route('/toggle_theme', methods=['POST'])
 @login_required
@@ -131,28 +289,33 @@ def login():
             flash(_('Too many attempts. Try again later. / عدد المحاولات كبير، حاول لاحقاً.'), 'danger')
             return render_template('login.html', form=form)
 
-    if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        if user and bcrypt.check_password_hash(user.password_hash, form.password.data):
-            if not user.active:
-                flash(_('حسابك غير مفعل / Your account is not active.'), 'danger')
-                return render_template('login.html', form=form)
+    try:
+        if form.validate_on_submit():
+            user = User.query.filter_by(username=form.username.data).first()
+            if user and bcrypt.check_password_hash(user.password_hash, form.password.data):
+                if not user.active:
+                    flash(_('حسابك غير مفعل / Your account is not active.'), 'danger')
+                    return render_template('login.html', form=form)
 
-            login_user(user, remember=form.remember.data)
-            user.last_login()
-            db.session.commit()
-            login_attempts.pop(client_ip, None)  # reset attempts
-            flash(_('تم تسجيل الدخول بنجاح / Logged in successfully.'), 'success')
-            return redirect(url_for('dashboard'))
+                login_user(user, remember=form.remember.data)
+                user.last_login()
+                db.session.commit()
+                login_attempts.pop(client_ip, None)  # reset attempts
+                flash(_('تم تسجيل الدخول بنجاح / Logged in successfully.'), 'success')
+                return redirect(url_for('dashboard'))
 
-        # Wrong credentials — increment counter
-        if client_ip not in login_attempts:
-            login_attempts[client_ip] = {"count": 1, "last_attempt": datetime.utcnow()}
-        else:
-            login_attempts[client_ip]["count"] += 1
-            login_attempts[client_ip]["last_attempt"] = datetime.utcnow()
+            # Wrong credentials — increment counter
+            if client_ip not in login_attempts:
+                login_attempts[client_ip] = {"count": 1, "last_attempt": datetime.utcnow()}
+            else:
+                login_attempts[client_ip]["count"] += 1
+                login_attempts[client_ip]["last_attempt"] = datetime.utcnow()
 
-        flash(_('اسم المستخدم أو كلمة المرور غير صحيحة / Invalid credentials.'), 'danger')
+            flash(_('اسم المستخدم أو كلمة المرور غير صحيحة / Invalid credentials.'), 'danger')
+    except Exception as e:
+        logging.exception('Login error: %s', e)
+        flash(_('حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى.'), 'danger')
+        return render_template('login.html', form=form)
 
     return render_template('login.html', form=form)
 
@@ -1280,17 +1443,48 @@ def salaries_statements_print():
         p = canvas.Canvas(buf, pagesize=A4)
         w, h = A4
         ar = register_ar_font()
-        # Header
+        # Header with logo
+        # Header with logo
+        def _get_logo_imagereader():
+            import io as _io
+            import os as _os2
+            try:
+                from reportlab.lib.utils import ImageReader as _IR
+            except Exception:
+                return None
+            png_logo = _os2.path.join(_os2.path.dirname(__file__), 'static', 'logo.png')
+            if _os2.path.exists(png_logo):
+                try:
+                    return _IR(png_logo)
+                except Exception:
+                    pass
+            svg_logo = _os2.path.join(_os2.path.dirname(__file__), 'static', 'logo.svg')
+            if _os2.path.exists(svg_logo):
+                try:
+                    import cairosvg
+                    with open(svg_logo, 'rb') as f:
+                        svg_data = f.read()
+                    png_bytes = cairosvg.svg2png(bytestring=svg_data, output_width=256, output_height=256)
+                    return _IR(_io.BytesIO(png_bytes))
+                except Exception:
+                    return None
+            return None
+        try:
+            logo_ir = _get_logo_imagereader()
+            if logo_ir:
+                p.drawImage(logo_ir, 20*mm, h-28*mm, width=16*mm, preserveAspectRatio=True, mask='auto')
+        except Exception:
+            pass
         if ar:
             p.setFont(ar, 14)
-            p.drawString(20*mm, h-20*mm, shape_ar(company_name))
+            p.drawString(40*mm, h-20*mm, shape_ar(company_name))
             p.setFont(ar, 11)
-            p.drawString(20*mm, h-28*mm, shape_ar(f"كشف الرواتب لشهر {year}-{month:02d}"))
+            p.drawString(40*mm, h-28*mm, shape_ar(f"كشف الرواتب لشهر {year}-{month:02d}"))
         else:
             p.setFont("Helvetica-Bold", 14)
-            p.drawString(20*mm, h-20*mm, company_name)
+            p.drawString(40*mm, h-20*mm, company_name)
             p.setFont("Helvetica", 11)
-            p.drawString(20*mm, h-28*mm, f"Payroll Statement {year}-{month:02d}")
+            p.drawString(40*mm, h-28*mm, f"Payroll Statement {year}-{month:02d}")
 
         # Table header
         y = h - 40*mm
@@ -1534,6 +1728,7 @@ def can_perm(screen:str, perm:str)->bool:
     return False
 
 # ---------------------- Users API ----------------------
+@csrf.exempt
 @app.route('/api/users', methods=['GET'])
 @login_required
 def api_users_list():
@@ -1555,6 +1750,7 @@ def api_users_list():
     ]
     return jsonify({'items':data,'page':pag.page,'pages':pag.pages,'total':pag.total})
 
+@csrf.exempt
 @app.route('/api/users', methods=['POST'])
 @login_required
 def api_users_create():
@@ -1575,6 +1771,7 @@ def api_users_create():
     db.session.commit()
     return jsonify({'status':'ok','id':u.id})
 
+@csrf.exempt
 @app.route('/api/users/<int:uid>', methods=['PATCH'])
 @login_required
 def api_users_update(uid):
@@ -1590,6 +1787,7 @@ def api_users_update(uid):
     db.session.commit()
     return jsonify({'status':'ok'})
 
+@csrf.exempt
 @app.route('/api/users', methods=['DELETE'])
 @login_required
 def api_users_delete():
@@ -1645,6 +1843,7 @@ def inject_can():
 # ---------------------- Permissions API ----------------------
 from models import UserPermission
 
+@csrf.exempt
 @app.route('/api/users/<int:uid>/permissions', methods=['GET'])
 @login_required
 def api_user_permissions_get(uid):
@@ -1669,6 +1868,7 @@ def api_user_permissions_get(uid):
     ]
     return jsonify({'items': out})
 
+@csrf.exempt
 @app.route('/api/users/<int:uid>/permissions', methods=['POST'])
 @login_required
 def api_user_permissions_save(uid):
@@ -1717,7 +1917,41 @@ def print_invoices(section):
 
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
+    from reportlab.lib.units import mm
     y = 800
+    # Header with logo & title
+    def _get_logo_imagereader():
+        import io as _io
+        import os as _os2
+        try:
+            from reportlab.lib.utils import ImageReader as _IR
+        except Exception:
+            return None
+        png_logo = _os2.path.join(_os2.path.dirname(__file__), 'static', 'logo.png')
+        if _os2.path.exists(png_logo):
+            try:
+                return _IR(png_logo)
+            except Exception:
+                pass
+        svg_logo = _os2.path.join(_os2.path.dirname(__file__), 'static', 'logo.svg')
+        if _os2.path.exists(svg_logo):
+            try:
+                import cairosvg
+                with open(svg_logo, 'rb') as f:
+                    svg_data = f.read()
+                png_bytes = cairosvg.svg2png(bytestring=svg_data, output_width=256, output_height=256)
+                return _IR(_io.BytesIO(png_bytes))
+            except Exception:
+                return None
+        return None
+    try:
+        logo_ir = _get_logo_imagereader()
+        if logo_ir:
+            p.drawImage(logo_ir, 20*mm, 800, width=16*mm, preserveAspectRatio=True, mask='auto')
+    except Exception:
+        pass
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(40*mm, 810, "Invoices Report")
 
     # Helpers: register Arabic-capable font and shape Arabic text if libs exist
     def register_ar_font():
@@ -2046,4 +2280,6 @@ def delete_expense_invoice(invoice_id):
     return redirect(url_for('expenses'))
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=8000, debug=True)
+    import os
+    port = int(os.environ.get('PORT', 8000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)

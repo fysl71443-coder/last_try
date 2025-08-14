@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Customers / العملاء') }}{% endblock %}
+{% block content %}
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>{{ _('Customers / العملاء') }}</h4>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dashboard') }}">🏠 {{ _('Dashboard') }}</a>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-4">
+      <div class="card p-3">
+        <h6 class="mb-2">{{ _('Add / Edit Customer / إضافة / تعديل عميل') }}</h6>
+        <form method="post" action="{{ url_for('customers_add') }}" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <div class="col-12">
+            <label class="form-label form-label-sm">{{ _('Name / الاسم') }}</label>
+            <input name="name" class="form-control form-control-sm" required/>
+          </div>
+          <div class="col-6">
+            <label class="form-label form-label-sm">{{ _('Discount %% / نسبة الخصم') }}</label>
+            <input type="number" name="discount_percent" step="0.01" min="0" max="100" class="form-control form-control-sm" placeholder="0"/>
+          </div>
+          <div class="col-6">
+            <label class="form-label form-label-sm">{{ _('Phone / الجوال') }}</label>
+            <input name="phone" class="form-control form-control-sm" placeholder="05xxxxxxxx"/>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-sm btn-primary">{{ _('Save / حفظ') }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="col-lg-8">
+      <div class="card p-3">
+        <h6 class="mb-2">{{ _('Customers List / قائمة العملاء') }}</h6>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>{{ _('Name') }}</th>
+                <th>{{ _('Phone') }}</th>
+                <th>{{ _('Discount %%') }}</th>
+                <th>{{ _('Active') }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in customers %}
+              <tr>
+                <td>{{ c.id }}</td>
+                <td>{{ c.name }}</td>
+                <td>{{ c.phone or '-' }}</td>
+                <td>{{ '%.2f'|format(c.discount_percent or 0) }}</td>
+                <td>
+                  {% if c.active %}<span class="badge bg-success">{{ _('Active') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive') }}</span>{% endif %}
+                </td>
+                <td class="text-nowrap">
+                  <form method="post" action="{{ url_for('customers_toggle', customer_id=c.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button class="btn btn-sm btn-outline-secondary">{{ _('Toggle / تفعيل/تعطيل') }}</button>
+                  </form>
+                  <form method="post" action="{{ url_for('customers_delete', customer_id=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete customer? / حذف العميل؟') }}');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="6" class="text-muted">{{ _('No customers / لا يوجد عملاء') }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
