@@ -1,16 +1,113 @@
+feature/branch-sales-pos-reports
+# =========================
+# START OF APP.PY (Top)
+# =========================
+
+# 1️⃣ Eventlet monkey patch must be first
+import eventlet
+eventlet.monkey_patch()
+
+# 2️⃣ Standard libraries
+ main
 import os
 import logging
 import json
 
 from datetime import datetime, timedelta
+ feature/branch-sales-pos-reports
+
+# 3️⃣ Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
+# 4️⃣ Flask & extensions
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
+from flask_sqlalchemy import SQLAlchemy
+
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
 from extensions import db
+ main
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from flask_bcrypt import Bcrypt
 from flask_babel import Babel, gettext as _
 from flask_socketio import SocketIO
+ feature/branch-sales-pos-reports
+from flask_wtf.csrf import CSRFProtect, CSRFError
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+# =========================
+# Flask App Configuration
+# =========================
+app = Flask(__name__)
+
+# Secret key
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key')
+
+# Instance folder for SQLite (fallback)
+basedir = os.path.abspath(os.path.dirname(__file__))
+instance_dir = os.path.join(basedir, 'instance')
+os.makedirs(instance_dir, exist_ok=True)
+
+# Default DB: SQLite
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
+
+# Override with production DB if available
+_db_url = os.getenv('DATABASE_URL')
+if _db_url:
+    if _db_url.startswith('postgres://'):
+        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Babel / i18n
+app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
+babel = Babel(app)
+
+# CSRF protection
+csrf = CSRFProtect(app)
+
+# Proxy fix (Render)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# Initialize other extensions
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+login_manager = LoginManager(app)
+bcrypt = Bcrypt(app)
+socketio = SocketIO(app)
+
+# =========================
+# END OF INITIALIZATION
+# =========================
+
+# Routes and rest of app.py remain unchanged
+
+# =========================
+# Monkey patch Eventlet
+# =========================
+import eventlet
+eventlet.monkey_patch()
+
+# =========================
+# Imports أساسية
+# =========================
+import os
+import sys
+import logging
+from datetime import datetime, timedelta
+ main
 from dotenv import load_dotenv
+
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
+from extensions import db
+from flask_migrate import Migrate, upgrade
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from flask_bcrypt import Bcrypt
+from flask_babel import Babel, gettext as _
+from flask_socketio import SocketIO
+from flask_wtf.csrf import CSRFProtect, CSRFError
 
 load_dotenv()
 

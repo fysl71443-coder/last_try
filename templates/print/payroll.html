@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <title>Payroll Statements / كشوفات الرواتب</title>
+  <style>
+    body{font-family:Arial, sans-serif; font-size:14px}
+    table{width:100%; border-collapse:collapse}
+    th,td{border-bottom:1px dashed #ddd; padding:6px 4px}
+    .right{text-align:right}
+    .center{text-align:center}
+    .muted{color:#666}
+    .total-row td{font-weight:bold}
+    @media print{.no-print{display:none}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="center">
+      <img src="{{ logo_url }}" alt="logo" style="height:40px"/>
+      <div><strong>{{ company_name }}</strong></div>
+      <div class="muted">{{ title }}</div>
+      <div class="muted">{{ meta }}</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>{{ _('Employee / الموظف') }}</th>
+          <th class="right">{{ _('Basic') }}</th>
+          <th class="right">{{ _('Allowances') }}</th>
+          <th class="right">{{ _('Deductions') }}</th>
+          <th class="right">{{ _('Prev. Due') }}</th>
+          <th class="right">{{ _('Total') }}</th>
+          <th class="right">{{ _('Paid') }}</th>
+          <th class="right">{{ _('Remaining') }}</th>
+          <th>{{ _('Status') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.employee_name }}</td>
+          <td class="right">{{ '%.2f'|format(r.basic) }}</td>
+          <td class="right">{{ '%.2f'|format(r.allow) }}</td>
+          <td class="right">{{ '%.2f'|format(r.ded) }}</td>
+          <td class="right">{{ '%.2f'|format(r.prev) }}</td>
+          <td class="right">{{ '%.2f'|format(r.total) }}</td>
+          <td class="right">{{ '%.2f'|format(r.paid) }}</td>
+          <td class="right">{{ '%.2f'|format(r.remaining) }}</td>
+          <td>{{ r.status }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="center muted">{{ _('No data') }}</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if totals %}
+      <tfoot>
+        <tr class="total-row">
+          <td>{{ _('Totals') }}</td>
+          <td class="right">{{ '%.2f'|format(totals.basic) }}</td>
+          <td class="right">{{ '%.2f'|format(totals.allow) }}</td>
+          <td class="right">{{ '%.2f'|format(totals.ded) }}</td>
+          <td class="right">{{ '%.2f'|format(totals.prev) }}</td>
+          <td class="right">{{ '%.2f'|format(totals.total) }}</td>
+          <td class="right">{{ '%.2f'|format(totals.paid) }}</td>
+          <td class="right">{{ '%.2f'|format(totals.remaining) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+
+    <div class="center no-print" style="margin-top:8px">
+      <button onclick="window.print()">{{ _('Print / طباعة') }}</button>
+    </div>
+  </div>
+</body>
+</html>
+

@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('POS Tables / طاولات المبيعات') }}{% endblock %}
+{% block content %}
+<style>
+:root{--pad:14px;--radius:14px}
+.table-card{background:#fff;border-radius:var(--radius);box-shadow:0 6px 14px rgba(0,0,0,.06);padding:var(--pad)}
+.table-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.table-btn{padding:24px;border-radius:var(--radius);font-weight:800;font-size:18px;border:1px solid #eaeaea;background:#f8f9fa;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1}
+.table-btn.occ{background:#ffeaa7;border-color:#f0c36d}
+</style>
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>🍽️ {{ _('Select Table / اختر الطاولة') }} — {{ branch }}</h4>
+    <a class="btn btn-outline-primary" href="{{ url_for('dashboard') }}">🏠 {{ _('Dashboard') }}</a>
+  </div>
+  <div class="table-card">
+    <div class="table-grid">
+      {% for t in tables %}
+      {% set is_occ = t.number in occupied %}
+      <a class="btn table-btn {% if is_occ %}occ{% endif %}" href="{{ url_for('pos_table', branch_code=branch, number=t.number) }}">
+        {{ _('#') }}{{ t.number }} {% if is_occ %}• {{ _('Occupied / مشغولة') }}{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
