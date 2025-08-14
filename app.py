@@ -1,4 +1,3 @@
-feature/branch-sales-pos-reports
 # =========================
 # START OF APP.PY (Top)
 # =========================
@@ -8,13 +7,11 @@ import eventlet
 eventlet.monkey_patch()
 
 # 2️⃣ Standard libraries
- main
 import os
+import sys
 import logging
 import json
-
 from datetime import datetime, timedelta
- feature/branch-sales-pos-reports
 
 # 3️⃣ Load environment variables
 from dotenv import load_dotenv
@@ -26,13 +23,12 @@ from flask_sqlalchemy import SQLAlchemy
 
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
 from extensions import db
- main
+
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from flask_bcrypt import Bcrypt
 from flask_babel import Babel, gettext as _
 from flask_socketio import SocketIO
- feature/branch-sales-pos-reports
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -84,62 +80,14 @@ socketio = SocketIO(app)
 
 # Routes and rest of app.py remain unchanged
 
-# =========================
-# Monkey patch Eventlet
-# =========================
-import eventlet
-eventlet.monkey_patch()
-
-# =========================
-# Imports أساسية
-# =========================
-import os
-import sys
-import logging
-from datetime import datetime, timedelta
- main
-from dotenv import load_dotenv
-
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
-from extensions import db
-from flask_migrate import Migrate, upgrade
-from flask_login import LoginManager, login_user, login_required, logout_user, current_user
-from flask_bcrypt import Bcrypt
-from flask_babel import Babel, gettext as _
-from flask_socketio import SocketIO
-from flask_wtf.csrf import CSRFProtect, CSRFError
-
-load_dotenv()
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key')
-basedir = os.path.abspath(os.path.dirname(__file__))
-instance_dir = os.path.join(basedir, 'instance')
-os.makedirs(instance_dir, exist_ok=True)
-db_url = os.getenv('DATABASE_URL')
-if db_url:
-    if db_url.startswith('postgres://'):
-        db_url = db_url.replace('postgres://', 'postgresql://', 1)
-    if db_url.startswith('postgresql://') and 'sslmode=' not in db_url:
-        db_url += ('&' if '?' in db_url else '?') + 'sslmode=require'
-    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
+# Ensure SQLAlchemy track modifications disabled
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Babel / i18n
 app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
-babel = Babel()
 
-# Create instance directory if it doesn't exist
-os.makedirs('instance', exist_ok=True)
 from flask import session
 
-
-db.init_app(app)
-migrate = Migrate(app, db)
-bcrypt = Bcrypt(app)
-login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 # Basic error logging to file (errors only)
