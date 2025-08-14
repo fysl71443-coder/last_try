@@ -2082,9 +2082,9 @@ def api_user_permissions_save(uid):
 
 
 # Retention: 12 months with PDF export
-@app.route('/invoices/retention', methods=['GET'])
+@app.route('/invoices/retention', methods=['GET'], endpoint='invoices_retention')
 @login_required
-def invoices_retention():
+def invoices_retention_view():
     # Show invoices older than 12 months (approx 365 days)
     cutoff = datetime.utcnow().date() - timedelta(days=365)
     sales_old = SalesInvoice.query.filter(SalesInvoice.date < cutoff).order_by(SalesInvoice.date.desc()).limit(200).all()
@@ -2092,9 +2092,9 @@ def invoices_retention():
     expenses_old = ExpenseInvoice.query.filter(ExpenseInvoice.date < cutoff).order_by(ExpenseInvoice.date.desc()).limit(200).all()
     return render_template('retention.html', cutoff=cutoff, sales=sales_old, purchases=purchases_old, expenses=expenses_old)
 
-@app.route('/invoices/retention/export')
+@app.route('/invoices/retention/export', endpoint='invoices_retention_export')
 @login_required
-def invoices_retention_export():
+def invoices_retention_export_view():
     # Export invoices older than 12 months to a single PDF (summary style)
     from flask import send_file
     from reportlab.lib.pagesizes import A4
