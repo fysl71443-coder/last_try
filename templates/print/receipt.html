@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>فاتورة مبيعات</title>
+  <style>
+    body{font-family:Arial, sans-serif; font-size:14px;}
+    .wrap{max-width:320px; margin:0 auto;}
+    .center{text-align:center}
+    .muted{color:#666}
+    table{width:100%; border-collapse:collapse}
+    th,td{padding:6px 0; border-bottom:1px dashed #ddd}
+    .total-row td{font-weight:bold}
+    .small{font-size:12px}
+    @media print{
+      .no-print{display:none}
+      body{background:#fff}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="center">
+      <img src="{{ logo_url }}" alt="logo" style="height:40px; margin-bottom:6px"/>
+      <div><strong>{{ company_name }}</strong></div>
+      {% if tax_number %}<div class="small muted">{{ _('VAT No.') }}: {{ tax_number }}</div>{% endif %}
+      {% if phone %}<div class="small muted">{{ _('Phone') }}: {{ phone }}</div>{% endif %}
+    </div>
+
+    <hr/>
+
+    <div class="small">
+      <div>{{ _('Invoice') }}: {{ inv.invoice_number or inv.id }}</div>
+      <div>{{ _('Date') }}: {{ inv.date }}</div>
+      <div>{{ _('Customer') }}: {{ inv.customer_name or _('Cash customer') }}</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="right">{{ _('Item') }}</th>
+          <th class="center">{{ _('Qty') }}</th>
+          <th class="center">{{ _('Price') }}</th>
+          <th class="right">{{ _('Total') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td>{{ it.product_name }}</td>
+          <td class="center">{{ '%.2f'|format(it.quantity) }}</td>
+          <td class="center">{{ '%.2f'|format((it.total_price or 0) / (it.quantity or 1)) }}</td>
+          <td class="right">{{ '%.2f'|format(it.total_price) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="total-row"><td colspan="3">{{ _('Subtotal') }}</td><td class="right">{{ '%.2f'|format(inv.total_before_tax) }}</td></tr>
+        <tr class="total-row"><td colspan="3">{{ _('VAT 15%%') }}</td><td class="right">{{ '%.2f'|format(inv.tax_amount) }}</td></tr>
+        <tr class="total-row"><td colspan="3">{{ _('Discount') }}</td><td class="right">{{ '%.2f'|format(inv.discount_amount) }}</td></tr>
+        <tr class="total-row"><td colspan="3">{{ _('Total') }}</td><td class="right">{{ '%.2f'|format(inv.total_after_tax_discount) }}</td></tr>
+      </tfoot>
+    </table>
+
+    <div class="center small muted" style="margin-top:8px">{{ _('Thank you / شكراً لزيارتكم') }}</div>
+
+    <div class="center no-print" style="margin-top:10px">
+      <button onclick="window.print()">{{ _('Print / طباعة') }}</button>
+    </div>
+  </div>
+</body>
+</html>
+
