@@ -2152,6 +2152,7 @@ def invoices_retention_export_view():
     p.showPage(); p.save(); buf.seek(0)
     return send_file(buf, as_attachment=True, download_name=f"invoices_retention_{cutoff}.pdf", mimetype='application/pdf')
 
+@app.route('/users')
 @require_perm('users','view')
 def users():
     us = User.query.order_by(User.username.asc()).all()
