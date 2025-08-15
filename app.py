@@ -19,9 +19,6 @@ load_dotenv()
 
 # 4️⃣ Flask & extensions
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
-from flask_sqlalchemy import SQLAlchemy
-
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
 from extensions import db
 
 from flask_migrate import Migrate
@@ -68,7 +65,7 @@ csrf = CSRFProtect(app)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # Initialize other extensions
-db = SQLAlchemy(app)
+db.init_app(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 bcrypt = Bcrypt(app)
@@ -104,14 +101,12 @@ def save_to_db(instance):
         logging.error('Database Error: %s', e, exc_info=True)
         return False
 
-socketio = SocketIO(app, cors_allowed_origins="*")
+
 
 # Rate limiting for login attempts
 login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
 
 # Import models after db created
-import models
-models.db = db
 from models import User, Invoice, SalesInvoice, SalesInvoiceItem, Product, RawMaterial, Meal, MealIngredient, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Employee, Salary, Payment, Account, LedgerEntry
 
 @login_manager.user_loader
@@ -221,6 +216,16 @@ def dashboard():
 def logout():
     logout_user()
     flash(_('تم تسجيل الخروج / Logged out.'), 'info')
+    return redirect(url_for('login'))
+
+@app.route('/pos/<branch_code>')
+@login_required
+def pos_home(branch_code):
+    # Minimal POS home to avoid template errors; integrate with real POS later
+    if branch_code not in ('place_india','china_town'):
+        flash(_('Unknown branch / فرع غير معروف'), 'danger')
+        return redirect(url_for('dashboard'))
+    return render_template('pos_home.html', branch_code=branch_code)
 
 @app.route('/sales/<branch_code>', methods=['GET', 'POST'])
 @login_required
@@ -362,15 +367,65 @@ def sales_branch(branch_code):
 
     return redirect(url_for('login'))
 
+ feature/pos-receipt-and-customers
 # Sales entry: Branch cards -> Tables -> Table invoice
+
+# Sales entry: show branch cards first
+ main
 @app.route('/sales', methods=['GET'])
 @login_required
 def sales():
     branches = [
+ feature/pos-receipt-and-customers
         {'code': 'china_town', 'label': 'China Town', 'url': url_for('sales_tables', branch_code='china_town')},
         {'code': 'place_india', 'label': 'Place India', 'url': url_for('sales_tables', branch_code='place_india')},
     ]
     return render_template('sales_branches.html', branches=branches)
+
+        {'code': 'place_india', 'label': 'Place India', 'url': url_for('sales_branch', branch_code='place_india')},
+        {'code': 'china_town', 'label': 'China Town', 'url': url_for('sales_branch', branch_code='china_town')}
+    ]
+    return render_template('sales_branches.html', branches=branches)
+
+# Old unified sales screen kept under /sales/all for backward links
+@app.route('/sales/all', methods=['GET', 'POST'])
+@login_required
+def sales_all():
+    import json
+    # Permissions: POST requires 'add'
+    if request.method == 'POST' and not can_perm('sales','add'):
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
+        return redirect(url_for('sales'))
+
+    # Get meals for dropdown (ready meals from cost management)
+    meals = Meal.query.filter_by(active=True).all()
+    product_choices = [(0, _('Select Meal / اختر الوجبة'))] + [(m.id, m.display_name) for m in meals]
+
+    form = SalesInvoiceForm()
+
+    # Set product choices for all item forms
+    for item_form in form.items:
+        item_form.product_id.choices = product_choices
+
+    # Prepare meals JSON for JavaScript
+    products_json = json.dumps([{
+        'id': m.id,
+        'name': m.display_name,
+        'price_before_tax': float(m.selling_price)  # Use selling price from cost calculation
+    } for m in meals])
+
+    if form.validate_on_submit():
+        # Generate invoice number
+        last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
+        if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
+            try:
+                last_num = int(last_invoice.invoice_number.split('-')[-1])
+                invoice_number = f'SAL-{datetime.utcnow().year}-{last_num + 1:03d}'
+            except Exception:
+                invoice_number = f'SAL-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
+        else:
+            invoice_number = f'SAL-{datetime.utcnow().year}-001'
+ main
 
 
 # Seed default menu categories once (safe, best-effort)
@@ -2200,6 +2255,7 @@ def invoices_retention_export_view():
     p.showPage(); p.save(); buf.seek(0)
     return send_file(buf, as_attachment=True, download_name=f"invoices_retention_{cutoff}.pdf", mimetype='application/pdf')
 
+@app.route('/users')
 @require_perm('users','view')
 def users():
     us = User.query.order_by(User.username.asc()).all()
