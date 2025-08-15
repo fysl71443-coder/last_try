@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="80" viewBox="0 0 180 80">
+  <rect width="180" height="80" fill="#b71c1c"/>
+  <g fill="#fff" font-family="Arial, sans-serif">
+    <text x="20" y="32" font-size="20" font-weight="bold">China Town</text>
+    <text x="20" y="56" font-size="12">Restaurant</text>
+  </g>
+  <g stroke="#fff" stroke-width="2" fill="none">
+    <path d="M140 20 q10 10 0 20 q-10 10 0 20"/>
+    <line x1="130" y1="30" x2="170" y2="30"/>
+    <line x1="130" y1="50" x2="170" y2="50"/>
+  </g>
+</svg>
+
