@@ -362,173 +362,167 @@ def sales_branch(branch_code):
 
     return redirect(url_for('login'))
 
-# Dashboard routes
-@app.route('/sales', methods=['GET', 'POST'])
+# Sales entry: Branch cards -> Tables -> Table invoice
+@app.route('/sales', methods=['GET'])
 @login_required
 def sales():
-    import json
-    # Permissions: POST requires 'add'
-    if request.method == 'POST' and not can_perm('sales','add'):
-        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
+    branches = [
+        {'code': 'china_town', 'label': 'China Town', 'url': url_for('sales_tables', branch_code='china_town')},
+        {'code': 'place_india', 'label': 'Place India', 'url': url_for('sales_tables', branch_code='place_india')},
+    ]
+    return render_template('sales_branches.html', branches=branches)
+
+# Helpers
+BRANCH_CODES = {'china_town': 'China Town', 'place_india': 'Place India'}
+
+def is_valid_branch(code: str) -> bool:
+    return code in BRANCH_CODES
+
+# Tables screen: 1..50 per branch
+@app.route('/sales/<branch_code>/tables', methods=['GET'])
+@login_required
+def sales_tables(branch_code):
+    if not is_valid_branch(branch_code):
+        flash(_('Unknown branch / فرع غير معروف'), 'danger')
         return redirect(url_for('sales'))
+    tables = list(range(1, 51))
+    return render_template('sales_tables.html', branch_code=branch_code, branch_label=BRANCH_CODES[branch_code], tables=tables)
 
-    # Get meals for dropdown (ready meals from cost management)
+# Table invoice screen (split UI)
+@app.route('/sales/<branch_code>/table/<int:table_no>', methods=['GET'])
+@login_required
+def sales_table_invoice(branch_code, table_no):
+    if not is_valid_branch(branch_code) or table_no < 1 or table_no > 50:
+        flash(_('Unknown branch/table / فرع أو طاولة غير معروف'), 'danger')
+        return redirect(url_for('sales'))
+    import json
+    # Load meals and categories
     meals = Meal.query.filter_by(active=True).all()
-    product_choices = [(0, _('Select Meal / اختر الوجبة'))] + [(m.id, m.display_name) for m in meals]
-
-    form = SalesInvoiceForm()
-
-    # Set product choices for all item forms
-    for item_form in form.items:
-        item_form.product_id.choices = product_choices
-
-    # Prepare meals JSON for JavaScript
-    products_json = json.dumps([{
+    categories = sorted({(m.category or _('Uncategorized')) for m in meals})
+    meals_data = [{
         'id': m.id,
         'name': m.display_name,
-        'price_before_tax': float(m.selling_price)  # Use selling price from cost calculation
-    } for m in meals])
+        'category': m.category or _('Uncategorized'),
+        'price': float(m.selling_price)
+    } for m in meals]
+    # VAT rate from settings if available
+    from models import Settings
+    settings = Settings.query.first()
+    vat_rate = float(settings.vat_rate) if settings and settings.vat_rate is not None else 15.0
+    return render_template('sales_table_invoice.html',
+                           branch_code=branch_code,
+                           branch_label=BRANCH_CODES[branch_code],
+                           table_no=table_no,
+                           categories=categories,
+                           meals_json=json.dumps(meals_data),
+                           vat_rate=vat_rate)
 
-    if form.validate_on_submit():
-        # Generate invoice number
-        last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
-        if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
-            try:
-                last_num = int(last_invoice.invoice_number.split('-')[-1])
-                invoice_number = f'SAL-{datetime.utcnow().year}-{last_num + 1:03d}'
-            except Exception:
-                invoice_number = f'SAL-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
-        else:
-            invoice_number = f'SAL-{datetime.utcnow().year}-001'
+# Checkout API: create invoice + items + payment, then return receipt URL
+@app.route('/api/sales/checkout', methods=['POST'])
+@login_required
+def api_sales_checkout():
+    from datetime import datetime as _dt
+    data = request.get_json(silent=True) or {}
+    branch_code = data.get('branch_code')
+    table_no = int(data.get('table_no') or 0)
+    items = data.get('items') or []  # [{meal_id, qty}]
+    customer_name = data.get('customer_name') or None
+    customer_phone = data.get('customer_phone') or None  # Stored in description for now
+    discount_pct = float(data.get('discount_pct') or 0)
+    tax_pct = float(data.get('tax_pct') or 15)
+    payment_method = data.get('payment_method') or 'CASH'
+    if not is_valid_branch(branch_code) or not items:
+        return jsonify({'ok': False, 'error': 'Invalid branch or empty items'}), 400
 
-        # Calculate totals
-        total_before_tax = 0
-        total_tax = 0
-        total_discount = 0
-        tax_rate = 0.15
-
-        # Create invoice
-        invoice = SalesInvoice(
-            invoice_number=invoice_number,
-            date=form.date.data,
-            payment_method=form.payment_method.data,
-            branch=form.branch.data,
-            customer_name=form.customer_name.data,
-            total_before_tax=0,  # Will be calculated
-            tax_amount=0,  # Will be calculated
-            discount_amount=0,  # Will be calculated
-            total_after_tax_discount=0,  # Will be calculated
-            status='unpaid',
-            user_id=current_user.id
-        )
-        db.session.add(invoice)
-        db.session.flush()
-
-        # Add invoice items and calculate totals
-        for item_form in form.items.entries:
-            if item_form.product_id.data and item_form.product_id.data != 0:  # Valid meal selected
-                meal = Meal.query.get(item_form.product_id.data)
-                if meal:
-                    qty = float(item_form.quantity.data)
-                    discount_pct = float(item_form.discount.data or 0)
-
-                    # Calculate amounts using meal's selling price
-                    unit_price = float(meal.selling_price)
-                    price_before_tax = unit_price * qty
-                    tax = price_before_tax * tax_rate
-                    discount_value = (price_before_tax + tax) * (discount_pct/100.0)
-                    total_item = price_before_tax + tax - discount_value
-
-                    # Add to invoice totals
-                    total_before_tax += price_before_tax
-                    total_tax += tax
-                    total_discount += discount_value
-
-                    # Create invoice item
-                    inv_item = SalesInvoiceItem(
-                        invoice_id=invoice.id,
-                        product_name=meal.display_name,
-                        quantity=qty,
-                        price_before_tax=meal.selling_price,
-                        tax=tax,
-                        discount=discount_value,
-                        total_price=total_item
-                    )
-                    db.session.add(inv_item)
-
-        # Update invoice totals
-        total_after_tax_discount = total_before_tax + total_tax - total_discount
-        invoice.total_before_tax = total_before_tax
-        invoice.tax_amount = total_tax
-        invoice.discount_amount = total_discount
-        invoice.total_after_tax_discount = total_after_tax_discount
-
-        db.session.commit()
-        # Post to ledger (Revenue, VAT Output, Cash/AR)
+    # Generate invoice number SAL-YYYY-###
+    last = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
+    if last and last.invoice_number and '-' in last.invoice_number:
         try:
-            # Ensure core accounts exist
-            def get_or_create(code, name, type_):
-                acc = Account.query.filter_by(code=code).first()
-                if not acc:
-                    acc = Account(code=code, name=name, type=type_)
-                    db.session.add(acc); db.session.flush()
-                return acc
-            rev_acc = get_or_create('4000', 'Sales Revenue', 'REVENUE')
-            vat_out_acc = get_or_create('2100', 'VAT Output', 'LIABILITY')
-            cash_acc = get_or_create('1000', 'Cash', 'ASSET')
-            ar_acc = get_or_create('1100', 'Accounts Receivable', 'ASSET')
+            last_num = int(str(last.invoice_number).split('-')[-1])
+            new_num = last_num + 1
+        except Exception:
+            new_num = 1
+    else:
+        new_num = 1
+    invoice_number = f"SAL-{_dt.utcnow().year}-{new_num:03d}"
 
-            # Determine settlement account based on payment method
-            # Treat immediate-settlement methods as CASH-like; 'آجل' (credit) goes to AR
-            settle_cash_like = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC','cash','mada','visa','mastercard','bank','aks','gcc']
-            settle_acc = cash_acc if (invoice.payment_method in settle_cash_like) else ar_acc
-            # Revenue entry
-            db.session.add(LedgerEntry(date=invoice.date, account_id=rev_acc.id, credit=invoice.total_before_tax, debit=0, description=f'Sales {invoice.invoice_number}'))
-            # VAT output
-            db.session.add(LedgerEntry(date=invoice.date, account_id=vat_out_acc.id, credit=invoice.tax_amount, debit=0, description=f'VAT Output {invoice.invoice_number}'))
-            # Settlement (debit)
-            db.session.add(LedgerEntry(date=invoice.date, account_id=settle_acc.id, debit=invoice.total_after_tax_discount, credit=0, description=f'Settlement {invoice.invoice_number}'))
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logging.error('Ledger posting (sales) failed: %s', e, exc_info=True)
-
-
-        # Emit real-time update
-        socketio.emit('sales_update', {
-            'invoice_number': invoice_number,
-            'branch': form.branch.data,
-            'total': float(total_after_tax_discount)
+    # Calculate totals and build items
+    subtotal = 0.0
+    tax_total = 0.0
+    invoice_items = []
+    for it in items:
+        meal = Meal.query.get(int(it.get('meal_id')))
+        qty = float(it.get('qty') or 0)
+        if not meal or qty <= 0:
+            continue
+        unit = float(meal.selling_price)
+        line_sub = unit * qty
+        line_tax = line_sub * (tax_pct/100.0)
+        subtotal += line_sub
+        tax_total += line_tax
+        total_line = line_sub + line_tax
+        invoice_items.append({
+            'name': meal.display_name,
+            'qty': qty,
+            'price_before_tax': unit,
+            'tax': line_tax,
+            'total': total_line
         })
 
-        flash(_('Invoice created successfully / تم إنشاء الفاتورة بنجاح'), 'success')
-        return redirect(url_for('sales'))
+    discount_val = (subtotal + tax_total) * (discount_pct/100.0)
+    grand_total = (subtotal + tax_total) - discount_val
 
-    # If POST but invalid, show user-friendly errors
-    if request.method == 'POST' and not form.validate():
-        if 'items' in (form.errors or {}):
-            flash(_('Please complete invoice items (select meal and set quantity) / يرجى إكمال عناصر الفاتورة (اختر وجبة وحدد الكمية)'), 'danger')
-        try:
-            for fname, errs in (form.errors or {}).items():
-                if fname == 'items':
-                    continue
-                if not errs:
-                    continue
-                label = getattr(getattr(form, fname, None), 'label', None)
-                label_text = label.text if label else fname
-                flash(f"{label_text}: {', '.join([str(e) for e in errs])}", 'danger')
-        except Exception:
-            pass
+    # Persist invoice
+    inv = SalesInvoice(
+        invoice_number=invoice_number,
+        date=_dt.utcnow().date(),
+        payment_method=payment_method,
+        branch=BRANCH_CODES[branch_code],
+        customer_name=customer_name,
+        total_before_tax=subtotal,
+        tax_amount=tax_total,
+        discount_amount=discount_val,
+        total_after_tax_discount=grand_total,
+        status='paid',
+        user_id=current_user.id
+    )
+    db.session.add(inv)
+    db.session.flush()
 
-    # Set default date for new form
-    if request.method == 'GET':
-        form.date.data = datetime.utcnow().date()
+    for it in invoice_items:
+        db.session.add(SalesInvoiceItem(
+            invoice_id=inv.id,
+            product_name=it['name'],
+            quantity=it['qty'],
+            price_before_tax=it['price_before_tax'],
+            tax=it['tax'],
+            discount=0,
+            total_price=it['total']
+        ))
 
-    # Pagination for sales invoices
-    page = int(request.args.get('page') or 1)
-    per_page = min(100, int(request.args.get('per_page') or 25))
-    pag = SalesInvoice.query.order_by(SalesInvoice.date.desc()).paginate(page=page, per_page=per_page, error_out=False)
-    return render_template('sales.html', form=form, invoices=pag.items, pagination=pag, products_json=products_json)
+    # Record payment
+    db.session.add(Payment(
+        invoice_id=inv.id,
+        invoice_type='sales',
+        amount_paid=grand_total,
+        payment_method=payment_method
+    ))
+
+    db.session.commit()
+
+    receipt_url = url_for('sales_receipt', invoice_id=inv.id)
+    return jsonify({'ok': True, 'invoice_id': inv.id, 'print_url': receipt_url})
+
+# Receipt (80mm thermal style)
+@app.route('/sales/receipt/<int:invoice_id>')
+@login_required
+def sales_receipt(invoice_id):
+    invoice = SalesInvoice.query.get_or_404(invoice_id)
+    items = SalesInvoiceItem.query.filter_by(invoice_id=invoice_id).all()
+    from models import Settings
+    settings = Settings.query.first()
+    return render_template('sales_receipt.html', invoice=invoice, items=items, settings=settings)
+
 
 @app.route('/purchases', methods=['GET', 'POST'])
 @login_required

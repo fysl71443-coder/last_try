@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ _('Receipt / إيصال') }} - {{ invoice.invoice_number }}</title>
+  <style>
+    /* 80mm thermal style */
+    body { font-family: Arial, sans-serif; }
+    .receipt { width: 300px; margin: 0 auto; }
+    .center { text-align: center; }
+    .right { text-align: right; }
+    .small { font-size: 12px; }
+    hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+    table { width: 100%; }
+    th, td { font-size: 12px; }
+  </style>
+</head>
+<body onload="window.print()">
+  <div class="receipt">
+    <div class="center">
+      <div><strong>{{ settings.company_name if settings else 'Restaurant' }}</strong></div>
+      <div class="small">{{ settings.address if settings else '' }}</div>
+      <div class="small">{{ settings.phone if settings else '' }}</div>
+    </div>
+    <hr>
+    <div class="small">
+      <div>{{ _('Invoice') }}: {{ invoice.invoice_number }}</div>
+      <div>{{ _('Date') }}: {{ invoice.date }}</div>
+      <div>{{ _('Branch') }}: {{ invoice.branch }}</div>
+      <div>{{ _('Customer') }}: {{ invoice.customer_name or '-' }}</div>
+    </div>
+    <hr>
+    <table>
+      <thead>
+        <tr>
+          <th>{{ _('Item') }}</th>
+          <th class="right">{{ _('Qty') }}</th>
+          <th class="right">{{ _('Total') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td>{{ it.product_name }}</td>
+          <td class="right">{{ '%.0f'|format(it.quantity) }}</td>
+          <td class="right">{{ '%.2f'|format(it.total_price) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <hr>
+    <div class="small right">{{ _('Subtotal') }}: {{ '%.2f'|format(invoice.total_before_tax) }}</div>
+    <div class="small right">{{ _('Tax') }}: {{ '%.2f'|format(invoice.tax_amount) }}</div>
+    <div class="small right">{{ _('Discount') }}: {{ '%.2f'|format(invoice.discount_amount) }}</div>
+    <div class="small right"><strong>{{ _('Grand Total') }}: {{ '%.2f'|format(invoice.total_after_tax_discount) }}</strong></div>
+    <hr>
+    <div class="center small">{{ _('Thank you / شكراً لكم') }}</div>
+  </div>
+</body>
+</html>
+
