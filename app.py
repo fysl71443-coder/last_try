@@ -213,6 +213,11 @@ def dashboard():
 
 @app.route('/logout')
 @login_required
+def logout():
+    logout_user()
+    flash(_('تم تسجيل الخروج / Logged out.'), 'info')
+    return redirect(url_for('login'))
+
 @app.route('/pos/<branch_code>')
 @login_required
 def pos_home(branch_code):
@@ -221,10 +226,6 @@ def pos_home(branch_code):
         flash(_('Unknown branch / فرع غير معروف'), 'danger')
         return redirect(url_for('dashboard'))
     return render_template('pos_home.html', branch_code=branch_code)
-
-def logout():
-    logout_user()
-    flash(_('تم تسجيل الخروج / Logged out.'), 'info')
 
 @app.route('/sales/<branch_code>', methods=['GET', 'POST'])
 @login_required
