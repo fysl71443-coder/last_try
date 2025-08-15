@@ -484,13 +484,15 @@ def sales_table_invoice(branch_code, table_no):
     from models import Settings
     settings = Settings.query.first()
     vat_rate = float(settings.vat_rate) if settings and settings.vat_rate is not None else 15.0
+    from datetime import date as _date
     return render_template('sales_table_invoice.html',
                            branch_code=branch_code,
                            branch_label=BRANCH_CODES[branch_code],
                            table_no=table_no,
                            categories=categories,
                            meals_json=json.dumps(meals_data),
-                           vat_rate=vat_rate)
+                           vat_rate=vat_rate,
+                           today=_date.today().isoformat())
 
 # API: customer lookup by name or phone
 @app.route('/api/customers/lookup')
