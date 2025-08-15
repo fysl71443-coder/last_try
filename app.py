@@ -218,6 +218,15 @@ def dashboard():
 
 @app.route('/logout')
 @login_required
+@app.route('/pos/<branch_code>')
+@login_required
+def pos_home(branch_code):
+    # Minimal POS home to avoid template errors; integrate with real POS later
+    if branch_code not in ('place_india','china_town'):
+        flash(_('Unknown branch / فرع غير معروف'), 'danger')
+        return redirect(url_for('dashboard'))
+    return render_template('pos_home.html', branch_code=branch_code)
+
 def logout():
     logout_user()
     flash(_('تم تسجيل الخروج / Logged out.'), 'info')
