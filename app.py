@@ -367,23 +367,13 @@ def sales_branch(branch_code):
 
     return redirect(url_for('login'))
 
- feature/pos-receipt-and-customers
 # Sales entry: Branch cards -> Tables -> Table invoice
-
-# Sales entry: show branch cards first
- main
 @app.route('/sales', methods=['GET'])
 @login_required
 def sales():
     branches = [
- feature/pos-receipt-and-customers
         {'code': 'china_town', 'label': 'China Town', 'url': url_for('sales_tables', branch_code='china_town')},
         {'code': 'place_india', 'label': 'Place India', 'url': url_for('sales_tables', branch_code='place_india')},
-    ]
-    return render_template('sales_branches.html', branches=branches)
-
-        {'code': 'place_india', 'label': 'Place India', 'url': url_for('sales_branch', branch_code='place_india')},
-        {'code': 'china_town', 'label': 'China Town', 'url': url_for('sales_branch', branch_code='china_town')}
     ]
     return render_template('sales_branches.html', branches=branches)
 
@@ -425,8 +415,6 @@ def sales_all():
                 invoice_number = f'SAL-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
         else:
             invoice_number = f'SAL-{datetime.utcnow().year}-001'
- main
-
 
 # Seed default menu categories once (safe, best-effort)
 @app.before_first_request
