@@ -18,7 +18,13 @@
 <body onload="window.print()">
   <div class="receipt">
     <div class="center">
+      {% if settings and settings.receipt_show_logo %}
+        <img src="{{ settings.logo_url or '/static/chinese-logo.svg' }}" alt="logo" style="max-height:60px; margin-bottom:6px;">
+      {% endif %}
       <div><strong>{{ settings.company_name if settings else 'Restaurant' }}</strong></div>
+      {% if settings and settings.receipt_show_tax_number %}
+      <div class="small">{{ _('Tax No.') }}: {{ settings.tax_number or '-' }}</div>
+      {% endif %}
       <div class="small">{{ settings.address if settings else '' }}</div>
       <div class="small">{{ settings.phone if settings else '' }}</div>
     </div>
@@ -28,6 +34,10 @@
       <div>{{ _('Date') }}: {{ invoice.date }}</div>
       <div>{{ _('Branch') }}: {{ invoice.branch }}</div>
       <div>{{ _('Customer') }}: {{ invoice.customer_name or '-' }}</div>
+    </div>
+    <hr>
+    <div class="center">
+      <canvas id="qr" width="120" height="120"></canvas>
     </div>
     <hr>
     <table>
@@ -57,5 +67,28 @@
     <div class="center small">{{ _('Thank you / شكراً لكم') }}</div>
   </div>
 </body>
+  <script>
+    // Simple placeholder QR drawing (not ISO-compliant); replace with proper QR lib if needed
+    (function(){
+      try{
+        const canvas = document.getElementById('qr');
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const payload = `NM={{ settings.company_name or '' }}|TAX={{ settings.tax_number or '' }}|INV={{ invoice.invoice_number }}|DT={{ invoice.date }}|AMT={{ '%.2f'|format(invoice.total_after_tax_discount) }}|VAT={{ '%.2f'|format(invoice.tax_amount) }}`;
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = '#000';
+        let x=0,y=0; const size=6; const W = canvas.width;
+        for(let i=0;i<payload.length;i++){
+          const code = payload.charCodeAt(i);
+          for(let b=0;b<8;b++){
+            const bit = (code >> b) & 1;
+            if(bit){ ctx.fillRect(x, y, size, size); }
+            x += size; if(x >= W){ x = 0; y += size; if(y >= W) break; }
+          }
+        }
+      }catch(e){}
+    })();
+  </script>
+
 </html>
 

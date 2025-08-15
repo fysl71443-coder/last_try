@@ -56,13 +56,14 @@
               <label class="form-label">{{ _('Invoice No. / رقم الفاتورة') }}</label>
               <input id="invNo" type="text" class="form-control" placeholder="Auto" readonly>
             </div>
-            <div class="col-md-6">
-              <label class="form-label">{{ _('Customer Name / اسم العميل') }}</label>
-              <input id="custName" type="text" class="form-control" placeholder="{{ _('Optional') }}">
+            <div class="col-md-8">
+              <label class="form-label">{{ _('Customer / العميل') }}</label>
+              <input id="custName" type="text" class="form-control" placeholder="{{ _('Type name or phone...') }}">
+              <div id="custList" class="list-group position-absolute w-50" style="z-index:10; display:none;"></div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label">{{ _('Customer Phone / هاتف العميل') }}</label>
-              <input id="custPhone" type="text" class="form-control" placeholder="{{ _('Optional') }}">
+              <input id="custPhone" type="text" class="form-control" placeholder="{{ _('Auto') }}" readonly>
             </div>
             <div class="col-md-4">
               <label class="form-label">{{ _('Discount % / نسبة الخصم %') }}</label>
@@ -123,6 +124,38 @@
   const meals = {{ meals_json | safe }};
   let currentCategory = null;
   const items = [];
+  let custTimer = null;
+  const custList = document.getElementById('custList');
+  const custName = document.getElementById('custName');
+  const custPhone = document.getElementById('custPhone');
+
+  custName.addEventListener('input', () => {
+    clearTimeout(custTimer);
+    const q = custName.value.trim();
+    if(!q){ custList.style.display='none'; return; }
+    custTimer = setTimeout(async () => {
+      const res = await fetch(`/api/customers/lookup?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      custList.innerHTML = '';
+      if(!data.length){ custList.style.display='none'; return; }
+      data.forEach(c => {
+        const a = document.createElement('a');
+        a.href = '#'; a.className = 'list-group-item list-group-item-action';
+        a.textContent = `${c.name} (${c.phone||'-'}) — ${c.discount_percent}%`;
+        a.onclick = (e)=>{ e.preventDefault(); selectCustomer(c); };
+        custList.appendChild(a);
+      });
+      custList.style.display = 'block';
+    }, 250);
+  });
+
+  function selectCustomer(c){
+    custName.value = c.name;
+    custPhone.value = c.phone || '';
+    document.getElementById('discountPct').value = (c.discount_percent||0);
+    custList.style.display='none';
+    renderItems();
+  }
 
   function selectCategory(cat){
     currentCategory = cat;

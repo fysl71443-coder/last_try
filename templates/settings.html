@@ -49,6 +49,38 @@
       <input type="text" name="china_town_label" class="form-control" value="{{ s.china_town_label or 'China Town' }}">
     </div>
 
+    <hr class="my-4">
+    <h4>إعدادات الإيصال والطباعة</h4>
+    <div class="col-md-3">
+      <label class="form-label">عرض الورق (مم)</label>
+      <select name="receipt_paper_width" class="form-select">
+        <option value="80" {% if s.receipt_paper_width=='80' %}selected{% endif %}>80mm</option>
+        <option value="58" {% if s.receipt_paper_width=='58' %}selected{% endif %}>58mm</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">حجم الخط</label>
+      <input type="number" name="receipt_font_size" class="form-control" value="{{ s.receipt_font_size or 12 }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">رابط الشعار (Logo URL)</label>
+      <input type="text" name="logo_url" class="form-control" value="{{ s.logo_url or '/static/chinese-logo.svg' }}">
+    </div>
+    <div class="col-md-6">
+      <div class="form-check mt-4">
+        <input class="form-check-input" type="checkbox" name="receipt_show_logo" id="recLogo" {% if s.receipt_show_logo %}checked{% endif %}>
+        <label class="form-check-label" for="recLogo">إظهار الشعار</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="receipt_show_tax_number" id="recTax" {% if s.receipt_show_tax_number %}checked{% endif %}>
+        <label class="form-check-label" for="recTax">إظهار الرقم الضريبي</label>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">نص تذييل الإيصال</label>
+      <input type="text" name="receipt_footer_text" class="form-control" value="{{ s.receipt_footer_text or '' }}">
+    </div>
+
     <div class="col-12 d-flex justify-content-end gap-2">
       <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">رجوع</a>
       <button class="btn btn-primary" type="submit">حفظ</button>

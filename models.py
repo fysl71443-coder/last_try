@@ -339,8 +339,34 @@ class Settings(db.Model):
     receipt_show_tax_number = db.Column(db.Boolean, default=True)
     receipt_footer_text = db.Column(db.String(300), default='')
 
+    logo_url = db.Column(db.String(300), default='/static/chinese-logo.svg')  # receipt logo
+
     def __repr__(self):
         return f'<Settings {self.company_name or "Settings"}>'
+
+
+class Customer(db.Model):
+    __tablename__ = 'customers'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    phone = db.Column(db.String(50), nullable=True)
+    discount_percent = db.Column(db.Numeric(5, 2), default=0)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Customer {self.name}>'
+
+class MenuCategory(db.Model):
+    __tablename__ = 'menu_categories'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, nullable=False)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<MenuCategory {self.name}>'
+
 
 
 class UserPermission(db.Model):
