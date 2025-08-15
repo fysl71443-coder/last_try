@@ -417,8 +417,12 @@ def sales_all():
             invoice_number = f'SAL-{datetime.utcnow().year}-001'
 
 # Seed default menu categories once (safe, best-effort)
-@app.before_first_request
-def seed_menu_categories_if_needed():
+MENU_SEEDED = False
+@app.before_request
+def _seed_menu_categories_once():
+    global MENU_SEEDED
+    if MENU_SEEDED:
+        return
     try:
         from models import MenuCategory
         defaults = [
@@ -435,6 +439,8 @@ def seed_menu_categories_if_needed():
     except Exception:
         # Table may not exist yet; ignore
         pass
+    finally:
+        MENU_SEEDED = True
 
 # Helpers
 BRANCH_CODES = {'china_town': 'China Town', 'place_india': 'Place India'}
