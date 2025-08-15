@@ -362,10 +362,20 @@ def sales_branch(branch_code):
 
     return redirect(url_for('login'))
 
-# Dashboard routes
-@app.route('/sales', methods=['GET', 'POST'])
+# Sales entry: show branch cards first
+@app.route('/sales', methods=['GET'])
 @login_required
 def sales():
+    branches = [
+        {'code': 'place_india', 'label': 'Place India', 'url': url_for('sales_branch', branch_code='place_india')},
+        {'code': 'china_town', 'label': 'China Town', 'url': url_for('sales_branch', branch_code='china_town')}
+    ]
+    return render_template('sales_branches.html', branches=branches)
+
+# Old unified sales screen kept under /sales/all for backward links
+@app.route('/sales/all', methods=['GET', 'POST'])
+@login_required
+def sales_all():
     import json
     # Permissions: POST requires 'add'
     if request.method == 'POST' and not can_perm('sales','add'):
