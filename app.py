@@ -372,6 +372,27 @@ def sales():
     ]
     return render_template('sales_branches.html', branches=branches)
 
+
+# Seed default menu categories once (safe, best-effort)
+@app.before_first_request
+def seed_menu_categories_if_needed():
+    try:
+        from models import MenuCategory
+        defaults = [
+            'Appetizers','Soups','Salads','House Special','Prawns','Seafoods','Chinese Sizzling','Shaw Faw',
+            'Chicken','Beef & Lamb','Rice & Biryani','Noodles & Chopsuey','Charcoal Grill / Kebabs',
+            'Indian Delicacy (Chicken)','Indian Delicacy (Fish)','Indian Delicacy (Vegetables)','Juices','Soft Drink'
+        ]
+        existing = {c.name for c in MenuCategory.query.all()}
+        to_add = [name for name in defaults if name not in existing]
+        if to_add:
+            for name in to_add:
+                db.session.add(MenuCategory(name=name))
+            db.session.commit()
+    except Exception:
+        # Table may not exist yet; ignore
+        pass
+
 # Helpers
 BRANCH_CODES = {'china_town': 'China Town', 'place_india': 'Place India'}
 
@@ -396,9 +417,14 @@ def sales_table_invoice(branch_code, table_no):
         flash(_('Unknown branch/table / فرع أو طاولة غير معروف'), 'danger')
         return redirect(url_for('sales'))
     import json
-    # Load meals and categories
+    # Load meals and categories (prefer MenuCategory if defined)
     meals = Meal.query.filter_by(active=True).all()
-    categories = sorted({(m.category or _('Uncategorized')) for m in meals})
+    try:
+        from models import MenuCategory
+        active_cats = [c.name for c in MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).all()]
+        categories = active_cats if active_cats else sorted({(m.category or _('Uncategorized')) for m in meals})
+    except Exception:
+        categories = sorted({(m.category or _('Uncategorized')) for m in meals})
     meals_data = [{
         'id': m.id,
         'name': m.display_name,
@@ -416,6 +442,24 @@ def sales_table_invoice(branch_code, table_no):
                            categories=categories,
                            meals_json=json.dumps(meals_data),
                            vat_rate=vat_rate)
+
+# API: customer lookup by name or phone
+@app.route('/api/customers/lookup')
+@login_required
+def api_customer_lookup():
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify([])
+    try:
+        from models import Customer
+        res = Customer.query.filter(
+            (Customer.name.ilike(f"%{q}%")) | (Customer.phone.ilike(f"%{q}%"))
+        ).order_by(Customer.name.asc()).limit(10).all()
+        return jsonify([{'id': c.id, 'name': c.name, 'phone': c.phone, 'discount_percent': float(c.discount_percent or 0)} for c in res])
+    except Exception:
+        # If table doesn't exist yet, return empty
+        return jsonify([])
+
 
 # Checkout API: create invoice + items + payment, then return receipt URL
 @app.route('/api/sales/checkout', methods=['POST'])
@@ -1821,6 +1865,16 @@ def settings():
         s.place_india_label = request.form.get('place_india_label') or 'Place India'
         s.china_town_label = request.form.get('china_town_label') or 'China Town'
         s.default_theme = (request.form.get('default_theme') or 'light').lower()
+        # Receipt settings
+        s.receipt_paper_width = (request.form.get('receipt_paper_width') or s.receipt_paper_width or '80')
+        try:
+            s.receipt_font_size = int(request.form.get('receipt_font_size') or s.receipt_font_size or 12)
+        except Exception:
+            pass
+        s.logo_url = (request.form.get('logo_url') or s.logo_url or '/static/chinese-logo.svg')
+        s.receipt_show_logo = bool(request.form.get('receipt_show_logo'))
+        s.receipt_show_tax_number = bool(request.form.get('receipt_show_tax_number'))
+        s.receipt_footer_text = (request.form.get('receipt_footer_text') or s.receipt_footer_text or '')
         db.session.commit()
         flash(_('Settings saved successfully / تم حفظ الإعدادات'), 'success')
         return redirect(url_for('settings'))
