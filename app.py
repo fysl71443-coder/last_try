@@ -500,15 +500,6 @@ def _seed_menu_categories_once():
         existing = {c.name for c in MenuCategory.query.all()}
         to_add = [name for name in defaults if name not in existing]
         if to_add:
-@app.context_processor
-def inject_csrf_token():
-    try:
-        from flask_wtf.csrf import generate_csrf
-        return dict(csrf_token=generate_csrf)
-    except Exception:
-        # Fallback: no-op to avoid template errors in environments without Flask-WTF
-        return dict(csrf_token=lambda: '')
-
             for name in to_add:
                 db.session.add(MenuCategory(name=name))
             db.session.commit()
