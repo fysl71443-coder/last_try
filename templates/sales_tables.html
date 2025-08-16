@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% set back_url = url_for('sales') %}
+
 {% block title %}{{ _('Tables / الطاولات') }} — {{ branch_label }}{% endblock %}
 {% block content %}
 <div class="container py-4">

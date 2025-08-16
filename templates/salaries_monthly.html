@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% set back_url = url_for('salaries') %}
+
 {% set back_url = url_for('employees') %}
 
 {% block title %}{{ _('Monthly Salaries / رواتب شهرية') }}{% endblock %}
