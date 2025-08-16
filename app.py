@@ -514,7 +514,11 @@ def sales_table_invoice(branch_code, table_no):
         return redirect(url_for('sales'))
     import json
     # Load meals and categories (prefer MenuCategory if defined)
-    meals = Meal.query.filter_by(active=True).all()
+    try:
+        meals = Meal.query.filter_by(active=True).all()
+    except Exception as e:
+        logging.error('Meals query failed: %s', e, exc_info=True)
+        meals = []
     try:
         from models import MenuCategory
         active_cats = [c.name for c in MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).all()]
@@ -525,7 +529,7 @@ def sales_table_invoice(branch_code, table_no):
         'id': m.id,
         'name': m.display_name,
         'category': m.category or _('Uncategorized'),
-        'price': float(m.selling_price)
+        'price': float(m.selling_price or 0)
     } for m in meals]
     # VAT rate from settings if available
     from models import Settings
@@ -1160,9 +1164,12 @@ def payments():
     status_filter = request.args.get('status')
     type_filter = request.args.get('type')
 
-    # Build unified invoices view via union_all
+    # Build unified invoices view via union_all (tolerate missing legacy tables)
     from sqlalchemy import literal, func
     from sqlalchemy import cast, String
+    from sqlalchemy import inspect as _sa_inspect, union_all
+    _insp = _sa_inspect(db.engine)
+    _tables = set(_insp.get_table_names())
     # Cross-database safe date expression for salary (year,month -> date)
     dialect = db.session.bind.dialect.name if db.session.bind is not None else 'sqlite'
     if dialect == 'postgresql':
@@ -1198,28 +1205,36 @@ def payments():
         ExpenseInvoice.date,
         ExpenseInvoice.status
     )
-    salaries_q = db.session.query(
-        Salary.id,
-        literal('salary'),
-        Employee.full_name,
-        Salary.total_salary,
-        literal(0),
-        date_expr,
-        Salary.status
-    ).join(Employee)
+    _union_parts = [sales_q, purchases_q, expenses_q]
+    if 'salaries' in _tables and 'employees' in _tables:
+        salaries_q = db.session.query(
+            Salary.id,
+            literal('salary'),
+            Employee.full_name,
+            Salary.total_salary,
+            literal(0),
+            date_expr,
+            Salary.status
+        ).join(Employee)
+        _union_parts.append(salaries_q)
 
-    from sqlalchemy import union_all
-    union_q = union_all(sales_q, purchases_q, expenses_q, salaries_q).alias('u')
+    union_q = union_all(*_union_parts).alias('u')
     rows = db.session.query(union_q).all()
 
     # Compute paid from Payments table per invoice
-    from sqlalchemy import func
     invoices = []
+    _payments_exists = 'payments' in _tables
     for r in rows:
-        paid_sum = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-            Payment.invoice_id == r.id,
-            Payment.invoice_type == r.type
-        ).scalar() or 0
+        if _payments_exists:
+            try:
+                paid_sum = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                    Payment.invoice_id == r.id,
+                    Payment.invoice_type == r.type
+                ).scalar() or 0
+            except Exception:
+                paid_sum = 0
+        else:
+            paid_sum = 0
         total_val = float(r.total) if r.total is not None else 0.0
         paid_val = float(paid_sum)
         # Compute status dynamically to always reflect latest payments
