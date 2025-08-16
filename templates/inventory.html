@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% set back_url = url_for('dashboard') %}
+
 {% block title %}{{ _('Inventory & Cost Management / المخزون وإدارة التكاليف') }}{% endblock %}
 {% block content %}
 
@@ -116,7 +118,7 @@ body {
     {% if raw_materials %}
     <div class="inventory-card">
         <h5 class="mb-3">{{ _('Raw Materials Summary / ملخص المواد الخام') }}</h5>
-        
+
         <div class="table-responsive">
             <table class="table table-sm">
                 <thead class="table-light">
@@ -146,7 +148,7 @@ body {
                 </tbody>
             </table>
         </div>
-        
+
         <div class="text-end">
             <a href="{{ url_for('raw_materials') }}" class="btn btn-outline-primary">
                 {{ _('View All Materials / عرض جميع المواد') }}
@@ -159,7 +161,7 @@ body {
     {% if meals %}
     <div class="inventory-card">
         <h5 class="mb-3">{{ _('Meals Summary / ملخص الوجبات') }}</h5>
-        
+
         <div class="table-responsive">
             <table class="table table-sm">
                 <thead class="table-light">
@@ -191,7 +193,7 @@ body {
                 </tbody>
             </table>
         </div>
-        
+
         <div class="text-end">
             <a href="{{ url_for('meals') }}" class="btn btn-outline-success">
                 {{ _('View All Meals / عرض جميع الوجبات') }}

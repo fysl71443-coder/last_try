@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% set back_url = url_for('inventory') %}
+
 {% block title %}{{ _('Meals Management / إدارة الوجبات') }}{% endblock %}
 {% block content %}
 
@@ -74,10 +76,10 @@ body {
     <!-- نموذج إنشاء وجبة جديدة -->
     <div class="meals-card">
         <h5 class="mb-3">{{ _('Create New Meal / إنشاء وجبة جديدة') }}</h5>
-        
+
         <form method="POST" id="meal-form">
             {{ form.hidden_tag() }}
-            
+
             <!-- معلومات الوجبة الأساسية -->
             <div class="row mb-3">
                 <div class="col-md-3">
@@ -164,7 +166,7 @@ body {
     {% if meals %}
     <div class="meals-card">
         <h5 class="mb-3">{{ _('Existing Meals / الوجبات الموجودة') }}</h5>
-        
+
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead class="table-dark">
@@ -211,7 +213,7 @@ body {
 <script>
     // Materials data for calculations
     const materials = {{ materials_json | safe }};
-    
+
     // SocketIO for real-time updates
     var socket = io();
     socket.on('meal_update', function(data) {
@@ -223,18 +225,18 @@ body {
     // Auto-calculation functionality
     function calculateCosts() {
         let totalCost = 0;
-        
+
         document.querySelectorAll('.ingredient-row').forEach(row => {
             const materialSelect = row.querySelector('select[name$="-raw_material_id"]');
             const quantityInput = row.querySelector('input[name$="-quantity"]');
             const costDisplay = row.querySelector('.ingredient-cost');
-            
+
             const materialId = parseInt(materialSelect.value);
             const quantity = parseFloat(quantityInput.value) || 0;
-            
+
             const material = materials.find(m => m.id === materialId);
             let ingredientCost = 0;
-            
+
             if (material && quantity > 0) {
                 ingredientCost = material.cost_per_unit * quantity;
                 costDisplay.textContent = '$' + ingredientCost.toFixed(4);
@@ -243,15 +245,15 @@ body {
                 costDisplay.textContent = '$0.0000';
             }
         });
-        
+
         // Update total cost
         document.getElementById('total-cost').textContent = '$' + totalCost.toFixed(2);
-        
+
         // Calculate profit and selling price
         const profitMargin = parseFloat(document.querySelector('input[name="profit_margin_percent"]').value) || 0;
         const profitAmount = totalCost * (profitMargin / 100);
         const sellingPrice = totalCost + profitAmount;
-        
+
         document.getElementById('profit-amount').textContent = '$' + profitAmount.toFixed(2);
         document.getElementById('selling-price').textContent = '$' + sellingPrice.toFixed(2);
     }
@@ -265,7 +267,7 @@ body {
 
     // Add new ingredient functionality
     let ingredientIndex = {{ form.ingredients|length }};
-    
+
     document.getElementById('add-ingredient').addEventListener('click', function() {
         const container = document.getElementById('ingredients-container');
         const newIngredient = document.createElement('div');
