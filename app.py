@@ -2864,7 +2864,13 @@ def meals():
                             raw_material_id=raw_material.id,
                             quantity=qty
                         )
-                        ingredient.calculate_cost()
+                        # Compute cost directly using the fetched raw_material to avoid lazy-load issues
+                        try:
+                            from decimal import Decimal
+                            ing_cost = qty * raw_material.cost_per_unit
+                            ingredient.total_cost = ing_cost
+                        except Exception:
+                            ingredient.total_cost = 0
                         db.session.add(ingredient)
                         total_cost += float(ingredient.total_cost)
 
