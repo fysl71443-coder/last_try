@@ -57,8 +57,9 @@ class SalesInvoice(db.Model):
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
     date = db.Column(db.Date, default=datetime.utcnow)
     payment_method = db.Column(db.String(20), nullable=False)
-    branch = db.Column(db.String(50), nullable=False)  # فرع الفاتورة (Place India أو China Town)
+    branch = db.Column(db.String(50), nullable=False)  # 'place_india' or 'china_town'
     customer_name = db.Column(db.String(100), nullable=True)
+    customer_phone = db.Column(db.String(30), nullable=True)
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
     tax_amount = db.Column(db.Numeric(12, 2), nullable=False)
     discount_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
