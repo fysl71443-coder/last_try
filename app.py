@@ -75,10 +75,9 @@ socketio = SocketIO(app)
 try:
     if os.getenv('RENDER') == 'true' or os.getenv('RENDER'):
         with app.app_context():
-            from alembic.config import Config
-            from alembic import command as _al_cmd
-            alembic_cfg = Config(os.path.join(os.path.dirname(__file__), 'migrations', 'alembic.ini'))
-            _al_cmd.upgrade(alembic_cfg, 'head')
+            # Use Flask-Migrate API so env.py/current_app config is respected
+            from flask_migrate import upgrade as _fm_upgrade
+            _fm_upgrade()
 except Exception as _migr_err:
     # Do not crash app if migrations fail; logs help diagnose
     logging.error('Auto migration failed: %s', _migr_err, exc_info=True)
