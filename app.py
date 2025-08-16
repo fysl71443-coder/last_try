@@ -567,6 +567,79 @@ def api_customer_lookup():
         # If table doesn't exist yet, return empty
         return jsonify([])
 
+# Customers management screen (simple CRUD)
+@app.route('/customers', methods=['GET','POST'])
+@login_required
+def customers():
+    from models import Customer
+    # Create
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        phone = (request.form.get('phone') or '').strip() or None
+        try:
+            discount_percent = float(request.form.get('discount_percent') or 0)
+        except Exception:
+            discount_percent = 0.0
+        if not name:
+            flash(_('Customer name is required / اسم العميل مطلوب'), 'danger')
+        else:
+            c = Customer(name=name, phone=phone, discount_percent=discount_percent, active=True)
+            db.session.add(c)
+            db.session.commit()
+            flash(_('Customer added successfully / تم إضافة العميل بنجاح'), 'success')
+        return redirect(url_for('customers'))
+    # List
+    q = (request.args.get('q') or '').strip()
+    query = Customer.query
+    if q:
+        query = query.filter((Customer.name.ilike(f"%{q}%")) | (Customer.phone.ilike(f"%{q}%")))
+    customers = query.order_by(Customer.name.asc()).all()
+    return render_template('customers.html', customers=customers)
+
+@app.route('/customers/<int:cid>/toggle', methods=['POST'])
+@login_required
+def customers_toggle(cid):
+    from models import Customer
+    c = Customer.query.get_or_404(cid)
+    c.active = not bool(c.active)
+    db.session.commit()
+    flash(_('Customer status updated / تم تحديث حالة العميل'), 'success')
+    return redirect(url_for('customers'))
+
+# Menu categories (simple admin)
+@app.route('/menu', methods=['GET','POST'])
+@login_required
+def menu():
+    from models import MenuCategory
+    # Create
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        if not name:
+            flash(_('Category name is required / اسم القسم مطلوب'), 'danger')
+        else:
+            # Ensure unique
+            exists = MenuCategory.query.filter_by(name=name).first()
+            if exists:
+                flash(_('Category already exists / القسم موجود مسبقاً'), 'warning')
+            else:
+                cat = MenuCategory(name=name, active=True)
+                db.session.add(cat)
+                db.session.commit()
+                flash(_('Category added / تم إضافة القسم'), 'success')
+        return redirect(url_for('menu'))
+    # List
+    cats = MenuCategory.query.order_by(MenuCategory.name.asc()).all()
+    return render_template('menu.html', categories=cats)
+
+@app.route('/menu/<int:cat_id>/toggle', methods=['POST'])
+@login_required
+def menu_toggle(cat_id):
+    from models import MenuCategory
+    cat = MenuCategory.query.get_or_404(cat_id)
+    cat.active = not bool(cat.active)
+    db.session.commit()
+    flash(_('Category status updated / تم تحديث حالة القسم'), 'success')
+    return redirect(url_for('menu'))
 
 # Checkout API: create invoice + items + payment, then return receipt URL
 @app.route('/api/sales/checkout', methods=['POST'])
