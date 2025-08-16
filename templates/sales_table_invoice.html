@@ -184,29 +184,33 @@
         data.forEach(m => {
           const col = document.createElement('div');
           col.className = 'col-6 col-md-4 col-lg-3';
+          const price = Number(m.price || 0);
+          const safeName = (m.name || '').replace(/`/g,'');
           col.innerHTML = `
-            <div class="card meal-card h-100" onclick='addMenuItem(${m.meal_id}, ${JSON.stringify(m.name)}, ${m.price})'>
+            <div class="card meal-card h-100" onclick='addMenuItem(${m.meal_id}, ${JSON.stringify(safeName)}, ${price})'>
               <div class="card-body d-flex flex-column justify-content-between">
-                <div class="fw-bold">${m.name}</div>
-                <div class="text-muted">{{ _('Price') }}: ${m.price.toFixed(2)}</div>
+                <div class="fw-bold">${safeName}</div>
+                <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
               </div>
             </div>`;
           grid.appendChild(col);
         });
-        if(data.length) return;
+        if(data.length===0){ empty.classList.remove('d-none'); return; } else { empty.classList.add('d-none'); return; }
       }catch(e){ empty.classList.remove('d-none'); }
     }
     // Fallback: filter local meals
     const filtered = meals.filter(m => m.category === cat);
-    empty.classList.toggle('d-none', filtered.length !== 0);
+    if(filtered.length === 0){ empty.classList.remove('d-none'); } else { empty.classList.add('d-none'); }
     filtered.forEach(m => {
       const col = document.createElement('div');
       col.className = 'col-6 col-md-4 col-lg-3';
+      const price = Number(m.price || 0);
+      const safeName = (m.name || '').replace(/`/g,'');
       col.innerHTML = `
         <div class="card meal-card h-100" onclick="addItem(${m.id})">
           <div class="card-body d-flex flex-column justify-content-between">
-            <div class="fw-bold">${m.name}</div>
-            <div class="text-muted">{{ _('Price') }}: ${m.price.toFixed(2)}</div>
+            <div class="fw-bold">${safeName}</div>
+            <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
           </div>
         </div>`;
       grid.appendChild(col);
@@ -266,13 +270,27 @@
   function removeItem(idx){ items.splice(idx,1); renderItems(); }
 
   async function payAndPrint(){
-    if(items.length === 0){ alert('{{ _('Add at least one item') }}'); return; }
+    if(items.length === 0){ alert('{{ _('Add at least one item / أضف عنصراً واحداً على الأقل') }}'); return; }
     const payload = {
       branch_code: '{{ branch_code }}',
       table_no: {{ table_no }},
+      items: items.map(x => ({ meal_id: x.meal_id, qty: x.qty })),
+      customer_name: document.getElementById('custName').value,
+      customer_phone: document.getElementById('custPhone').value,
+      discount_pct: parseFloat(document.getElementById('discountPct').value || '0'),
+      tax_pct: parseFloat(document.getElementById('taxPct').value || '0'),
+      payment_method: document.getElementById('payMethod').value
+    };
+    const res = await fetch('{{ url_for('api_sales_checkout') }}', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if(!data.ok){ alert(data.error || 'Error'); return; }
+    window.open(data.print_url, '_blank');
+  }
 
   async function voidInvoice(){
-    // Require supervisor password to void
+    if(items.length === 0){ alert('{{ _('Invoice is already empty / لا توجد عناصر في الفاتورة') }}'); return; }
     const pwd = prompt("{{ _('Enter void password / أدخل كلمة مرور الإلغاء') }}");
     if(pwd===null) return; // cancelled prompt
     if(!pwd || pwd.trim().length===0){ alert("{{ _('Password required / كلمة المرور مطلوبة') }}"); return; }
@@ -288,21 +306,6 @@
       renderItems();
       alert('{{ _('Invoice cancelled / تم إلغاء الفاتورة') }}');
     }catch(e){ alert('Error'); }
-  }
-
-      items: items.map(x => ({ meal_id: x.meal_id, qty: x.qty })),
-      customer_name: document.getElementById('custName').value,
-      customer_phone: document.getElementById('custPhone').value,
-      discount_pct: parseFloat(document.getElementById('discountPct').value || '0'),
-      tax_pct: parseFloat(document.getElementById('taxPct').value || '0'),
-      payment_method: document.getElementById('payMethod').value
-    };
-    const res = await fetch('{{ url_for('api_sales_checkout') }}', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if(!data.ok){ alert(data.error || 'Error'); return; }
-    window.open(data.print_url, '_blank');
   }
 </script>
 {% endblock %}
