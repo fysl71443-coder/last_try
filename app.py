@@ -2805,63 +2805,68 @@ def meals():
     } for m in raw_materials])
 
     if form.validate_on_submit():
-        # Create meal
-        meal = Meal(
-            name=form.name.data,
-            name_ar=form.name_ar.data,
-            description=form.description.data,
-            category=form.category.data,
-            profit_margin_percent=form.profit_margin_percent.data,
-            user_id=current_user.id
-        )
-        db.session.add(meal)
-        db.session.flush()  # Get meal ID
+        try:
+            # Create meal
+            meal = Meal(
+                name=form.name.data,
+                name_ar=form.name_ar.data,
+                description=form.description.data,
+                category=form.category.data,
+                profit_margin_percent=form.profit_margin_percent.data,
+                user_id=current_user.id
+            )
+            db.session.add(meal)
+            db.session.flush()  # Get meal ID
 
-        # Add ingredients and calculate total cost (robust parse from POST to support dynamic rows)
-        from decimal import Decimal
-        total_cost = 0
-        # Find all indices in POST like ingredients-<i>-raw_material_id
-        idxs = set()
-        for k in request.form.keys():
-            if k.startswith('ingredients-') and k.endswith('-raw_material_id'):
+            # Add ingredients and calculate total cost (robust parse from POST to support dynamic rows)
+            from decimal import Decimal
+            total_cost = 0
+            # Find all indices in POST like ingredients-<i>-raw_material_id
+            idxs = set()
+            for k in request.form.keys():
+                if k.startswith('ingredients-') and k.endswith('-raw_material_id'):
+                    try:
+                        idxs.add(int(k.split('-')[1]))
+                    except Exception:
+                        pass
+            for i in sorted(idxs):
                 try:
-                    idxs.add(int(k.split('-')[1]))
+                    rm_id = int(request.form.get(f'ingredients-{i}-raw_material_id') or 0)
+                    qty_raw = request.form.get(f'ingredients-{i}-quantity')
+                    qty = Decimal(qty_raw) if qty_raw not in (None, '',) else Decimal('0')
                 except Exception:
-                    pass
-        for i in sorted(idxs):
-            try:
-                rm_id = int(request.form.get(f'ingredients-{i}-raw_material_id') or 0)
-                qty_raw = request.form.get(f'ingredients-{i}-quantity')
-                qty = Decimal(qty_raw) if qty_raw not in (None, '',) else Decimal('0')
-            except Exception:
-                rm_id, qty = 0, Decimal('0')
-            if rm_id and qty > 0:
-                raw_material = RawMaterial.query.get(rm_id)
-                if raw_material:
-                    ingredient = MealIngredient(
-                        meal_id=meal.id,
-                        raw_material_id=raw_material.id,
-                        quantity=qty
-                    )
-                    ingredient.calculate_cost()
-                    db.session.add(ingredient)
-                    total_cost += float(ingredient.total_cost)
+                    rm_id, qty = 0, Decimal('0')
+                if rm_id and qty > 0:
+                    raw_material = RawMaterial.query.get(rm_id)
+                    if raw_material:
+                        ingredient = MealIngredient(
+                            meal_id=meal.id,
+                            raw_material_id=raw_material.id,
+                            quantity=qty
+                        )
+                        ingredient.calculate_cost()
+                        db.session.add(ingredient)
+                        total_cost += float(ingredient.total_cost)
 
-        # Update meal costs
-        meal.total_cost = total_cost
-        meal.calculate_selling_price()
+            # Update meal costs
+            meal.total_cost = total_cost
+            meal.calculate_selling_price()
 
-        db.session.commit()
+            db.session.commit()
 
-        # Emit real-time update
-        socketio.emit('meal_update', {
-            'meal_name': meal.display_name,
-            'total_cost': float(meal.total_cost),
-            'selling_price': float(meal.selling_price)
-        })
+            # Emit real-time update
+            socketio.emit('meal_update', {
+                'meal_name': meal.display_name,
+                'total_cost': float(meal.total_cost),
+                'selling_price': float(meal.selling_price)
+            })
 
-        flash(_('Meal created successfully / تم إنشاء الوجبة بنجاح'), 'success')
-        return redirect(url_for('meals'))
+            flash(_('Meal created successfully / تم إنشاء الوجبة بنجاح'), 'success')
+            return redirect(url_for('meals'))
+        except Exception as e:
+            db.session.rollback()
+            logging.exception('Failed to save meal')
+            flash(_('Failed to save meal / فشل حفظ الوجبة'), 'danger')
 
     # Get all meals
     all_meals = Meal.query.filter_by(active=True).all()
