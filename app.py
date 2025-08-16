@@ -71,30 +71,52 @@ login_manager = LoginManager(app)
 bcrypt = Bcrypt(app)
 socketio = SocketIO(app)
 
-# Run Alembic migrations automatically in production (Render) once per process
+# Production-safe runtime schema patcher (avoid heavy migrations on legacy DB)
 try:
     if os.getenv('RENDER') == 'true' or os.getenv('RENDER'):
         with app.app_context():
-            # Use Flask-Migrate API so env.py/current_app config is respected
-            from flask_migrate import upgrade as _fm_upgrade, stamp as _fm_stamp
-            from sqlalchemy import inspect as _sa_inspect
-            insp = _sa_inspect(db.engine)
-            has_alembic_version = 'alembic_version' in insp.get_table_names()
-            try:
-                _fm_upgrade()
-            except Exception as _e1:
-                logging.error('Auto migration attempt 1 failed: %s', _e1, exc_info=True)
-                # If database has no alembic_version table but already has legacy tables,
-                # stamp to a safe baseline then upgrade to head (idempotent migrations will add missing bits)
-                try:
-                    if not has_alembic_version:
-                        _fm_stamp('20250814_01')  # baseline before our idempotent fixes
-                        _fm_upgrade()
-                except Exception as _e2:
-                    logging.error('Auto migration attempt 2 (stamp then upgrade) failed: %s', _e2, exc_info=True)
-except Exception as _migr_err:
-    # Do not crash app if migrations fail; logs help diagnose
-    logging.error('Auto migration wrapper failed: %s', _migr_err, exc_info=True)
+            from sqlalchemy import inspect as _sa_inspect, text as _sa_text
+            _insp = _sa_inspect(db.engine)
+            with db.engine.begin() as _conn:
+                # 1) Ensure menu_categories table exists (idempotent)
+                if 'menu_categories' not in _insp.get_table_names():
+                    _conn.execute(_sa_text(
+                        """
+                        CREATE TABLE IF NOT EXISTS menu_categories (
+                            id SERIAL PRIMARY KEY,
+                            name VARCHAR(200) UNIQUE NOT NULL,
+                            active BOOLEAN DEFAULT TRUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                        """
+                    ))
+                # 2) Ensure Settings receipt columns and logo_url exist (idempotent)
+                if 'settings' in _insp.get_table_names():
+                    existing_cols = {c['name'] for c in _insp.get_columns('settings')}
+                    def addcol(col_sql):
+                        _conn.execute(_sa_text(col_sql))
+                    if 'receipt_paper_width' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_paper_width VARCHAR(4)")
+                    if 'receipt_margin_top_mm' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_top_mm INTEGER")
+                    if 'receipt_margin_bottom_mm' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_bottom_mm INTEGER")
+                    if 'receipt_margin_left_mm' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_left_mm INTEGER")
+                    if 'receipt_margin_right_mm' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_right_mm INTEGER")
+                    if 'receipt_font_size' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_font_size INTEGER")
+                    if 'receipt_show_logo' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_logo BOOLEAN DEFAULT TRUE")
+                    if 'receipt_show_tax_number' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_tax_number BOOLEAN DEFAULT TRUE")
+                    if 'receipt_footer_text' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_footer_text VARCHAR(300)")
+                    if 'logo_url' not in existing_cols:
+                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS logo_url VARCHAR(300)")
+except Exception as _patch_err:
+    logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
 
 # =========================
 # END OF INITIALIZATION
