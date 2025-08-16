@@ -1171,12 +1171,15 @@ def payments():
     _insp = _sa_inspect(db.engine)
     _tables = set(_insp.get_table_names())
     # Cross-database safe date expression for salary (year,month -> date)
-    dialect = db.session.bind.dialect.name if db.session.bind is not None else 'sqlite'
-    if dialect == 'postgresql':
+    try:
+        _dialect = db.engine.dialect.name
+    except Exception:
+        _dialect = 'postgresql'
+    if _dialect == 'postgresql':
         date_expr = func.to_date(func.concat(cast(Salary.year, String), '-', func.lpad(cast(Salary.month, String), 2, '0'), '-01'), 'YYYY-MM-DD')
     else:
-        # SQLite path
-        date_expr = func.date(func.printf('%04d-%02d-01', Salary.year, Salary.month))
+        # Fallback for non-Postgres (avoid printf which doesn't exist in PG)
+        date_expr = func.date('now')
 
     # Introspect columns to tolerate legacy schemas
     cols_sales = {c['name'] for c in _insp.get_columns('sales_invoices')} if 'sales_invoices' in _tables else set()
