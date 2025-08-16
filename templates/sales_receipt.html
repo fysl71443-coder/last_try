@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <title>{{ _('Receipt / إيصال') }} - {{ invoice.invoice_number }}</title>
   <style>
-    /* 80mm thermal style */
-    body { font-family: Arial, sans-serif; }
-    .receipt { width: 300px; margin: 0 auto; }
+    /* Thermal style based on Settings */
+    body { font-family: Arial, sans-serif; font-size: {{ (settings.receipt_font_size or 12) if settings else 12 }}px; }
+    .receipt { width: {{ '300' if (settings and settings.receipt_paper_width=='80') else '220' }}px; margin: 0 auto; }
     .center { text-align: center; }
     .right { text-align: right; }
-    .small { font-size: 12px; }
+    .small { font-size: {{ ((settings.receipt_font_size or 12) - 2) if settings else 10 }}px; }
     hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
     table { width: 100%; }
-    th, td { font-size: 12px; }
+    th, td { font-size: {{ (settings.receipt_font_size or 12) if settings else 12 }}px; }
   </style>
 </head>
 <body onload="window.print()">
@@ -34,6 +34,7 @@
       <div>{{ _('Date') }}: {{ invoice.date }}</div>
       <div>{{ _('Branch') }}: {{ invoice.branch }}</div>
       <div>{{ _('Customer') }}: {{ invoice.customer_name or '-' }}</div>
+      {% if invoice.customer_phone %}<div>{{ _('Phone') }}: {{ invoice.customer_phone }}</div>{% endif %}
     </div>
     <hr>
     <div class="center">
