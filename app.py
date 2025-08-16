@@ -135,6 +135,21 @@ try:
                     if 'customer_phone' not in existing_cols_si:
                         _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30)"))
 
+                # 5) Ensure menu_items table exists
+                if 'menu_items' not in _insp.get_table_names():
+                    _conn.execute(_sa_text(
+                        """
+                        CREATE TABLE IF NOT EXISTS menu_items (
+                            id SERIAL PRIMARY KEY,
+                            category_id INTEGER NOT NULL REFERENCES menu_categories(id) ON DELETE CASCADE,
+                            meal_id INTEGER NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+                            price_override NUMERIC(12,2),
+                            display_order INTEGER,
+                            CONSTRAINT uq_category_meal UNIQUE (category_id, meal_id)
+                        )
+                        """
+                    ))
+
 except Exception as _patch_err:
     logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
 
@@ -555,10 +570,13 @@ def sales_table_invoice(branch_code, table_no):
         meals = []
     try:
         from models import MenuCategory
-        active_cats = [c.name for c in MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).all()]
+        cat_objs = MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).all()
+        active_cats = [c.name for c in cat_objs]
         categories = active_cats if active_cats else sorted({(m.category or _('Uncategorized')) for m in meals})
+        cat_map = {c.name: c.id for c in cat_objs}
     except Exception:
         categories = sorted({(m.category or _('Uncategorized')) for m in meals})
+        cat_map = {}
     meals_data = [{
         'id': m.id,
         'name': m.display_name,
@@ -576,6 +594,31 @@ def sales_table_invoice(branch_code, table_no):
                            table_no=table_no,
                            categories=categories,
                            meals_json=json.dumps(meals_data),
+                           cat_map_json=json.dumps(cat_map),
+                           vat_rate=vat_rate,
+                           today=_date.today().isoformat())
+
+# API: items by category
+@app.route('/api/menu/<int:cat_id>/items')
+@login_required
+def api_menu_items(cat_id):
+    from models import MenuItem, Meal
+    items = MenuItem.query.filter_by(category_id=cat_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+    res = []
+    for it in items:
+        price = float(it.price_override) if it.price_override is not None else float(it.meal.selling_price or 0)
+        res.append({'id': it.id, 'meal_id': it.meal_id, 'name': it.meal.display_name, 'price': price})
+    return jsonify(res)
+
+    vat_rate = float(settings.vat_rate) if settings and settings.vat_rate is not None else 15.0
+    from datetime import date as _date
+    return render_template('sales_table_invoice.html',
+                           branch_code=branch_code,
+                           branch_label=BRANCH_CODES[branch_code],
+                           table_no=table_no,
+                           categories=categories,
+                           meals_json=json.dumps(meals_data),
+                           cat_map_json=json.dumps(cat_map),
                            vat_rate=vat_rate,
                            today=_date.today().isoformat())
 
@@ -622,7 +665,10 @@ def customers():
     query = Customer.query
     if q:
         query = query.filter((Customer.name.ilike(f"%{q}%")) | (Customer.phone.ilike(f"%{q}%")))
-    customers = query.order_by(Customer.name.asc()).all()
+    try:
+        customers = query.order_by(Customer.name.asc()).all()
+    except Exception:
+        customers = []
     return render_template('customers.html', customers=customers)
 
 @app.route('/customers/<int:cid>/toggle', methods=['POST'])
@@ -656,9 +702,115 @@ def menu():
                 db.session.commit()
                 flash(_('Category added / تم إضافة القسم'), 'success')
         return redirect(url_for('menu'))
-    # List
+    # List + optional items management
+    from models import MenuItem, Meal
     cats = MenuCategory.query.order_by(MenuCategory.name.asc()).all()
-    return render_template('menu_simple.html', categories=cats)
+    sel_id = request.args.get('cat_id', type=int)
+    selected_category = None
+    items = []
+    meals = []
+    try:
+        meals = Meal.query.filter_by(active=True).order_by(Meal.name.asc()).all()
+    except Exception:
+        meals = []
+    if sel_id:
+        selected_category = MenuCategory.query.get(sel_id)
+        if selected_category:
+            try:
+                items = MenuItem.query.filter_by(category_id=sel_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+            except Exception:
+                items = []
+    return render_template('menu_simple.html', categories=cats, selected_category=selected_category, items=items, meals=meals)
+
+# Menu items management (link meals to categories)
+@app.route('/menu/item/add', methods=['POST'])
+@login_required
+def menu_item_add():
+    from models import MenuItem, MenuCategory, Meal
+    try:
+        section_id = int(request.form.get('section_id') or 0)
+        meal_id = int(request.form.get('meal_id') or 0)
+        price_override = request.form.get('price_override')
+        display_order = request.form.get('display_order')
+        if price_override == '' or price_override is None:
+            price_override = None
+        else:
+            price_override = float(price_override)
+        display_order = int(display_order) if (display_order or '').strip() else None
+        # Validate
+        if not MenuCategory.query.get(section_id) or not Meal.query.get(meal_id):
+            flash(_('Invalid section or meal'), 'danger')
+            return redirect(url_for('menu_admin', section_id=section_id))
+        # Upsert unique (section, meal)
+        ex = MenuItem.query.filter_by(category_id=section_id, meal_id=meal_id).first()
+        if ex:
+            ex.price_override = price_override
+            ex.display_order = display_order
+        else:
+            db.session.add(MenuItem(category_id=section_id, meal_id=meal_id, price_override=price_override, display_order=display_order))
+        db.session.commit()
+        flash(_('Item saved'), 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(_('Failed to save item'), 'danger')
+    return redirect(url_for('menu'))
+
+@app.route('/menu/item/<int:item_id>/update', methods=['POST'])
+@login_required
+def menu_item_update(item_id):
+    from models import MenuItem
+    it = MenuItem.query.get_or_404(item_id)
+    try:
+        price_override = request.form.get('price_override')
+        display_order = request.form.get('display_order')
+        it.price_override = (None if price_override == '' else float(price_override))
+        it.display_order = int(display_order) if (display_order or '').strip() else None
+        db.session.commit()
+        flash(_('Item updated'), 'success')
+    except Exception:
+        db.session.rollback()
+        flash(_('Update failed'), 'danger')
+    return redirect(url_for('menu'))
+
+@app.route('/menu/item/<int:item_id>/delete', methods=['POST'])
+@login_required
+def menu_item_delete(item_id):
+    from models import MenuItem
+    it = MenuItem.query.get_or_404(item_id)
+    try:
+        db.session.delete(it)
+        db.session.commit()
+        flash(_('Item deleted'), 'success')
+    except Exception:
+        db.session.rollback()
+        flash(_('Delete failed'), 'danger')
+    return redirect(url_for('menu'))
+
+            else:
+                cat = MenuCategory(name=name, active=True)
+                db.session.add(cat)
+                db.session.commit()
+                flash(_('Category added / تم إضافة القسم'), 'success')
+        return redirect(url_for('menu'))
+    # List + optional items management
+    from models import MenuItem, Meal
+    cats = MenuCategory.query.order_by(MenuCategory.name.asc()).all()
+    sel_id = request.args.get('cat_id', type=int)
+    selected_category = None
+    items = []
+    meals = []
+    try:
+        meals = Meal.query.filter_by(active=True).order_by(Meal.name.asc()).all()
+    except Exception:
+        meals = []
+    if sel_id:
+        selected_category = MenuCategory.query.get(sel_id)
+        if selected_category:
+            try:
+                items = MenuItem.query.filter_by(category_id=sel_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+            except Exception:
+                items = []
+    return render_template('menu_simple.html', categories=cats, selected_category=selected_category, items=items, meals=meals)
 
 @app.route('/menu/<int:cat_id>/toggle', methods=['POST'])
 @login_required
