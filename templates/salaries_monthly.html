@@ -29,7 +29,7 @@
   </form>
 
   <form method="POST" action="{{ url_for('salaries_monthly_save') }}">
-    {{ csrf_token() if csrf_token is defined else '' }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <input type="hidden" name="year" value="{{ year }}">
     <input type="hidden" name="month" value="{{ month }}">
 

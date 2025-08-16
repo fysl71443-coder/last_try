@@ -56,17 +56,18 @@ body {
     <!-- نموذج إنشاء فاتورة مصروفات جديدة -->
     <div class="expenses-card">
         <h5 class="mb-3">{{ _('Create New Expense Invoice / إنشاء فاتورة مصروفات جديدة') }}</h5>
-        
+
         <div class="alert alert-info">
             <strong>💡 {{ _('Note / ملاحظة') }}:</strong>
             {{ _('Record all business expenses including utilities, rent, supplies, and other operational costs / سجل جميع مصروفات العمل بما في ذلك المرافق والإيجار واللوازم والتكاليف التشغيلية الأخرى') }}
         </div>
-        
+
         <form method="POST" id="expense-form">
             {{ form.hidden_tag() }}
-            
+
             <!-- معلومات الفاتورة الأساسية -->
             <div class="row mb-3">
+                {% if form.csrf_token %}{{ form.csrf_token }}{% endif %}
                 <div class="col-md-6">
                     {{ form.date.label(class_='form-label') }}
                     {{ form.date(class_='form-control') }}
@@ -142,6 +143,8 @@ body {
                     </button>
                 </div>
                 <div class="col-md-6 text-end">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
                     {{ form.submit(class_='btn btn-danger btn-lg') }}
                 </div>
             </div>
@@ -152,7 +155,7 @@ body {
     {% if invoices %}
     <div class="expenses-card">
         <h5 class="mb-3">{{ _('Previous Expense Invoices / فواتير المصروفات السابقة') }}</h5>
-        
+
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead class="table-dark">
@@ -228,30 +231,30 @@ body {
         let totalBeforeTax = 0;
         let totalTax = 0;
         let totalDiscount = 0;
-        
+
         document.querySelectorAll('.item-row').forEach(row => {
             const quantityInput = row.querySelector('input[name$="-quantity"]');
             const priceInput = row.querySelector('input[name$="-price_before_tax"]');
             const taxInput = row.querySelector('input[name$="-tax"]');
             const discountInput = row.querySelector('input[name$="-discount"]');
             const totalDisplay = row.querySelector('.item-total');
-            
+
             const quantity = parseFloat(quantityInput.value) || 0;
             const price = parseFloat(priceInput.value) || 0;
             const tax = parseFloat(taxInput.value) || 0;
             const discount = parseFloat(discountInput.value) || 0;
-            
+
             const itemBeforeTax = quantity * price;
             const itemTotal = itemBeforeTax + tax - discount;
-            
+
             totalDisplay.textContent = '$' + itemTotal.toFixed(2);
             totalBeforeTax += itemBeforeTax;
             totalTax += tax;
             totalDiscount += discount;
         });
-        
+
         const finalTotal = totalBeforeTax + totalTax - totalDiscount;
-        
+
         document.getElementById('total-before-tax').textContent = '$' + totalBeforeTax.toFixed(2);
         document.getElementById('tax-amount').textContent = '$' + totalTax.toFixed(2);
         document.getElementById('total-discount').textContent = '$' + totalDiscount.toFixed(2);
@@ -267,7 +270,7 @@ body {
 
     // Add new item functionality
     let itemIndex = {{ form.items|length }};
-    
+
     document.getElementById('add-item').addEventListener('click', function() {
         const container = document.getElementById('items-container');
         const newItem = document.createElement('div');
@@ -326,7 +329,7 @@ body {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = '/delete_expense_invoice/' + invoiceId;
-            
+
             // Add CSRF token if available
             const csrfToken = document.querySelector('input[name="csrf_token"]');
             if (csrfToken) {
@@ -336,7 +339,7 @@ body {
                 tokenInput.value = csrfToken.value;
                 form.appendChild(tokenInput);
             }
-            
+
             document.body.appendChild(form);
             form.submit();
         }
