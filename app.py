@@ -2618,10 +2618,23 @@ def print_invoices(section):
     from reportlab.pdfgen import canvas
     import io
 
-    if section == 'all':
-        query = Invoice.query.all()
-    else:
-        query = Invoice.query.filter_by(invoice_type=section).all()
+    # Build rows from specialized invoice tables to avoid reliance on unified Invoice table
+    from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice
+    section_norm = (section or 'all').lower()
+    if section_norm in ['purchases', 'purchase']: section_norm = 'purchase'
+    elif section_norm in ['expenses', 'expense']: section_norm = 'expense'
+    elif section_norm in ['sales', 'sale']: section_norm = 'sales'
+    else: section_norm = 'all'
+    rows = []
+    if section_norm in ['all','sales']:
+        for s in SalesInvoice.query.order_by(SalesInvoice.date.desc()).all():
+            rows.append({'invoice_number': s.invoice_number, 'who': s.customer_name or '-', 'total': float(s.total_after_tax_discount or 0), 'status': s.status})
+    if section_norm in ['all','purchase']:
+        for p in PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).all():
+            rows.append({'invoice_number': p.invoice_number, 'who': p.supplier_name or '-', 'total': float(p.total_after_tax_discount or 0), 'status': p.status})
+    if section_norm in ['all','expense']:
+        for e in ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).all():
+            rows.append({'invoice_number': e.invoice_number, 'who': '-', 'total': float(e.total_after_tax_discount or 0), 'status': e.status})
 
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
@@ -2705,8 +2718,8 @@ def print_sales_receipt(invoice_id:int):
         p.setFont(ar_font, 10)
     else:
         p.setFont("Helvetica", 10)
-    for inv in query:
-        line = f"{getattr(inv,'invoice_number','')} | {getattr(inv,'customer_supplier','') or ''} | {getattr(inv,'total_amount','')} | {getattr(inv,'status','')}"
+    for r in rows:
+        line = f"{r['invoice_number']} | {r['who']} | {r['total']:.2f} | {r['status']}"
         p.drawString(50, y, shape_ar(line) if ar_font else line)
         y -= 20
         if y < 50:  # New page if needed
@@ -2729,7 +2742,15 @@ def print_sales_receipt(invoice_id:int):
 @app.route('/invoices/single_payment/<int:invoice_id>', methods=['POST'])
 @login_required
 def single_payment(invoice_id):
-    invoice = Invoice.query.get_or_404(invoice_id)
+    # Single payment against unified Invoice table (legacy). If not exists, fall back to specialized tables mapping.
+    try:
+        invoice = Invoice.query.get_or_404(invoice_id)
+    except Exception:
+        # Fallback: attempt to locate in specialized invoices (use first match by id) and mirror minimal fields
+        from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice
+        invoice = SalesInvoice.query.get(invoice_id) or PurchaseInvoice.query.get(invoice_id) or ExpenseInvoice.query.get(invoice_id)
+        if not invoice:
+            abort(404)
     payment_amount = float(request.form.get('payment_amount', 0))
 
     if payment_amount > 0:
