@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Menu / المنيو') }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">📖 {{ _('Menu / المنيو') }}</h3>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+  </div>
+
+  <div class="card mb-3"><div class="card-body">
+    <form method="POST" class="row g-2 align-items-end" action="{{ url_for('menu') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="col-md-6">
+        <label class="form-label">{{ _('Category Name / اسم القسم') }}</label>
+        <input name="name" class="form-control" required>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-success w-100">{{ _('Add Category / إضافة قسم') }}</button>
+      </div>
+    </form>
+  </div></div>
+
+  <div class="card"><div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead><tr>
+          <th>#</th><th>{{ _('Name / الاسم') }}</th><th>{{ _('Status / الحالة') }}</th><th>{{ _('Actions / الإجراءات') }}</th>
+        </tr></thead>
+        <tbody>
+          {% for c in categories %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ c.name }}</td>
+            <td><span class="badge bg-{{ 'success' if c.active else 'secondary' }}">{{ _('Active') if c.active else _('Inactive') }}</span></td>
+            <td>
+              <form method="post" action="{{ url_for('menu_toggle', cat_id=c.id) }}" onsubmit="return confirm('{{ _('Confirm toggle? / تأكيد التبديل؟') }}')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button class="btn btn-sm btn-outline-primary">{{ _('Toggle / تبديل') }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center">{{ _('No categories / لا توجد أقسام') }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+

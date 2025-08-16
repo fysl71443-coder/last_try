@@ -658,7 +658,7 @@ def menu():
         return redirect(url_for('menu'))
     # List
     cats = MenuCategory.query.order_by(MenuCategory.name.asc()).all()
-    return render_template('menu.html', categories=cats)
+    return render_template('menu_simple.html', categories=cats)
 
 @app.route('/menu/<int:cat_id>/toggle', methods=['POST'])
 @login_required
