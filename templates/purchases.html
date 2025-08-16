@@ -68,6 +68,8 @@ body {
 
         <form method="POST" id="purchase-form">
             {{ form.hidden_tag() }}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
 
             <!-- معلومات الفاتورة الأساسية -->
             <div class="row mb-3">

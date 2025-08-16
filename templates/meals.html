@@ -79,6 +79,8 @@ body {
 
         <form method="POST" id="meal-form">
             {{ form.hidden_tag() }}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
 
             <!-- معلومات الوجبة الأساسية -->
             <div class="row mb-3">

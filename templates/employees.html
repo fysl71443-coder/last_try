@@ -16,6 +16,8 @@
     <div class="card-body">
       <form method="POST">
         {{ form.hidden_tag() }}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
         <div class="row g-3">
           <div class="col-md-3">{{ form.employee_code.label(class_='form-label') }}{{ form.employee_code(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.full_name.label(class_='form-label') }}{{ form.full_name(class_='form-control') }}</div>

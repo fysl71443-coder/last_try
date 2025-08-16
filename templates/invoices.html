@@ -71,6 +71,8 @@ body {
     <!-- نموذج الدفع المتعدد -->
     <div class="invoice-card">
         <form method="post" action="{{ url_for('bulk_payment') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
             <div class="table-responsive">
                 <table class="table table-striped table-bordered">
                     <thead class="table-dark">
@@ -109,8 +111,11 @@ body {
                             </td>
                             <td>{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '-' }}</td>
                             <td>
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
                                 {% if invoice.status != 'paid' %}
                                 <form method="post" action="{{ url_for('single_payment', invoice_id=invoice.id) }}" class="d-flex">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     <input type="number" step="0.01" name="payment_amount"
                                            placeholder="Amount" class="form-control form-control-sm me-1"
                                            max="{{ invoice.remaining_amount }}" required>
