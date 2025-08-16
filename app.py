@@ -491,9 +491,14 @@ def _seed_menu_categories_once():
 
 # Helpers
 BRANCH_CODES = {'china_town': 'China Town', 'place_india': 'Place India'}
+PAYMENT_METHODS = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC']
 
 def is_valid_branch(code: str) -> bool:
     return code in BRANCH_CODES
+
+@app.context_processor
+def inject_globals():
+    return dict(PAYMENT_METHODS=PAYMENT_METHODS, BRANCH_CODES=BRANCH_CODES)
 
 # Tables screen: 1..50 per branch
 @app.route('/sales/<branch_code>/tables', methods=['GET'])
@@ -623,8 +628,9 @@ def api_sales_checkout():
         invoice_number=invoice_number,
         date=_dt.utcnow().date(),
         payment_method=payment_method,
-        branch=BRANCH_CODES[branch_code],
+        branch=branch_code,
         customer_name=customer_name,
+        customer_phone=customer_phone,
         total_before_tax=subtotal,
         tax_amount=tax_total,
         discount_amount=discount_val,
@@ -1314,6 +1320,20 @@ def reports():
             end_dt = today
     else:
         start_dt = today.replace(day=1)
+    # Optional branch filter
+    branch_filter = request.args.get('branch')
+    if branch_filter and branch_filter != 'all':
+        sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter).scalar() or 0
+        sales_china = 0
+        total_sales = float(sales_place)
+        daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter) \
+            .group_by(SalesInvoice.date) \
+            .order_by(SalesInvoice.date.asc()).all()
+        line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
+        line_values = [float(r.t or 0) for r in daily_rows]
+
         end_dt = today
 
     # Sales totals by branch
@@ -1429,7 +1449,7 @@ def register_payment_ajax():
         return jsonify({'status':'error', 'message':'invalid_amount'}), 400
     if amount <= 0:
         return jsonify({'status':'error', 'message':'invalid_amount'}), 400
-    method = request.form.get('payment_method')
+    method = (request.form.get('payment_method') or 'CASH').strip().upper()
 
     # Register payment
     pay = Payment(invoice_id=invoice_id, invoice_type=invoice_type, amount_paid=amount, payment_method=method)

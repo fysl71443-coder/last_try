@@ -23,6 +23,15 @@
       </select>
     </div>
     <div class="col-md-3">
+      <label class="form-label">{{ _('Branch / الفرع') }}</label>
+      <select class="form-select" name="branch">
+        <option value="all" {{ 'selected' if request.args.get('branch','all')=='all' }}>{{ _('All / الكل') }}</option>
+        <option value="place_india" {{ 'selected' if request.args.get('branch')=='place_india' }}>{{ _('Place India') }}</option>
+        <option value="china_town" {{ 'selected' if request.args.get('branch')=='china_town' }}>{{ _('China Town') }}</option>
+      </select>
+    </div>
+
+    <div class="col-md-3">
       <label class="form-label">{{ _('From / من') }}</label>
       <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
     </div>
