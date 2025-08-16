@@ -11,7 +11,7 @@ import os
 import sys
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # 3️⃣ Load environment variables
 from dotenv import load_dotenv
@@ -259,7 +259,7 @@ def login():
     # Check if blocked
     if client_ip in login_attempts:
         attempts_info = login_attempts[client_ip]
-        if attempts_info["count"] >= 5 and datetime.utcnow() - attempts_info["last_attempt"] < timedelta(minutes=10):
+        if attempts_info["count"] >= 5 and datetime.now(timezone.utc) - attempts_info["last_attempt"] < timedelta(minutes=10):
             flash(_('Too many attempts. Try again later. / عدد المحاولات كبير، حاول لاحقاً.'), 'danger')
             return render_template('login.html', form=form)
 
@@ -279,10 +279,10 @@ def login():
 
         # Wrong credentials — increment counter
         if client_ip not in login_attempts:
-            login_attempts[client_ip] = {"count": 1, "last_attempt": datetime.utcnow()}
+            login_attempts[client_ip] = {"count": 1, "last_attempt": datetime.now(timezone.utc)}
         else:
             login_attempts[client_ip]["count"] += 1
-            login_attempts[client_ip]["last_attempt"] = datetime.utcnow()
+            login_attempts[client_ip]["last_attempt"] = datetime.now(timezone.utc)
 
         flash(_('اسم المستخدم أو كلمة المرور غير صحيحة / Invalid credentials.'), 'danger')
 
@@ -344,7 +344,7 @@ def sales_branch(branch_code):
 
     # Default date
     if request.method == 'GET':
-        form.date.data = datetime.utcnow().date()
+        form.date.data = datetime.now(timezone.utc).date()
 
     # Handle submit
     if form.validate_on_submit():
@@ -353,11 +353,11 @@ def sales_branch(branch_code):
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
             try:
                 last_num = int(last_invoice.invoice_number.split('-')[-1])
-                invoice_number = f'SAL-{datetime.utcnow().year}-{last_num + 1:03d}'
+                invoice_number = f'SAL-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
             except Exception:
-                invoice_number = f'SAL-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
+                invoice_number = f'SAL-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
         else:
-            invoice_number = f'SAL-{datetime.utcnow().year}-001'
+            invoice_number = f'SAL-{datetime.now(timezone.utc).year}-001'
 
         # Totals
         total_before_tax = 0.0
@@ -492,11 +492,11 @@ def sales_all():
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
             try:
                 last_num = int(last_invoice.invoice_number.split('-')[-1])
-                invoice_number = f'SAL-{datetime.utcnow().year}-{last_num + 1:03d}'
+                invoice_number = f'SAL-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
             except Exception:
-                invoice_number = f'SAL-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
+                invoice_number = f'SAL-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
         else:
-            invoice_number = f'SAL-{datetime.utcnow().year}-001'
+            invoice_number = f'SAL-{datetime.now(timezone.utc).year}-001'
 
 # Seed default menu categories once (safe, best-effort)
 MENU_SEEDED = False
@@ -824,7 +824,7 @@ def api_sales_checkout():
             new_num = 1
     else:
         new_num = 1
-    invoice_number = f"SAL-{_dt.utcnow().year}-{new_num:03d}"
+    invoice_number = f"SAL-{_dt.now(_dt.timezone.utc).year}-{new_num:03d}"
 
     # Calculate totals and build items
     subtotal = 0.0
@@ -855,7 +855,7 @@ def api_sales_checkout():
     # Persist invoice
     inv = SalesInvoice(
         invoice_number=invoice_number,
-        date=_dt.utcnow().date(),
+        date=_dt.now(_dt.timezone.utc).date(),
         payment_method=payment_method,
         branch=branch_code,
         customer_name=customer_name,
@@ -935,11 +935,11 @@ def purchases():
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
             try:
                 last_num = int(last_invoice.invoice_number.split('-')[-1])
-                invoice_number = f'PUR-{datetime.utcnow().year}-{last_num + 1:03d}'
+                invoice_number = f'PUR-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
             except Exception:
-                invoice_number = f'PUR-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
+                invoice_number = f'PUR-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
         else:
-            invoice_number = f'PUR-{datetime.utcnow().year}-001'
+            invoice_number = f'PUR-{datetime.now(timezone.utc).year}-001'
 
         # Calculate totals
         total_before_tax = 0
@@ -1060,7 +1060,7 @@ def purchases():
 
     # Set default date for new form
     if request.method == 'GET':
-        form.date.data = datetime.utcnow().date()
+        form.date.data = datetime.now(timezone.utc).date()
 
     # Pagination for purchase invoices
     page = int(request.args.get('page') or 1)
@@ -1079,11 +1079,11 @@ def expenses():
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
             try:
                 last_num = int(last_invoice.invoice_number.split('-')[-1])
-                invoice_number = f'EXP-{datetime.utcnow().year}-{last_num + 1:03d}'
+                invoice_number = f'EXP-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
             except Exception:
-                invoice_number = f'EXP-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
+                invoice_number = f'EXP-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
         else:
-            invoice_number = f'EXP-{datetime.utcnow().year}-001'
+            invoice_number = f'EXP-{datetime.now(timezone.utc).year}-001'
 
         # Calculate totals
         total_before_tax = 0
@@ -1188,7 +1188,7 @@ def expenses():
 
     # Set default date for new form
     if request.method == 'GET':
-        form.date.data = datetime.utcnow().date()
+        form.date.data = datetime.now(timezone.utc).date()
 
     # Pagination for expense invoices
     page = int(request.args.get('page') or 1)
@@ -1528,7 +1528,7 @@ def reports():
     start_arg = request.args.get('start_date')
     end_arg = request.args.get('end_date')
 
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     if period == 'today':
         start_dt = end_dt = today
     elif period == 'this_week':
@@ -1845,13 +1845,13 @@ def salaries_statements():
         pass
     # Year/month
     try:
-        year = int(request.args.get('year') or datetime.utcnow().year)
+        year = int(request.args.get('year') or datetime.now(timezone.utc).year)
     except Exception:
-        year = datetime.utcnow().year
+        year = datetime.now(timezone.utc).year
     try:
-        month = int(request.args.get('month') or datetime.utcnow().month)
+        month = int(request.args.get('month') or datetime.now(timezone.utc).month)
     except Exception:
-        month = datetime.utcnow().month
+        month = datetime.now(timezone.utc).month
 
     from sqlalchemy import func
     qs = Salary.query.filter_by(year=year, month=month).join(Employee).order_by(Employee.full_name.asc())
@@ -2099,13 +2099,13 @@ def salaries_monthly():
         pass
     # Select year/month
     try:
-        year = int(request.values.get('year') or datetime.utcnow().year)
+        year = int(request.values.get('year') or datetime.now(timezone.utc).year)
     except Exception:
-        year = datetime.utcnow().year
+        year = datetime.now(timezone.utc).year
     try:
-        month = int(request.values.get('month') or datetime.utcnow().month)
+        month = int(request.values.get('month') or datetime.now(timezone.utc).month)
     except Exception:
-        month = datetime.utcnow().month
+        month = datetime.now(timezone.utc).month
 
     # Ensure salary rows exist for all active employees
     emps = Employee.query.filter_by(status='active').order_by(Employee.full_name.asc()).all()
@@ -2517,7 +2517,7 @@ def api_user_permissions_save(uid):
 @login_required
 def invoices_retention_view():
     # Show invoices older than 12 months (approx 365 days)
-    cutoff = datetime.utcnow().date() - timedelta(days=365)
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=365)
     sales_old = SalesInvoice.query.filter(SalesInvoice.date < cutoff).order_by(SalesInvoice.date.desc()).limit(200).all()
     purchases_old = PurchaseInvoice.query.filter(PurchaseInvoice.date < cutoff).order_by(PurchaseInvoice.date.desc()).limit(200).all()
     expenses_old = ExpenseInvoice.query.filter(ExpenseInvoice.date < cutoff).order_by(ExpenseInvoice.date.desc()).limit(200).all()
@@ -2531,7 +2531,7 @@ def invoices_retention_export_view():
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
     import io
-    cutoff = datetime.utcnow().date() - timedelta(days=365)
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=365)
     kind = (request.args.get('type') or 'all').lower()
     # Collect
     sales = SalesInvoice.query.filter(SalesInvoice.date < cutoff).order_by(SalesInvoice.date.asc()).all() if kind in ['all','sales'] else []
