@@ -117,7 +117,8 @@
             </div>
           </div>
 
-          <div class="mt-3 text-end">
+          <div class="mt-3 d-flex justify-content-between align-items-center">
+            <button class="btn btn-outline-danger" onclick="voidInvoice()">{{ _('Cancel Invoice / إلغاء الفاتورة') }}</button>
             <button class="btn btn-success" onclick="payAndPrint()">{{ _('Pay & Print / دفع + طباعة') }}</button>
           </div>
         </div>
@@ -267,6 +268,26 @@
     const payload = {
       branch_code: '{{ branch_code }}',
       table_no: {{ table_no }},
+
+  async function voidInvoice(){
+    // Require supervisor password to void
+    const pwd = prompt("{{ _('Enter void password / أدخل كلمة مرور الإلغاء') }}");
+    if(pwd===null) return; // cancelled prompt
+    if(!pwd || pwd.trim().length===0){ alert("{{ _('Password required / كلمة المرور مطلوبة') }}"); return; }
+    try{
+      const resp = await fetch('{{ url_for('api_sales_void_check') }}', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ password: pwd })
+      });
+      const data = await resp.json();
+      if(!data.ok){ alert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}'); return; }
+      // Clear invoice items and totals
+      items.length = 0;
+      renderItems();
+      alert('{{ _('Invoice cancelled / تم إلغاء الفاتورة') }}');
+    }catch(e){ alert('Error'); }
+  }
+
       items: items.map(x => ({ meal_id: x.meal_id, qty: x.qty })),
       customer_name: document.getElementById('custName').value,
       customer_phone: document.getElementById('custPhone').value,

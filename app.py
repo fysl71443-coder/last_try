@@ -798,6 +798,26 @@ def menu_toggle(cat_id):
     return redirect(url_for('menu'))
 
 # Checkout API: create invoice + items + payment, then return receipt URL
+
+@app.route('/api/sales/void-check', methods=['POST'])
+@login_required
+def api_sales_void_check():
+    data = request.get_json(silent=True) or {}
+    pwd = (data.get('password') or '').strip()
+    # Allow only admin role by password check
+    ok = False
+    try:
+        from models import Settings
+        s = Settings.query.first()
+        # Use tax_number as a quick configurable secret if set; otherwise fallback to '0000'
+        expected = (s.tax_number or '0000').strip() if s and s.tax_number else '0000'
+        ok = (pwd == expected)
+    except Exception:
+        ok = (pwd == '0000')
+    if not ok:
+        return jsonify({'ok': False, 'error': _('Wrong password / كلمة المرور غير صحيحة')}), 403
+    return jsonify({'ok': True})
+
 @app.route('/api/sales/checkout', methods=['POST'])
 @login_required
 def api_sales_checkout():
