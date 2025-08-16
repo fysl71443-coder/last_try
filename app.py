@@ -115,6 +115,26 @@ try:
                         addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_footer_text VARCHAR(300)")
                     if 'logo_url' not in existing_cols:
                         addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS logo_url VARCHAR(300)")
+                # 3) Ensure customers table exists (idempotent)
+                if 'customers' not in _insp.get_table_names():
+                    _conn.execute(_sa_text(
+                        """
+                        CREATE TABLE IF NOT EXISTS customers (
+                            id SERIAL PRIMARY KEY,
+                            name VARCHAR(200) NOT NULL,
+                            phone VARCHAR(50),
+                            discount_percent NUMERIC(5,2) DEFAULT 0,
+                            active BOOLEAN DEFAULT TRUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                        """
+                    ))
+                # 4) Ensure sales_invoices.customer_phone exists (idempotent)
+                if 'sales_invoices' in _insp.get_table_names():
+                    existing_cols_si = {c['name'] for c in _insp.get_columns('sales_invoices')}
+                    if 'customer_phone' not in existing_cols_si:
+                        _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30)"))
+
 except Exception as _patch_err:
     logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
 
