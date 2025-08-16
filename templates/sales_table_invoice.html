@@ -124,6 +124,12 @@
 </div>
 
 <script>
+  function collapseAll(){ document.querySelectorAll('.meals-holder').forEach(h=>{ h.style.display='none'; }); }
+  document.querySelectorAll('.cat-card').forEach((el, i)=>{
+    el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectCategory(el.innerText.trim(), i);} });
+    el.setAttribute('tabindex','0');
+  });
+
   // Category name -> id map injected from server when available
   window.CAT_MAP = {{ cat_map_json | safe }};
 
@@ -172,15 +178,18 @@
     const empty = document.getElementById(`empty-${idx}`);
     if(!holder||!grid||!empty) return;
     holder.style.display = 'block';
+    holder.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
     grid.innerHTML = '';
 
     // Try menu category mapping first
     const catId = (window.CAT_MAP && window.CAT_MAP[cat]) ? window.CAT_MAP[cat] : null;
     if(catId){
       try{
-        const resp = await fetch(`/api/menu/${catId}/items`);
+        const resp = await fetch(`/api/menu/${catId}/items`, { credentials: 'same-origin' });
         const data = await resp.json();
         empty.classList.toggle('d-none', data.length !== 0);
+        grid.innerHTML = '';
         data.forEach(m => {
           const col = document.createElement('div');
           col.className = 'col-6 col-md-4 col-lg-3';
