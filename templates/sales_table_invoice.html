@@ -121,6 +121,9 @@
 </div>
 
 <script>
+  // Category name -> id map injected from server when available
+  window.CAT_MAP = {{ cat_map_json | safe }};
+
   const meals = {{ meals_json | safe }};
   let currentCategory = null;
   const items = [];
@@ -157,10 +160,32 @@
     renderItems();
   }
 
-  function selectCategory(cat){
+  async function selectCategory(cat){
     currentCategory = cat;
     const grid = document.getElementById('mealsGrid');
     grid.innerHTML = '';
+    // Try menu category mapping first
+    const catId = (window.CAT_MAP && window.CAT_MAP[cat]) ? window.CAT_MAP[cat] : null;
+    if(catId){
+      try{
+        const resp = await fetch(`/api/menu/${catId}/items`);
+        const data = await resp.json();
+        data.forEach(m => {
+          const col = document.createElement('div');
+          col.className = 'col-6 col-md-4 col-lg-3';
+          col.innerHTML = `
+            <div class="card meal-card h-100" onclick="addItem(${m.meal_id})">
+              <div class="card-body d-flex flex-column justify-content-between">
+                <div class="fw-bold">${m.name}</div>
+                <div class="text-muted">{{ _('Price') }}: ${m.price.toFixed(2)}</div>
+              </div>
+            </div>`;
+          grid.appendChild(col);
+        });
+        if(data.length) return;
+      }catch(e){ /* fallback below */ }
+    }
+    // Fallback: filter local meals
     const filtered = meals.filter(m => m.category === cat);
     filtered.forEach(m => {
       const col = document.createElement('div');

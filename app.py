@@ -570,10 +570,13 @@ def sales_table_invoice(branch_code, table_no):
         meals = []
     try:
         from models import MenuCategory
-        active_cats = [c.name for c in MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).all()]
+        cat_objs = MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).all()
+        active_cats = [c.name for c in cat_objs]
         categories = active_cats if active_cats else sorted({(m.category or _('Uncategorized')) for m in meals})
+        cat_map = {c.name: c.id for c in cat_objs}
     except Exception:
         categories = sorted({(m.category or _('Uncategorized')) for m in meals})
+        cat_map = {}
     meals_data = [{
         'id': m.id,
         'name': m.display_name,
@@ -591,6 +594,7 @@ def sales_table_invoice(branch_code, table_no):
                            table_no=table_no,
                            categories=categories,
                            meals_json=json.dumps(meals_data),
+                           cat_map_json=json.dumps(cat_map),
                            vat_rate=vat_rate,
                            today=_date.today().isoformat())
 
@@ -614,6 +618,7 @@ def api_menu_items(cat_id):
                            table_no=table_no,
                            categories=categories,
                            meals_json=json.dumps(meals_data),
+                           cat_map_json=json.dumps(cat_map),
                            vat_rate=vat_rate,
                            today=_date.today().isoformat())
 
@@ -660,7 +665,10 @@ def customers():
     query = Customer.query
     if q:
         query = query.filter((Customer.name.ilike(f"%{q}%")) | (Customer.phone.ilike(f"%{q}%")))
-    customers = query.order_by(Customer.name.asc()).all()
+    try:
+        customers = query.order_by(Customer.name.asc()).all()
+    except Exception:
+        customers = []
     return render_template('customers.html', customers=customers)
 
 @app.route('/customers/<int:cid>/toggle', methods=['POST'])
