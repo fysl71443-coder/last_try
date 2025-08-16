@@ -1178,32 +1178,50 @@ def payments():
         # SQLite path
         date_expr = func.date(func.printf('%04d-%02d-01', Salary.year, Salary.month))
 
+    # Introspect columns to tolerate legacy schemas
+    cols_sales = {c['name'] for c in _insp.get_columns('sales_invoices')} if 'sales_invoices' in _tables else set()
+    cols_purch = {c['name'] for c in _insp.get_columns('purchase_invoices')} if 'purchase_invoices' in _tables else set()
+    cols_exp = {c['name'] for c in _insp.get_columns('expense_invoices')} if 'expense_invoices' in _tables else set()
+
+    sales_party = SalesInvoice.customer_name if 'customer_name' in cols_sales else literal('Customer')
+    sales_total = SalesInvoice.total_after_tax_discount if 'total_after_tax_discount' in cols_sales else literal(0)
+    sales_date = SalesInvoice.date if 'date' in cols_sales else func.now()
+    sales_status = SalesInvoice.status if 'status' in cols_sales else literal('unpaid')
     sales_q = db.session.query(
         SalesInvoice.id.label('id'),
         literal('sales').label('type'),
-        SalesInvoice.customer_name.label('party'),
-        SalesInvoice.total_after_tax_discount.label('total'),
+        sales_party.label('party'),
+        sales_total.label('total'),
         literal(0).label('paid'),
-        SalesInvoice.date.label('date'),
-        SalesInvoice.status.label('status')
+        sales_date.label('date'),
+        sales_status.label('status')
     )
+
+    purch_party = PurchaseInvoice.supplier_name if 'supplier_name' in cols_purch else literal('Supplier')
+    purch_total = PurchaseInvoice.total_after_tax_discount if 'total_after_tax_discount' in cols_purch else literal(0)
+    purch_date = PurchaseInvoice.date if 'date' in cols_purch else func.now()
+    purch_status = PurchaseInvoice.status if 'status' in cols_purch else literal('unpaid')
     purchases_q = db.session.query(
         PurchaseInvoice.id,
         literal('purchase'),
-        PurchaseInvoice.supplier_name,
-        PurchaseInvoice.total_after_tax_discount,
+        purch_party,
+        purch_total,
         literal(0),
-        PurchaseInvoice.date,
-        PurchaseInvoice.status
+        purch_date,
+        purch_status
     )
+
+    exp_total = ExpenseInvoice.total_after_tax_discount if 'total_after_tax_discount' in cols_exp else literal(0)
+    exp_date = ExpenseInvoice.date if 'date' in cols_exp else func.now()
+    exp_status = ExpenseInvoice.status if 'status' in cols_exp else literal('unpaid')
     expenses_q = db.session.query(
         ExpenseInvoice.id,
         literal('expense'),
         literal('Expense').label('party'),
-        ExpenseInvoice.total_after_tax_discount,
+        exp_total,
         literal(0),
-        ExpenseInvoice.date,
-        ExpenseInvoice.status
+        exp_date,
+        exp_status
     )
     _union_parts = [sales_q, purchases_q, expenses_q]
     if 'salaries' in _tables and 'employees' in _tables:
