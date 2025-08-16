@@ -38,6 +38,10 @@
       </div>
 
       <div>
+      <div class="alert alert-info" id="emptyNotice" style="display:none;">
+        {{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}
+      </div>
+
         <h6 class="mb-2">{{ _('Meals / الوجبات') }}</h6>
         <div id="mealsGrid" class="row g-2"></div>
       </div>
@@ -170,6 +174,7 @@
       try{
         const resp = await fetch(`/api/menu/${catId}/items`);
         const data = await resp.json();
+        if(data.length === 0){ document.getElementById('emptyNotice').style.display='block'; } else { document.getElementById('emptyNotice').style.display='none'; }
         data.forEach(m => {
           const col = document.createElement('div');
           col.className = 'col-6 col-md-4 col-lg-3';
@@ -183,10 +188,12 @@
           grid.appendChild(col);
         });
         if(data.length) return;
-      }catch(e){ /* fallback below */ }
+      }catch(e){ document.getElementById('emptyNotice').style.display='block'; }
     }
     // Fallback: filter local meals
     const filtered = meals.filter(m => m.category === cat);
+    const notice = document.getElementById('emptyNotice');
+    notice.style.display = (filtered.length === 0 ? 'block' : 'none');
     filtered.forEach(m => {
       const col = document.createElement('div');
       col.className = 'col-6 col-md-4 col-lg-3';
