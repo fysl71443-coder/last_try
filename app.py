@@ -740,7 +740,7 @@ def menu_item_add():
         # Validate
         if not MenuCategory.query.get(section_id) or not Meal.query.get(meal_id):
             flash(_('Invalid section or meal'), 'danger')
-            return redirect(url_for('menu_admin', section_id=section_id))
+            return redirect(url_for('menu', cat_id=section_id))
         # Upsert unique (section, meal)
         ex = MenuItem.query.filter_by(category_id=section_id, meal_id=meal_id).first()
         if ex:
