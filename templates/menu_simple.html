@@ -17,7 +17,7 @@
       <div class="col-md-2">
         <button class="btn btn-success w-100">{{ _('Add Category / إضافة قسم') }}</button>
       <div class="col-md-4">
-        <a class="btn btn-outline-secondary w-100" href="{{ url_for('employees') }}">{{ _('Go to Products & Cost / شاشة المنتجات والتكاليف') }}</a>
+        <a class="btn btn-outline-secondary w-100" href="{{ url_for('meals') }}">{{ _('Go to Products & Cost / شاشة المنتجات والتكاليف') }}</a>
       </div>
 
       </div>
@@ -37,10 +37,9 @@
             <td>{{ c.name }}</td>
             <td><span class="badge bg-{{ 'success' if c.active else 'secondary' }}">{{ _('Active') if c.active else _('Inactive') }}</span></td>
             <td>
-              <form method="post" action="{{ url_for('menu_toggle', cat_id=c.id) }}" onsubmit="return confirm('{{ _('Confirm toggle? / تأكيد التبديل؟') }}')">
+              <a class="btn btn-sm btn-outline-secondary me-1" href="{{ url_for('menu', cat_id=c.id) }}">{{ _('Manage Items / إدارة الأصناف') }}</a>
+              <form method="post" action="{{ url_for('menu_toggle', cat_id=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Confirm toggle? / تأكيد التبديل؟') }}')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('menu', cat_id=c.id) }}">{{ _('Manage Items / إدارة الأصناف') }}</a>
-
                 <button class="btn btn-sm btn-outline-primary">{{ _('Toggle / تبديل') }}</button>
               </form>
             </td>
