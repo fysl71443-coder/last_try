@@ -24,22 +24,23 @@
     <div>
       <div class="mb-2">
         <h5 class="mb-2">{{ _('Main Categories / الأقسام الرئيسية') }}</h5>
-        <div class="row g-2">
-          {% for c in categories %}
-          <div class="col-6 col-md-4 col-lg-3">
-            <div class="card cat-card p-2 h-100" onclick="selectCategory('{{ c }}')">
-              <div class="card-body d-flex align-items-center justify-content-center">
-                <div class="fw-bold text-center">{{ c }}</div>
-              </div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
+        <div id="categoriesGrid" class="row g-2"></div>
       </div>
 
       <div>
         <h6 class="mb-2">{{ _('Meals / الوجبات') }}</h6>
         <div id="mealsGrid" class="row g-2"></div>
+      </div>
+
+      <!-- Drill-down Panel for Section Items -->
+      <div id="sectionPanel" class="card mt-2" style="display:none;">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong id="sectionTitle"></strong>
+          <button class="btn btn-sm btn-outline-secondary" onclick="closeSectionPanel()">{{ _('Back / رجوع') }}</button>
+        </div>
+        <div class="card-body">
+          <div id="sectionItemsGrid" class="row g-2"></div>
+        </div>
       </div>
     </div>
 
@@ -129,6 +130,35 @@
   const custName = document.getElementById('custName');
   const custPhone = document.getElementById('custPhone');
 
+  // Load sections for this branch and render main category cards
+  async function loadSections(){
+    const grid = document.getElementById('categoriesGrid');
+    if(!grid) return;
+    grid.innerHTML = '';
+    try{
+      const res = await fetch(`/api/pos/{{ branch_code }}/sections`);
+      const sections = await res.json();
+      sections.forEach(sec => {
+        const col = document.createElement('div');
+        col.className = 'col-6 col-md-4 col-lg-3';
+        const img = (sec.image_url && sec.image_url.trim()) ? sec.image_url : "{{ url_for('static', filename='img/item-placeholder.svg') }}";
+        col.innerHTML = `
+          <div class="card cat-card h-100" onclick='openSection(${JSON.stringify({id: 0}).replace("0", "` + "${sec.id}" + "")})'>
+            <img src="${img}" class="card-img-top" alt="section" style="height:120px;object-fit:cover;">
+            <div class="card-body d-flex align-items-center justify-content-center p-2">
+              <div class="fw-bold text-center small">${sec.name}</div>
+            </div>
+          </div>`;
+        // adjust onclick to pass object safely
+        col.querySelector('.card').onclick = () => openSection(sec);
+        grid.appendChild(col);
+      });
+    }catch(e){
+      grid.innerHTML = `<div class="alert alert-danger">{{ _('Failed to load sections / فشل تحميل الأقسام') }}</div>`;
+    }
+  }
+  document.addEventListener('DOMContentLoaded', loadSections);
+
   custName.addEventListener('input', () => {
     clearTimeout(custTimer);
     const q = custName.value.trim();
@@ -161,7 +191,19 @@
     currentCategory = cat;
     const grid = document.getElementById('mealsGrid');
     grid.innerHTML = '';
-    const filtered = meals.filter(m => m.category === cat);
+    const norm = (s) => (s||'').toString().trim().toLowerCase();
+    let filtered = meals.filter(m => norm(m.category) === norm(cat));
+    if (filtered.length === 0) {
+      // Fallback to partial match if exact match yields nothing
+      filtered = meals.filter(m => norm(m.category).includes(norm(cat)) || norm(cat).includes(norm(m.category)));
+    }
+    if (filtered.length === 0) {
+      const alert = document.createElement('div');
+      alert.className = 'alert alert-warning';
+      alert.textContent = '{{ _('No meals under this category / لا توجد وجبات تحت هذا القسم') }}';
+      grid.appendChild(alert);
+      return;
+    }
     filtered.forEach(m => {
       const col = document.createElement('div');
       col.className = 'col-6 col-md-4 col-lg-3';
@@ -174,6 +216,7 @@
         </div>`;
       grid.appendChild(col);
     });
+    grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function addItem(mealId){

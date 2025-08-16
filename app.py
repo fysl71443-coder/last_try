@@ -336,6 +336,7 @@ def sales_branch(branch_code):
             payment_method=form.payment_method.data,
             branch=branch_code,
             customer_name=form.customer_name.data,
+            customer_phone=form.customer_phone.data,
             total_before_tax=0,
             tax_amount=0,
             discount_amount=0,
@@ -491,6 +492,7 @@ def _seed_menu_categories_once():
 
 # Helpers
 BRANCH_CODES = {'china_town': 'China Town', 'place_india': 'Place India'}
+PAYMENT_METHODS = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC']
 
 def is_valid_branch(code: str) -> bool:
     return code in BRANCH_CODES
@@ -596,12 +598,28 @@ def api_sales_checkout():
     subtotal = 0.0
     tax_total = 0.0
     invoice_items = []
+    from sqlalchemy import or_
+    from models import MenuSection, MenuSectionItem
     for it in items:
         meal = Meal.query.get(int(it.get('meal_id')))
         qty = float(it.get('qty') or 0)
         if not meal or qty <= 0:
             continue
-        unit = float(meal.selling_price)
+        # Determine effective unit price: prefer MenuSectionItem.price_override for this branch (or global)
+        unit = None
+        try:
+            msi = (MenuSectionItem.query
+                   .join(MenuSection, MenuSectionItem.section_id == MenuSection.id)
+                   .filter(MenuSectionItem.meal_id == meal.id,
+                           or_(MenuSection.branch == branch_code, MenuSection.branch == None))  # noqa: E711
+                   .order_by(MenuSectionItem.display_order.asc())
+                   .first())
+            if msi and msi.price_override is not None:
+                unit = float(msi.price_override)
+        except Exception:
+            pass
+        if unit is None:
+            unit = float(meal.selling_price or 0)
         line_sub = unit * qty
         line_tax = line_sub * (tax_pct/100.0)
         subtotal += line_sub
@@ -623,8 +641,9 @@ def api_sales_checkout():
         invoice_number=invoice_number,
         date=_dt.utcnow().date(),
         payment_method=payment_method,
-        branch=BRANCH_CODES[branch_code],
+        branch=branch_code,
         customer_name=customer_name,
+        customer_phone=customer_phone,
         total_before_tax=subtotal,
         tax_amount=tax_total,
         discount_amount=discount_val,
@@ -658,6 +677,53 @@ def api_sales_checkout():
 
     receipt_url = url_for('sales_receipt', invoice_id=inv.id)
     return jsonify({'ok': True, 'invoice_id': inv.id, 'print_url': receipt_url})
+
+# POS API: sections (per branch) and items (per section)
+@app.route('/api/pos/<branch_code>/sections')
+@login_required
+def api_pos_sections(branch_code):
+    if not is_valid_branch(branch_code):
+        return jsonify({'error': 'invalid branch'}), 400
+    try:
+        from sqlalchemy import or_
+        from models import MenuSection
+        q = (MenuSection.query
+             .filter(or_(MenuSection.branch == branch_code, MenuSection.branch == None))  # noqa: E711
+             .order_by(MenuSection.display_order.asc(), MenuSection.name.asc()))
+        sections = [{'id': s.id, 'name': s.name, 'image_url': s.image_url} for s in q.all()]
+        return jsonify(sections)
+    except Exception as e:
+        app.logger.error('api_pos_sections failed: %s', e, exc_info=True)
+        return jsonify([])
+
+
+@app.route('/api/pos/sections/<int:section_id>/items')
+@login_required
+def api_pos_section_items(section_id):
+    try:
+        from models import MenuSection, MenuSectionItem
+        sec = MenuSection.query.get_or_404(section_id)
+        items = (MenuSectionItem.query
+                 .filter_by(section_id=section_id)
+                 .order_by(MenuSectionItem.display_order.asc())
+                 .all())
+        payload = []
+        for it in items:
+            try:
+                price = float(it.price_override) if it.price_override is not None else float(it.meal.selling_price or 0)
+            except Exception:
+                price = 0.0
+            payload.append({
+                'meal_id': it.meal_id,
+                'name': it.meal.display_name,
+                'price': price,
+                'image_url': (it.image_url if hasattr(it, 'image_url') and it.image_url else sec.image_url)
+            })
+        return jsonify({'section': {'id': sec.id, 'name': sec.name, 'image_url': sec.image_url}, 'items': payload})
+    except Exception as e:
+        app.logger.error('api_pos_section_items failed: %s', e, exc_info=True)
+        return jsonify({'section': None, 'items': []})
+
 
 # Receipt (80mm thermal style)
 @app.route('/sales/receipt/<int:invoice_id>')
@@ -1316,12 +1382,28 @@ def reports():
         start_dt = today.replace(day=1)
         end_dt = today
 
-    # Sales totals by branch
-    sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'place_india').scalar() or 0
-    sales_china = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
-    total_sales = float(sales_place) + float(sales_china)
+
+    # Optional branch filter
+    branch_filter = request.args.get('branch')
+    if branch_filter and branch_filter != 'all':
+        sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter).scalar() or 0
+        sales_china = 0
+        total_sales = float(sales_place)
+        daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter) \
+            .group_by(SalesInvoice.date) \
+            .order_by(SalesInvoice.date.asc()).all()
+        line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
+        line_values = [float(r.t or 0) for r in daily_rows]
+
+    # Sales totals by branch (default when no specific branch selected)
+    if not branch_filter or branch_filter == 'all':
+        sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'place_india').scalar() or 0
+        sales_china = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
+        total_sales = float(sales_place) + float(sales_china)
 
     # Purchases and Expenses
     total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
@@ -1343,12 +1425,13 @@ def reports():
     profit = float(total_sales) - (float(total_purchases) + float(total_expenses) + float(total_salaries))
 
     # Line chart: daily sales
-    daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-        .group_by(SalesInvoice.date) \
-        .order_by(SalesInvoice.date.asc()).all()
-    line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
-    line_values = [float(r.t or 0) for r in daily_rows]
+    if not branch_filter or branch_filter == 'all':
+        daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+            .group_by(SalesInvoice.date) \
+            .order_by(SalesInvoice.date.asc()).all()
+        line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
+        line_values = [float(r.t or 0) for r in daily_rows]
 
     # Payment method distribution across invoices
     def pm_counts(model, date_col, method_col):
@@ -1429,7 +1512,7 @@ def register_payment_ajax():
         return jsonify({'status':'error', 'message':'invalid_amount'}), 400
     if amount <= 0:
         return jsonify({'status':'error', 'message':'invalid_amount'}), 400
-    method = request.form.get('payment_method')
+    method = (request.form.get('payment_method') or 'CASH').strip().upper()
 
     # Register payment
     pay = Payment(invoice_id=invoice_id, invoice_type=invoice_type, amount_paid=amount, payment_method=method)
@@ -2092,12 +2175,61 @@ def first_allowed_sales_branch():
 
 
 BRANCH_CODES = {'china_town': 'China Town', 'place_india': 'Place India'}
+PAYMENT_METHODS = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC']
 
 def is_valid_branch(code:str)->bool:
     return code in BRANCH_CODES
 
 def branch_label(code:str)->str:
     return BRANCH_CODES.get(code, code)
+
+
+# ---- ZATCA TLV QR Helpers ----
+import base64 as _b64
+from datetime import datetime as _dtmod, timezone as _tz
+
+def _tlv(tag: int, value: str) -> bytes:
+    data = value.encode('utf-8')
+    length = len(data)
+    if length > 255:
+        # Basic support: split into chunks of 255 if needed (rare for our fields)
+        length_bytes = bytes([length & 0xFF])
+    else:
+        length_bytes = bytes([length])
+    return bytes([tag]) + length_bytes + data
+
+
+def build_zatca_tlv_b64(seller_name: str, vat_number: str, invoice_dt_iso: str, total_with_vat: float, vat_total: float) -> str:
+    payload = (
+        _tlv(1, seller_name or '') +
+        _tlv(2, vat_number or '') +
+        _tlv(3, invoice_dt_iso or '') +
+        _tlv(4, f"{float(total_with_vat or 0):.2f}") +
+        _tlv(5, f"{float(vat_total or 0):.2f}")
+    )
+    return _b64.b64encode(payload).decode('utf-8')
+
+
+def make_qr_data_url_from_b64(data_b64: str, box_size: int = 3) -> str | None:
+    try:
+        # Lazy import; if qrcode is unavailable, return None gracefully
+        try:
+            import qrcode
+        except Exception:
+            return None
+        from io import BytesIO
+        img = qrcode.make(data_b64)
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        return 'data:image/png;base64,' + _b64.b64encode(buf.getvalue()).decode('utf-8')
+    except Exception:
+        return None
+
+# Expose constants to templates
+@app.context_processor
+def inject_globals():
+    return dict(PAYMENT_METHODS=PAYMENT_METHODS, BRANCH_CODES=BRANCH_CODES)
+
 
 # ---------------------- Users API ----------------------
 @app.route('/api/users', methods=['GET'])
@@ -2155,6 +2287,119 @@ def api_users_update(uid):
         u.set_password(payload['password'], bcrypt)
     db.session.commit()
     return jsonify({'status':'ok'})
+
+# ---- Menu admin helpers ----
+@app.context_processor
+def inject_section_image_helper():
+    from flask import url_for as _url_for
+    def section_image_for(name: str):
+        # Placeholder mapping can be customized later based on name
+        return _url_for('static', filename='img/item-placeholder.svg')
+    return dict(section_image_for=section_image_for)
+
+
+# ---- Menu Admin Routes ----
+@app.route('/menu')
+@login_required
+def menu_admin():
+    from models import MenuSection, MenuSectionItem, Meal
+    section_id = request.args.get('section_id', type=int)
+    sections = MenuSection.query.order_by(MenuSection.display_order.asc(), MenuSection.name.asc()).all()
+    current_section = MenuSection.query.get(section_id) if section_id else None
+    meals = Meal.query.filter_by(active=True).order_by(Meal.name.asc()).all()
+    items = []
+    if current_section:
+        items = (MenuSectionItem.query
+                 .filter_by(section_id=current_section.id)
+                 .order_by(MenuSectionItem.display_order.asc())
+                 .all())
+    # counts per section
+    from sqlalchemy import func
+    counts = dict(db.session.query(MenuSectionItem.section_id, func.count(MenuSectionItem.id))
+                  .group_by(MenuSectionItem.section_id).all())
+    item_counts = {s.id: counts.get(s.id, 0) for s in sections}
+    return render_template('menu.html', sections=sections, current_section=current_section,
+                           meals=meals, items=items, item_counts=item_counts)
+
+
+@app.route('/menu/section/add', methods=['POST'])
+@login_required
+def menu_section_add():
+    from models import MenuSection
+    name = (request.form.get('name') or '').strip()
+    branch = (request.form.get('branch') or '').strip() or None
+    display_order = request.form.get('display_order', type=int) or 0
+    image_url = (request.form.get('image_url') or '').strip() or None
+    if not name:
+        flash(_('Name is required'), 'danger')
+        return redirect(url_for('menu_admin'))
+    db.session.add(MenuSection(name=name, branch=branch, display_order=display_order, image_url=image_url))
+    db.session.commit()
+    return redirect(url_for('menu_admin'))
+
+
+@app.route('/menu/section/delete/<int:section_id>')
+@login_required
+def menu_section_delete(section_id):
+    from models import MenuSection, MenuSectionItem
+    sec = MenuSection.query.get_or_404(section_id)
+    # delete items then section
+    MenuSectionItem.query.filter_by(section_id=sec.id).delete(synchronize_session=False)
+    db.session.delete(sec)
+    db.session.commit()
+    return redirect(url_for('menu_admin'))
+
+
+@app.route('/menu/item/add', methods=['POST'])
+@login_required
+def menu_item_add():
+    from models import MenuSectionItem, Meal
+    section_id = request.form.get('section_id', type=int)
+    meal_id = request.form.get('meal_id', type=int)
+    display_order = request.form.get('display_order', type=int) or 0
+    price_override = request.form.get('price_override')
+    image_url = (request.form.get('item_image_url') or '').strip() or None
+    po = None
+    try:
+        po = float(price_override) if price_override not in (None, '',) else None
+    except Exception:
+        po = None
+    if not section_id or not meal_id:
+        flash(_('Missing data'), 'danger')
+        return redirect(url_for('menu_admin'))
+    db.session.add(MenuSectionItem(section_id=section_id, meal_id=meal_id,
+                                   display_order=display_order, price_override=po,
+                                   image_url=image_url))
+    db.session.commit()
+    return redirect(url_for('menu_admin', section_id=section_id))
+
+
+@app.route('/menu/item/<int:item_id>/update', methods=['POST'])
+@login_required
+def menu_item_update(item_id):
+    from models import MenuSectionItem
+    it = MenuSectionItem.query.get_or_404(item_id)
+    po = request.form.get('price_override')
+    try:
+        it.price_override = float(po) if po not in (None, '',) else None
+    except Exception:
+        it.price_override = None
+    it.display_order = request.form.get('display_order', type=int) or 0
+    img = (request.form.get('item_image_url') or '').strip()
+    it.image_url = img or None
+    db.session.commit()
+    return redirect(url_for('menu_admin', section_id=it.section_id))
+
+
+@app.route('/menu/item/<int:item_id>/delete', methods=['POST'])
+@login_required
+def menu_item_delete(item_id):
+    from models import MenuSectionItem
+    it = MenuSectionItem.query.get_or_404(item_id)
+    sid = it.section_id
+    db.session.delete(it)
+    db.session.commit()
+    return redirect(url_for('menu_admin', section_id=sid))
 
 @app.route('/api/users', methods=['DELETE'])
 @login_required

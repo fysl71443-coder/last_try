@@ -59,6 +59,7 @@ class SalesInvoice(db.Model):
     payment_method = db.Column(db.String(20), nullable=False)
     branch = db.Column(db.String(50), nullable=False)  # فرع الفاتورة (Place India أو China Town)
     customer_name = db.Column(db.String(100), nullable=True)
+    customer_phone = db.Column(db.String(30), nullable=True)
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
     tax_amount = db.Column(db.Numeric(12, 2), nullable=False)
     discount_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
@@ -366,6 +367,46 @@ class MenuCategory(db.Model):
 
     def __repr__(self):
         return f'<MenuCategory {self.name}>'
+
+
+# POS Menu: Sections and Items
+class MenuSection(db.Model):
+    __tablename__ = 'menu_sections'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    branch = db.Column(db.String(50), nullable=True)  # None => all branches
+    display_order = db.Column(db.Integer, nullable=False, default=0)
+    image_url = db.Column(db.String(300), nullable=True)
+
+    # Relationships
+    items = db.relationship('MenuSectionItem', backref='section', lazy=True, cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<MenuSection {self.name}>'
+
+
+class MenuSectionItem(db.Model):
+    __tablename__ = 'menu_section_items'
+    id = db.Column(db.Integer, primary_key=True)
+    section_id = db.Column(db.Integer, db.ForeignKey('menu_sections.id'), nullable=False)
+    meal_id = db.Column(db.Integer, db.ForeignKey('meals.id'), nullable=False)
+    display_order = db.Column(db.Integer, nullable=False, default=0)
+    price_override = db.Column(db.Numeric(12, 2), nullable=True)
+    image_url = db.Column(db.String(300), nullable=True)
+
+    # Relationships
+    meal = db.relationship('Meal')
+
+    def effective_price(self) -> float:
+        try:
+            if self.price_override is not None:
+                return float(self.price_override)
+            return float(self.meal.selling_price or 0)
+        except Exception:
+            return 0.0
+
+    def __repr__(self):
+        return f'<MenuSectionItem sec={self.section_id} meal={self.meal_id}>'
 
 
 

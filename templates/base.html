@@ -123,7 +123,7 @@
 
       <!-- زر رجوع عام مع حماية من فقدان التعديلات -->
       <div class="mb-3 d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-outline-secondary" onclick="safeBack('{{ back_url or url_for('employees') }}')">⬅️ {{ _('Back / رجوع') }}</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="safeBack('{{ back_url|default('') }}')">⬅️ {{ _('Back / رجوع') }}</button>
       </div>
 
       {% if request.endpoint != 'dashboard' %}
@@ -150,7 +150,16 @@
         if(__dirty){
           if(!confirm("{{ _('You have unsaved changes. Are you sure you want to go back? / لديك تغييرات غير محفوظة. هل تريد الرجوع؟') }}")) return;
         }
-        if(url){ window.location.href = url; } else { history.back(); }
+        if (url && url.trim()) {
+          window.location.href = url;
+          return;
+        }
+        // Prefer referrer when available; otherwise fallback to dashboard
+        if (document.referrer && document.referrer !== window.location.href) {
+          history.back();
+        } else {
+          window.location.href = "{{ url_for('dashboard') }}";
+        }
       }
     </script>
 

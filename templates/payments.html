@@ -8,6 +8,8 @@
   </div>
 
   <!-- Filters -->
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
   <form method="GET" class="row g-2 mb-3">
     <div class="col-md-3">
       <label class="form-label">{{ _('Status / الحالة') }}</label>
@@ -48,6 +50,7 @@
               <th>{{ _('Remaining / المتبقي') }}</th>
               <th>{{ _('Status / الحالة') }}</th>
               <th>{{ _('Date / التاريخ') }}</th>
+              <th>{{ _('Payment Method / طريقة الدفع') }}</th>
               <th>{{ _('Actions / الإجراءات') }}</th>
             </tr>
           </thead>
@@ -65,6 +68,13 @@
               <td>{{ i.status }}</td>
               <td>{{ i.date }}</td>
               <td>
+                  <select class="form-select form-select-sm pay-method" data-id="{{ i.id }}" data-type="{{ i.type }}">
+                    {% for pm in PAYMENT_METHODS %}
+                      <option value="{{ pm }}">{{ pm }}</option>
+                    {% endfor %}
+                  </select>
+                </td>
+              <td>
                 <button class="btn btn-sm btn-success" onclick="payFull('{{ i.id }}','{{ i.type }}','{{ remaining }}')">{{ _('Pay Full / دفع كامل') }}</button>
                 <button class="btn btn-sm btn-outline-success" onclick="openPaymentCustom('{{ i.id }}','{{ i.type }}','{{ remaining }}')">{{ _('Enter Amount / ادخال مبلغ') }}</button>
                 <button class="btn btn-sm btn-outline-primary" onclick="viewDetails('{{ i.id }}','{{ i.type }}')">{{ _('Details / تفاصيل') }}</button>
@@ -80,16 +90,21 @@
 
 <!-- Simple modal prompts -->
 <script>
+function currentPayMethod(id){
+  const sel = document.querySelector(`select.pay-method[data-id='${id}']`);
+  return sel ? sel.value : 'CASH';
+}
 function sendPayment(id, type, amount){
   const form = new FormData();
   form.append('invoice_id', id);
   form.append('invoice_type', type);
   form.append('amount', amount);
+  form.append('payment_method', currentPayMethod(id));
   const csrf = document.querySelector('input[name="csrf_token"]');
   if (csrf) form.append('csrf_token', csrf.value);
   fetch('{{ url_for('register_payment_ajax') }}', { method:'POST', body: form, credentials: 'same-origin' })
     .then(r=>r.json()).then(data=>{
-      if(data.status==='success') location.reload(); else alert('Error');
+      if(data.status==='success') location.reload(); else alert(data.message || 'Error');
     }).catch(()=>alert('Network error'));
 }
 function payFull(id, type, remaining){

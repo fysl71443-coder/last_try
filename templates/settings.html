@@ -4,6 +4,8 @@
 <div class="container py-4">
   <h3>الإعدادات العامة</h3>
   <form method="post" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
     <div class="col-md-6">
       <label class="form-label">اسم الشركة</label>
       <input type="text" name="company_name" class="form-control" value="{{ s.company_name or '' }}">

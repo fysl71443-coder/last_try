@@ -43,6 +43,9 @@ if 'image_url' not in ms_cols:
 msi_cols = cols('menu_section_items')
 if 'price_override' not in msi_cols:
     cur.execute("ALTER TABLE menu_section_items ADD COLUMN price_override NUMERIC(12,2)")
+if 'image_url' not in msi_cols:
+    cur.execute("ALTER TABLE menu_section_items ADD COLUMN image_url VARCHAR(300)")
+
 
 con.commit()
 
