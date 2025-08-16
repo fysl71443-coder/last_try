@@ -135,6 +135,21 @@ try:
                     if 'customer_phone' not in existing_cols_si:
                         _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30)"))
 
+                # 5) Ensure menu_items table exists
+                if 'menu_items' not in _insp.get_table_names():
+                    _conn.execute(_sa_text(
+                        """
+                        CREATE TABLE IF NOT EXISTS menu_items (
+                            id SERIAL PRIMARY KEY,
+                            category_id INTEGER NOT NULL REFERENCES menu_categories(id) ON DELETE CASCADE,
+                            meal_id INTEGER NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+                            price_override NUMERIC(12,2),
+                            display_order INTEGER,
+                            CONSTRAINT uq_category_meal UNIQUE (category_id, meal_id)
+                        )
+                        """
+                    ))
+
 except Exception as _patch_err:
     logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
 
@@ -650,6 +665,80 @@ def menu():
             exists = MenuCategory.query.filter_by(name=name).first()
             if exists:
                 flash(_('Category already exists / القسم موجود مسبقاً'), 'warning')
+            else:
+                cat = MenuCategory(name=name, active=True)
+                db.session.add(cat)
+                db.session.commit()
+                flash(_('Category added / تم إضافة القسم'), 'success')
+        return redirect(url_for('menu'))
+    # List
+    cats = MenuCategory.query.order_by(MenuCategory.name.asc()).all()
+    return render_template('menu_simple.html', categories=cats)
+
+# Menu items management (link meals to categories)
+@app.route('/menu/item/add', methods=['POST'])
+@login_required
+def menu_item_add():
+    from models import MenuItem, MenuCategory, Meal
+    try:
+        section_id = int(request.form.get('section_id') or 0)
+        meal_id = int(request.form.get('meal_id') or 0)
+        price_override = request.form.get('price_override')
+        display_order = request.form.get('display_order')
+        if price_override == '' or price_override is None:
+            price_override = None
+        else:
+            price_override = float(price_override)
+        display_order = int(display_order) if (display_order or '').strip() else None
+        # Validate
+        if not MenuCategory.query.get(section_id) or not Meal.query.get(meal_id):
+            flash(_('Invalid section or meal'), 'danger')
+            return redirect(url_for('menu_admin', section_id=section_id))
+        # Upsert unique (section, meal)
+        ex = MenuItem.query.filter_by(category_id=section_id, meal_id=meal_id).first()
+        if ex:
+            ex.price_override = price_override
+            ex.display_order = display_order
+        else:
+            db.session.add(MenuItem(category_id=section_id, meal_id=meal_id, price_override=price_override, display_order=display_order))
+        db.session.commit()
+        flash(_('Item saved'), 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(_('Failed to save item'), 'danger')
+    return redirect(url_for('menu'))
+
+@app.route('/menu/item/<int:item_id>/update', methods=['POST'])
+@login_required
+def menu_item_update(item_id):
+    from models import MenuItem
+    it = MenuItem.query.get_or_404(item_id)
+    try:
+        price_override = request.form.get('price_override')
+        display_order = request.form.get('display_order')
+        it.price_override = (None if price_override == '' else float(price_override))
+        it.display_order = int(display_order) if (display_order or '').strip() else None
+        db.session.commit()
+        flash(_('Item updated'), 'success')
+    except Exception:
+        db.session.rollback()
+        flash(_('Update failed'), 'danger')
+    return redirect(url_for('menu'))
+
+@app.route('/menu/item/<int:item_id>/delete', methods=['POST'])
+@login_required
+def menu_item_delete(item_id):
+    from models import MenuItem
+    it = MenuItem.query.get_or_404(item_id)
+    try:
+        db.session.delete(it)
+        db.session.commit()
+        flash(_('Item deleted'), 'success')
+    except Exception:
+        db.session.rollback()
+        flash(_('Delete failed'), 'danger')
+    return redirect(url_for('menu'))
+
             else:
                 cat = MenuCategory(name=name, active=True)
                 db.session.add(cat)

@@ -369,6 +369,25 @@ class MenuCategory(db.Model):
         return f'<MenuCategory {self.name}>'
 
 
+class MenuItem(db.Model):
+    __tablename__ = 'menu_items'
+    id = db.Column(db.Integer, primary_key=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('menu_categories.id'), nullable=False)
+    meal_id = db.Column(db.Integer, db.ForeignKey('meals.id'), nullable=False)
+    price_override = db.Column(db.Numeric(12, 2), nullable=True)
+    display_order = db.Column(db.Integer, nullable=True)
+
+    category = db.relationship('MenuCategory', backref='items')
+    meal = db.relationship('Meal')
+
+    __table_args__ = (
+        db.UniqueConstraint('category_id', 'meal_id', name='uq_category_meal'),
+    )
+
+    def __repr__(self):
+        return f'<MenuItem cat={self.category_id} meal={self.meal_id}>'
+
+
 
 class UserPermission(db.Model):
     __tablename__ = 'user_permissions'
