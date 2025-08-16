@@ -702,9 +702,25 @@ def menu():
                 db.session.commit()
                 flash(_('Category added / تم إضافة القسم'), 'success')
         return redirect(url_for('menu'))
-    # List
+    # List + optional items management
+    from models import MenuItem, Meal
     cats = MenuCategory.query.order_by(MenuCategory.name.asc()).all()
-    return render_template('menu_simple.html', categories=cats)
+    sel_id = request.args.get('cat_id', type=int)
+    selected_category = None
+    items = []
+    meals = []
+    try:
+        meals = Meal.query.filter_by(active=True).order_by(Meal.name.asc()).all()
+    except Exception:
+        meals = []
+    if sel_id:
+        selected_category = MenuCategory.query.get(sel_id)
+        if selected_category:
+            try:
+                items = MenuItem.query.filter_by(category_id=sel_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+            except Exception:
+                items = []
+    return render_template('menu_simple.html', categories=cats, selected_category=selected_category, items=items, meals=meals)
 
 # Menu items management (link meals to categories)
 @app.route('/menu/item/add', methods=['POST'])
@@ -776,9 +792,25 @@ def menu_item_delete(item_id):
                 db.session.commit()
                 flash(_('Category added / تم إضافة القسم'), 'success')
         return redirect(url_for('menu'))
-    # List
+    # List + optional items management
+    from models import MenuItem, Meal
     cats = MenuCategory.query.order_by(MenuCategory.name.asc()).all()
-    return render_template('menu_simple.html', categories=cats)
+    sel_id = request.args.get('cat_id', type=int)
+    selected_category = None
+    items = []
+    meals = []
+    try:
+        meals = Meal.query.filter_by(active=True).order_by(Meal.name.asc()).all()
+    except Exception:
+        meals = []
+    if sel_id:
+        selected_category = MenuCategory.query.get(sel_id)
+        if selected_category:
+            try:
+                items = MenuItem.query.filter_by(category_id=sel_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+            except Exception:
+                items = []
+    return render_template('menu_simple.html', categories=cats, selected_category=selected_category, items=items, meals=meals)
 
 @app.route('/menu/<int:cat_id>/toggle', methods=['POST'])
 @login_required
