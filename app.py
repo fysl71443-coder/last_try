@@ -76,11 +76,25 @@ try:
     if os.getenv('RENDER') == 'true' or os.getenv('RENDER'):
         with app.app_context():
             # Use Flask-Migrate API so env.py/current_app config is respected
-            from flask_migrate import upgrade as _fm_upgrade
-            _fm_upgrade()
+            from flask_migrate import upgrade as _fm_upgrade, stamp as _fm_stamp
+            from sqlalchemy import inspect as _sa_inspect
+            insp = _sa_inspect(db.engine)
+            has_alembic_version = 'alembic_version' in insp.get_table_names()
+            try:
+                _fm_upgrade()
+            except Exception as _e1:
+                logging.error('Auto migration attempt 1 failed: %s', _e1, exc_info=True)
+                # If database has no alembic_version table but already has legacy tables,
+                # stamp to a safe baseline then upgrade to head (idempotent migrations will add missing bits)
+                try:
+                    if not has_alembic_version:
+                        _fm_stamp('20250814_01')  # baseline before our idempotent fixes
+                        _fm_upgrade()
+                except Exception as _e2:
+                    logging.error('Auto migration attempt 2 (stamp then upgrade) failed: %s', _e2, exc_info=True)
 except Exception as _migr_err:
     # Do not crash app if migrations fail; logs help diagnose
-    logging.error('Auto migration failed: %s', _migr_err, exc_info=True)
+    logging.error('Auto migration wrapper failed: %s', _migr_err, exc_info=True)
 
 # =========================
 # END OF INITIALIZATION
