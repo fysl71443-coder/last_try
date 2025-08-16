@@ -496,6 +496,10 @@ PAYMENT_METHODS = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC']
 def is_valid_branch(code: str) -> bool:
     return code in BRANCH_CODES
 
+@app.context_processor
+def inject_globals():
+    return dict(PAYMENT_METHODS=PAYMENT_METHODS, BRANCH_CODES=BRANCH_CODES)
+
 # Tables screen: 1..50 per branch
 @app.route('/sales/<branch_code>/tables', methods=['GET'])
 @login_required

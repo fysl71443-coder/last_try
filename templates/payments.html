@@ -66,13 +66,9 @@
               <td>{{ i.date }}</td>
               <td>
                 <select class="form-select form-select-sm pay-method" data-id="{{ i.id }}" data-type="{{ i.type }}">
-                  <option value="CASH">CASH</option>
-                  <option value="MADA">MADA</option>
-                  <option value="VISA">VISA</option>
-                  <option value="MASTERCARD">MASTERCARD</option>
-                  <option value="BANK">BANK</option>
-                  <option value="AKS">AKS</option>
-                  <option value="GCC">GCC</option>
+                  {% for pm in PAYMENT_METHODS %}
+                  <option value="{{ pm }}">{{ pm }}</option>
+                  {% endfor %}
                 </select>
 
                 <button class="btn btn-sm btn-success" onclick="payFull('{{ i.id }}','{{ i.type }}','{{ remaining }}')">{{ _('Pay Full / دفع كامل') }}</button>
