@@ -181,7 +181,7 @@
           const col = document.createElement('div');
           col.className = 'col-6 col-md-4 col-lg-3';
           col.innerHTML = `
-            <div class="card meal-card h-100" onclick="addItem(${m.meal_id})">
+            <div class="card meal-card h-100" onclick='addMenuItem(${m.meal_id}, ${JSON.stringify(m.name)}, ${m.price})'>
               <div class="card-body d-flex flex-column justify-content-between">
                 <div class="fw-bold">${m.name}</div>
                 <div class="text-muted">{{ _('Price') }}: ${m.price.toFixed(2)}</div>
@@ -216,6 +216,16 @@
     const existing = items.find(x => x.meal_id === m.id);
     if(existing){ existing.qty += 1; }
     else { items.push({ meal_id: m.id, name: m.name, unit: m.price, qty: 1 }); }
+    renderItems();
+  }
+
+  // Add item using data from Menu API (fallback if meal not in global list)
+  function addMenuItem(mealId, name, unit){
+    const m = meals.find(x => x.id === mealId);
+    if(m){ addItem(mealId); return; }
+    const existing = items.find(x => x.meal_id === mealId);
+    if(existing){ existing.qty += 1; }
+    else { items.push({ meal_id: mealId, name: name, unit: unit, qty: 1 }); }
     renderItems();
   }
 
