@@ -29,23 +29,19 @@
         <div class="row g-2">
           {% for c in categories %}
           <div class="col-6 col-md-4 col-lg-3">
-            <div class="card cat-card p-2 h-100" onclick="selectCategory('{{ c }}')">
+            <div class="card cat-card p-2 h-100" onclick="selectCategory('{{ c }}', {{ loop.index0 }})">
               <div class="card-body d-flex align-items-center justify-content-center">
                 <div class="fw-bold text-center">{{ c }}</div>
               </div>
             </div>
+            <!-- Meals inside category card -->
+            <div class="meals-holder mt-2" id="meals-{{ loop.index0 }}" style="display:none;">
+              <div class="alert alert-info mb-2 d-none" id="empty-{{ loop.index0 }}">{{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}</div>
+              <div class="row g-2" id="grid-{{ loop.index0 }}"></div>
+            </div>
           </div>
           {% endfor %}
         </div>
-      </div>
-
-      <div>
-      <div class="alert alert-info" id="emptyNotice" style="display:none;">
-        {{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}
-      </div>
-
-        <h6 class="mb-2">{{ _('Meals / الوجبات') }}</h6>
-        <div id="mealsGrid" class="row g-2"></div>
       </div>
     </div>
 
@@ -117,7 +113,8 @@
             </div>
           </div>
 
-          <div class="mt-3 text-end">
+          <div class="mt-3 d-flex justify-content-between align-items-center">
+            <button class="btn btn-outline-danger" onclick="voidInvoice()">{{ _('Cancel Invoice / إلغاء الفاتورة') }}</button>
             <button class="btn btn-success" onclick="payAndPrint()">{{ _('Pay & Print / دفع + طباعة') }}</button>
           </div>
         </div>
@@ -166,17 +163,24 @@
     renderItems();
   }
 
-  async function selectCategory(cat){
+  async function selectCategory(cat, idx){
     currentCategory = cat;
-    const grid = document.getElementById('mealsGrid');
+    // Collapse all holders, then open the selected one
+    document.querySelectorAll('.meals-holder').forEach(h=>{ h.style.display='none'; });
+    const holder = document.getElementById(`meals-${idx}`);
+    const grid = document.getElementById(`grid-${idx}`);
+    const empty = document.getElementById(`empty-${idx}`);
+    if(!holder||!grid||!empty) return;
+    holder.style.display = 'block';
     grid.innerHTML = '';
+
     // Try menu category mapping first
     const catId = (window.CAT_MAP && window.CAT_MAP[cat]) ? window.CAT_MAP[cat] : null;
     if(catId){
       try{
         const resp = await fetch(`/api/menu/${catId}/items`);
         const data = await resp.json();
-        if(data.length === 0){ document.getElementById('emptyNotice').style.display='block'; } else { document.getElementById('emptyNotice').style.display='none'; }
+        empty.classList.toggle('d-none', data.length !== 0);
         data.forEach(m => {
           const col = document.createElement('div');
           col.className = 'col-6 col-md-4 col-lg-3';
@@ -190,12 +194,11 @@
           grid.appendChild(col);
         });
         if(data.length) return;
-      }catch(e){ document.getElementById('emptyNotice').style.display='block'; }
+      }catch(e){ empty.classList.remove('d-none'); }
     }
     // Fallback: filter local meals
     const filtered = meals.filter(m => m.category === cat);
-    const notice = document.getElementById('emptyNotice');
-    notice.style.display = (filtered.length === 0 ? 'block' : 'none');
+    empty.classList.toggle('d-none', filtered.length !== 0);
     filtered.forEach(m => {
       const col = document.createElement('div');
       col.className = 'col-6 col-md-4 col-lg-3';
@@ -267,6 +270,26 @@
     const payload = {
       branch_code: '{{ branch_code }}',
       table_no: {{ table_no }},
+
+  async function voidInvoice(){
+    // Require supervisor password to void
+    const pwd = prompt("{{ _('Enter void password / أدخل كلمة مرور الإلغاء') }}");
+    if(pwd===null) return; // cancelled prompt
+    if(!pwd || pwd.trim().length===0){ alert("{{ _('Password required / كلمة المرور مطلوبة') }}"); return; }
+    try{
+      const resp = await fetch('{{ url_for('api_sales_void_check') }}', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ password: pwd })
+      });
+      const data = await resp.json();
+      if(!data.ok){ alert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}'); return; }
+      // Clear invoice items and totals
+      items.length = 0;
+      renderItems();
+      alert('{{ _('Invoice cancelled / تم إلغاء الفاتورة') }}');
+    }catch(e){ alert('Error'); }
+  }
+
       items: items.map(x => ({ meal_id: x.meal_id, qty: x.qty })),
       customer_name: document.getElementById('custName').value,
       customer_phone: document.getElementById('custPhone').value,

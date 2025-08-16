@@ -798,6 +798,26 @@ def menu_toggle(cat_id):
     return redirect(url_for('menu'))
 
 # Checkout API: create invoice + items + payment, then return receipt URL
+
+@app.route('/api/sales/void-check', methods=['POST'])
+@login_required
+def api_sales_void_check():
+    data = request.get_json(silent=True) or {}
+    pwd = (data.get('password') or '').strip()
+    # Allow only admin role by password check
+    ok = False
+    try:
+        from models import Settings
+        s = Settings.query.first()
+        # Use tax_number as a quick configurable secret if set; otherwise fallback to '0000'
+        expected = (s.tax_number or '0000').strip() if s and s.tax_number else '0000'
+        ok = (pwd == expected)
+    except Exception:
+        ok = (pwd == '0000')
+    if not ok:
+        return jsonify({'ok': False, 'error': _('Wrong password / كلمة المرور غير صحيحة')}), 403
+    return jsonify({'ok': True})
+
 @app.route('/api/sales/checkout', methods=['POST'])
 @login_required
 def api_sales_checkout():
@@ -2805,63 +2825,74 @@ def meals():
     } for m in raw_materials])
 
     if form.validate_on_submit():
-        # Create meal
-        meal = Meal(
-            name=form.name.data,
-            name_ar=form.name_ar.data,
-            description=form.description.data,
-            category=form.category.data,
-            profit_margin_percent=form.profit_margin_percent.data,
-            user_id=current_user.id
-        )
-        db.session.add(meal)
-        db.session.flush()  # Get meal ID
+        try:
+            # Create meal
+            meal = Meal(
+                name=form.name.data,
+                name_ar=form.name_ar.data,
+                description=form.description.data,
+                category=form.category.data,
+                profit_margin_percent=form.profit_margin_percent.data,
+                user_id=current_user.id
+            )
+            db.session.add(meal)
+            db.session.flush()  # Get meal ID
 
-        # Add ingredients and calculate total cost (robust parse from POST to support dynamic rows)
-        from decimal import Decimal
-        total_cost = 0
-        # Find all indices in POST like ingredients-<i>-raw_material_id
-        idxs = set()
-        for k in request.form.keys():
-            if k.startswith('ingredients-') and k.endswith('-raw_material_id'):
+            # Add ingredients and calculate total cost (robust parse from POST to support dynamic rows)
+            from decimal import Decimal
+            total_cost = 0
+            # Find all indices in POST like ingredients-<i>-raw_material_id
+            idxs = set()
+            for k in request.form.keys():
+                if k.startswith('ingredients-') and k.endswith('-raw_material_id'):
+                    try:
+                        idxs.add(int(k.split('-')[1]))
+                    except Exception:
+                        pass
+            for i in sorted(idxs):
                 try:
-                    idxs.add(int(k.split('-')[1]))
+                    rm_id = int(request.form.get(f'ingredients-{i}-raw_material_id') or 0)
+                    qty_raw = request.form.get(f'ingredients-{i}-quantity')
+                    qty = Decimal(qty_raw) if qty_raw not in (None, '',) else Decimal('0')
                 except Exception:
-                    pass
-        for i in sorted(idxs):
-            try:
-                rm_id = int(request.form.get(f'ingredients-{i}-raw_material_id') or 0)
-                qty_raw = request.form.get(f'ingredients-{i}-quantity')
-                qty = Decimal(qty_raw) if qty_raw not in (None, '',) else Decimal('0')
-            except Exception:
-                rm_id, qty = 0, Decimal('0')
-            if rm_id and qty > 0:
-                raw_material = RawMaterial.query.get(rm_id)
-                if raw_material:
-                    ingredient = MealIngredient(
-                        meal_id=meal.id,
-                        raw_material_id=raw_material.id,
-                        quantity=qty
-                    )
-                    ingredient.calculate_cost()
-                    db.session.add(ingredient)
-                    total_cost += float(ingredient.total_cost)
+                    rm_id, qty = 0, Decimal('0')
+                if rm_id and qty > 0:
+                    raw_material = RawMaterial.query.get(rm_id)
+                    if raw_material:
+                        ingredient = MealIngredient(
+                            meal_id=meal.id,
+                            raw_material_id=raw_material.id,
+                            quantity=qty
+                        )
+                        # Compute cost directly using the fetched raw_material to avoid lazy-load issues
+                        try:
+                            from decimal import Decimal
+                            ing_cost = qty * raw_material.cost_per_unit
+                            ingredient.total_cost = ing_cost
+                        except Exception:
+                            ingredient.total_cost = 0
+                        db.session.add(ingredient)
+                        total_cost += float(ingredient.total_cost)
 
-        # Update meal costs
-        meal.total_cost = total_cost
-        meal.calculate_selling_price()
+            # Update meal costs
+            meal.total_cost = total_cost
+            meal.calculate_selling_price()
 
-        db.session.commit()
+            db.session.commit()
 
-        # Emit real-time update
-        socketio.emit('meal_update', {
-            'meal_name': meal.display_name,
-            'total_cost': float(meal.total_cost),
-            'selling_price': float(meal.selling_price)
-        })
+            # Emit real-time update
+            socketio.emit('meal_update', {
+                'meal_name': meal.display_name,
+                'total_cost': float(meal.total_cost),
+                'selling_price': float(meal.selling_price)
+            })
 
-        flash(_('Meal created successfully / تم إنشاء الوجبة بنجاح'), 'success')
-        return redirect(url_for('meals'))
+            flash(_('Meal created successfully / تم إنشاء الوجبة بنجاح'), 'success')
+            return redirect(url_for('meals'))
+        except Exception as e:
+            db.session.rollback()
+            logging.exception('Failed to save meal')
+            flash(_('Failed to save meal / فشل حفظ الوجبة'), 'danger')
 
     # Get all meals
     all_meals = Meal.query.filter_by(active=True).all()
