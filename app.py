@@ -71,6 +71,18 @@ login_manager = LoginManager(app)
 bcrypt = Bcrypt(app)
 socketio = SocketIO(app)
 
+# Run Alembic migrations automatically in production (Render) once per process
+try:
+    if os.getenv('RENDER') == 'true' or os.getenv('RENDER'):
+        with app.app_context():
+            from alembic.config import Config
+            from alembic import command as _al_cmd
+            alembic_cfg = Config(os.path.join(os.path.dirname(__file__), 'migrations', 'alembic.ini'))
+            _al_cmd.upgrade(alembic_cfg, 'head')
+except Exception as _migr_err:
+    # Do not crash app if migrations fail; logs help diagnose
+    logging.error('Auto migration failed: %s', _migr_err, exc_info=True)
+
 # =========================
 # END OF INITIALIZATION
 # =========================
