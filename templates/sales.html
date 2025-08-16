@@ -67,10 +67,12 @@ body {
             {{ _('Meals are automatically loaded from Cost Management system with calculated prices / الوجبات يتم تحميلها تلقائياً من نظام إدارة التكاليف مع الأسعار المحسوبة') }}
             <a href="{{ url_for('inventory') }}" class="alert-link">{{ _('Manage Meals / إدارة الوجبات') }}</a>
         </div>
-        
+
         <form method="POST" id="sales-form">
             {{ form.hidden_tag() }}
-            
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+
             <!-- معلومات الفاتورة الأساسية -->
             <div class="row mb-3">
                 <div class="col-md-3">
@@ -144,7 +146,7 @@ body {
     {% if invoices %}
     <div class="sales-card">
         <h5 class="mb-3">{{ _('Previous Invoices / الفواتير السابقة') }}</h5>
-        
+
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead class="table-dark">
