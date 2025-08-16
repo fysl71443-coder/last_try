@@ -135,11 +135,11 @@ class Meal(db.Model):
     name_ar = db.Column(db.String(200), nullable=True)
     description = db.Column(db.Text, nullable=True)
     category = db.Column(db.String(100), nullable=True)
-    total_cost = db.Column(db.Numeric(12, 2), nullable=False, default=0)  # Calculated from ingredients
-    profit_margin_percent = db.Column(db.Numeric(5, 2), nullable=False, default=30)  # Default 30%
-    selling_price = db.Column(db.Numeric(12, 2), nullable=False, default=0)  # Cost + profit margin
+    total_cost = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # Calculated from ingredients
+    profit_margin_percent = db.Column(db.Numeric(5, 2), nullable=False, default=30.00)  # Default 30%
+    selling_price = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # Cost + profit margin
     active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     # Relationship to ingredients

@@ -2817,16 +2817,31 @@ def meals():
         db.session.add(meal)
         db.session.flush()  # Get meal ID
 
-        # Add ingredients and calculate total cost
+        # Add ingredients and calculate total cost (robust parse from POST to support dynamic rows)
+        from decimal import Decimal
         total_cost = 0
-        for ingredient_form in form.ingredients.entries:
-            if ingredient_form.raw_material_id.data and ingredient_form.raw_material_id.data != 0:
-                raw_material = RawMaterial.query.get(ingredient_form.raw_material_id.data)
+        # Find all indices in POST like ingredients-<i>-raw_material_id
+        idxs = set()
+        for k in request.form.keys():
+            if k.startswith('ingredients-') and k.endswith('-raw_material_id'):
+                try:
+                    idxs.add(int(k.split('-')[1]))
+                except Exception:
+                    pass
+        for i in sorted(idxs):
+            try:
+                rm_id = int(request.form.get(f'ingredients-{i}-raw_material_id') or 0)
+                qty_raw = request.form.get(f'ingredients-{i}-quantity')
+                qty = Decimal(qty_raw) if qty_raw not in (None, '',) else Decimal('0')
+            except Exception:
+                rm_id, qty = 0, Decimal('0')
+            if rm_id and qty > 0:
+                raw_material = RawMaterial.query.get(rm_id)
                 if raw_material:
                     ingredient = MealIngredient(
                         meal_id=meal.id,
                         raw_material_id=raw_material.id,
-                        quantity=ingredient_form.quantity.data
+                        quantity=qty
                     )
                     ingredient.calculate_cost()
                     db.session.add(ingredient)
