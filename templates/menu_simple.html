@@ -16,6 +16,10 @@
       </div>
       <div class="col-md-2">
         <button class="btn btn-success w-100">{{ _('Add Category / إضافة قسم') }}</button>
+      <div class="col-md-4">
+        <a class="btn btn-outline-secondary w-100" href="{{ url_for('employees') }}">{{ _('Go to Products & Cost / شاشة المنتجات والتكاليف') }}</a>
+      </div>
+
       </div>
     </form>
   </div></div>
@@ -41,6 +45,10 @@
           </tr>
           {% else %}
           <tr><td colspan="4" class="text-center">{{ _('No categories / لا توجد أقسام') }}</td></tr>
+  <script>
+    // Quick add item modal/navigation could be added later.
+  </script>
+
           {% endfor %}
         </tbody>
       </table>
