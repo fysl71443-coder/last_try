@@ -34,22 +34,26 @@
       </div>
     </form>
     <hr>
-    <form method="POST" action="{{ url_for('customers_import') }}" enctype="multipart/form-data" class="row g-2 align-items-end">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="row g-2 align-items-end">
       <div class="col-md-6">
-        <label class="form-label">CSV (name,phone,discount_percent)</label>
-        <input type="file" name="file" accept=".csv" class="form-control" required>
+        <form method="POST" action="/customers/import" enctype="multipart/form-data" class="row g-2 align-items-end">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <div class="col-12">
+            <label class="form-label">CSV (name,phone,discount_percent)</label>
+            <input type="file" name="file" accept=".csv" class="form-control" required>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-outline-primary w-100">{{ _('Import CSV / استيراد CSV') }}</button>
+          </div>
+        </form>
       </div>
-      <div class="col-md-3">
-        <button class="btn btn-outline-primary w-100">{{ _('Import CSV / استيراد CSV') }}</button>
-      </div>
-      <div class="col-md-3">
-        <form method="POST" action="{{ url_for('customers_seed') }}">
+      <div class="col-md-6">
+        <form method="POST" action="/customers/seed">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <button class="btn btn-outline-secondary w-100">{{ _('Add 5 sample customers / إضافة 5 عملاء تجريبيين') }}</button>
         </form>
       </div>
-    </form>
+    </div>
   </div></div>
 
   <div class="card"><div class="card-body">
