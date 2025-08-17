@@ -678,6 +678,11 @@ def _safe_customers_view(fn):
 @login_required
 def customers():
     from models import Customer
+    # Ensure table exists for legacy DBs
+    try:
+        Customer.__table__.create(bind=db.engine, checkfirst=True)
+    except Exception:
+        pass
     # Add new customer
     if request.method == 'POST':
         name = (request.form.get('name') or '').strip()
