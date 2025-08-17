@@ -644,6 +644,27 @@ def api_customer_lookup():
 @login_required
 def customers():
     from models import Customer
+    # Ensure customers table exists in legacy DBs without migrations
+    try:
+        from sqlalchemy import inspect as _sa_inspect, text as _sa_text
+        _insp = _sa_inspect(db.engine)
+        if 'customers' not in _insp.get_table_names():
+            with db.engine.begin() as _conn:
+                _conn.execute(_sa_text(
+                    """
+                    CREATE TABLE IF NOT EXISTS customers (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(200) NOT NULL,
+                        phone VARCHAR(50),
+                        discount_percent NUMERIC(5,2) DEFAULT 0,
+                        active BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                ))
+    except Exception:
+        pass
+
     # Create
     if request.method == 'POST':
         name = (request.form.get('name') or '').strip()
@@ -655,10 +676,14 @@ def customers():
         if not name:
             flash(_('Customer name is required / اسم العميل مطلوب'), 'danger')
         else:
-            c = Customer(name=name, phone=phone, discount_percent=discount_percent, active=True)
-            db.session.add(c)
-            db.session.commit()
-            flash(_('Customer added successfully / تم إضافة العميل بنجاح'), 'success')
+            try:
+                c = Customer(name=name, phone=phone, discount_percent=discount_percent, active=True)
+                db.session.add(c)
+                db.session.commit()
+                flash(_('Customer added successfully / تم إضافة العميل بنجاح'), 'success')
+            except Exception as e:
+                db.session.rollback()
+                flash(_('Failed to save customer / فشل حفظ العميل'), 'danger')
         return redirect(url_for('customers'))
     # List
     q = (request.args.get('q') or '').strip()
