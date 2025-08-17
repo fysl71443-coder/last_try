@@ -162,10 +162,14 @@
     const q = custName.value.trim();
     if(!q){ custList.style.display='none'; return; }
     custTimer = setTimeout(async () => {
-      const res = await fetch(`/api/customers/lookup?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
+      let data = [];
+      try{
+        const res = await fetch(`/api/customers/lookup?q=${encodeURIComponent(q)}`, { credentials: 'same-origin' });
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        data = await res.json();
+      }catch(e){ data = []; }
       custList.innerHTML = '';
-      if(!data.length){ custList.style.display='none'; return; }
+      if(!Array.isArray(data) || !data.length){ custList.style.display='none'; return; }
       data.forEach(c => {
         const a = document.createElement('a');
         a.href = '#'; a.className = 'list-group-item list-group-item-action';
@@ -243,12 +247,12 @@
     }
 
     // Reuse single modal instance to avoid double backdrops and stuck state
-    if(!window.__catModalInstance){ window.__catModalInstance = new bootstrap.Modal(modalEl); }
+    if(!window.__catModalInstance){ window.__catModalInstance = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true }); }
     window.__catModalInstance.show();
   }
 
-  function addItemClose(mealId){ addItem(mealId); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); inst?.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
-  function addMenuItemClose(mealId, name, unit){ addMenuItem(mealId, name, unit); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); inst?.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
+  function addItemClose(mealId){ addItem(mealId); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
+  function addMenuItemClose(mealId, name, unit){ addMenuItem(mealId, name, unit); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
 
   function addItem(mealId){
     const m = meals.find(x => x.id === mealId);
