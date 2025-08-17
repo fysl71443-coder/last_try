@@ -319,7 +319,9 @@
     if(token){ headers['X-CSRFToken'] = token; }
     let data;
     try{
-      const res = await fetch('{{ url_for('api_sales_checkout') }}', {
+      const checkoutUrl = {{ safe_url('api_sales_checkout') and ('\'' + safe_url('api_sales_checkout') + '\'') or 'null' }};
+      if(!checkoutUrl){ alert('Missing checkout endpoint'); return; }
+      const res = await fetch(checkoutUrl, {
         method: 'POST', headers, credentials:'same-origin', body: JSON.stringify(payload)
       });
       if(!res.ok){
