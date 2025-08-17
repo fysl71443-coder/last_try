@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 4️⃣ Flask & extensions
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, make_response
 from extensions import db
 
 from flask_migrate import Migrate
