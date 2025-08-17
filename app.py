@@ -640,8 +640,32 @@ def api_customer_lookup():
         return jsonify([])
 
 # Customers management screen (simple CRUD)
+
+# Defensive wrapper to prevent 500s on customers page while logging root cause
+from functools import wraps
+
+def _safe_customers_view(fn):
+    @wraps(fn)
+    def _inner(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as _fatal_err:
+            logging.error('Customers view fatal error', exc_info=True)
+            try:
+                flash(_('Unexpected error in Customers page / حدث خطأ غير متوقع في شاشة العملاء'), 'danger')
+            except Exception:
+                pass
+            # Render minimal page to avoid 500 while still letting user proceed
+            try:
+                return render_template('customers.html', customers=[]), 200
+            except Exception:
+                # ultimate fallback
+                return redirect(url_for('dashboard'))
+    return _inner
+
 @app.route('/customers', methods=['GET','POST'])
 @login_required
+@_safe_customers_view
 def customers():
     from models import Customer
     # Ensure customers table exists in legacy DBs without migrations
