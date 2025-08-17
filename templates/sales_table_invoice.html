@@ -49,6 +49,7 @@
       <div class="card">
         <div class="card-body">
           <div class="row g-2">
+            <input type="hidden" id="csrfTokenPage" value="{{ csrf_token() }}">
             <div class="col-md-6">
               <label class="form-label">{{ _('Date / التاريخ') }}</label>
               <input id="date" type="date" class="form-control" value="{{ today }}">
@@ -329,7 +330,7 @@
       tax_pct: parseFloat(document.getElementById('taxPct').value || '0'),
       payment_method: document.getElementById('payMethod').value
     };
-    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+    const token = document.querySelector('meta[name="csrf-token"]')?.content || document.getElementById('csrfTokenPage')?.value;
     const headers = { 'Content-Type': 'application/json' };
     if(token){ headers['X-CSRFToken'] = token; }
     let data;
@@ -359,7 +360,7 @@
     if(pwd===null) return; // cancelled prompt
     if(!pwd || pwd.trim().length===0){ alert("{{ _('Password required / كلمة المرور مطلوبة') }}"); return; }
     try{
-      const token = document.querySelector('meta[name="csrf-token"]')?.content;
+      const token = document.querySelector('meta[name="csrf-token"]')?.content || document.getElementById('csrfTokenPage')?.value;
       const headers = { 'Content-Type':'application/json' };
       if(token){ headers['X-CSRFToken'] = token; }
       const resp = await fetch('{{ url_for('api_sales_void_check') }}', {
