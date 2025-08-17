@@ -968,6 +968,29 @@ def menu_item_update(item_id):
 @login_required
 def menu_item_delete(item_id):
     from models import MenuItem
+# API: sales void password check
+@app.route('/api/sales/void-check', methods=['POST'])
+@login_required
+def api_sales_void_check():
+    try:
+        data = request.get_json(silent=True) or {}
+        pwd = (data.get('password') or '').strip()
+        # Determine expected password from settings, fall back to '0000'
+        settings = get_settings_safe()
+        expected = None
+        if settings and getattr(settings, 'void_password', None):
+            expected = str(settings.void_password)
+        elif settings and getattr(settings, 'tax_number', None):
+            expected = str(settings.tax_number)
+        else:
+            expected = '0000'
+        if pwd == str(expected):
+            return jsonify({'ok': True})
+        return jsonify({'ok': False, 'error': 'Wrong password'}), 400
+    except Exception as e:
+        current_app.logger.error("=== Void Check Error Traceback ===\n" + traceback.format_exc())
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
     it = MenuItem.query.get_or_404(item_id)
     try:
         db.session.delete(it)
