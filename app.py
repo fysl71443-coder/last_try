@@ -676,17 +676,9 @@ def _safe_customers_view(fn):
 
 @app.route('/customers', methods=['GET','POST'])
 @login_required
-@_safe_customers_view
 def customers():
     from models import Customer
-    # Ensure customers table exists in legacy DBs without migrations
-    try:
-        # Create table via SQLAlchemy for cross-DB compatibility (SQLite/Postgres)
-        Customer.__table__.create(bind=db.engine, checkfirst=True)
-    except Exception:
-        pass
-
-    # Create
+    # Add new customer
     if request.method == 'POST':
         name = (request.form.get('name') or '').strip()
         phone = (request.form.get('phone') or '').strip() or None
@@ -702,28 +694,43 @@ def customers():
                 db.session.add(c)
                 db.session.commit()
                 flash(_('Customer added successfully / تم إضافة العميل بنجاح'), 'success')
-            except Exception as e:
+            except Exception:
                 db.session.rollback()
                 flash(_('Failed to save customer / فشل حفظ العميل'), 'danger')
         return redirect(url_for('customers'))
-    # List
+
+    # List customers
     q = (request.args.get('q') or '').strip()
     query = Customer.query
     if q:
         query = query.filter((Customer.name.ilike(f"%{q}%")) | (Customer.phone.ilike(f"%{q}%")))
-    try:
-        customers = query.order_by(Customer.name.asc()).all()
-    except Exception as _err:
-        # Fallback: tolerate legacy/bad data in discount_percent by selecting via SQL with coercion
-        from sqlalchemy import text as _sa_text
-        pat = f"%{q}%" if q else None
-        where = ""
-        params = {}
-        if pat:
-            where = "WHERE (LOWER(name) LIKE LOWER(:pat) OR LOWER(COALESCE(phone,'')) LIKE LOWER(:pat))"
-            params['pat'] = pat
-        sql = f"""
-            SELECT id, name, phone,
+    customers = query.order_by(Customer.name.asc()).limit(200).all()
+    return render_template('customers.html', customers=customers, q=q)
+
+@app.route('/customers/<int:cid>/edit', methods=['GET','POST'])
+@login_required
+def customers_edit(cid):
+    from models import Customer
+    c = Customer.query.get_or_404(cid)
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        phone = (request.form.get('phone') or '').strip() or None
+        try:
+            discount_percent = float(request.form.get('discount_percent') or 0)
+        except Exception:
+            discount_percent = 0.0
+        if not name:
+            flash(_('Customer name is required / اسم العميل مطلوب'), 'danger')
+        else:
+            try:
+                c.name = name; c.phone = phone; c.discount_percent = discount_percent
+                db.session.commit()
+                flash(_('Customer updated / تم تحديث العميل'), 'success')
+                return redirect(url_for('customers'))
+            except Exception:
+                db.session.rollback()
+                flash(_('Failed to update customer / تعذر تحديث العميل'), 'danger')
+    return render_template('customers_edit.html', c=c)
 
 @app.route('/customers/<int:cid>/delete', methods=['POST'])
 @login_required
@@ -739,9 +746,19 @@ def customers_delete(cid):
         flash(_('Failed to delete customer / تعذر حذف العميل'), 'danger')
     return redirect(url_for('customers'))
 
-@app.route('/customers/import', methods=['POST'])
+@app.route('/customers/<int:cid>/toggle', methods=['POST'])
 @login_required
-def customers_import():
+def customers_toggle(cid):
+    from models import Customer
+    c = Customer.query.get_or_404(cid)
+    c.active = not bool(c.active)
+    db.session.commit()
+    flash(_('Customer status updated / تم تحديث حالة العميل'), 'success')
+    return redirect(url_for('customers'))
+
+@app.route('/customers/import/csv', methods=['POST'])
+@login_required
+def customers_import_csv():
     from models import Customer
     file = request.files.get('file')
     if not file or file.filename.strip() == '':
@@ -772,61 +789,33 @@ def customers_import():
         flash(_('Invalid CSV format / تنسيق CSV غير صالح'), 'danger')
     return redirect(url_for('customers'))
 
-@app.route('/customers/seed', methods=['POST'])
+@app.route('/customers/import/excel', methods=['POST'])
 @login_required
-def customers_seed():
-    from models import Customer
-    samples = [
-        ('عميل تجريبي 1', '0500000001', 0),
-        ('عميل تجريبي 2', '0500000002', 0),
-        ('عميل تجريبي 3', '0500000003', 0),
-        ('عميل تجريبي 4', '0500000004', 0),
-        ('عميل تجريبي 5', '0500000005', 0),
-    ]
-    try:
-        for name, phone, dp in samples:
-            db.session.add(Customer(name=name, phone=phone, discount_percent=float(dp), active=True))
-        db.session.commit()
-        flash(_('5 sample customers added / تمت إضافة 5 عملاء تجريبيين'), 'success')
-    except Exception:
-        db.session.rollback()
-        flash(_('Failed to add sample customers / تعذر إضافة العملاء التجريبيين'), 'danger')
+def customers_import_excel():
+    # Stub: Excel import requires additional dependencies (e.g., openpyxl/pandas)
+    flash(_('Excel import not enabled on this deployment. Please use CSV. / استيراد Excel غير مفعّل حالياً، يرجى استخدام CSV'), 'warning')
     return redirect(url_for('customers'))
 
-                   CAST(COALESCE(discount_percent, 0) AS NUMERIC) AS discount_percent,
-                   COALESCE(active, 1) AS active,
-                   COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at
-            FROM customers
-            {where}
-            ORDER BY name ASC
-        """
-        with db.engine.connect() as conn:
-            rows = conn.execute(_sa_text(sql), params).mappings().all()
-            try:
-                from types import SimpleNamespace as _NS
-                customers = [
-                    _NS(
-                        id=r.get('id'),
-                        name=r.get('name'),
-                        phone=r.get('phone'),
-                        discount_percent=r.get('discount_percent') or 0,
-                        active=bool(r.get('active')),
-                        created_at=r.get('created_at')
-                    ) for r in rows
-                ]
-            except Exception:
-                customers = []
-    return render_template('customers.html', customers=customers)
-
-@app.route('/customers/<int:cid>/toggle', methods=['POST'])
+@app.route('/customers/import/pdf', methods=['POST'])
 @login_required
-def customers_toggle(cid):
-    from models import Customer
-    c = Customer.query.get_or_404(cid)
-    c.active = not bool(c.active)
-    db.session.commit()
-    flash(_('Customer status updated / تم تحديث حالة العميل'), 'success')
+def customers_import_pdf():
+    # Stub: PDF parsing is not supported without additional libs; recommend CSV
+    flash(_('PDF import not enabled. Please use CSV. / استيراد PDF غير مفعّل، يرجى استخدام CSV'), 'warning')
     return redirect(url_for('customers'))
+
+@app.route('/customers/export.csv')
+@login_required
+def customers_export_csv():
+    from models import Customer
+    import csv, io
+    buf = io.StringIO(); writer = csv.writer(buf)
+    writer.writerow(['name','phone','discount_percent','active','created_at'])
+    for c in Customer.query.order_by(Customer.name.asc()).all():
+        writer.writerow([c.name, c.phone or '', float(c.discount_percent or 0), int(bool(c.active)), (c.created_at or '')])
+    resp = make_response(buf.getvalue())
+    resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    resp.headers['Content-Disposition'] = 'attachment; filename=customers.csv'
+    return resp
 
 # Menu categories (simple admin)
 @app.route('/menu', methods=['GET','POST'])
