@@ -140,10 +140,12 @@
 </div>
 
 <script>
-  document.querySelectorAll('.cat-card').forEach((el, i)=>{
-    el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectCategory(el.innerText.trim(), i);} });
-    el.addEventListener('click', ()=> selectCategory(el.innerText.trim(), i));
-    el.setAttribute('tabindex','0');
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.cat-card').forEach((el, i)=>{
+      el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectCategory(el.innerText.trim(), i);} });
+      el.addEventListener('click', ()=> selectCategory(el.innerText.trim(), i));
+      el.setAttribute('tabindex','0');
+    });
   });
 
   // Category name -> id map injected from server when available
@@ -157,29 +159,32 @@
   const custName = document.getElementById('custName');
   const custPhone = document.getElementById('custPhone');
 
-  custName.addEventListener('input', () => {
-    clearTimeout(custTimer);
-    const q = custName.value.trim();
-    if(!q){ custList.style.display='none'; return; }
-    custTimer = setTimeout(async () => {
-      let data = [];
-      try{
-        const res = await fetch(`/api/customers/lookup?q=${encodeURIComponent(q)}`, { credentials: 'same-origin' });
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        data = await res.json();
-      }catch(e){ data = []; }
-      custList.innerHTML = '';
-      if(!Array.isArray(data) || !data.length){ custList.style.display='none'; return; }
-      data.forEach(c => {
-        const a = document.createElement('a');
-        a.href = '#'; a.className = 'list-group-item list-group-item-action';
-        a.textContent = `${c.name} (${c.phone||'-'}) — ${c.discount_percent}%`;
-        a.onclick = (e)=>{ e.preventDefault(); selectCustomer(c); };
-        custList.appendChild(a);
-      });
-      custList.style.display = 'block';
-    }, 250);
-  });
+  if(custName){
+    custName.addEventListener('input', () => {
+      clearTimeout(custTimer);
+      const q = custName.value.trim();
+      if(!q){ if(custList){ custList.style.display='none'; } return; }
+      custTimer = setTimeout(async () => {
+        let data = [];
+        try{
+          const res = await fetch(`/api/customers/lookup?q=${encodeURIComponent(q)}`, { credentials: 'same-origin' });
+          if(!res.ok) throw new Error('HTTP '+res.status);
+          data = await res.json();
+        }catch(e){ data = []; }
+        if(!custList){ return; }
+        custList.innerHTML = '';
+        if(!Array.isArray(data) || !data.length){ custList.style.display='none'; return; }
+        data.forEach(c => {
+          const a = document.createElement('a');
+          a.href = '#'; a.className = 'list-group-item list-group-item-action';
+          a.textContent = `${c.name} (${c.phone||'-'}) — ${c.discount_percent}%`;
+          a.onclick = (e)=>{ e.preventDefault(); selectCustomer(c); };
+          custList.appendChild(a);
+        });
+        custList.style.display = 'block';
+      }, 250);
+    });
+  }
 
   function selectCustomer(c){
     custName.value = c.name;
@@ -247,8 +252,14 @@
     }
 
     // Reuse single modal instance to avoid double backdrops and stuck state
-    if(!window.__catModalInstance){ window.__catModalInstance = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true }); }
-    window.__catModalInstance.show();
+    if(window.bootstrap && bootstrap.Modal){
+      if(!window.__catModalInstance){ window.__catModalInstance = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true }); }
+      window.__catModalInstance.show();
+    } else {
+      // Fallback: no Bootstrap available => inline grid visible
+      modalEl.classList.add('show');
+      modalEl.style.display = 'block';
+    }
   }
 
   function addItemClose(mealId){ addItem(mealId); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
