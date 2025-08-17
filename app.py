@@ -2264,6 +2264,9 @@ def salaries_monthly_save():
     if updated:
         db.session.commit()
         flash(_('تم حفظ التعديلات / Changes saved'), 'success')
+    else:
+        flash(_('No changes / لا توجد تعديلات'), 'info')
+    return redirect(url_for('salaries_monthly', year=request.form.get('year'), month=request.form.get('month')))
 
 @app.route('/settings/print', methods=['POST'])
 @login_required
