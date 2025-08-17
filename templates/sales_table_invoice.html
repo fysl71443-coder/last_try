@@ -147,6 +147,9 @@
       el.addEventListener('click', ()=> selectCategory(el.innerText.trim(), i));
       el.setAttribute('tabindex','0');
     });
+    // expose codes for external script
+    document.body.dataset.branch = '{{ branch_code }}';
+    document.body.dataset.table = '{{ table_no }}';
   });
 
   // Category name -> id map injected from server when available
@@ -372,6 +375,8 @@
       const data = await resp.json().catch(()=>({ok:false,error:'Invalid response'}));
       if(!resp.ok || !data.ok){ alert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}'); return; }
       // Clear invoice items and totals
+<script src="{{ url_for('static', filename='js/printInvoice.js') }}"></script>
+
       items.length = 0;
       renderItems();
       alert('{{ _('Invoice cancelled / تم إلغاء الفاتورة') }}');

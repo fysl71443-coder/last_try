@@ -64,6 +64,27 @@ csrf = CSRFProtect(app)
 # Proxy fix (Render)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+# API-friendly error handlers
+from flask import jsonify, request
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    try:
+        if request.path.startswith('/api/'):
+            return jsonify({'ok': False, 'error': f'CSRF error: {getattr(e, "description", str(e))}'}), 400
+    except Exception:
+        pass
+    return render_template('login.html', form=LoginForm()), 400
+
+@app.errorhandler(500)
+def handle_internal_error(e):
+    try:
+        if request.path.startswith('/api/'):
+            return jsonify({'ok': False, 'error': 'Internal server error'}), 500
+    except Exception:
+        pass
+    return e
+
 # Initialize other extensions
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -956,115 +977,158 @@ def menu_toggle(cat_id):
 
 # Checkout API: create invoice + items + payment, then return receipt URL
 
-@app.route('/api/sales/void-check', methods=['POST'])
-@login_required
-def api_sales_void_check():
-    data = request.get_json(silent=True) or {}
-    pwd = (data.get('password') or '').strip()
-    # Allow only admin role by password check
-    ok = False
-    s = get_settings_safe()
-    expected = (s.tax_number or '0000').strip() if s and s.tax_number else '0000'
-    ok = (pwd == expected)
-    if not ok:
-        return jsonify({'ok': False, 'error': _('Wrong password / كلمة المرور غير صحيحة')}), 403
-    return jsonify({'ok': True})
-
+@csrf.exempt
 @app.route('/api/sales/checkout', methods=['POST'])
 @login_required
 def api_sales_checkout():
-    from datetime import datetime as _dt
-    data = request.get_json(silent=True) or {}
-    branch_code = data.get('branch_code')
-    table_no = int(data.get('table_no') or 0)
-    items = data.get('items') or []  # [{meal_id, qty}]
-    customer_name = data.get('customer_name') or None
-    customer_phone = data.get('customer_phone') or None  # Stored in description for now
-    discount_pct = float(data.get('discount_pct') or 0)
-    tax_pct = float(data.get('tax_pct') or 15)
-    payment_method = data.get('payment_method') or 'CASH'
-    if not is_valid_branch(branch_code) or not items:
-        return jsonify({'ok': False, 'error': 'Invalid branch or empty items'}), 400
+    # Temporary debug handler: echo back request payload to verify endpoint wiring
+    try:
+        data = request.get_json(silent=True) or {}
+        branch = data.get('branch') or data.get('branch_code')
+        table = data.get('table') or data.get('table_no')
+        items = data.get('items')
+        customer_id = data.get('customer_id')
+        return jsonify({
+            'status': 'success',
+            'branch': branch,
+            'table': table,
+            'items': items,
+            'customer_id': customer_id
+        }), 200
+    except Exception as e:
+        logging.exception('Checkout debug echo failed')
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
-    # Generate invoice number SAL-YYYY-###
-    last = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
-    if last and last.invoice_number and '-' in last.invoice_number:
+    try:
+        from datetime import datetime as _dt
+        data = request.get_json(silent=True) or {}
+        branch_code = data.get('branch_code')
+        table_no = int(data.get('table_no') or 0)
+        items = data.get('items') or []  # [{meal_id, qty}]
+        customer_name = data.get('customer_name') or None
+        customer_phone = data.get('customer_phone') or None
+        discount_pct = float(data.get('discount_pct') or 0)
+        tax_pct = float(data.get('tax_pct') or 15)
+        payment_method = data.get('payment_method') or 'CASH'
+
+        if not is_valid_branch(branch_code) or not items:
+            return jsonify({'ok': False, 'error': 'Invalid branch or empty items'}), 400
+
+        # Ensure tables exist
         try:
-            last_num = int(str(last.invoice_number).split('-')[-1])
-            new_num = last_num + 1
+            db.create_all()
         except Exception:
+            pass
+
+        # Generate invoice number SAL-YYYY-###
+        last = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
+        if last and last.invoice_number and '-' in last.invoice_number:
+            try:
+                last_num = int(str(last.invoice_number).split('-')[-1])
+                new_num = last_num + 1
+            except Exception:
+                new_num = 1
+        else:
             new_num = 1
-    else:
-        new_num = 1
-    invoice_number = f"SAL-{_dt.now(_dt.timezone.utc).year}-{new_num:03d}"
 
-    # Calculate totals and build items
-    subtotal = 0.0
-    tax_total = 0.0
-    invoice_items = []
-    for it in items:
-        meal = Meal.query.get(int(it.get('meal_id')))
-        qty = float(it.get('qty') or 0)
-        if not meal or qty <= 0:
-            continue
-        unit = float(meal.selling_price)
-        line_sub = unit * qty
-        line_tax = line_sub * (tax_pct/100.0)
-        subtotal += line_sub
-        tax_total += line_tax
-        total_line = line_sub + line_tax
-        invoice_items.append({
-            'name': meal.display_name,
-            'qty': qty,
-            'price_before_tax': unit,
-            'tax': line_tax,
-            'total': total_line
-        })
+        # Get current datetime
+        try:
+            from datetime import timezone as _tz
+            _now = _dt.now(_tz.utc)
+        except Exception:
+            _now = _dt.now()
 
-    discount_val = (subtotal + tax_total) * (discount_pct/100.0)
-    grand_total = (subtotal + tax_total) - discount_val
+        invoice_number = f"SAL-{_now.year}-{new_num:03d}"
 
-    # Persist invoice
-    inv = SalesInvoice(
-        invoice_number=invoice_number,
-        date=_dt.now(_dt.timezone.utc).date(),
-        payment_method=payment_method,
-        branch=branch_code,
-        customer_name=customer_name,
-        customer_phone=customer_phone,
-        total_before_tax=subtotal,
-        tax_amount=tax_total,
-        discount_amount=discount_val,
-        total_after_tax_discount=grand_total,
-        status='paid',
-        user_id=current_user.id
-    )
-    db.session.add(inv)
-    db.session.flush()
+        # Calculate totals and build items
+        subtotal = 0.0
+        tax_total = 0.0
+        invoice_items = []
+        for it in items:
+            meal = Meal.query.get(int(it.get('meal_id')))
+            qty = float(it.get('qty') or 0)
+            if not meal or qty <= 0:
+                continue
+            unit = float(meal.selling_price or 0)
+            line_sub = unit * qty
+            line_tax = line_sub * (tax_pct / 100.0)
+            subtotal += line_sub
+            tax_total += line_tax
+            total_line = line_sub + line_tax
+            invoice_items.append({
+                'name': meal.display_name,
+                'qty': qty,
+                'price_before_tax': unit,
+                'tax': line_tax,
+                'total': total_line
+            })
 
-    for it in invoice_items:
-        db.session.add(SalesInvoiceItem(
+        discount_val = (subtotal + tax_total) * (discount_pct / 100.0)
+        grand_total = (subtotal + tax_total) - discount_val
+
+        # Persist invoice
+        inv = SalesInvoice(
+            invoice_number=invoice_number,
+            date=_now.date(),
+            payment_method=payment_method,
+            branch=branch_code,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            total_before_tax=subtotal,
+            tax_amount=tax_total,
+            discount_amount=discount_val,
+            total_after_tax_discount=grand_total,
+            status='paid',
+            user_id=current_user.id
+        )
+
+        try:
+            db.session.add(inv)
+            db.session.flush()
+        except Exception as e:
+            db.session.rollback()
+            logging.exception('checkout flush failed')
+            return jsonify({'ok': False, 'error': str(e)}), 500
+
+        for it in invoice_items:
+            db.session.add(SalesInvoiceItem(
+                invoice_id=inv.id,
+                product_name=str(it.get('name') or ''),
+                quantity=float(it.get('qty') or 0),
+                price_before_tax=float(it.get('price_before_tax') or 0),
+                tax=float(it.get('tax') or 0),
+                discount=0,
+                total_price=float(it.get('total') or 0)
+            ))
+
+        # Record payment
+        db.session.add(Payment(
             invoice_id=inv.id,
-            product_name=it['name'],
-            quantity=it['qty'],
-            price_before_tax=it['price_before_tax'],
-            tax=it['tax'],
-            discount=0,
-            total_price=it['total']
+            invoice_type='sales',
+            amount_paid=grand_total,
+            payment_method=payment_method
         ))
 
-    # Record payment
-    db.session.add(Payment(
-        invoice_id=inv.id,
-        invoice_type='sales',
-        amount_paid=grand_total,
-        payment_method=payment_method
-    ))
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logging.exception('checkout commit failed')
+            return jsonify({'ok': False, 'error': str(e)}), 500
 
-    db.session.commit()
+        receipt_url = url_for('sales_receipt', invoice_id=inv.id)
+        return jsonify({'ok': True, 'invoice_id': inv.id, 'print_url': receipt_url})
 
-    receipt_url = url_for('sales_receipt', invoice_id=inv.id)
-    return jsonify({'ok': True, 'invoice_id': inv.id, 'print_url': receipt_url})
+    except Exception as e:
+        logging.exception('checkout top-level failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+        receipt_url = url_for('sales_receipt', invoice_id=inv.id)
+        return jsonify({'ok': True, 'invoice_id': inv.id, 'print_url': receipt_url})
+    except Exception as e:
+        logging.exception('checkout top-level failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 # Receipt (80mm thermal style)
 @app.route('/sales/receipt/<int:invoice_id>')
