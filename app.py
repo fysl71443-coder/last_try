@@ -245,6 +245,15 @@ def inject_safe_url():
             return None
     return dict(safe_url=safe_url)
 
+# Safe Settings getter to avoid 500s if DB schema is outdated
+def get_settings_safe():
+    try:
+        from models import Settings
+        return Settings.query.first()
+    except Exception:
+        return None
+
+
 
 from forms import LoginForm, SalesInvoiceForm, RawMaterialForm, MealForm, PurchaseInvoiceForm, ExpenseInvoiceForm, EmployeeForm, SalaryForm
 # Register blueprints
@@ -595,8 +604,7 @@ def sales_table_invoice(branch_code, table_no):
         'price': float(m.selling_price or 0)
     } for m in meals]
     # VAT rate from settings if available
-    from models import Settings
-    settings = Settings.query.first()
+    settings = get_settings_safe()
     vat_rate = float(settings.vat_rate) if settings and settings.vat_rate is not None else 15.0
     from datetime import date as _date
     return render_template('sales_table_invoice.html',
@@ -709,7 +717,15 @@ def customers():
     query = Customer.query
     if q:
         query = query.filter((Customer.name.ilike(f"%{q}%")) | (Customer.phone.ilike(f"%{q}%")))
-    customers = query.order_by(Customer.name.asc()).limit(200).all()
+    try:
+        customers = query.order_by(Customer.name.asc()).limit(200).all()
+    except Exception:
+        logging.error('Customers list failed', exc_info=True)
+        customers = []
+        try:
+            flash(_('Customers storage is not ready yet. Please import or add customers. / مخزن العملاء غير جاهز بعد. يرجى إضافة أو استيراد عملاء.'), 'warning')
+        except Exception:
+            pass
     return render_template('customers.html', customers=customers, q=q)
 
 @app.route('/customers/<int:cid>/edit', methods=['GET','POST'])
@@ -947,14 +963,9 @@ def api_sales_void_check():
     pwd = (data.get('password') or '').strip()
     # Allow only admin role by password check
     ok = False
-    try:
-        from models import Settings
-        s = Settings.query.first()
-        # Use tax_number as a quick configurable secret if set; otherwise fallback to '0000'
-        expected = (s.tax_number or '0000').strip() if s and s.tax_number else '0000'
-        ok = (pwd == expected)
-    except Exception:
-        ok = (pwd == '0000')
+    s = get_settings_safe()
+    expected = (s.tax_number or '0000').strip() if s and s.tax_number else '0000'
+    ok = (pwd == expected)
     if not ok:
         return jsonify({'ok': False, 'error': _('Wrong password / كلمة المرور غير صحيحة')}), 403
     return jsonify({'ok': True})
@@ -1800,8 +1811,7 @@ def reports():
         .limit(10).all()
     top_labels = [r[0] for r in top_rows]
     # Settings for labels/currency
-    from models import Settings
-    s = Settings.query.first()
+    s = get_settings_safe()
     place_lbl = s.place_india_label if s and s.place_india_label else 'Place India'
     china_lbl = s.china_town_label if s and s.china_town_label else 'China Town'
     currency = s.currency if s and s.currency else 'SAR'
@@ -2076,12 +2086,8 @@ def salaries_statements_print():
     paid_map = {pid: float(total or 0) for (pid,total) in pays}
 
     # Collect company name
-    try:
-        from models import Settings
-        s = Settings.query.first()
-        company_name = (s.company_name or '').strip() if s and s.company_name else 'Company'
-    except Exception:
-        company_name = 'Company'
+    s = get_settings_safe()
+    company_name = (s.company_name or '').strip() if s and s.company_name else 'Company'
 
     # HTML print (professional header) unless mode=pdf explicitly
     if request.args.get('mode') != 'pdf':
@@ -2113,12 +2119,8 @@ def salaries_statements_print():
             totals['paid'] += paid
             totals['remaining'] += remaining
         # Header data
-        try:
-            from models import Settings
-            s = Settings.query.first()
-            company_name = (s.company_name or '').strip() if s and s.company_name else 'Company'
-        except Exception:
-            company_name = 'Company'
+        s = get_settings_safe()
+        company_name = (s.company_name or '').strip() if s and s.company_name else 'Company'
         logo_url = url_for('static', filename='logo.svg', _external=False)
         title = _("Payroll Statements / كشوفات الرواتب")
         meta = _("Month / الشهر") + f": {year}-{month:02d}"
