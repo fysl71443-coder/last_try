@@ -140,6 +140,7 @@
 <script>
   document.querySelectorAll('.cat-card').forEach((el, i)=>{
     el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectCategory(el.innerText.trim(), i);} });
+    el.addEventListener('click', ()=> selectCategory(el.innerText.trim(), i));
     el.setAttribute('tabindex','0');
   });
 

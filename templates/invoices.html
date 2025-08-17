@@ -59,6 +59,8 @@ body {
             </div>
             <div class="col-md-4 text-end">
                 <!-- زر طباعة -->
+                <!-- If nothing prints, ensure /invoices/print/<type> is reachable -->
+
                 <a href="{{ url_for('print_invoices', section=current_type) }}"
                    class="btn btn-success" target="_blank">
                    📄 {{ _('Print All / طباعة الكل') }}

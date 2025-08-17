@@ -81,6 +81,8 @@
       body.dark .btn-outline-danger:hover{ background:#E74C3C; color:#fff; }
     </style>
 
+      <meta name="csrf-token" content="{{ csrf_token() }}">
+
   </head>
   <body class="{{ (session.get('theme') or (settings.default_theme if settings else 'light')) }}">
     {% if request.endpoint != 'login' %}
