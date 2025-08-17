@@ -235,6 +235,17 @@ def inject_conf_vars():
 def index():
     return redirect(url_for('login'))
 
+# Safe url_for helper to avoid template crashes if an endpoint is missing in current deployment
+@app.context_processor
+def inject_safe_url():
+    def safe_url(endpoint, **kwargs):
+        try:
+            return url_for(endpoint, **kwargs)
+        except Exception:
+            return None
+    return dict(safe_url=safe_url)
+
+
 from forms import LoginForm, SalesInvoiceForm, RawMaterialForm, MealForm, PurchaseInvoiceForm, ExpenseInvoiceForm, EmployeeForm, SalaryForm
 # Register blueprints
 try:
@@ -713,6 +724,75 @@ def customers():
             params['pat'] = pat
         sql = f"""
             SELECT id, name, phone,
+
+@app.route('/customers/<int:cid>/delete', methods=['POST'])
+@login_required
+def customers_delete(cid):
+    from models import Customer
+    c = Customer.query.get_or_404(cid)
+    try:
+        db.session.delete(c)
+        db.session.commit()
+        flash(_('Customer deleted / تم حذف العميل'), 'success')
+    except Exception:
+        db.session.rollback()
+        flash(_('Failed to delete customer / تعذر حذف العميل'), 'danger')
+    return redirect(url_for('customers'))
+
+@app.route('/customers/import', methods=['POST'])
+@login_required
+def customers_import():
+    from models import Customer
+    file = request.files.get('file')
+    if not file or file.filename.strip() == '':
+        flash(_('Please choose a CSV file / يرجى اختيار ملف CSV'), 'danger')
+        return redirect(url_for('customers'))
+    import csv, io
+    try:
+        raw = file.read()
+        text = raw.decode('utf-8-sig', errors='ignore')
+        f = io.StringIO(text)
+        reader = csv.DictReader(f)
+        added = 0
+        for row in reader:
+            name = (row.get('name') or row.get('Name') or '').strip()
+            phone = (row.get('phone') or row.get('Phone') or '').strip() or None
+            try:
+                dp = float((row.get('discount_percent') or row.get('Discount') or 0) or 0)
+            except Exception:
+                dp = 0.0
+            if not name:
+                continue
+            db.session.add(Customer(name=name, phone=phone, discount_percent=dp, active=True))
+            added += 1
+        db.session.commit()
+        flash(_('%(n)s customers imported / تم استيراد %(n)s عميل', n=added), 'success')
+    except Exception:
+        db.session.rollback()
+        flash(_('Invalid CSV format / تنسيق CSV غير صالح'), 'danger')
+    return redirect(url_for('customers'))
+
+@app.route('/customers/seed', methods=['POST'])
+@login_required
+def customers_seed():
+    from models import Customer
+    samples = [
+        ('عميل تجريبي 1', '0500000001', 0),
+        ('عميل تجريبي 2', '0500000002', 0),
+        ('عميل تجريبي 3', '0500000003', 0),
+        ('عميل تجريبي 4', '0500000004', 0),
+        ('عميل تجريبي 5', '0500000005', 0),
+    ]
+    try:
+        for name, phone, dp in samples:
+            db.session.add(Customer(name=name, phone=phone, discount_percent=float(dp), active=True))
+        db.session.commit()
+        flash(_('5 sample customers added / تمت إضافة 5 عملاء تجريبيين'), 'success')
+    except Exception:
+        db.session.rollback()
+        flash(_('Failed to add sample customers / تعذر إضافة العملاء التجريبيين'), 'danger')
+    return redirect(url_for('customers'))
+
                    CAST(COALESCE(discount_percent, 0) AS NUMERIC) AS discount_percent,
                    COALESCE(active, 1) AS active,
                    COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at
@@ -722,7 +802,20 @@ def customers():
         """
         with db.engine.connect() as conn:
             rows = conn.execute(_sa_text(sql), params).mappings().all()
-            customers = rows  # Jinja can access dict keys via dot notation
+            try:
+                from types import SimpleNamespace as _NS
+                customers = [
+                    _NS(
+                        id=r.get('id'),
+                        name=r.get('name'),
+                        phone=r.get('phone'),
+                        discount_percent=r.get('discount_percent') or 0,
+                        active=bool(r.get('active')),
+                        created_at=r.get('created_at')
+                    ) for r in rows
+                ]
+            except Exception:
+                customers = []
     return render_template('customers.html', customers=customers)
 
 @app.route('/customers/<int:cid>/toggle', methods=['POST'])
