@@ -646,22 +646,8 @@ def customers():
     from models import Customer
     # Ensure customers table exists in legacy DBs without migrations
     try:
-        from sqlalchemy import inspect as _sa_inspect, text as _sa_text
-        _insp = _sa_inspect(db.engine)
-        if 'customers' not in _insp.get_table_names():
-            with db.engine.begin() as _conn:
-                _conn.execute(_sa_text(
-                    """
-                    CREATE TABLE IF NOT EXISTS customers (
-                        id SERIAL PRIMARY KEY,
-                        name VARCHAR(200) NOT NULL,
-                        phone VARCHAR(50),
-                        discount_percent NUMERIC(5,2) DEFAULT 0,
-                        active BOOLEAN DEFAULT TRUE,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                    """
-                ))
+        # Create table via SQLAlchemy for cross-DB compatibility (SQLite/Postgres)
+        Customer.__table__.create(bind=db.engine, checkfirst=True)
     except Exception:
         pass
 
