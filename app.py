@@ -678,8 +678,27 @@ def customers():
         query = query.filter((Customer.name.ilike(f"%{q}%")) | (Customer.phone.ilike(f"%{q}%")))
     try:
         customers = query.order_by(Customer.name.asc()).all()
-    except Exception:
-        customers = []
+    except Exception as _err:
+        # Fallback: tolerate legacy/bad data in discount_percent by selecting via SQL with coercion
+        from sqlalchemy import text as _sa_text
+        pat = f"%{q}%" if q else None
+        where = ""
+        params = {}
+        if pat:
+            where = "WHERE (LOWER(name) LIKE LOWER(:pat) OR LOWER(COALESCE(phone,'')) LIKE LOWER(:pat))"
+            params['pat'] = pat
+        sql = f"""
+            SELECT id, name, phone,
+                   CAST(COALESCE(NULLIF(discount_percent, ''), 0) AS NUMERIC) AS discount_percent,
+                   COALESCE(active, 1) AS active,
+                   COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at
+            FROM customers
+            {where}
+            ORDER BY name ASC
+        """
+        with db.engine.connect() as conn:
+            rows = conn.execute(_sa_text(sql), params).mappings().all()
+            customers = rows  # Jinja can access dict keys via dot notation
     return render_template('customers.html', customers=customers)
 
 @app.route('/customers/<int:cid>/toggle', methods=['POST'])
