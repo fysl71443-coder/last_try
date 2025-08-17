@@ -348,12 +348,15 @@
     if(pwd===null) return; // cancelled prompt
     if(!pwd || pwd.trim().length===0){ alert("{{ _('Password required / كلمة المرور مطلوبة') }}"); return; }
     try{
+      const token = document.querySelector('meta[name="csrf-token"]')?.content;
+      const headers = { 'Content-Type':'application/json' };
+      if(token){ headers['X-CSRFToken'] = token; }
       const resp = await fetch('{{ url_for('api_sales_void_check') }}', {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST', headers, credentials:'same-origin',
         body: JSON.stringify({ password: pwd })
       });
-      const data = await resp.json();
-      if(!data.ok){ alert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}'); return; }
+      const data = await resp.json().catch(()=>({ok:false,error:'Invalid response'}));
+      if(!resp.ok || !data.ok){ alert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}'); return; }
       // Clear invoice items and totals
       items.length = 0;
       renderItems();

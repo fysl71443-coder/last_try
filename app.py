@@ -1072,8 +1072,7 @@ def api_sales_checkout():
 def sales_receipt(invoice_id):
     invoice = SalesInvoice.query.get_or_404(invoice_id)
     items = SalesInvoiceItem.query.filter_by(invoice_id=invoice_id).all()
-    from models import Settings
-    settings = Settings.query.first()
+    settings = get_settings_safe()
     return render_template('sales_receipt.html', invoice=invoice, items=items, settings=settings)
 
 
