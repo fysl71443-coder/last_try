@@ -689,7 +689,7 @@ def customers():
             params['pat'] = pat
         sql = f"""
             SELECT id, name, phone,
-                   CAST(COALESCE(NULLIF(discount_percent, ''), 0) AS NUMERIC) AS discount_percent,
+                   CAST(COALESCE(discount_percent, 0) AS NUMERIC) AS discount_percent,
                    COALESCE(active, 1) AS active,
                    COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at
             FROM customers
