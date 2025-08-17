@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Customers / العملاء') }}{% endblock %}
+{% block content %}
+<div class="container py-3">
+  <div class="section-header">
+    <h3>{{ _('Customers / العملاء') }}</h3>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('customers_export_csv') }}">{{ _('Export CSV / تصدير CSV') }}</a>
+    </div>
+  </div>
+
+  <div class="card mb-3"><div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <label class="form-label">{{ _('Search by name or phone / البحث بالاسم أو الهاتف') }}</label>
+        <input class="form-control" name="q" value="{{ q or '' }}" placeholder="{{ _('Type to filter...') }}">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-outline-primary w-100">{{ _('Filter / تصفية') }}</button>
+      </div>
+    </form>
+  </div></div>
+
+  <div class="card mb-3"><div class="card-body">
+    <form method="post" class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="col-md-4">
+        <label class="form-label">{{ _('Name / الاسم') }}</label>
+        <input name="name" class="form-control" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ _('Phone / الهاتف') }}</label>
+        <input name="phone" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ _('Discount % / الخصم %') }}</label>
+        <input name="discount_percent" type="number" step="0.01" value="0" class="form-control">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-success w-100">{{ _('Add / إضافة') }}</button>
+      </div>
+    </form>
+    <hr>
+    <div class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <form method="POST" action="{{ url_for('customers_import_csv') }}" enctype="multipart/form-data" class="row g-2 align-items-end">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <div class="col-12">
+            <label class="form-label">CSV (name,phone,discount_percent)</label>
+            <input type="file" name="file" accept=".csv" class="form-control" required>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-outline-primary w-100">{{ _('Import CSV / استيراد CSV') }}</button>
+          </div>
+        </form>
+      </div>
+      <div class="col-md-3">
+        <form method="POST" action="{{ url_for('customers_import_excel') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <button class="btn btn-outline-secondary w-100">{{ _('Import Excel / استيراد Excel') }}</button>
+        </form>
+      </div>
+      <div class="col-md-3">
+        <form method="POST" action="{{ url_for('customers_import_pdf') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <button class="btn btn-outline-secondary w-100">{{ _('Import PDF / استيراد PDF') }}</button>
+        </form>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="card"><div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>{{ _('Name / الاسم') }}</th>
+            <th>{{ _('Phone / الهاتف') }}</th>
+            <th class="text-end">{{ _('Discount % / الخصم %') }}</th>
+            <th>{{ _('Status / الحالة') }}</th>
+            <th class="text-end" style="width:260px;">{{ _('Actions / إجراءات') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in customers %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td>{{ c.phone or '-' }}</td>
+            <td class="text-end">{{ '%.2f'| format(c.discount_percent or 0) }}</td>
+            <td>
+              {% if c.active %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}
+            </td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('customers_edit', cid=c.id) }}">{{ _('Edit / تعديل') }}</a>
+              <form method="post" action="{{ url_for('customers_toggle', cid=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Confirm toggle status? / تأكيد تغيير الحالة؟') }}')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button class="btn btn-sm btn-outline-secondary">{{ _('Toggle / تبديل') }}</button>
+              </form>
+              <form method="post" action="{{ url_for('customers_delete', cid=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this customer? / حذف هذا العميل؟') }}')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted">{{ _('No customers yet / لا يوجد عملاء بعد') }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+

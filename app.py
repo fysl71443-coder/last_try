@@ -677,9 +677,145 @@ def _safe_customers_view(fn):
 @app.route('/customers', methods=['GET','POST'])
 @login_required
 def customers():
-    abort(404)
+    from models import Customer
+    # Add new customer
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        phone = (request.form.get('phone') or '').strip() or None
+        try:
+            discount_percent = float(request.form.get('discount_percent') or 0)
+        except Exception:
+            discount_percent = 0.0
+        if not name:
+            flash(_('Customer name is required / اسم العميل مطلوب'), 'danger')
+        else:
+            try:
+                c = Customer(name=name, phone=phone, discount_percent=discount_percent, active=True)
+                db.session.add(c)
+                db.session.commit()
+                flash(_('Customer added successfully / تم إضافة العميل بنجاح'), 'success')
+            except Exception:
+                db.session.rollback()
+                flash(_('Failed to save customer / فشل حفظ العميل'), 'danger')
+        return redirect(url_for('customers'))
 
-# Removed customers-related routes as per request
+    # List customers
+    q = (request.args.get('q') or '').strip()
+    query = Customer.query
+    if q:
+        query = query.filter((Customer.name.ilike(f"%{q}%")) | (Customer.phone.ilike(f"%{q}%")))
+    customers = query.order_by(Customer.name.asc()).limit(200).all()
+    return render_template('customers.html', customers=customers, q=q)
+
+@app.route('/customers/<int:cid>/edit', methods=['GET','POST'])
+@login_required
+def customers_edit(cid):
+    from models import Customer
+    c = Customer.query.get_or_404(cid)
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        phone = (request.form.get('phone') or '').strip() or None
+        try:
+            discount_percent = float(request.form.get('discount_percent') or 0)
+        except Exception:
+            discount_percent = 0.0
+        if not name:
+            flash(_('Customer name is required / اسم العميل مطلوب'), 'danger')
+        else:
+            try:
+                c.name = name; c.phone = phone; c.discount_percent = discount_percent
+                db.session.commit()
+                flash(_('Customer updated / تم تحديث العميل'), 'success')
+                return redirect(url_for('customers'))
+            except Exception:
+                db.session.rollback()
+                flash(_('Failed to update customer / تعذر تحديث العميل'), 'danger')
+    return render_template('customers_edit.html', c=c)
+
+@app.route('/customers/<int:cid>/delete', methods=['POST'])
+@login_required
+def customers_delete(cid):
+    from models import Customer
+    c = Customer.query.get_or_404(cid)
+    try:
+        db.session.delete(c)
+        db.session.commit()
+        flash(_('Customer deleted / تم حذف العميل'), 'success')
+    except Exception:
+        db.session.rollback()
+        flash(_('Failed to delete customer / تعذر حذف العميل'), 'danger')
+    return redirect(url_for('customers'))
+
+@app.route('/customers/<int:cid>/toggle', methods=['POST'])
+@login_required
+def customers_toggle(cid):
+    from models import Customer
+    c = Customer.query.get_or_404(cid)
+    c.active = not bool(c.active)
+    db.session.commit()
+    flash(_('Customer status updated / تم تحديث حالة العميل'), 'success')
+    return redirect(url_for('customers'))
+
+@app.route('/customers/import/csv', methods=['POST'])
+@login_required
+def customers_import_csv():
+    from models import Customer
+    file = request.files.get('file')
+    if not file or file.filename.strip() == '':
+        flash(_('Please choose a CSV file / يرجى اختيار ملف CSV'), 'danger')
+        return redirect(url_for('customers'))
+    import csv, io
+    try:
+        raw = file.read()
+        text = raw.decode('utf-8-sig', errors='ignore')
+        f = io.StringIO(text)
+        reader = csv.DictReader(f)
+        added = 0
+        for row in reader:
+            name = (row.get('name') or row.get('Name') or '').strip()
+            phone = (row.get('phone') or row.get('Phone') or '').strip() or None
+            try:
+                dp = float((row.get('discount_percent') or row.get('Discount') or 0) or 0)
+            except Exception:
+                dp = 0.0
+            if not name:
+                continue
+            db.session.add(Customer(name=name, phone=phone, discount_percent=dp, active=True))
+            added += 1
+        db.session.commit()
+        flash(_('%(n)s customers imported / تم استيراد %(n)s عميل', n=added), 'success')
+    except Exception:
+        db.session.rollback()
+        flash(_('Invalid CSV format / تنسيق CSV غير صالح'), 'danger')
+    return redirect(url_for('customers'))
+
+@app.route('/customers/import/excel', methods=['POST'])
+@login_required
+def customers_import_excel():
+    # Stub: Excel import requires additional dependencies (e.g., openpyxl/pandas)
+    flash(_('Excel import not enabled on this deployment. Please use CSV. / استيراد Excel غير مفعّل حالياً، يرجى استخدام CSV'), 'warning')
+    return redirect(url_for('customers'))
+
+@app.route('/customers/import/pdf', methods=['POST'])
+@login_required
+def customers_import_pdf():
+    # Stub: PDF parsing is not supported without additional libs; recommend CSV
+    flash(_('PDF import not enabled. Please use CSV. / استيراد PDF غير مفعّل، يرجى استخدام CSV'), 'warning')
+    return redirect(url_for('customers'))
+
+@app.route('/customers/export.csv')
+@login_required
+def customers_export_csv():
+    from models import Customer
+    import csv, io
+    buf = io.StringIO(); writer = csv.writer(buf)
+    writer.writerow(['name','phone','discount_percent','active','created_at'])
+    for c in Customer.query.order_by(Customer.name.asc()).all():
+        writer.writerow([c.name, c.phone or '', float(c.discount_percent or 0), int(bool(c.active)), (c.created_at or '')])
+    resp = make_response(buf.getvalue())
+    resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    resp.headers['Content-Disposition'] = 'attachment; filename=customers.csv'
+    return resp
 
 # Menu categories (simple admin)
 @app.route('/menu', methods=['GET','POST'])
