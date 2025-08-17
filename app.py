@@ -11,6 +11,7 @@ import os
 import sys
 import logging
 import json
+import traceback
 from datetime import datetime, timedelta, timezone
 
 # 3️⃣ Load environment variables
@@ -18,7 +19,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 4️⃣ Flask & extensions
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, make_response
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, make_response, current_app
 from extensions import db
 
 from flask_migrate import Migrate
@@ -57,6 +58,15 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Babel / i18n
 app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
 babel = Babel(app)
+@app.errorhandler(500)
+def handle_internal_error(e):
+    try:
+        if request.path.startswith('/api/'):
+            return jsonify({'ok': False, 'error': 'Internal server error'}), 500
+    except Exception:
+        pass
+    return e
+
 
 # CSRF protection
 csrf = CSRFProtect(app)
@@ -628,15 +638,19 @@ def sales_table_invoice(branch_code, table_no):
     settings = get_settings_safe()
     vat_rate = float(settings.vat_rate) if settings and settings.vat_rate is not None else 15.0
     from datetime import date as _date
-    return render_template('sales_table_invoice.html',
-                           branch_code=branch_code,
-                           branch_label=BRANCH_CODES[branch_code],
-                           table_no=table_no,
-                           categories=categories,
-                           meals_json=json.dumps(meals_data),
-                           cat_map_json=json.dumps(cat_map),
-                           vat_rate=vat_rate,
-                           today=_date.today().isoformat())
+    try:
+        return render_template('sales_table_invoice.html',
+                               branch_code=branch_code,
+                               branch_label=BRANCH_CODES[branch_code],
+                               table_no=table_no,
+                               categories=categories,
+                               meals_json=json.dumps(meals_data),
+                               cat_map_json=json.dumps(cat_map),
+                               vat_rate=vat_rate,
+                               today=_date.today().isoformat())
+    except Exception as e:
+        current_app.logger.error("=== Table View Error Traceback ===\n" + traceback.format_exc())
+        return f"Error loading table: {e}", 500
 
 # API: items by category
 @app.route('/api/menu/<int:cat_id>/items')
@@ -996,7 +1010,7 @@ def api_sales_checkout():
             'customer_id': customer_id
         }), 200
     except Exception as e:
-        logging.exception('Checkout debug echo failed')
+        current_app.logger.error("=== Checkout Error Traceback ===\n" + traceback.format_exc())
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
     try:
