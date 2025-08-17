@@ -35,10 +35,24 @@
               </div>
             </div>
             <!-- Meals inside category card -->
-            <div class="meals-holder mt-2" id="meals-{{ loop.index0 }}" style="display:none;">
-              <div class="alert alert-info mb-2 d-none" id="empty-{{ loop.index0 }}">{{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}</div>
-              <div class="row g-2" id="grid-{{ loop.index0 }}"></div>
+            <!-- Inline holder removed: using modal approach for cleaner navigation -->
+
+            <!-- Modal for category items -->
+            <div class="modal fade" id="catModal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="catModalTitle">{{ _('Items') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div id="catEmpty" class="alert alert-info d-none">{{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}</div>
+                    <div class="row g-2" id="catGrid"></div>
+                  </div>
+                </div>
+              </div>
             </div>
+
           </div>
           {% endfor %}
         </div>
@@ -124,7 +138,6 @@
 </div>
 
 <script>
-  function collapseAll(){ document.querySelectorAll('.meals-holder').forEach(h=>{ h.style.display='none'; }); }
   document.querySelectorAll('.cat-card').forEach((el, i)=>{
     el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectCategory(el.innerText.trim(), i);} });
     el.setAttribute('tabindex','0');
@@ -171,60 +184,67 @@
 
   async function selectCategory(cat, idx){
     currentCategory = cat;
-    // Collapse all holders, then open the selected one
-    document.querySelectorAll('.meals-holder').forEach(h=>{ h.style.display='none'; });
-    const holder = document.getElementById(`meals-${idx}`);
-    const grid = document.getElementById(`grid-${idx}`);
-    const empty = document.getElementById(`empty-${idx}`);
-    if(!holder||!grid||!empty) return;
-    holder.style.display = 'block';
-    holder.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
+    // Open modal and populate with items in this category (from Menu API or fallback)
+    const modalEl = document.getElementById('catModal');
+    const modalTitle = document.getElementById('catModalTitle');
+    const grid = document.getElementById('catGrid');
+    const empty = document.getElementById('catEmpty');
+    modalTitle.textContent = cat;
     grid.innerHTML = '';
+    empty.classList.add('d-none');
 
     // Try menu category mapping first
     const catId = (window.CAT_MAP && window.CAT_MAP[cat]) ? window.CAT_MAP[cat] : null;
+    let data = [];
     if(catId){
       try{
         const resp = await fetch(`/api/menu/${catId}/items`, { credentials: 'same-origin' });
-        const data = await resp.json();
-        empty.classList.toggle('d-none', data.length !== 0);
-        grid.innerHTML = '';
-        data.forEach(m => {
-          const col = document.createElement('div');
-          col.className = 'col-6 col-md-4 col-lg-3';
-          const price = Number(m.price || 0);
-          const safeName = (m.name || '').replace(/`/g,'');
-          col.innerHTML = `
-            <div class="card meal-card h-100" onclick='addMenuItem(${m.meal_id}, ${JSON.stringify(safeName)}, ${price})'>
-              <div class="card-body d-flex flex-column justify-content-between">
-                <div class="fw-bold">${safeName}</div>
-                <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
-              </div>
-            </div>`;
-          grid.appendChild(col);
-        });
-        if(data.length===0){ empty.classList.remove('d-none'); return; } else { empty.classList.add('d-none'); return; }
-      }catch(e){ empty.classList.remove('d-none'); }
+        data = await resp.json();
+      }catch(e){ data = []; }
     }
-    // Fallback: filter local meals
-    const filtered = meals.filter(m => m.category === cat);
-    if(filtered.length === 0){ empty.classList.remove('d-none'); } else { empty.classList.add('d-none'); }
-    filtered.forEach(m => {
-      const col = document.createElement('div');
-      col.className = 'col-6 col-md-4 col-lg-3';
-      const price = Number(m.price || 0);
-      const safeName = (m.name || '').replace(/`/g,'');
-      col.innerHTML = `
-        <div class="card meal-card h-100" onclick="addItem(${m.id})">
-          <div class="card-body d-flex flex-column justify-content-between">
-            <div class="fw-bold">${safeName}</div>
-            <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
-          </div>
-        </div>`;
-      grid.appendChild(col);
-    });
+
+    if(catId && Array.isArray(data)){
+      if(data.length === 0){ empty.classList.remove('d-none'); }
+      data.forEach(m => {
+        const col = document.createElement('div');
+        col.className = 'col-6 col-md-4 col-lg-3';
+        const price = Number(m.price || 0);
+        const safeName = (m.name || '').replace(/`/g,'');
+        col.innerHTML = `
+          <div class="card meal-card h-100" onclick='addMenuItemClose(${m.meal_id}, ${JSON.stringify(safeName)}, ${price})'>
+            <div class="card-body d-flex flex-column justify-content-between">
+              <div class="fw-bold">${safeName}</div>
+              <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
+            </div>
+          </div>`;
+        grid.appendChild(col);
+      });
+    } else {
+      // Fallback: local meals filter
+      const filtered = meals.filter(m => m.category === cat);
+      if(filtered.length === 0){ empty.classList.remove('d-none'); }
+      filtered.forEach(m => {
+        const col = document.createElement('div');
+        col.className = 'col-6 col-md-4 col-lg-3';
+        const price = Number(m.price || 0);
+        const safeName = (m.name || '').replace(/`/g,'');
+        col.innerHTML = `
+          <div class="card meal-card h-100" onclick="addItemClose(${m.id})">
+            <div class="card-body d-flex flex-column justify-content-between">
+              <div class="fw-bold">${safeName}</div>
+              <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
+            </div>
+          </div>`;
+        grid.appendChild(col);
+      });
+    }
+
+    const bsModal = new bootstrap.Modal(modalEl);
+    bsModal.show();
   }
+
+  function addItemClose(mealId){ addItem(mealId); bootstrap.Modal.getInstance(document.getElementById('catModal'))?.hide(); }
+  function addMenuItemClose(mealId, name, unit){ addMenuItem(mealId, name, unit); bootstrap.Modal.getInstance(document.getElementById('catModal'))?.hide(); }
 
   function addItem(mealId){
     const m = meals.find(x => x.id === mealId);
