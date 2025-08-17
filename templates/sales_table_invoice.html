@@ -37,21 +37,6 @@
             <!-- Meals inside category card -->
             <!-- Inline holder removed: using modal approach for cleaner navigation -->
 
-            <!-- Modal for category items -->
-            <div class="modal fade" id="catModal" tabindex="-1" aria-hidden="true">
-              <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                <div class="modal-content">
-                  <div class="modal-header">
-                    <h5 class="modal-title" id="catModalTitle">{{ _('Items') }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                  </div>
-                  <div class="modal-body">
-                    <div id="catEmpty" class="alert alert-info d-none">{{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}</div>
-                    <div class="row g-2" id="catGrid"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
 
           </div>
           {% endfor %}
@@ -134,6 +119,23 @@
         </div>
       </div>
     </div>
+
+<!-- One global modal placed once per page to avoid multiple instances -->
+<div class="modal fade" id="catModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="catModalTitle">{{ _('Items') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="catEmpty" class="alert alert-info d-none">{{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}</div>
+        <div class="row g-2" id="catGrid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
   </div>
 </div>
 
@@ -240,12 +242,13 @@
       });
     }
 
-    const bsModal = new bootstrap.Modal(modalEl);
-    bsModal.show();
+    // Reuse single modal instance to avoid double backdrops and stuck state
+    if(!window.__catModalInstance){ window.__catModalInstance = new bootstrap.Modal(modalEl); }
+    window.__catModalInstance.show();
   }
 
-  function addItemClose(mealId){ addItem(mealId); bootstrap.Modal.getInstance(document.getElementById('catModal'))?.hide(); }
-  function addMenuItemClose(mealId, name, unit){ addMenuItem(mealId, name, unit); bootstrap.Modal.getInstance(document.getElementById('catModal'))?.hide(); }
+  function addItemClose(mealId){ addItem(mealId); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); inst?.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
+  function addMenuItemClose(mealId, name, unit){ addMenuItem(mealId, name, unit); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); inst?.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
 
   function addItem(mealId){
     const m = meals.find(x => x.id === mealId);
@@ -316,6 +319,12 @@
     });
     const data = await res.json();
     if(!data.ok){ alert(data.error || 'Error'); return; }
+  // Safety: ensure body/modal-open class is removed after hide
+  document.getElementById('catModal')?.addEventListener('hidden.bs.modal', ()=>{
+    document.body.classList.remove('modal-open');
+    document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
+  });
+
     window.open(data.print_url, '_blank');
   }
 
