@@ -314,17 +314,25 @@
       tax_pct: parseFloat(document.getElementById('taxPct').value || '0'),
       payment_method: document.getElementById('payMethod').value
     };
-    const res = await fetch('{{ url_for('api_sales_checkout') }}', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if(!data.ok){ alert(data.error || 'Error'); return; }
-  // Safety: ensure body/modal-open class is removed after hide
-  document.getElementById('catModal')?.addEventListener('hidden.bs.modal', ()=>{
+    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+    const headers = { 'Content-Type': 'application/json' };
+    if(token){ headers['X-CSRFToken'] = token; }
+    let data;
+    try{
+      const res = await fetch('{{ url_for('api_sales_checkout') }}', {
+        method: 'POST', headers, credentials:'same-origin', body: JSON.stringify(payload)
+      });
+      if(!res.ok){
+        const txt = await res.text();
+        alert(txt || ('HTTP '+res.status));
+        return;
+      }
+      data = await res.json().catch(()=>null);
+    }catch(e){ alert('Network error'); return; }
+    if(!data || !data.ok){ alert((data && data.error) || 'Error'); return; }
+    // Ensure any modal leftovers are removed
     document.body.classList.remove('modal-open');
     document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
-  });
-
     window.open(data.print_url, '_blank');
   }
 
