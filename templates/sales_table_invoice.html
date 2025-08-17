@@ -330,12 +330,14 @@
       tax_pct: parseFloat(document.getElementById('taxPct').value || '0'),
       payment_method: document.getElementById('payMethod').value
     };
-    const token = document.querySelector('meta[name="csrf-token"]')?.content || document.getElementById('csrfTokenPage')?.value;
+    var __meta = document.querySelector('meta[name="csrf-token"]');
+    var __hidden = document.getElementById('csrfTokenPage');
+    var token = (__meta ? __meta.content : '') || (__hidden ? __hidden.value : '');
     const headers = { 'Content-Type': 'application/json' };
     if(token){ headers['X-CSRFToken'] = token; }
     let data;
     try{
-      const checkoutUrl = {{ safe_url('api_sales_checkout') and ('\'' + safe_url('api_sales_checkout') + '\'') or 'null' }};
+      const checkoutUrl = {{ safe_url('api_sales_checkout') | tojson }};
       if(!checkoutUrl){ alert('Missing checkout endpoint'); return; }
       const res = await fetch(checkoutUrl, {
         method: 'POST', headers, credentials:'same-origin', body: JSON.stringify(payload)
