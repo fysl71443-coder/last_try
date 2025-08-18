@@ -49,7 +49,7 @@
     <hr>
     <div class="small center">
       <div>{{ _('Invoice') }}: {{ invoice.invoice_number }}</div>
-      <div>{{ _('Date/Time') }}: {{ (invoice.created_at.strftime('%Y-%m-%d %H:%M') if invoice.created_at else invoice.date|string) }}</div>
+      <div>{{ _('Date/Time') }}: {{ (invoice.created_at.astimezone().strftime('%Y-%m-%d %H:%M') if invoice.created_at else invoice.date|string) }}</div>
       <div>{{ _('Branch') }}: {{ invoice.branch }}</div>
       <div>{{ _('Payment') }}: {{ invoice.payment_method }}</div>
 
@@ -117,7 +117,7 @@
         }
         const seller = enc.encode("{{ (settings.company_name or '').strip() }}");
         const vat = enc.encode("{{ (settings.tax_number or '').strip() }}");
-        const ts = enc.encode("{{ (invoice.created_at.isoformat() if invoice.created_at else invoice.date|string) }}");
+        const ts = enc.encode("{{ (invoice.created_at.astimezone().isoformat() if invoice.created_at else invoice.date|string) }}");
         const total = enc.encode("{{ '%.2f'|format(invoice.total_after_tax_discount) }}");
         const vatAmt = enc.encode("{{ '%.2f'|format(invoice.tax_amount) }}");
         const bytes = concat([

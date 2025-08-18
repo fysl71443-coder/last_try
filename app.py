@@ -1052,10 +1052,11 @@ def api_sales_checkout():
         else:
             new_num = 1
 
-        # Get current datetime
+        # Get current datetime in Saudi Arabia timezone (UTC+3)
         try:
             from datetime import timezone as _tz
-            _now = _dt.now(_tz.utc)
+            saudi_tz = _tz(timedelta(hours=3))
+            _now = _dt.now(saudi_tz)
         except Exception:
             _now = _dt.now()
 
