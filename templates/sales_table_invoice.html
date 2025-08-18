@@ -158,7 +158,21 @@
   const meals = {{ meals_json | safe }};
   let currentCategory = null;
   const items = [];
+  let currentDraftId = {{ current_draft.id if current_draft else 'null' }};
   let custTimer = null;
+
+  // Load existing draft items
+  const draftItems = {{ draft_items|safe }};
+  if (draftItems && draftItems.length > 0) {
+    draftItems.forEach(item => {
+      items.push({
+        meal_id: item.meal_id,
+        name: item.name,
+        unit: item.price,
+        qty: item.quantity
+      });
+    });
+  }
   const custList = document.getElementById('custList');
   const custName = document.getElementById('custName');
   const custPhone = document.getElementById('custPhone');
@@ -269,12 +283,39 @@
   function addItemClose(mealId){ addItem(mealId); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
   function addMenuItemClose(mealId, name, unit){ addMenuItem(mealId, name, unit); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
 
-  function addItem(mealId){
+  async function addItem(mealId){
     const m = meals.find(x => x.id === mealId);
     if(!m) return;
     const existing = items.find(x => x.meal_id === m.id);
-    if(existing){ existing.qty += 1; }
-    else { items.push({ meal_id: m.id, name: m.name, unit: m.price, qty: 1 }); }
+    if(existing){
+      existing.qty += 1;
+    } else {
+      items.push({ meal_id: m.id, name: m.name, unit: m.price, qty: 1 });
+    }
+
+    // Save to draft order if we have one
+    if (currentDraftId) {
+      try {
+        const response = await fetch(`/api/draft_orders/${currentDraftId}/add_item`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+          },
+          body: JSON.stringify({
+            meal_id: mealId,
+            quantity: 1
+          })
+        });
+        const data = await response.json();
+        if (!data.success) {
+          console.error('Failed to save item to draft:', data.error);
+        }
+      } catch (error) {
+        console.error('Error saving item to draft:', error);
+      }
+    }
+
     renderItems();
   }
 
@@ -323,6 +364,35 @@
 
   async function payAndPrint(){
     if(items.length === 0){ alert('{{ _('Add at least one item / أضف عنصراً واحداً على الأقل') }}'); return; }
+
+    // If we have a draft order, use the checkout endpoint
+    if (currentDraftId) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = `/sales/{{ branch_code }}/draft/${currentDraftId}/checkout`;
+
+      // Add form fields
+      const fields = {
+        'csrf_token': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        'customer_name': document.getElementById('custName').value,
+        'customer_phone': document.getElementById('custPhone').value,
+        'payment_method': document.getElementById('payMethod').value
+      };
+
+      for (const [key, value] of Object.entries(fields)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      }
+
+      document.body.appendChild(form);
+      form.submit();
+      return;
+    }
+
+    // Fallback to old method for non-draft orders
     const payload = {
       branch_code: '{{ branch_code }}',
       table_no: {{ table_no }},
@@ -384,6 +454,11 @@
       alert('{{ _('Invoice cancelled / تم إلغاء الفاتورة') }}');
     }catch(e){ alert('Error'); }
   }
+
+  // Initialize the page
+  document.addEventListener('DOMContentLoaded', function() {
+    renderItems(); // Show any loaded draft items
+  });
 </script>
 {% endblock %}
 

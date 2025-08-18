@@ -726,10 +726,25 @@ def sales_table_invoice(branch_code, table_no):
     vat_rate = float(settings.vat_rate) if settings and settings.vat_rate is not None else 15.0
     from datetime import date as _date
     try:
+        # Prepare draft items for the template
+        draft_items_json = []
+        if current_draft and draft_items:
+            for item in draft_items:
+                draft_items_json.append({
+                    'id': item.id,
+                    'meal_id': item.meal_id,
+                    'name': item.product_name,
+                    'quantity': float(item.quantity),
+                    'price': float(item.price_before_tax),
+                    'total': float(item.total_price)
+                })
+
         return render_template('sales_table_invoice.html',
                                branch_code=branch_code,
                                branch_label=BRANCH_CODES[branch_code],
                                table_no=table_no,
+                               current_draft=current_draft,
+                               draft_items=json.dumps(draft_items_json),
                                categories=categories,
                                meals_json=json.dumps(meals_data),
                                cat_map_json=json.dumps(cat_map),
