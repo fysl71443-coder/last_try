@@ -58,7 +58,8 @@ class SalesInvoice(db.Model):
     date = db.Column(db.Date, default=datetime.utcnow)
     payment_method = db.Column(db.String(20), nullable=False)
     branch = db.Column(db.String(50), nullable=False)  # 'place_india' or 'china_town'
-    table_no = db.Column(db.Integer, nullable=True)  # Table number
+    table_number = db.Column(db.Integer, nullable=True)  # Table number
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=True)  # Customer reference
     customer_name = db.Column(db.String(100), nullable=True)
     customer_phone = db.Column(db.String(30), nullable=True)
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
@@ -335,7 +336,7 @@ class DraftOrder(db.Model):
     __tablename__ = 'draft_orders'
     id = db.Column(db.Integer, primary_key=True)
     branch_code = db.Column(db.String(20), nullable=False)
-    table_no = db.Column(db.Integer, nullable=False)
+    table_number = db.Column(db.Integer, nullable=False)
     customer_name = db.Column(db.String(100), nullable=True)
     customer_phone = db.Column(db.String(30), nullable=True)
     payment_method = db.Column(db.String(20), default='CASH')
@@ -347,7 +348,7 @@ class DraftOrder(db.Model):
     items = db.relationship('DraftOrderItem', backref='draft_order', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
-        return f'<DraftOrder {self.branch_code}-T{self.table_no} ({self.status})>'
+        return f'<DraftOrder {self.branch_code}-T{self.table_number} ({self.status})>'
 
 class DraftOrderItem(db.Model):
     __tablename__ = 'draft_order_items'

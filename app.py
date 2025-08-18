@@ -616,7 +616,7 @@ def sales_tables(branch_code):
     # Count active draft orders per table
     draft_orders = DraftOrder.query.filter_by(branch_code=branch_code, status='draft').all()
     for draft in draft_orders:
-        draft_counts[draft.table_no] = draft_counts.get(draft.table_no, 0) + 1
+        draft_counts[draft.table_number] = draft_counts.get(draft.table_number, 0) + 1
 
     # Generate table list with status and draft count
     tables_data = []
@@ -639,10 +639,10 @@ def sales_tables(branch_code):
                          branch_label=BRANCH_CODES[branch_code],
                          tables=tables_data)
 # Table management screen: shows draft orders for a table
-@app.route('/sales/<branch_code>/table/<int:table_no>/manage', methods=['GET'])
+@app.route('/sales/<branch_code>/table/<int:table_number>/manage', methods=['GET'])
 @login_required
-def sales_table_manage(branch_code, table_no):
-    if not is_valid_branch(branch_code) or table_no < 1 or table_no > 50:
+def sales_table_manage(branch_code, table_number):
+    if not is_valid_branch(branch_code) or table_number < 1 or table_number > 50:
         flash(_('Unknown branch/table / فرع أو طاولة غير معروف'), 'danger')
         return redirect(url_for('sales'))
 
@@ -651,7 +651,7 @@ def sales_table_manage(branch_code, table_no):
     # Get all draft orders for this table
     draft_orders = DraftOrder.query.filter_by(
         branch_code=branch_code,
-        table_no=table_no,
+        table_number=table_number,
         status='draft'
     ).order_by(DraftOrder.created_at.desc()).all()
 
@@ -662,14 +662,14 @@ def sales_table_manage(branch_code, table_no):
     return render_template('sales_table_manage.html',
                          branch_code=branch_code,
                          branch_label=BRANCH_CODES[branch_code],
-                         table_no=table_no,
+                         table_number=table_number,
                          draft_orders=draft_orders)
 
 # Table invoice screen (split UI) - supports draft orders
-@app.route('/sales/<branch_code>/table/<int:table_no>', methods=['GET'])
+@app.route('/sales/<branch_code>/table/<int:table_number>', methods=['GET'])
 @login_required
-def sales_table_invoice(branch_code, table_no):
-    if not is_valid_branch(branch_code) or table_no < 1 or table_no > 50:
+def sales_table_invoice(branch_code, table_number):
+    if not is_valid_branch(branch_code) or table_number < 1 or table_number > 50:
         flash(_('Unknown branch/table / فرع أو طاولة غير معروف'), 'danger')
         return redirect(url_for('sales'))
 
@@ -685,7 +685,7 @@ def sales_table_invoice(branch_code, table_no):
         current_draft = DraftOrder.query.filter_by(
             id=draft_id,
             branch_code=branch_code,
-            table_no=table_no,
+            table_number=table_number,
             status='draft'
         ).first()
         if current_draft:
@@ -694,7 +694,7 @@ def sales_table_invoice(branch_code, table_no):
         # Create new draft order
         current_draft = DraftOrder(
             branch_code=branch_code,
-            table_no=table_no,
+            table_number=table_number,
             user_id=current_user.id,
             status='draft'
         )
@@ -742,7 +742,7 @@ def sales_table_invoice(branch_code, table_no):
         return render_template('sales_table_invoice.html',
                                branch_code=branch_code,
                                branch_label=BRANCH_CODES[branch_code],
-                               table_no=table_no,
+                               table_number=table_number,
                                current_draft=current_draft,
                                draft_items=json.dumps(draft_items_json),
                                categories=categories,
@@ -771,7 +771,7 @@ def api_menu_items(cat_id):
     return render_template('sales_table_invoice.html',
                            branch_code=branch_code,
                            branch_label=BRANCH_CODES[branch_code],
-                           table_no=table_no,
+                           table_number=table_number,
                            categories=categories,
                            meals_json=json.dumps(meals_data),
                            cat_map_json=json.dumps(cat_map),
@@ -1126,7 +1126,7 @@ def api_sales_checkout():
         from datetime import datetime as _dt
         data = request.get_json(silent=True) or {}
         branch_code = data.get('branch_code')
-        table_no = int(data.get('table_no') or 0)
+        table_number = int(data.get('table_number') or 0)
         items = data.get('items') or []  # [{meal_id, qty}]
         customer_name = data.get('customer_name') or None
         customer_phone = data.get('customer_phone') or None
@@ -1196,7 +1196,7 @@ def api_sales_checkout():
             date=_now.date(),
             payment_method=payment_method,
             branch=branch_code,
-            table_no=table_no,
+            table_number=table_number,
             customer_name=customer_name,
             customer_phone=customer_phone,
             total_before_tax=subtotal,
@@ -1213,9 +1213,9 @@ def api_sales_checkout():
 
             # Update table status to occupied when order is created
             from models import Table
-            table = Table.query.filter_by(branch_code=branch_code, table_number=table_no).first()
+            table = Table.query.filter_by(branch_code=branch_code, table_number=table_number).first()
             if not table:
-                table = Table(branch_code=branch_code, table_number=table_no, status='occupied', current_order_id=inv.id)
+                table = Table(branch_code=branch_code, table_number=table_number, status='occupied', current_order_id=inv.id)
                 db.session.add(table)
             else:
                 table.status = 'occupied'
@@ -1581,7 +1581,7 @@ def cancel_draft_order(draft_id):
             return jsonify({'success': False, 'error': 'Permission denied'}), 403
 
         branch_code = draft.branch_code
-        table_no = draft.table_no
+        table_number = draft.table_number
 
         # Delete the draft order (cascade will delete items)
         db.session.delete(draft)
@@ -1589,12 +1589,12 @@ def cancel_draft_order(draft_id):
         # Update table status if no more drafts
         remaining_drafts = DraftOrder.query.filter_by(
             branch_code=branch_code,
-            table_no=table_no,
+            table_number=table_number,
             status='draft'
         ).count()
 
         if remaining_drafts <= 1:  # <= 1 because we haven't committed the delete yet
-            table = Table.query.filter_by(branch_code=branch_code, table_number=table_no).first()
+            table = Table.query.filter_by(branch_code=branch_code, table_number=table_number).first()
             if table:
                 table.status = 'available'
                 table.updated_at = datetime.utcnow()
@@ -1648,9 +1648,9 @@ def add_item_to_draft(draft_id):
 
         # Update table status to reserved if this is the first item
         if len(draft.items) == 0:  # First item being added
-            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_no).first()
+            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_number).first()
             if not table:
-                table = Table(branch_code=draft.branch_code, table_number=draft.table_no, status='reserved')
+                table = Table(branch_code=draft.branch_code, table_number=draft.table_number, status='reserved')
                 db.session.add(table)
             else:
                 table.status = 'reserved'
@@ -1724,9 +1724,9 @@ def update_draft_order(draft_id):
 
         # Update table status to reserved if items exist
         if items_data:
-            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_no).first()
+            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_number).first()
             if not table:
-                table = Table(branch_code=draft.branch_code, table_number=draft.table_no, status='reserved')
+                table = Table(branch_code=draft.branch_code, table_number=draft.table_number, status='reserved')
                 db.session.add(table)
             else:
                 table.status = 'reserved'
@@ -1790,7 +1790,7 @@ def api_draft_checkout():
             date=_now.date(),
             payment_method=payment_method,
             branch=draft.branch_code,
-            table_no=draft.table_no,
+            table_number=draft.table_number,
             customer_name=customer_name or None,
             customer_phone=customer_phone or None,
             total_before_tax=subtotal,
@@ -1834,11 +1834,11 @@ def api_draft_checkout():
         # Update table status
         remaining_drafts = DraftOrder.query.filter_by(
             branch_code=draft.branch_code,
-            table_no=draft.table_no,
+            table_number=draft.table_number,
             status='draft'
         ).count()
 
-        table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_no).first()
+        table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_number).first()
         if table:
             if remaining_drafts <= 1:  # This draft will be completed
                 table.status = 'available'
@@ -1873,24 +1873,24 @@ def fix_database_route():
 
         results = []
 
-        # 1. Add table_no column to sales_invoices if missing
+        # 1. Add table_number column to sales_invoices if missing
         try:
             with db.engine.connect() as conn:
                 result = conn.execute(text("""
                     SELECT column_name
                     FROM information_schema.columns
                     WHERE table_name = 'sales_invoices'
-                    AND column_name = 'table_no'
+                    AND column_name = 'table_number'
                 """))
 
                 if not result.fetchone():
-                    conn.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_no INTEGER"))
+                    conn.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_number INTEGER"))
                     conn.commit()
-                    results.append("✅ Added table_no column to sales_invoices")
+                    results.append("✅ Added table_number column to sales_invoices")
                 else:
-                    results.append("✅ table_no column already exists")
+                    results.append("✅ table_number column already exists")
         except Exception as e:
-            results.append(f"⚠️ Error with table_no: {e}")
+            results.append(f"⚠️ Error with table_number: {e}")
 
         # 2. Create tables table if missing
         try:
@@ -1918,7 +1918,7 @@ def fix_database_route():
                     CREATE TABLE IF NOT EXISTS draft_orders (
                         id SERIAL PRIMARY KEY,
                         branch_code VARCHAR(20) NOT NULL,
-                        table_no INTEGER NOT NULL,
+                        table_number INTEGER NOT NULL,
                         customer_name VARCHAR(100),
                         customer_phone VARCHAR(30),
                         payment_method VARCHAR(20) DEFAULT 'CASH',
