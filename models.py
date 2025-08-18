@@ -322,8 +322,7 @@ class Table(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     branch_code = db.Column(db.String(20), nullable=False)  # place_india, china_town
     table_number = db.Column(db.Integer, nullable=False)
-    status = db.Column(db.String(20), default='available')  # available, occupied, reserved
-    current_order_id = db.Column(db.Integer, nullable=True)  # Reference to current active order
+    status = db.Column(db.String(20), default='available')  # available, reserved, occupied
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -331,6 +330,41 @@ class Table(db.Model):
 
     def __repr__(self):
         return f'<Table {self.branch_code}-{self.table_number} ({self.status})>'
+
+class DraftOrder(db.Model):
+    __tablename__ = 'draft_orders'
+    id = db.Column(db.Integer, primary_key=True)
+    branch_code = db.Column(db.String(20), nullable=False)
+    table_no = db.Column(db.Integer, nullable=False)
+    customer_name = db.Column(db.String(100), nullable=True)
+    customer_phone = db.Column(db.String(30), nullable=True)
+    payment_method = db.Column(db.String(20), default='CASH')
+    status = db.Column(db.String(20), default='draft')  # draft, completed, cancelled
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    items = db.relationship('DraftOrderItem', backref='draft_order', lazy=True, cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<DraftOrder {self.branch_code}-T{self.table_no} ({self.status})>'
+
+class DraftOrderItem(db.Model):
+    __tablename__ = 'draft_order_items'
+    id = db.Column(db.Integer, primary_key=True)
+    draft_order_id = db.Column(db.Integer, db.ForeignKey('draft_orders.id'), nullable=False)
+    meal_id = db.Column(db.Integer, db.ForeignKey('meals.id'), nullable=True)
+    product_name = db.Column(db.String(200), nullable=False)
+    quantity = db.Column(db.Numeric(10, 2), nullable=False)
+    price_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
+    tax = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    discount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    total_price = db.Column(db.Numeric(12, 2), nullable=False)
+
+    meal = db.relationship('Meal', backref='draft_items')
+
+    def __repr__(self):
+        return f'<DraftOrderItem {self.product_name} x{self.quantity}>'
 
 class Settings(db.Model):
     __tablename__ = 'settings'

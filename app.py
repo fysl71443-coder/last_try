@@ -604,32 +604,102 @@ def sales_tables(branch_code):
         flash(_('Unknown branch / فرع غير معروف'), 'danger')
         return redirect(url_for('sales'))
 
-    # Get table statuses from database
-    from models import Table
+    # Get table statuses and draft orders count
+    from models import Table, DraftOrder
     table_statuses = {}
+    draft_counts = {}
+
     existing_tables = Table.query.filter_by(branch_code=branch_code).all()
     for table in existing_tables:
         table_statuses[table.table_number] = table.status
 
-    # Generate table list with status
+    # Count active draft orders per table
+    draft_orders = DraftOrder.query.filter_by(branch_code=branch_code, status='draft').all()
+    for draft in draft_orders:
+        draft_counts[draft.table_no] = draft_counts.get(draft.table_no, 0) + 1
+
+    # Generate table list with status and draft count
     tables_data = []
     for n in range(1, 51):
         status = table_statuses.get(n, 'available')
-        tables_data.append({'number': n, 'status': status})
+        draft_count = draft_counts.get(n, 0)
+
+        # Update status based on draft orders
+        if draft_count > 0 and status == 'available':
+            status = 'reserved'
+
+        tables_data.append({
+            'number': n,
+            'status': status,
+            'draft_count': draft_count
+        })
 
     return render_template('sales_tables.html',
                          branch_code=branch_code,
                          branch_label=BRANCH_CODES[branch_code],
                          tables=tables_data)
+# Table management screen: shows draft orders for a table
+@app.route('/sales/<branch_code>/table/<int:table_no>/manage', methods=['GET'])
+@login_required
+def sales_table_manage(branch_code, table_no):
+    if not is_valid_branch(branch_code) or table_no < 1 or table_no > 50:
+        flash(_('Unknown branch/table / فرع أو طاولة غير معروف'), 'danger')
+        return redirect(url_for('sales'))
 
-# Table invoice screen (split UI)
+    from models import DraftOrder, DraftOrderItem
+
+    # Get all draft orders for this table
+    draft_orders = DraftOrder.query.filter_by(
+        branch_code=branch_code,
+        table_no=table_no,
+        status='draft'
+    ).order_by(DraftOrder.created_at.desc()).all()
+
+    # Calculate totals for each draft
+    for draft in draft_orders:
+        draft.total_amount = sum(float(item.total_price or 0) for item in draft.items)
+
+    return render_template('sales_table_manage.html',
+                         branch_code=branch_code,
+                         branch_label=BRANCH_CODES[branch_code],
+                         table_no=table_no,
+                         draft_orders=draft_orders)
+
+# Table invoice screen (split UI) - supports draft orders
 @app.route('/sales/<branch_code>/table/<int:table_no>', methods=['GET'])
 @login_required
 def sales_table_invoice(branch_code, table_no):
     if not is_valid_branch(branch_code) or table_no < 1 or table_no > 50:
         flash(_('Unknown branch/table / فرع أو طاولة غير معروف'), 'danger')
         return redirect(url_for('sales'))
+
     import json
+    from models import DraftOrder, DraftOrderItem
+
+    # Check if we're editing an existing draft
+    draft_id = request.args.get('draft_id', type=int)
+    current_draft = None
+    draft_items = []
+
+    if draft_id:
+        current_draft = DraftOrder.query.filter_by(
+            id=draft_id,
+            branch_code=branch_code,
+            table_no=table_no,
+            status='draft'
+        ).first()
+        if current_draft:
+            draft_items = current_draft.items
+    else:
+        # Create new draft order
+        current_draft = DraftOrder(
+            branch_code=branch_code,
+            table_no=table_no,
+            user_id=current_user.id,
+            status='draft'
+        )
+        db.session.add(current_draft)
+        db.session.commit()
     # Load meals and categories (prefer MenuCategory if defined)
     try:
         meals = Meal.query.filter_by(active=True).all()
@@ -1399,6 +1469,7 @@ def expenses():
                 item_before_tax = price * qty
                 discount = (item_before_tax + tax) * (discount_pct/100.0)
                 total_item = item_before_tax + tax - discount
+
 @app.route('/import_meals', methods=['POST'])
 @login_required
 def import_meals():
@@ -1481,6 +1552,246 @@ def import_meals():
         flash(_('Import failed / فشل الاستيراد: %(error)s', error=str(e)), 'danger')
 
     return redirect(url_for('meals'))
+# API: Cancel draft order
+@app.route('/api/draft_orders/<int:draft_id>/cancel', methods=['POST'])
+@login_required
+def cancel_draft_order(draft_id):
+    try:
+        from models import DraftOrder, Table
+
+        draft = DraftOrder.query.get_or_404(draft_id)
+
+        # Check permissions (user can cancel their own drafts or admin can cancel any)
+        if draft.user_id != current_user.id and getattr(current_user, 'role', '') != 'admin':
+            return jsonify({'success': False, 'error': 'Permission denied'}), 403
+
+        branch_code = draft.branch_code
+        table_no = draft.table_no
+
+        # Delete the draft order (cascade will delete items)
+        db.session.delete(draft)
+
+        # Update table status if no more drafts
+        remaining_drafts = DraftOrder.query.filter_by(
+            branch_code=branch_code,
+            table_no=table_no,
+            status='draft'
+        ).count()
+
+        if remaining_drafts <= 1:  # <= 1 because we haven't committed the delete yet
+            table = Table.query.filter_by(branch_code=branch_code, table_number=table_no).first()
+            if table:
+                table.status = 'available'
+                table.updated_at = datetime.utcnow()
+
+        db.session.commit()
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.session.rollback()
+        logging.exception('Cancel draft order failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# API: Add item to draft order
+@app.route('/api/draft_orders/<int:draft_id>/add_item', methods=['POST'])
+@login_required
+def add_item_to_draft(draft_id):
+    try:
+        from models import DraftOrder, DraftOrderItem, Meal, Table
+
+        draft = DraftOrder.query.get_or_404(draft_id)
+        data = request.get_json() or {}
+
+        meal_id = data.get('meal_id')
+        quantity = float(data.get('quantity', 1))
+
+        if not meal_id or quantity <= 0:
+            return jsonify({'success': False, 'error': 'Invalid meal or quantity'}), 400
+
+        meal = Meal.query.get_or_404(meal_id)
+
+        # Calculate pricing
+        settings = get_settings_safe()
+        vat_rate = float(settings.vat_rate) if settings and settings.vat_rate else 15.0
+
+        price_before_tax = float(meal.selling_price or 0)
+        line_subtotal = price_before_tax * quantity
+        line_tax = line_subtotal * (vat_rate / 100.0)
+        total_price = line_subtotal + line_tax
+
+        # Add item to draft
+        draft_item = DraftOrderItem(
+            draft_order_id=draft.id,
+            meal_id=meal.id,
+            product_name=meal.display_name,
+            quantity=quantity,
+            price_before_tax=price_before_tax,
+            tax=line_tax,
+            total_price=total_price
+        )
+        db.session.add(draft_item)
+
+        # Update table status to reserved if this is the first item
+        if len(draft.items) == 0:  # First item being added
+            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_no).first()
+            if not table:
+                table = Table(branch_code=draft.branch_code, table_number=draft.table_no, status='reserved')
+                db.session.add(table)
+            else:
+                table.status = 'reserved'
+                table.updated_at = datetime.utcnow()
+
+        db.session.commit()
+        return jsonify({'success': True, 'item_id': draft_item.id})
+
+    except Exception as e:
+        db.session.rollback()
+        logging.exception('Add item to draft failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# Checkout draft order (convert to final invoice)
+@app.route('/sales/<branch_code>/draft/<int:draft_id>/checkout', methods=['GET', 'POST'])
+@login_required
+def checkout_draft_order(branch_code, draft_id):
+    from models import DraftOrder, SalesInvoice, SalesInvoiceItem, Payment, Table
+
+    draft = DraftOrder.query.get_or_404(draft_id)
+
+    if draft.branch_code != branch_code or draft.status != 'draft':
+        flash(_('Invalid draft order / طلب مسودة غير صالح'), 'danger')
+        return redirect(url_for('sales_tables', branch_code=branch_code))
+
+    if request.method == 'POST':
+        try:
+            # Get form data
+            customer_name = request.form.get('customer_name', '').strip()
+            customer_phone = request.form.get('customer_phone', '').strip()
+            payment_method = request.form.get('payment_method', 'CASH')
+
+            # Calculate totals
+            subtotal = sum(float(item.price_before_tax * item.quantity) for item in draft.items)
+            tax_total = sum(float(item.tax) for item in draft.items)
+            grand_total = sum(float(item.total_price) for item in draft.items)
+
+            # Generate invoice number
+            from datetime import datetime as _dt, timezone
+            saudi_tz = timezone(timedelta(hours=3))
+            _now = _dt.now(saudi_tz)
+
+            last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
+            invoice_number = (last_invoice.id + 1) if last_invoice else 1
+
+            # Create final invoice
+            invoice = SalesInvoice(
+                invoice_number=invoice_number,
+                date=_now.date(),
+                payment_method=payment_method,
+                branch=branch_code,
+                table_no=draft.table_no,
+                customer_name=customer_name or None,
+                customer_phone=customer_phone or None,
+                total_before_tax=subtotal,
+                tax_amount=tax_total,
+                discount_amount=0,
+                total_after_tax_discount=grand_total,
+                status='paid',
+                user_id=current_user.id,
+                created_at=_now
+            )
+            db.session.add(invoice)
+            db.session.flush()
+
+            # Copy items from draft to invoice
+            for draft_item in draft.items:
+                invoice_item = SalesInvoiceItem(
+                    invoice_id=invoice.id,
+                    meal_id=draft_item.meal_id,
+                    product_name=draft_item.product_name,
+                    quantity=draft_item.quantity,
+                    price_before_tax=draft_item.price_before_tax,
+                    tax=draft_item.tax,
+                    discount=draft_item.discount,
+                    total_price=draft_item.total_price
+                )
+                db.session.add(invoice_item)
+
+            # Create payment record
+            payment = Payment(
+                invoice_id=invoice.id,
+                invoice_type='sales',
+                amount_paid=grand_total,
+                payment_method=payment_method,
+                payment_date=_now
+            )
+            db.session.add(payment)
+
+            # Mark draft as completed
+            draft.status = 'completed'
+
+            # Update table status
+            remaining_drafts = DraftOrder.query.filter_by(
+                branch_code=branch_code,
+                table_no=draft.table_no,
+                status='draft'
+            ).count()
+
+            table = Table.query.filter_by(branch_code=branch_code, table_number=draft.table_no).first()
+            if table:
+                if remaining_drafts <= 1:  # This draft will be completed
+                    table.status = 'available'
+                else:
+                    table.status = 'reserved'  # Still has other drafts
+                table.updated_at = _now
+
+            db.session.commit()
+
+            flash(_('Order completed successfully / تم إكمال الطلب بنجاح'), 'success')
+            return redirect(url_for('sales_receipt', invoice_id=invoice.id))
+
+        except Exception as e:
+            db.session.rollback()
+            logging.exception('Draft checkout failed')
+            flash(_('Checkout failed / فشل الدفع: %(error)s', error=str(e)), 'danger')
+
+    # GET request - show checkout form
+    total_amount = sum(float(item.total_price) for item in draft.items)
+
+    return render_template('draft_checkout.html',
+                         draft=draft,
+                         branch_code=branch_code,
+                         branch_label=BRANCH_CODES[branch_code],
+                         total_amount=total_amount)
+@app.route('/admin/migrate_table_no', methods=['GET'])
+@login_required
+def migrate_table_no():
+    """Temporary route to add table_no column - remove after migration"""
+    if not hasattr(current_user, 'role') or current_user.role != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    try:
+        from sqlalchemy import text
+
+        # Check if column exists
+        result = db.engine.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'sales_invoices'
+            AND column_name = 'table_no'
+        """))
+
+        if result.fetchone():
+            return jsonify({'status': 'Column table_no already exists'})
+
+        # Add the column
+        db.engine.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_no INTEGER"))
+
+        # Create tables table if needed
+        db.create_all()
+
+        return jsonify({'status': 'Migration completed successfully'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/invoices')
 @login_required
