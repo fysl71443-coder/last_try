@@ -2439,27 +2439,19 @@ def reports():
             end_dt = today
 
         # Optional branch filter
-    branch_filter = request.args.get('branch')
-    if branch_filter and branch_filter != 'all':
-        sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
-            .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter).scalar() or 0
-        sales_china = 0
-        total_sales = float(sales_place)
-        daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
-            .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter) \
-            .group_by(SalesInvoice.date) \
-            .order_by(SalesInvoice.date.asc()).all()
-        line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
-        line_values = [float(r.t or 0) for r in daily_rows]
-
-        end_dt = today
-
-    # Sales totals by branch
-    sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'place_india').scalar() or 0
-    sales_china = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
-    total_sales = float(sales_place) + float(sales_china)
+        branch_filter = request.args.get('branch')
+        if branch_filter and branch_filter != 'all':
+            sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+                .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter).scalar() or 0
+            sales_china = 0
+            total_sales = float(sales_place)
+        else:
+            # Sales totals by branch
+            sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+                .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'place_india').scalar() or 0
+            sales_china = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+                .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
+            total_sales = float(sales_place) + float(sales_china)
 
     # Purchases and Expenses
     total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
@@ -2525,7 +2517,7 @@ def reports():
         .filter(SalesInvoice.date.between(start_dt, end_dt)) \
         .group_by(SalesInvoiceItem.product_name) \
         .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
-            .limit(10).all()
+        .limit(10).all()
         top_labels = [r[0] for r in top_rows]
 
         # Settings for labels/currency
