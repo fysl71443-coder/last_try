@@ -37,10 +37,7 @@
       {% if invoice.customer_phone %}<div>{{ _('Phone') }}: {{ invoice.customer_phone }}</div>{% endif %}
     </div>
     <hr>
-    <div class="center">
-      <canvas id="qr" width="120" height="120"></canvas>
-    </div>
-    <hr>
+
     <table>
       <thead>
         <tr>
@@ -65,29 +62,49 @@
     <div class="small right">{{ _('Discount') }}: {{ '%.2f'|format(invoice.discount_amount) }}</div>
     <div class="small right"><strong>{{ _('Grand Total') }}: {{ '%.2f'|format(invoice.total_after_tax_discount) }}</strong></div>
     <hr>
-    <div class="center small">{{ _('Thank you / شكراً لكم') }}</div>
   </div>
+    <hr>
+    <div class="center">
+      <div id="qr" style="width:96px;height:96px;margin:0 auto;"></div>
+    </div>
+    <div class="center small" style="margin-top:6px;">{{ _('Thank you / شكراً لكم') }}</div>
+
 </body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
-    // Simple placeholder QR drawing (not ISO-compliant); replace with proper QR lib if needed
+    // ZATCA TLV QR per KSA e-invoicing (seller, VAT, timestamp, total, VAT amount)
     (function(){
       try{
-        const canvas = document.getElementById('qr');
-        if(!canvas) return;
-        const ctx = canvas.getContext('2d');
-        const payload = `NM={{ settings.company_name or '' }}|TAX={{ settings.tax_number or '' }}|INV={{ invoice.invoice_number }}|DT={{ invoice.date }}|AMT={{ '%.2f'|format(invoice.total_after_tax_discount) }}|VAT={{ '%.2f'|format(invoice.tax_amount) }}`;
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle = '#000';
-        let x=0,y=0; const size=6; const W = canvas.width;
-        for(let i=0;i<payload.length;i++){
-          const code = payload.charCodeAt(i);
-          for(let b=0;b<8;b++){
-            const bit = (code >> b) & 1;
-            if(bit){ ctx.fillRect(x, y, size, size); }
-            x += size; if(x >= W){ x = 0; y += size; if(y >= W) break; }
-          }
+        const el = document.getElementById('qr');
+        if(!el) return;
+        const enc = new TextEncoder();
+        function tlv(tag, bytes){
+          const out = new Uint8Array(2 + bytes.length);
+          out[0] = tag & 0xFF; out[1] = bytes.length & 0xFF;
+          out.set(bytes, 2); return out;
         }
-      }catch(e){}
+        function concat(arrs){
+          let len = 0; arrs.forEach(a=> len += a.length);
+          const out = new Uint8Array(len); let o=0;
+          arrs.forEach(a=>{ out.set(a, o); o += a.length; });
+          return out;
+        }
+        function b64(bytes){
+          let bin = ''; for(let i=0;i<bytes.length;i++){ bin += String.fromCharCode(bytes[i]); }
+          return btoa(bin);
+        }
+        const seller = enc.encode("{{ (settings.company_name or '').strip() }}");
+        const vat = enc.encode("{{ (settings.tax_number or '').strip() }}");
+        const ts = enc.encode("{{ (invoice.created_at.isoformat() if invoice.created_at else invoice.date|string) }}");
+        const total = enc.encode("{{ '%.2f'|format(invoice.total_after_tax_discount) }}");
+        const vatAmt = enc.encode("{{ '%.2f'|format(invoice.tax_amount) }}");
+        const bytes = concat([
+          tlv(1, seller), tlv(2, vat), tlv(3, ts), tlv(4, total), tlv(5, vatAmt)
+        ]);
+        const payload = b64(bytes);
+        // Render QR
+        new QRCode(el, { text: payload, width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
+      }catch(e){ /* ignore */ }
     })();
   </script>
 
