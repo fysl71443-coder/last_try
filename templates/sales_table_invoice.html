@@ -383,44 +383,33 @@
       return;
     }
 
-    // If we have a draft order, use the checkout endpoint
+    // Direct payment and print - no additional screens
+    let payload;
+
     if (currentDraftId) {
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = `/sales/{{ branch_code }}/draft/${currentDraftId}/checkout`;
-
-      // Add form fields
-      const fields = {
-        'csrf_token': document.querySelector('meta[name="csrf-token"]')?.content || '',
-        'customer_name': document.getElementById('custName').value,
-        'customer_phone': document.getElementById('custPhone').value,
-        'payment_method': document.getElementById('payMethod').value
+      // Convert draft to invoice directly
+      payload = {
+        draft_id: currentDraftId,
+        customer_name: document.getElementById('custName').value,
+        customer_phone: document.getElementById('custPhone').value,
+        payment_method: document.getElementById('payMethod').value
       };
-
-      for (const [key, value] of Object.entries(fields)) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value;
-        form.appendChild(input);
-      }
-
-      document.body.appendChild(form);
-      form.submit();
-      return;
+    } else {
+      // Regular checkout
+      payload = {
+        branch_code: '{{ branch_code }}',
+        table_no: {{ table_no }},
+        items: items.map(x => ({ meal_id: x.meal_id, qty: x.qty })),
+        customer_name: document.getElementById('custName').value,
+        customer_phone: document.getElementById('custPhone').value,
+        discount_pct: parseFloat(document.getElementById('discountPct').value || '0'),
+        tax_pct: parseFloat(document.getElementById('taxPct').value || '0'),
+        payment_method: document.getElementById('payMethod').value
+      };
     }
 
-    // Fallback to old method for non-draft orders
-    const payload = {
-      branch_code: '{{ branch_code }}',
-      table_no: {{ table_no }},
-      items: items.map(x => ({ meal_id: x.meal_id, qty: x.qty })),
-      customer_name: document.getElementById('custName').value,
-      customer_phone: document.getElementById('custPhone').value,
-      discount_pct: parseFloat(document.getElementById('discountPct').value || '0'),
-      tax_pct: parseFloat(document.getElementById('taxPct').value || '0'),
-      payment_method: document.getElementById('payMethod').value
-    };
+    // Send request to appropriate endpoint
+    let endpoint = currentDraftId ? '/api/draft/checkout' : '/api/sales/checkout';
     var __meta = document.querySelector('meta[name="csrf-token"]');
     var __hidden = document.getElementById('csrfTokenPage');
     var token = (__meta ? __meta.content : '') || (__hidden ? __hidden.value : '');
@@ -428,9 +417,7 @@
     if(token){ headers['X-CSRFToken'] = token; }
     let data;
     try{
-      const checkoutUrl = {{ safe_url('api_sales_checkout') | tojson }};
-      if(!checkoutUrl){ alert('Missing checkout endpoint'); return; }
-      const res = await fetch(checkoutUrl, {
+      const res = await fetch(endpoint, {
         method: 'POST', headers, credentials:'same-origin', body: JSON.stringify(payload)
       });
       if(!res.ok){

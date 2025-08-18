@@ -1748,110 +1748,119 @@ def checkout_draft_order(branch_code, draft_id):
 
     draft = DraftOrder.query.get_or_404(draft_id)
 
-    if draft.branch_code != branch_code or draft.status != 'draft':
-        flash(_('Invalid draft order / طلب مسودة غير صالح'), 'danger')
-        return redirect(url_for('sales_tables', branch_code=branch_code))
+# API: Direct draft checkout (no additional screens)
+@app.route('/api/draft/checkout', methods=['POST'])
+@login_required
+def api_draft_checkout():
+    try:
+        from models import DraftOrder, SalesInvoice, SalesInvoiceItem, Payment, Table
 
-    if request.method == 'POST':
-        try:
-            # Get form data
-            customer_name = request.form.get('customer_name', '').strip()
-            customer_phone = request.form.get('customer_phone', '').strip()
-            payment_method = request.form.get('payment_method', 'CASH')
+        data = request.get_json() or {}
+        draft_id = data.get('draft_id')
 
-            # Calculate totals
-            subtotal = sum(float(item.price_before_tax * item.quantity) for item in draft.items)
-            tax_total = sum(float(item.tax) for item in draft.items)
-            grand_total = sum(float(item.total_price) for item in draft.items)
+        if not draft_id:
+            return jsonify({'ok': False, 'error': 'Draft ID required'}), 400
 
-            # Generate invoice number
-            from datetime import datetime as _dt, timezone
-            saudi_tz = timezone(timedelta(hours=3))
-            _now = _dt.now(saudi_tz)
+        draft = DraftOrder.query.get_or_404(draft_id)
 
-            last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
-            invoice_number = (last_invoice.id + 1) if last_invoice else 1
+        if draft.status != 'draft':
+            return jsonify({'ok': False, 'error': 'Invalid draft order'}), 400
 
-            # Create final invoice
-            invoice = SalesInvoice(
-                invoice_number=invoice_number,
-                date=_now.date(),
-                payment_method=payment_method,
-                branch=branch_code,
-                table_no=draft.table_no,
-                customer_name=customer_name or None,
-                customer_phone=customer_phone or None,
-                total_before_tax=subtotal,
-                tax_amount=tax_total,
-                discount_amount=0,
-                total_after_tax_discount=grand_total,
-                status='paid',
-                user_id=current_user.id,
-                created_at=_now
-            )
-            db.session.add(invoice)
-            db.session.flush()
+        # Get form data
+        customer_name = data.get('customer_name', '').strip()
+        customer_phone = data.get('customer_phone', '').strip()
+        payment_method = data.get('payment_method', 'CASH')
 
-            # Copy items from draft to invoice
-            for draft_item in draft.items:
-                invoice_item = SalesInvoiceItem(
-                    invoice_id=invoice.id,
-                    meal_id=draft_item.meal_id,
-                    product_name=draft_item.product_name,
-                    quantity=draft_item.quantity,
-                    price_before_tax=draft_item.price_before_tax,
-                    tax=draft_item.tax,
-                    discount=draft_item.discount,
-                    total_price=draft_item.total_price
-                )
-                db.session.add(invoice_item)
+        # Calculate totals
+        subtotal = sum(float(item.price_before_tax * item.quantity) for item in draft.items)
+        tax_total = sum(float(item.tax) for item in draft.items)
+        grand_total = sum(float(item.total_price) for item in draft.items)
 
-            # Create payment record
-            payment = Payment(
+        # Generate invoice number
+        from datetime import datetime as _dt, timezone, timedelta
+        saudi_tz = timezone(timedelta(hours=3))
+        _now = _dt.now(saudi_tz)
+
+        last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
+        invoice_number = (last_invoice.id + 1) if last_invoice else 1
+
+        # Create final invoice
+        invoice = SalesInvoice(
+            invoice_number=invoice_number,
+            date=_now.date(),
+            payment_method=payment_method,
+            branch=draft.branch_code,
+            table_no=draft.table_no,
+            customer_name=customer_name or None,
+            customer_phone=customer_phone or None,
+            total_before_tax=subtotal,
+            tax_amount=tax_total,
+            discount_amount=0,
+            total_after_tax_discount=grand_total,
+            status='paid',
+            user_id=current_user.id,
+            created_at=_now
+        )
+        db.session.add(invoice)
+        db.session.flush()
+
+        # Copy items from draft to invoice
+        for draft_item in draft.items:
+            invoice_item = SalesInvoiceItem(
                 invoice_id=invoice.id,
-                invoice_type='sales',
-                amount_paid=grand_total,
-                payment_method=payment_method,
-                payment_date=_now
+                meal_id=draft_item.meal_id,
+                product_name=draft_item.product_name,
+                quantity=draft_item.quantity,
+                price_before_tax=draft_item.price_before_tax,
+                tax=draft_item.tax,
+                discount=draft_item.discount,
+                total_price=draft_item.total_price
             )
-            db.session.add(payment)
+            db.session.add(invoice_item)
 
-            # Mark draft as completed
-            draft.status = 'completed'
+        # Create payment record
+        payment = Payment(
+            invoice_id=invoice.id,
+            invoice_type='sales',
+            amount_paid=grand_total,
+            payment_method=payment_method,
+            payment_date=_now
+        )
+        db.session.add(payment)
 
-            # Update table status
-            remaining_drafts = DraftOrder.query.filter_by(
-                branch_code=branch_code,
-                table_no=draft.table_no,
-                status='draft'
-            ).count()
+        # Mark draft as completed
+        draft.status = 'completed'
 
-            table = Table.query.filter_by(branch_code=branch_code, table_number=draft.table_no).first()
-            if table:
-                if remaining_drafts <= 1:  # This draft will be completed
-                    table.status = 'available'
-                else:
-                    table.status = 'reserved'  # Still has other drafts
-                table.updated_at = _now
+        # Update table status
+        remaining_drafts = DraftOrder.query.filter_by(
+            branch_code=draft.branch_code,
+            table_no=draft.table_no,
+            status='draft'
+        ).count()
 
-            db.session.commit()
+        table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_no).first()
+        if table:
+            if remaining_drafts <= 1:  # This draft will be completed
+                table.status = 'available'
+            else:
+                table.status = 'reserved'  # Still has other drafts
+            table.updated_at = _now
 
-            flash(_('Order completed successfully / تم إكمال الطلب بنجاح'), 'success')
-            return redirect(url_for('sales_receipt', invoice_id=invoice.id))
+        db.session.commit()
 
-        except Exception as e:
-            db.session.rollback()
-            logging.exception('Draft checkout failed')
-            flash(_('Checkout failed / فشل الدفع: %(error)s', error=str(e)), 'danger')
+        # Return success with print URL
+        print_url = url_for('sales_receipt', invoice_id=invoice.id)
+        return jsonify({
+            'ok': True,
+            'status': 'success',
+            'invoice_id': invoice.id,
+            'print_url': print_url
+        })
 
-    # GET request - show checkout form
-    total_amount = sum(float(item.total_price) for item in draft.items)
-
-    return render_template('draft_checkout.html',
-                         draft=draft,
-                         branch_code=branch_code,
-                         branch_label=BRANCH_CODES[branch_code],
-                         total_amount=total_amount)
+    except Exception as e:
+        db.session.rollback()
+        logging.exception('API draft checkout failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
 @app.route('/admin/fix_database', methods=['GET'])
 @login_required
 def fix_database_route():
