@@ -81,13 +81,10 @@
           </div>
           
           <div class="d-flex gap-2">
-            <a href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_no=table_no, draft_id=draft.id) }}" 
+            <a href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_no=table_no, draft_id=draft.id) }}"
                class="btn btn-primary btn-sm flex-fill">
               {{ _('Continue / متابعة') }}
             </a>
-            <button class="btn btn-success btn-sm" onclick="payDraft({{ draft.id }})">
-              {{ _('Pay / دفع') }}
-            </button>
             <button class="btn btn-outline-danger btn-sm" onclick="cancelDraft({{ draft.id }})">
               {{ _('Cancel / إلغاء') }}
             </button>
@@ -113,12 +110,6 @@
 </div>
 
 <script>
-function payDraft(draftId) {
-  if (confirm('{{ _("Proceed to payment for this order? / المتابعة للدفع لهذا الطلب؟") }}')) {
-    window.location.href = `/sales/{{ branch_code }}/draft/${draftId}/checkout`;
-  }
-}
-
 function cancelDraft(draftId) {
   if (confirm('{{ _("Cancel this draft order? This cannot be undone. / إلغاء هذا الطلب المسودة؟ لا يمكن التراجع عن هذا الإجراء.") }}')) {
     fetch(`/api/draft_orders/${draftId}/cancel`, {
