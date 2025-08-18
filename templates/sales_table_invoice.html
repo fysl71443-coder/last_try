@@ -352,11 +352,13 @@
       }
       data = await res.json().catch(()=>null);
     }catch(e){ alert('Network error'); return; }
-    if(!data || !data.ok){ alert((data && data.error) || 'Error'); return; }
+    if(!data){ alert('Error'); return; }
+    const ok = (data.ok === true) || (data.status === 'success');
+    if(!ok){ alert((data && data.error) || 'Error'); return; }
     // Ensure any modal leftovers are removed
     document.body.classList.remove('modal-open');
     document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
-    window.open(data.print_url, '_blank');
+    if(data.print_url){ window.open(data.print_url, '_blank'); } else { alert('Invoice created (test echo).'); }
   }
 
   async function voidInvoice(){
@@ -375,7 +377,7 @@
       const data = await resp.json().catch(()=>({ok:false,error:'Invalid response'}));
       if(!resp.ok || !data.ok){ alert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}'); return; }
       // Clear invoice items and totals
-<script src="{{ url_for('static', filename='js/printInvoice.js') }}"></script>
+
 
       items.length = 0;
       renderItems();
