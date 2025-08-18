@@ -293,30 +293,8 @@
       items.push({ meal_id: m.id, name: m.name, unit: m.price, qty: 1 });
     }
 
-    // Save to draft order if we have one
-    if (currentDraftId) {
-      try {
-        const response = await fetch(`/api/draft_orders/${currentDraftId}/add_item`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
-          },
-          body: JSON.stringify({
-            meal_id: mealId,
-            quantity: 1
-          })
-        });
-        const data = await response.json();
-        if (!data.success) {
-          console.error('Failed to save item to draft:', data.error);
-        }
-      } catch (error) {
-        console.error('Error saving item to draft:', error);
-      }
-    }
-
     renderItems();
+    await saveDraftOrder(); // Auto-save after adding item
   }
 
   // Add item using data from Menu API (fallback if meal not in global list)
@@ -359,8 +337,45 @@
     document.getElementById('grand').innerText = grand.toFixed(2);
   }
 
-  function changeQty(idx, v){ items[idx].qty = parseFloat(v||'1'); renderItems(); }
-  function removeItem(idx){ items.splice(idx,1); renderItems(); }
+  async function changeQty(idx, v){
+    items[idx].qty = parseFloat(v||'1');
+    renderItems();
+    await saveDraftOrder(); // Auto-save after quantity change
+  }
+
+  async function removeItem(idx){
+    items.splice(idx,1);
+    renderItems();
+    await saveDraftOrder(); // Auto-save after item removal
+  }
+
+  // Auto-save draft order
+  async function saveDraftOrder() {
+    if (!currentDraftId || items.length === 0) return;
+
+    try {
+      const response = await fetch(`/api/draft_orders/${currentDraftId}/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        },
+        body: JSON.stringify({
+          items: items,
+          customer_name: document.getElementById('custName').value,
+          customer_phone: document.getElementById('custPhone').value,
+          payment_method: document.getElementById('payMethod').value
+        })
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        console.error('Failed to save draft order:', data.error);
+      }
+    } catch (error) {
+      console.error('Error saving draft order:', error);
+    }
+  }
 
   async function payAndPrint(){
     if(items.length === 0){ alert('{{ _('Add at least one item / أضف عنصراً واحداً على الأقل') }}'); return; }
@@ -458,6 +473,15 @@
   // Initialize the page
   document.addEventListener('DOMContentLoaded', function() {
     renderItems(); // Show any loaded draft items
+
+    // Auto-save when customer info changes
+    const custName = document.getElementById('custName');
+    const custPhone = document.getElementById('custPhone');
+    const payMethod = document.getElementById('payMethod');
+
+    if (custName) custName.addEventListener('blur', saveDraftOrder);
+    if (custPhone) custPhone.addEventListener('blur', saveDraftOrder);
+    if (payMethod) payMethod.addEventListener('change', saveDraftOrder);
   });
 </script>
 {% endblock %}

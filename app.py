@@ -1663,6 +1663,82 @@ def add_item_to_draft(draft_id):
         db.session.rollback()
         logging.exception('Add item to draft failed')
         return jsonify({'success': False, 'error': str(e)}), 500
+# API: Update draft order with all items
+@app.route('/api/draft_orders/<int:draft_id>/update', methods=['POST'])
+@login_required
+def update_draft_order(draft_id):
+    try:
+        from models import DraftOrder, DraftOrderItem, Meal, Table
+
+        draft = DraftOrder.query.get_or_404(draft_id)
+        data = request.get_json() or {}
+
+        # Get items from request
+        items_data = data.get('items', [])
+        customer_name = data.get('customer_name', '').strip()
+        customer_phone = data.get('customer_phone', '').strip()
+        payment_method = data.get('payment_method', 'CASH')
+
+        # Update draft order info
+        if customer_name:
+            draft.customer_name = customer_name
+        if customer_phone:
+            draft.customer_phone = customer_phone
+        draft.payment_method = payment_method
+
+        # Clear existing items
+        DraftOrderItem.query.filter_by(draft_order_id=draft.id).delete()
+
+        # Add new items
+        settings = get_settings_safe()
+        vat_rate = float(settings.vat_rate) if settings and settings.vat_rate else 15.0
+
+        for item_data in items_data:
+            meal_id = item_data.get('meal_id')
+            quantity = float(item_data.get('qty', 1))
+
+            if not meal_id or quantity <= 0:
+                continue
+
+            meal = Meal.query.get(meal_id)
+            if not meal:
+                continue
+
+            # Calculate pricing
+            price_before_tax = float(meal.selling_price or 0)
+            line_subtotal = price_before_tax * quantity
+            line_tax = line_subtotal * (vat_rate / 100.0)
+            total_price = line_subtotal + line_tax
+
+            # Create draft item
+            draft_item = DraftOrderItem(
+                draft_order_id=draft.id,
+                meal_id=meal.id,
+                product_name=meal.display_name,
+                quantity=quantity,
+                price_before_tax=price_before_tax,
+                tax=line_tax,
+                total_price=total_price
+            )
+            db.session.add(draft_item)
+
+        # Update table status to reserved if items exist
+        if items_data:
+            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_no).first()
+            if not table:
+                table = Table(branch_code=draft.branch_code, table_number=draft.table_no, status='reserved')
+                db.session.add(table)
+            else:
+                table.status = 'reserved'
+                table.updated_at = datetime.utcnow()
+
+        db.session.commit()
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.session.rollback()
+        logging.exception('Update draft order failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Checkout draft order (convert to final invoice)
 @app.route('/sales/<branch_code>/draft/<int:draft_id>/checkout', methods=['GET', 'POST'])
