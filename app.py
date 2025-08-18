@@ -1852,34 +1852,46 @@ def checkout_draft_order(branch_code, draft_id):
                          branch_code=branch_code,
                          branch_label=BRANCH_CODES[branch_code],
                          total_amount=total_amount)
-@app.route('/admin/migrate_table_no', methods=['GET'])
+@app.route('/admin/fix_database', methods=['GET'])
 @login_required
-def migrate_table_no():
-    """Temporary route to add table_no column - remove after migration"""
+def fix_database_route():
+    """Temporary route to fix database issues"""
     if not hasattr(current_user, 'role') or current_user.role != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
     try:
         from sqlalchemy import text
 
-        # Check if column exists
-        result = db.engine.execute(text("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name = 'sales_invoices'
-            AND column_name = 'table_no'
-        """))
+        results = []
 
-        if result.fetchone():
-            return jsonify({'status': 'Column table_no already exists'})
+        # 1. Add table_no column to sales_invoices if missing
+        try:
+            result = db.engine.execute(text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'sales_invoices'
+                AND column_name = 'table_no'
+            """))
 
-        # Add the column
-        db.engine.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_no INTEGER"))
+            if not result.fetchone():
+                db.engine.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_no INTEGER"))
+                results.append("✅ Added table_no column to sales_invoices")
+            else:
+                results.append("✅ table_no column already exists")
+        except Exception as e:
+            results.append(f"⚠️ Error with table_no: {e}")
 
-        # Create tables table if needed
-        db.create_all()
+        # 2. Create all missing tables
+        try:
+            db.create_all()
+            results.append("✅ All tables created/verified")
+        except Exception as e:
+            results.append(f"⚠️ Error creating tables: {e}")
 
-        return jsonify({'status': 'Migration completed successfully'})
+        return jsonify({
+            'status': 'Database fix completed',
+            'results': results
+        })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
