@@ -1864,7 +1864,7 @@ def api_draft_checkout():
 @app.route('/admin/fix_database', methods=['GET'])
 @login_required
 def fix_database_route():
-    """Temporary route to fix database issues"""
+    """Comprehensive database fix route"""
     if not hasattr(current_user, 'role') or current_user.role != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
@@ -1884,26 +1884,101 @@ def fix_database_route():
 
             if not result.fetchone():
                 db.engine.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_no INTEGER"))
+                db.session.commit()
                 results.append("✅ Added table_no column to sales_invoices")
             else:
                 results.append("✅ table_no column already exists")
         except Exception as e:
             results.append(f"⚠️ Error with table_no: {e}")
 
-        # 2. Create all missing tables
+        # 2. Create tables table if missing
         try:
-            db.create_all()
-            results.append("✅ All tables created/verified")
+            db.engine.execute(text("""
+                CREATE TABLE IF NOT EXISTS tables (
+                    id SERIAL PRIMARY KEY,
+                    branch_code VARCHAR(20) NOT NULL,
+                    table_number INTEGER NOT NULL,
+                    status VARCHAR(20) DEFAULT 'available',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(branch_code, table_number)
+                )
+            """))
+            db.session.commit()
+            results.append("✅ tables table created/verified")
         except Exception as e:
-            results.append(f"⚠️ Error creating tables: {e}")
+            results.append(f"⚠️ Error with tables table: {e}")
+
+        # 3. Create draft_orders table if missing
+        try:
+            db.engine.execute(text("""
+                CREATE TABLE IF NOT EXISTS draft_orders (
+                    id SERIAL PRIMARY KEY,
+                    branch_code VARCHAR(20) NOT NULL,
+                    table_no INTEGER NOT NULL,
+                    customer_name VARCHAR(100),
+                    customer_phone VARCHAR(30),
+                    payment_method VARCHAR(20) DEFAULT 'CASH',
+                    status VARCHAR(20) DEFAULT 'draft',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    user_id INTEGER NOT NULL
+                )
+            """))
+            db.session.commit()
+            results.append("✅ draft_orders table created/verified")
+        except Exception as e:
+            results.append(f"⚠️ Error with draft_orders table: {e}")
+
+        # 4. Create draft_order_items table if missing
+        try:
+            db.engine.execute(text("""
+                CREATE TABLE IF NOT EXISTS draft_order_items (
+                    id SERIAL PRIMARY KEY,
+                    draft_order_id INTEGER NOT NULL,
+                    meal_id INTEGER,
+                    product_name VARCHAR(200) NOT NULL,
+                    quantity NUMERIC(10,2) NOT NULL,
+                    price_before_tax NUMERIC(12,2) NOT NULL,
+                    tax NUMERIC(12,2) NOT NULL DEFAULT 0,
+                    discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+                    total_price NUMERIC(12,2) NOT NULL
+                )
+            """))
+            db.session.commit()
+            results.append("✅ draft_order_items table created/verified")
+        except Exception as e:
+            results.append(f"⚠️ Error with draft_order_items table: {e}")
+
+        # 5. Add foreign key constraints if they don't exist
+        try:
+            db.engine.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints
+                        WHERE constraint_name = 'draft_order_items_draft_order_id_fkey'
+                    ) THEN
+                        ALTER TABLE draft_order_items
+                        ADD CONSTRAINT draft_order_items_draft_order_id_fkey
+                        FOREIGN KEY (draft_order_id) REFERENCES draft_orders(id) ON DELETE CASCADE;
+                    END IF;
+                END $$;
+            """))
+            db.session.commit()
+            results.append("✅ Foreign key constraints added/verified")
+        except Exception as e:
+            results.append(f"⚠️ Error with foreign keys: {e}")
 
         return jsonify({
-            'status': 'Database fix completed',
+            'ok': True,
+            'status': 'Database fix completed successfully',
             'results': results
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @app.route('/invoices')
 @login_required
@@ -2191,63 +2266,61 @@ def payments():
     status_filter = request.args.get('status')
     type_filter = request.args.get('type')
 
-    # Build unified invoices view via union_all (tolerate missing legacy tables)
-    from sqlalchemy import literal, func
-    from sqlalchemy import cast, String
-    from sqlalchemy import inspect as _sa_inspect, union_all
-    _insp = _sa_inspect(db.engine)
-    _tables = set(_insp.get_table_names())
-    # Cross-database safe date expression for salary (year,month -> date)
+    # Simple approach - get invoices directly from models
     try:
-        _dialect = db.engine.dialect.name
-    except Exception:
-        _dialect = 'postgresql'
-    if _dialect == 'postgresql':
-        date_expr = func.to_date(func.concat(cast(Salary.year, String), '-', func.lpad(cast(Salary.month, String), 2, '0'), '-01'), 'YYYY-MM-DD')
-    else:
-        # Fallback for non-Postgres (avoid printf which doesn't exist in PG)
-        date_expr = func.date('now')
+        # Sales invoices
+        sales_invoices = []
+        try:
+            sales_list = SalesInvoice.query.order_by(SalesInvoice.date.desc()).all()
+            for inv in sales_list:
+                sales_invoices.append({
+                    'id': inv.id,
+                    'type': 'sales',
+                    'party': inv.customer_name or 'Customer',
+                    'total': float(inv.total_after_tax_discount or 0),
+                    'paid': 0,  # Will be calculated from payments
+                    'date': inv.date,
+                    'status': inv.status or 'unpaid'
+                })
+        except Exception as e:
+            logging.warning(f'Error loading sales invoices: {e}')
 
-    # Introspect columns to tolerate legacy schemas
-    cols_sales = {c['name'] for c in _insp.get_columns('sales_invoices')} if 'sales_invoices' in _tables else set()
-    cols_purch = {c['name'] for c in _insp.get_columns('purchase_invoices')} if 'purchase_invoices' in _tables else set()
-    cols_exp = {c['name'] for c in _insp.get_columns('expense_invoices')} if 'expense_invoices' in _tables else set()
+        # Purchase invoices
+        purchase_invoices = []
+        try:
+            purchase_list = PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).all()
+            for inv in purchase_list:
+                purchase_invoices.append({
+                    'id': inv.id,
+                    'type': 'purchase',
+                    'party': getattr(inv, 'supplier_name', 'Supplier'),
+                    'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
+                    'paid': 0,
+                    'date': inv.date,
+                    'status': getattr(inv, 'status', 'unpaid')
+                })
+        except Exception as e:
+            logging.warning(f'Error loading purchase invoices: {e}')
 
-    sales_party = SalesInvoice.customer_name if 'customer_name' in cols_sales else literal('Customer')
-    sales_total = SalesInvoice.total_after_tax_discount if 'total_after_tax_discount' in cols_sales else literal(0)
-    sales_date = SalesInvoice.date if 'date' in cols_sales else func.now()
-    sales_status = SalesInvoice.status if 'status' in cols_sales else literal('unpaid')
-    sales_q = db.session.query(
-        SalesInvoice.id.label('id'),
-        literal('sales').label('type'),
-        sales_party.label('party'),
-        sales_total.label('total'),
-        literal(0).label('paid'),
-        sales_date.label('date'),
-        sales_status.label('status')
-    )
+        # Expense invoices
+        expense_invoices = []
+        try:
+            expense_list = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).all()
+            for inv in expense_list:
+                expense_invoices.append({
+                    'id': inv.id,
+                    'type': 'expense',
+                    'party': 'Expense',
+                    'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
+                    'paid': 0,
+                    'date': inv.date,
+                    'status': getattr(inv, 'status', 'unpaid')
+                })
+        except Exception as e:
+            logging.warning(f'Error loading expense invoices: {e}')
 
-    purch_party = PurchaseInvoice.supplier_name if 'supplier_name' in cols_purch else literal('Supplier')
-    purch_total = PurchaseInvoice.total_after_tax_discount if 'total_after_tax_discount' in cols_purch else literal(0)
-    purch_date = PurchaseInvoice.date if 'date' in cols_purch else func.now()
-    purch_status = PurchaseInvoice.status if 'status' in cols_purch else literal('unpaid')
-    purchases_q = db.session.query(
-        PurchaseInvoice.id,
-        literal('purchase'),
-        purch_party,
-        purch_total,
-        literal(0),
-        purch_date,
-        purch_status
-    )
-
-    exp_total = ExpenseInvoice.total_after_tax_discount if 'total_after_tax_discount' in cols_exp else literal(0)
-    exp_date = ExpenseInvoice.date if 'date' in cols_exp else func.now()
-    exp_status = ExpenseInvoice.status if 'status' in cols_exp else literal('unpaid')
-    expenses_q = db.session.query(
-        ExpenseInvoice.id,
-        literal('expense'),
-        literal('Expense').label('party'),
+        # Combine all invoices
+        all_invoices = sales_invoices + purchase_invoices + expense_invoices
         exp_total,
         literal(0),
         exp_date,
@@ -3848,6 +3921,12 @@ def delete_purchase_invoice(invoice_id):
 def delete_sales_invoice(invoice_id):
     invoice = SalesInvoice.query.get_or_404(invoice_id)
 
+    # Delete related payments first
+    try:
+        Payment.query.filter_by(invoice_id=invoice_id, invoice_type='sales').delete()
+    except:
+        pass  # Payment table might not exist in some setups
+
     # Delete invoice items first
     SalesInvoiceItem.query.filter_by(invoice_id=invoice_id).delete()
 
@@ -3856,12 +3935,24 @@ def delete_sales_invoice(invoice_id):
     db.session.commit()
 
     flash(_('Sales invoice deleted successfully / تم حذف فاتورة المبيعات بنجاح'), 'success')
-    return redirect(url_for('sales'))
+
+    # Check if request came from payments page
+    referer = request.headers.get('Referer', '')
+    if 'payments' in referer:
+        return redirect(url_for('payments'))
+    else:
+        return redirect(url_for('sales'))
 
 @app.route('/delete_expense_invoice/<int:invoice_id>', methods=['POST'])
 @login_required
 def delete_expense_invoice(invoice_id):
     invoice = ExpenseInvoice.query.get_or_404(invoice_id)
+
+    # Delete related payments first
+    try:
+        Payment.query.filter_by(invoice_id=invoice_id, invoice_type='expense').delete()
+    except:
+        pass
 
     # Delete invoice items first
     ExpenseInvoiceItem.query.filter_by(invoice_id=invoice_id).delete()
@@ -3871,7 +3962,13 @@ def delete_expense_invoice(invoice_id):
     db.session.commit()
 
     flash(_('Expense invoice deleted successfully / تم حذف فاتورة المصروفات بنجاح'), 'success')
-    return redirect(url_for('expenses'))
+
+    # Check if request came from payments page
+    referer = request.headers.get('Referer', '')
+    if 'payments' in referer:
+        return redirect(url_for('payments'))
+    else:
+        return redirect(url_for('expenses'))
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=8000, debug=True)
