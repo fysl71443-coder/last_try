@@ -7,7 +7,7 @@
       const itemsSrc = Array.isArray(window.items) ? window.items : [];
       const items = itemsSrc.map(x => ({ meal_id: x.meal_id, qty: x.qty }));
       if(items.length === 0){
-        alert('Add at least one item / أضف عنصراً واحداً على الأقل');
+        await showAlert('Add at least one item / أضف عنصراً واحداً على الأقل');
         return;
       }
       const payload = {
@@ -30,15 +30,15 @@
       });
       if(!res.ok){
         const txt = await res.text();
-        alert(txt || ('HTTP '+res.status));
+        await showAlert(txt || ('HTTP '+res.status));
         return;
       }
       const data = await res.json().catch(()=>null);
-      if(!data || !data.ok){ alert((data && data.error) || 'Error'); return; }
+      if(!data || !data.ok){ await showAlert((data && data.error) || 'Error'); return; }
       window.open(data.print_url, '_blank');
     }catch(e){
       console.error(e);
-      alert('Error while paying/printing');
+      await showAlert('Error while paying/printing');
     }
   };
 })();

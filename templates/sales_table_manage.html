@@ -110,26 +110,26 @@
 </div>
 
 <script>
-function cancelDraft(draftId) {
-  if (confirm('{{ _("Cancel this draft order? This cannot be undone. / إلغاء هذا الطلب المسودة؟ لا يمكن التراجع عن هذا الإجراء.") }}')) {
-    fetch(`/api/draft_orders/${draftId}/cancel`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
-      }
-    })
-    .then(response => response.json())
-    .then(data => {
+async function cancelDraft(draftId) {
+  const confirmed = await showConfirm('{{ _("Cancel this draft order? This cannot be undone. / إلغاء هذا الطلب المسودة؟ لا يمكن التراجع عن هذا الإجراء.") }}');
+  if (confirmed) {
+    try {
+      const response = await fetch(`/api/draft_orders/${draftId}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        }
+      });
+      const data = await response.json();
       if (data.success) {
         location.reload();
       } else {
-        alert(data.error || '{{ _("Failed to cancel order / فشل إلغاء الطلب") }}');
+        await showAlert(data.error || '{{ _("Failed to cancel order / فشل إلغاء الطلب") }}');
       }
-    })
-    .catch(error => {
-      alert('{{ _("Error cancelling order / خطأ في إلغاء الطلب") }}');
-    });
+    } catch (error) {
+      await showAlert('{{ _("Error cancelling order / خطأ في إلغاء الطلب") }}');
+    }
   }
 }
 </script>

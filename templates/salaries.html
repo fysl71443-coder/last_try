@@ -69,15 +69,19 @@
               <td>{{ s.status }}</td>
               <td>
                 <a href="{{ url_for('edit_salary', salary_id=s.id) }}" class="btn btn-sm btn-outline-primary">{{ _('Edit / تعديل') }}</a>
-                <form method="POST" action="{{ url_for('delete_salary', salary_id=s.id) }}" style="display:inline" onsubmit="return confirmDelete('{{ s.employee.full_name if s.employee else s.employee_id }}')">
+                <form method="POST" action="{{ url_for('delete_salary', salary_id=s.id) }}" style="display:inline" onsubmit="return handleDeleteSalary(event, '{{ s.employee.full_name if s.employee else s.employee_id }}')"
                   {{ form.csrf_token }}
                   <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
                 </form>
               </td>
             </tr>
 <script>
-function confirmDelete(name){
-  return confirm("{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}\n" + name);
+async function handleDeleteSalary(event, name) {
+  event.preventDefault();
+  const confirmed = await showConfirm("{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}\n" + name);
+  if (confirmed) {
+    event.target.submit();
+  }
 }
 </script>
             {% endfor %}

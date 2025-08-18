@@ -324,8 +324,9 @@ body {
         alert('Invoice details for ID: ' + invoiceId + ' (Feature coming soon)');
     }
 
-    function deleteSalesInvoice(invoiceId, invoiceNumber) {
-        if (confirm('{{ _("Are you sure you want to delete sales invoice") }} "' + invoiceNumber + '"?\n\n{{ _("This action cannot be undone.") }}')) {
+    async function deleteSalesInvoice(invoiceId, invoiceNumber) {
+        const confirmed = await showConfirm('{{ _("Are you sure you want to delete sales invoice") }} "' + invoiceNumber + '"?\n\n{{ _("This action cannot be undone.") }}');
+        if (confirmed) {
             // Create a form and submit it
             const form = document.createElement('form');
             form.method = 'POST';

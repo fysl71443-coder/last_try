@@ -378,7 +378,10 @@
   }
 
   async function payAndPrint(){
-    if(items.length === 0){ alert('{{ _('Add at least one item / أضف عنصراً واحداً على الأقل') }}'); return; }
+    if(items.length === 0){
+      await showAlert('{{ _('Add at least one item / أضف عنصراً واحداً على الأقل') }}');
+      return;
+    }
 
     // If we have a draft order, use the checkout endpoint
     if (currentDraftId) {
@@ -432,14 +435,14 @@
       });
       if(!res.ok){
         const txt = await res.text();
-        alert(txt || ('HTTP '+res.status));
+        await showAlert(txt || ('HTTP '+res.status));
         return;
       }
       data = await res.json().catch(()=>null);
-    }catch(e){ alert('Network error'); return; }
-    if(!data){ alert('Error'); return; }
+    }catch(e){ await showAlert('Network error'); return; }
+    if(!data){ await showAlert('Error'); return; }
     const ok = (data.ok === true) || (data.status === 'success');
-    if(!ok){ alert((data && data.error) || 'Error'); return; }
+    if(!ok){ await showAlert((data && data.error) || 'Error'); return; }
     // Ensure any modal leftovers are removed
     document.body.classList.remove('modal-open');
     document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
@@ -447,10 +450,16 @@
   }
 
   async function voidInvoice(){
-    if(items.length === 0){ alert('{{ _('Invoice is already empty / لا توجد عناصر في الفاتورة') }}'); return; }
-    const pwd = prompt("{{ _('Enter void password / أدخل كلمة مرور الإلغاء') }}");
-    if(pwd===null) return; // cancelled prompt
-    if(!pwd || pwd.trim().length===0){ alert("{{ _('Password required / كلمة المرور مطلوبة') }}"); return; }
+    if(items.length === 0){
+      await showAlert('{{ _('Invoice is already empty / لا توجد عناصر في الفاتورة') }}');
+      return;
+    }
+    const pwd = await showPrompt("{{ _('Enter void password / أدخل كلمة مرور الإلغاء') }}");
+    if(pwd === null) return; // cancelled prompt
+    if(!pwd || pwd.trim().length===0){
+      await showAlert("{{ _('Password required / كلمة المرور مطلوبة') }}");
+      return;
+    }
     try{
       const token = document.querySelector('meta[name="csrf-token"]')?.content || document.getElementById('csrfTokenPage')?.value;
       const headers = { 'Content-Type':'application/json' };
@@ -460,14 +469,16 @@
         body: JSON.stringify({ password: pwd })
       });
       const data = await resp.json().catch(()=>({ok:false,error:'Invalid response'}));
-      if(!resp.ok || !data.ok){ alert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}'); return; }
+      if(!resp.ok || !data.ok){
+        await showAlert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}');
+        return;
+      }
       // Clear invoice items and totals
-
 
       items.length = 0;
       renderItems();
-      alert('{{ _('Invoice cancelled / تم إلغاء الفاتورة') }}');
-    }catch(e){ alert('Error'); }
+      await showAlert('{{ _('Invoice cancelled / تم إلغاء الفاتورة') }}');
+    }catch(e){ await showAlert('Error'); }
   }
 
   // Initialize the page
