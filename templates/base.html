@@ -81,6 +81,8 @@
       body.dark .btn-outline-danger:hover{ background:#E74C3C; color:#fff; }
     </style>
 
+      <meta name="csrf-token" content="{{ csrf_token() }}">
+
   </head>
   <body class="{{ (session.get('theme') or (settings.default_theme if settings else 'light')) }}">
     {% if request.endpoint != 'login' %}
@@ -123,7 +125,7 @@
 
       <!-- زر رجوع عام مع حماية من فقدان التعديلات -->
       <div class="mb-3 d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-outline-secondary" onclick="safeBack('{{ back_url or url_for('employees') }}')">⬅️ {{ _('Back / رجوع') }}</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="safeBack('{{ back_url or url_for('dashboard') }}')">⬅️ {{ _('Back / رجوع') }}</button>
       </div>
 
       {% if request.endpoint != 'dashboard' %}
@@ -161,6 +163,7 @@
 
     {% block content %}{% endblock %}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/modal-system.js') }}"></script>
     {% block scripts %}{% endblock %}
   </body>
 </html>

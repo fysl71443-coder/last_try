@@ -34,6 +34,7 @@
       <div>{{ _('Invoice') }}: {{ inv.invoice_number or inv.id }}</div>
       <div>{{ _('Date') }}: {{ inv.date }}</div>
       <div>{{ _('Customer') }}: {{ inv.customer_name or _('Cash customer') }}</div>
+      {% if inv.customer_phone %}<div>{{ _('Phone') }}: {{ inv.customer_phone }}</div>{% endif %}
     </div>
 
     <table>

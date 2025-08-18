@@ -51,10 +51,12 @@ body {
     <!-- نموذج إضافة مادة خام جديدة -->
     <div class="materials-card">
         <h5 class="mb-3">{{ _('Add New Raw Material / إضافة مادة خام جديدة') }}</h5>
-        
+
         <form method="POST">
             {{ form.hidden_tag() }}
-            
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+
             <div class="row mb-3">
                 <div class="col-md-3">
                     {{ form.name.label(class_='form-label') }}
@@ -90,7 +92,7 @@ body {
     {% if materials %}
     <div class="materials-card">
         <h5 class="mb-3">{{ _('Existing Raw Materials / المواد الخام الموجودة') }}</h5>
-        
+
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead class="table-dark">
@@ -126,7 +128,7 @@ body {
                 </tbody>
             </table>
         </div>
-        
+
         <div class="mt-3">
             <div class="row">
                 <div class="col-md-6">

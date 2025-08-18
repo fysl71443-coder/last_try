@@ -1,9 +1,12 @@
 {% extends 'base.html' %}
+{% set back_url = url_for('dashboard') %}
+
 {% block title %}الإعدادات{% endblock %}
 {% block content %}
 <div class="container py-4">
   <h3>الإعدادات العامة</h3>
-  <form method="post" class="row g-3">
+  <form method="post" enctype="multipart/form-data" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <div class="col-md-6">
       <label class="form-label">اسم الشركة</label>
       <input type="text" name="company_name" class="form-control" value="{{ s.company_name or '' }}">
@@ -47,6 +50,59 @@
     <div class="col-md-6">
       <label class="form-label">تسمية فرع China Town</label>
       <input type="text" name="china_town_label" class="form-control" value="{{ s.china_town_label or 'China Town' }}">
+    </div>
+
+    <hr class="my-4">
+    <h4>إعدادات الإيصال والطباعة</h4>
+    <div class="col-md-3">
+      <label class="form-label">عرض الورق (مم)</label>
+      <select name="receipt_paper_width" class="form-select">
+        <option value="80" {% if s.receipt_paper_width=='80' %}selected{% endif %}>80mm</option>
+        <option value="58" {% if s.receipt_paper_width=='58' %}selected{% endif %}>58mm</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">حجم الخط</label>
+      <input type="number" name="receipt_font_size" class="form-control" value="{{ s.receipt_font_size or 12 }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">الشعار (Logo)</label>
+      <div class="mb-2">
+        <input type="file" name="logo_file" class="form-control" accept="image/*" id="logoFile">
+        <div class="form-text">{{ _('Upload logo from computer / رفع الشعار من الكمبيوتر') }}</div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small">{{ _('Or enter logo URL / أو أدخل رابط الشعار') }}</label>
+        <input type="text" name="logo_url" class="form-control" value="{{ s.logo_url or '/static/chinese-logo.svg' }}">
+      </div>
+      {% if s and s.logo_url %}
+      <div class="mt-2">
+        <img src="{{ s.logo_url }}" alt="Current Logo" style="max-height: 60px; max-width: 200px;" class="border rounded">
+        <div class="form-text">{{ _('Current logo / الشعار الحالي') }}</div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="col-md-6">
+      <div class="form-check mt-4">
+        <input class="form-check-input" type="checkbox" name="receipt_show_logo" id="recLogo" {% if s.receipt_show_logo %}checked{% endif %}>
+        <label class="form-check-label" for="recLogo">إظهار الشعار</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="receipt_show_tax_number" id="recTax" {% if s.receipt_show_tax_number %}checked{% endif %}>
+        <label class="form-check-label" for="recTax">إظهار الرقم الضريبي</label>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">نص تذييل الإيصال</label>
+      <input type="text" name="receipt_footer_text" class="form-control" value="{{ s.receipt_footer_text or '' }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">طول إضافي أسفل الإيصال (مم)</label>
+      <input type="number" step="1" min="0" name="receipt_extra_bottom_mm" class="form-control" value="{{ s.receipt_extra_bottom_mm or 15 }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">ارتفاع الشعار (px)</label>
+      <input type="number" step="1" min="20" name="receipt_logo_height" class="form-control" value="{{ s.receipt_logo_height or 40 }}">
     </div>
 
     <div class="col-12 d-flex justify-content-end gap-2">

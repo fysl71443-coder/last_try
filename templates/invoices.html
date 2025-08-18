@@ -58,11 +58,10 @@ body {
                 </a>
             </div>
             <div class="col-md-4 text-end">
-                <!-- زر طباعة -->
-                <a href="{{ url_for('print_invoices', section=current_type) }}"
-                   class="btn btn-success" target="_blank">
-                   📄 {{ _('Print All / طباعة الكل') }}
-                </a>
+                <div class="btn-group" role="group">
+                  <a href="{{ url_for('print_invoices', section=current_type) }}" class="btn btn-success" target="_blank">📄 {{ _('Print All / طباعة الكل') }}</a>
+                  <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">🗑️ {{ _('Delete / حذف') }}</button>
+                </div>
             </div>
         </div>
     </div>
@@ -71,6 +70,8 @@ body {
     <!-- نموذج الدفع المتعدد -->
     <div class="invoice-card">
         <form method="post" action="{{ url_for('bulk_payment') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
             <div class="table-responsive">
                 <table class="table table-striped table-bordered">
                     <thead class="table-dark">
@@ -86,7 +87,8 @@ body {
                             <th>{{ _('Status') }}</th>
                             <th>{{ _('Due Date') }}</th>
                             <th>{{ _('Pay') }}</th>
-                           <th>{{ _('View') }}</th>
+                            <th>{{ _('View') }}</th>
+                            <th>{{ _('Actions / الإجراءات') }}</th>
                         </tr>
                     </thead>
                     <tbody id="invoice-list">
@@ -109,8 +111,11 @@ body {
                             </td>
                             <td>{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '-' }}</td>
                             <td>
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
                                 {% if invoice.status != 'paid' %}
                                 <form method="post" action="{{ url_for('single_payment', invoice_id=invoice.id) }}" class="d-flex">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     <input type="number" step="0.01" name="payment_amount"
                                            placeholder="Amount" class="form-control form-control-sm me-1"
                                            max="{{ invoice.remaining_amount }}" required>
@@ -159,6 +164,44 @@ body {
     </div>
     {% endif %}
 </div>
+    <!-- Delete Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form method="post" action="{{ url_for('invoices_delete', type=current_type) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="modal-header">
+              <h5 class="modal-title">{{ _('Delete Invoices / حذف الفواتير') }}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-2">
+                <label class="form-label">{{ _('Scope / النطاق') }}</label>
+                <select class="form-select" name="scope" id="del-scope">
+                  <option value="selected">{{ _('Selected only / المحدد فقط') }}</option>
+                  <option value="type">{{ _('All in current type tab / كل فواتير النوع الحالي') }}</option>
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">{{ _('Type / النوع') }}</label>
+                <select class="form-select" name="invoice_type">
+                  <option value="sales" {{ 'selected' if current_type=='sales' else '' }}>{{ _('Sales / مبيعات') }}</option>
+                  <option value="purchases" {{ 'selected' if current_type=='purchases' else '' }}>{{ _('Purchases / مشتريات') }}</option>
+                  <option value="expenses" {{ 'selected' if current_type=='expenses' else '' }}>{{ _('Expenses / مصروفات') }}</option>
+                </select>
+              </div>
+              <div class="alert alert-warning small">{{ _('This action is irreversible. Related items and payments will be deleted as well. / هذا الإجراء لا يمكن التراجع عنه وسيتم حذف العناصر والمدفوعات المرتبطة أيضاً') }}</div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel / إلغاء') }}</button>
+              <button type="submit" class="btn btn-danger">{{ _('Delete / حذف') }}</button>
+            </div>
+            <!-- Include selected IDs as hidden fields dynamically before submit via JS -->
+          </form>
+        </div>
+      </div>
+    </div>
+
 
 <!-- SocketIO and JavaScript -->
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
@@ -176,6 +219,29 @@ body {
         let checkboxes = document.querySelectorAll('input[name="invoice_ids"]');
         checkboxes.forEach(cb => cb.checked = this.checked);
     });
+
+    // Before submit delete form, inject selected ids as hidden fields
+    const delModal = document.getElementById('deleteModal');
+    if(delModal){
+      delModal.addEventListener('show.bs.modal', function(){
+        // nothing yet
+      });
+      delModal.addEventListener('shown.bs.modal', function(){
+        // Focus
+      });
+      delModal.querySelector('form').addEventListener('submit', function(ev){
+        const tbodyCbs = document.querySelectorAll('tbody#invoice-list input[name="invoice_ids"]:checked');
+        // remove previous hidden inputs
+        this.querySelectorAll('input[type="hidden"][name="invoice_ids"]').forEach(n=>n.remove());
+        tbodyCbs.forEach(cb => {
+          const i = document.createElement('input');
+          i.type = 'hidden'; i.name = 'invoice_ids'; i.value = cb.value;
+          this.appendChild(i);
+        });
+        // pass current tab type for safety
+        const t = document.createElement('input'); t.type='hidden'; t.name='current_type'; t.value='{{ current_type }}'; this.appendChild(t);
+      });
+    }
 
     // Auto-calculate remaining amount for payment input
     document.querySelectorAll('input[name="payment_amount"]').forEach(input => {

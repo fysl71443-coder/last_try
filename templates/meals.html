@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% set back_url = url_for('inventory') %}
+
 {% block title %}{{ _('Meals Management / إدارة الوجبات') }}{% endblock %}
 {% block content %}
 
@@ -56,6 +58,9 @@ body {
             <h3 class="mb-0">🍽️ {{ _('Meals Management / إدارة الوجبات') }}</h3>
         </div>
         <div class="col-md-6 text-end">
+            <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#importModal">
+                📥 {{ _('Import Meals / استيراد الوجبات') }}
+            </button>
             <a href="{{ url_for('raw_materials') }}" class="btn btn-outline-success me-2">
                 🥘 {{ _('Raw Materials / المواد الخام') }}
             </a>
@@ -74,10 +79,12 @@ body {
     <!-- نموذج إنشاء وجبة جديدة -->
     <div class="meals-card">
         <h5 class="mb-3">{{ _('Create New Meal / إنشاء وجبة جديدة') }}</h5>
-        
+
         <form method="POST" id="meal-form">
             {{ form.hidden_tag() }}
-            
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+
             <!-- معلومات الوجبة الأساسية -->
             <div class="row mb-3">
                 <div class="col-md-3">
@@ -164,7 +171,7 @@ body {
     {% if meals %}
     <div class="meals-card">
         <h5 class="mb-3">{{ _('Existing Meals / الوجبات الموجودة') }}</h5>
-        
+
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead class="table-dark">
@@ -211,7 +218,7 @@ body {
 <script>
     // Materials data for calculations
     const materials = {{ materials_json | safe }};
-    
+
     // SocketIO for real-time updates
     var socket = io();
     socket.on('meal_update', function(data) {
@@ -223,18 +230,18 @@ body {
     // Auto-calculation functionality
     function calculateCosts() {
         let totalCost = 0;
-        
+
         document.querySelectorAll('.ingredient-row').forEach(row => {
             const materialSelect = row.querySelector('select[name$="-raw_material_id"]');
             const quantityInput = row.querySelector('input[name$="-quantity"]');
             const costDisplay = row.querySelector('.ingredient-cost');
-            
+
             const materialId = parseInt(materialSelect.value);
             const quantity = parseFloat(quantityInput.value) || 0;
-            
+
             const material = materials.find(m => m.id === materialId);
             let ingredientCost = 0;
-            
+
             if (material && quantity > 0) {
                 ingredientCost = material.cost_per_unit * quantity;
                 costDisplay.textContent = '$' + ingredientCost.toFixed(4);
@@ -243,15 +250,15 @@ body {
                 costDisplay.textContent = '$0.0000';
             }
         });
-        
+
         // Update total cost
         document.getElementById('total-cost').textContent = '$' + totalCost.toFixed(2);
-        
+
         // Calculate profit and selling price
         const profitMargin = parseFloat(document.querySelector('input[name="profit_margin_percent"]').value) || 0;
         const profitAmount = totalCost * (profitMargin / 100);
         const sellingPrice = totalCost + profitAmount;
-        
+
         document.getElementById('profit-amount').textContent = '$' + profitAmount.toFixed(2);
         document.getElementById('selling-price').textContent = '$' + sellingPrice.toFixed(2);
     }
@@ -265,7 +272,7 @@ body {
 
     // Add new ingredient functionality
     let ingredientIndex = {{ form.ingredients|length }};
-    
+
     document.getElementById('add-ingredient').addEventListener('click', function() {
         const container = document.getElementById('ingredients-container');
         const newIngredient = document.createElement('div');
@@ -336,5 +343,35 @@ body {
         calculateCosts();
     });
 </script>
+
+<!-- Import Meals Modal -->
+<div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('import_meals') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ _('Import Meals / استيراد الوجبات') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">{{ _('Select File / اختر الملف') }}</label>
+                        <input type="file" name="file" class="form-control" accept=".xlsx,.xls,.csv" required>
+                        <div class="form-text">{{ _('Supported formats: Excel (.xlsx, .xls), CSV / الصيغ المدعومة: إكسل، CSV') }}</div>
+                    </div>
+                    <div class="alert alert-info">
+                        <strong>{{ _('File Format / تنسيق الملف') }}:</strong><br>
+                        {{ _('Columns should be: Name, Name (Arabic), Category, Cost, Selling Price / الأعمدة يجب أن تكون: الاسم، الاسم بالعربية، الفئة، التكلفة، سعر البيع') }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel / إلغاء') }}</button>
+                    <button type="submit" class="btn btn-success">{{ _('Import / استيراد') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 {% endblock %}

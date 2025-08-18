@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_login import UserMixin
 from extensions import db
 
@@ -57,8 +57,10 @@ class SalesInvoice(db.Model):
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
     date = db.Column(db.Date, default=datetime.utcnow)
     payment_method = db.Column(db.String(20), nullable=False)
-    branch = db.Column(db.String(50), nullable=False)  # فرع الفاتورة (Place India أو China Town)
+    branch = db.Column(db.String(50), nullable=False)  # 'place_india' or 'china_town'
+    table_no = db.Column(db.Integer, nullable=True)  # Table number
     customer_name = db.Column(db.String(100), nullable=True)
+    customer_phone = db.Column(db.String(30), nullable=True)
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
     tax_amount = db.Column(db.Numeric(12, 2), nullable=False)
     discount_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
@@ -134,11 +136,11 @@ class Meal(db.Model):
     name_ar = db.Column(db.String(200), nullable=True)
     description = db.Column(db.Text, nullable=True)
     category = db.Column(db.String(100), nullable=True)
-    total_cost = db.Column(db.Numeric(12, 2), nullable=False, default=0)  # Calculated from ingredients
-    profit_margin_percent = db.Column(db.Numeric(5, 2), nullable=False, default=30)  # Default 30%
-    selling_price = db.Column(db.Numeric(12, 2), nullable=False, default=0)  # Cost + profit margin
+    total_cost = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # Calculated from ingredients
+    profit_margin_percent = db.Column(db.Numeric(5, 2), nullable=False, default=30.00)  # Default 30%
+    selling_price = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # Cost + profit margin
     active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     # Relationship to ingredients
@@ -315,6 +317,55 @@ class Payment(db.Model):
         return f'<Payment {self.invoice_type} #{self.invoice_id} amount={self.amount_paid}>'
 
 
+class Table(db.Model):
+    __tablename__ = 'tables'
+    id = db.Column(db.Integer, primary_key=True)
+    branch_code = db.Column(db.String(20), nullable=False)  # place_india, china_town
+    table_number = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(20), default='available')  # available, reserved, occupied
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('branch_code', 'table_number', name='unique_branch_table'),)
+
+    def __repr__(self):
+        return f'<Table {self.branch_code}-{self.table_number} ({self.status})>'
+
+class DraftOrder(db.Model):
+    __tablename__ = 'draft_orders'
+    id = db.Column(db.Integer, primary_key=True)
+    branch_code = db.Column(db.String(20), nullable=False)
+    table_no = db.Column(db.Integer, nullable=False)
+    customer_name = db.Column(db.String(100), nullable=True)
+    customer_phone = db.Column(db.String(30), nullable=True)
+    payment_method = db.Column(db.String(20), default='CASH')
+    status = db.Column(db.String(20), default='draft')  # draft, completed, cancelled
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    items = db.relationship('DraftOrderItem', backref='draft_order', lazy=True, cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<DraftOrder {self.branch_code}-T{self.table_no} ({self.status})>'
+
+class DraftOrderItem(db.Model):
+    __tablename__ = 'draft_order_items'
+    id = db.Column(db.Integer, primary_key=True)
+    draft_order_id = db.Column(db.Integer, db.ForeignKey('draft_orders.id'), nullable=False)
+    meal_id = db.Column(db.Integer, db.ForeignKey('meals.id'), nullable=True)
+    product_name = db.Column(db.String(200), nullable=False)
+    quantity = db.Column(db.Numeric(10, 2), nullable=False)
+    price_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
+    tax = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    discount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    total_price = db.Column(db.Numeric(12, 2), nullable=False)
+
+    meal = db.relationship('Meal', backref='draft_items')
+
+    def __repr__(self):
+        return f'<DraftOrderItem {self.product_name} x{self.quantity}>'
+
 class Settings(db.Model):
     __tablename__ = 'settings'
     id = db.Column(db.Integer, primary_key=True)
@@ -339,8 +390,53 @@ class Settings(db.Model):
     receipt_show_tax_number = db.Column(db.Boolean, default=True)
     receipt_footer_text = db.Column(db.String(300), default='')
 
+    logo_url = db.Column(db.String(300), default='/static/chinese-logo.svg')  # receipt logo
+
     def __repr__(self):
         return f'<Settings {self.company_name or "Settings"}>'
+
+
+class Customer(db.Model):
+    __tablename__ = 'customers'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    phone = db.Column(db.String(50), nullable=True)
+    discount_percent = db.Column(db.Numeric(5, 2), default=0)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Customer {self.name}>'
+
+class MenuCategory(db.Model):
+    __tablename__ = 'menu_categories'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, nullable=False)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<MenuCategory {self.name}>'
+
+
+class MenuItem(db.Model):
+    __tablename__ = 'menu_items'
+    id = db.Column(db.Integer, primary_key=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('menu_categories.id'), nullable=False)
+    meal_id = db.Column(db.Integer, db.ForeignKey('meals.id'), nullable=False)
+    price_override = db.Column(db.Numeric(12, 2), nullable=True)
+    display_order = db.Column(db.Integer, nullable=True)
+
+    category = db.relationship('MenuCategory', backref='items')
+    meal = db.relationship('Meal')
+
+    __table_args__ = (
+        db.UniqueConstraint('category_id', 'meal_id', name='uq_category_meal'),
+    )
+
+    def __repr__(self):
+        return f'<MenuItem cat={self.category_id} meal={self.meal_id}>'
+
 
 
 class UserPermission(db.Model):

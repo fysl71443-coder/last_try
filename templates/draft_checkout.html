@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Checkout Order / دفع الطلب') }} #{{ draft.id }} — {{ branch_label }}{% endblock %}
+{% block content %}
+<style>
+  .order-summary {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    border-left: 4px solid #007bff;
+  }
+  .item-row {
+    border-bottom: 1px solid #eee;
+    padding: 0.5rem 0;
+  }
+  .item-row:last-child {
+    border-bottom: none;
+  }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="mb-0">{{ _('Checkout Order / دفع الطلب') }} #{{ draft.id }}</h4>
+      <small class="text-muted">{{ _('Table') }} #{{ draft.table_no }} — {{ branch_label }}</small>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('sales_table_manage', branch_code=branch_code, table_no=draft.table_no) }}">
+      ← {{ _('Back / رجوع') }}
+    </a>
+  </div>
+
+  <div class="row">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">{{ _('Payment Details / تفاصيل الدفع') }}</h5>
+        </div>
+        <div class="card-body">
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">{{ _('Customer Name / اسم العميل') }}</label>
+                <input type="text" name="customer_name" class="form-control" 
+                       value="{{ draft.customer_name or '' }}" placeholder="{{ _('Optional / اختياري') }}">
+              </div>
+              
+              <div class="col-md-6">
+                <label class="form-label">{{ _('Customer Phone / رقم العميل') }}</label>
+                <input type="text" name="customer_phone" class="form-control" 
+                       value="{{ draft.customer_phone or '' }}" placeholder="{{ _('Optional / اختياري') }}">
+              </div>
+              
+              <div class="col-md-6">
+                <label class="form-label">{{ _('Payment Method / طريقة الدفع') }} <span class="text-danger">*</span></label>
+                <select name="payment_method" class="form-select" required>
+                  <option value="CASH" {% if draft.payment_method == 'CASH' %}selected{% endif %}>{{ _('Cash / نقداً') }}</option>
+                  <option value="MADA" {% if draft.payment_method == 'MADA' %}selected{% endif %}>{{ _('Mada / مدى') }}</option>
+                  <option value="VISA" {% if draft.payment_method == 'VISA' %}selected{% endif %}>{{ _('Visa / فيزا') }}</option>
+                  <option value="MASTERCARD" {% if draft.payment_method == 'MASTERCARD' %}selected{% endif %}>{{ _('Mastercard / ماستركارد') }}</option>
+                  <option value="BANK" {% if draft.payment_method == 'BANK' %}selected{% endif %}>{{ _('Bank Transfer / تحويل بنكي') }}</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="mt-4 d-flex gap-2">
+              <button type="submit" class="btn btn-success btn-lg">
+                💳 {{ _('Complete Payment / إكمال الدفع') }} ({{ '%.2f'|format(total_amount) }} {{ _('SAR') }})
+              </button>
+              <a href="{{ url_for('sales_table_manage', branch_code=branch_code, table_no=draft.table_no) }}" 
+                 class="btn btn-outline-secondary btn-lg">
+                {{ _('Cancel / إلغاء') }}
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-4">
+      <div class="order-summary">
+        <h5 class="mb-3">{{ _('Order Summary / ملخص الطلب') }}</h5>
+        
+        <div class="mb-3">
+          <div class="d-flex justify-content-between">
+            <span>{{ _('Order') }} #{{ draft.id }}</span>
+            <span class="text-muted">{{ draft.created_at.strftime('%H:%M') }}</span>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span>{{ _('Table') }}</span>
+            <span>#{{ draft.table_no }}</span>
+          </div>
+        </div>
+        
+        <hr>
+        
+        <div class="mb-3">
+          <h6>{{ _('Items / الأصناف') }} ({{ draft.items|length }})</h6>
+          {% for item in draft.items %}
+          <div class="item-row">
+            <div class="d-flex justify-content-between">
+              <div class="flex-grow-1">
+                <div class="fw-medium">{{ item.product_name }}</div>
+                <small class="text-muted">{{ '%.2f'|format(item.price_before_tax) }} × {{ '%.0f'|format(item.quantity) }}</small>
+              </div>
+              <div class="text-end">
+                <div class="fw-medium">{{ '%.2f'|format(item.total_price) }}</div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        
+        <hr>
+        
+        <div class="mb-3">
+          {% set subtotal = draft.items | sum(attribute='price_before_tax') %}
+          {% set tax_total = draft.items | sum(attribute='tax') %}
+          
+          <div class="d-flex justify-content-between">
+            <span>{{ _('Subtotal / المجموع الفرعي') }}</span>
+            <span>{{ '%.2f'|format(subtotal) }}</span>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span>{{ _('Tax / الضريبة') }}</span>
+            <span>{{ '%.2f'|format(tax_total) }}</span>
+          </div>
+        </div>
+        
+        <hr>
+        
+        <div class="d-flex justify-content-between fs-5 fw-bold">
+          <span>{{ _('Total / الإجمالي') }}</span>
+          <span>{{ '%.2f'|format(total_amount) }} {{ _('SAR') }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

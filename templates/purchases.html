@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% set back_url = url_for('inventory') %}
+
 {% block title %}{{ _('Purchases / المشتريات') }}{% endblock %}
 {% block content %}
 
@@ -58,15 +60,17 @@ body {
     <!-- نموذج إنشاء فاتورة شراء جديدة -->
     <div class="purchases-card">
         <h5 class="mb-3">{{ _('Create New Purchase Invoice / إنشاء فاتورة شراء جديدة') }}</h5>
-        
+
         <div class="alert alert-info">
             <strong>💡 {{ _('Note / ملاحظة') }}:</strong>
             {{ _('Purchase invoices will automatically update raw material stock quantities and costs / فواتير الشراء ستحدث كميات وتكاليف المواد الخام تلقائياً') }}
         </div>
-        
+
         <form method="POST" id="purchase-form">
             {{ form.hidden_tag() }}
-            
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+
             <!-- معلومات الفاتورة الأساسية -->
             <div class="row mb-3">
                 <div class="col-md-3">
@@ -155,7 +159,7 @@ body {
     {% if invoices %}
     <div class="purchases-card">
         <h5 class="mb-3">{{ _('Previous Purchase Invoices / فواتير الشراء السابقة') }}</h5>
-        
+
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead class="table-dark">
@@ -224,43 +228,44 @@ body {
 <script>
     // Materials data for calculations and stock info
     const materials = {{ materials_json | safe }};
-    
+
     // SocketIO for real-time updates
     var socket = io();
     socket.on('purchase_update', function(data) {
         console.log('Purchase updated:', data);
-        alert('New purchase invoice created: ' + data.invoice_number + ' - $' + data.total);
-        location.reload();
+        showAlert('New purchase invoice created: ' + data.invoice_number + ' - $' + data.total).then(() => {
+            location.reload();
+        });
     });
 
     // Auto-calculation functionality
     function calculateTotals() {
         let totalBeforeTax = 0;
         let totalDiscount = 0;
-        
+
         document.querySelectorAll('.item-row').forEach(row => {
             const materialSelect = row.querySelector('select[name$="-raw_material_id"]');
             const quantityInput = row.querySelector('input[name$="-quantity"]');
             const priceInput = row.querySelector('input[name$="-price_before_tax"]');
             const discountInput = row.querySelector('input[name$="-discount"]');
             const totalDisplay = row.querySelector('.item-total');
-            
+
             const quantity = parseFloat(quantityInput.value) || 0;
             const price = parseFloat(priceInput.value) || 0;
             const discount = parseFloat(discountInput.value) || 0;
-            
+
             const itemBeforeTax = quantity * price;
             const itemTax = itemBeforeTax * 0.15;
             const itemTotal = itemBeforeTax + itemTax - discount;
-            
+
             totalDisplay.textContent = '$' + itemTotal.toFixed(2);
             totalBeforeTax += itemBeforeTax;
             totalDiscount += discount;
         });
-        
+
         const totalTax = totalBeforeTax * 0.15;
         const finalTotal = totalBeforeTax + totalTax - totalDiscount;
-        
+
         document.getElementById('total-before-tax').textContent = '$' + totalBeforeTax.toFixed(2);
         document.getElementById('tax-amount').textContent = '$' + totalTax.toFixed(2);
         document.getElementById('total-discount').textContent = '$' + totalDiscount.toFixed(2);
@@ -271,7 +276,7 @@ body {
     function updateStockInfo(selectElement) {
         const materialId = parseInt(selectElement.value);
         const stockInfoDiv = selectElement.parentElement.querySelector('.stock-info');
-        
+
         const material = materials.find(m => m.id === materialId);
         if (material) {
             stockInfoDiv.textContent = `Current stock: ${material.stock_quantity} ${material.unit} | Cost: $${material.cost_per_unit}/unit`;
@@ -292,7 +297,7 @@ body {
 
     // Add new item functionality
     let itemIndex = {{ form.items|length }};
-    
+
     document.getElementById('add-item').addEventListener('click', function() {
         const container = document.getElementById('items-container');
         const newItem = document.createElement('div');

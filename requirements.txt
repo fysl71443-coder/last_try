@@ -17,3 +17,6 @@ eventlet==0.36.1
 # Arabic text shaping for PDF
 arabic-reshaper>=3.0.0
 python-bidi>=0.4.2
+
+# Optional: QR code image generation for ZATCA TLV on receipts
+qrcode[pil]>=7.4.2

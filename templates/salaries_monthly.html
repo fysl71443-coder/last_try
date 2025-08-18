@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% set back_url = url_for('salaries') %}
+
 {% set back_url = url_for('employees') %}
 
 {% block title %}{{ _('Monthly Salaries / رواتب شهرية') }}{% endblock %}
@@ -29,7 +31,7 @@
   </form>
 
   <form method="POST" action="{{ url_for('salaries_monthly_save') }}">
-    {{ csrf_token() if csrf_token is defined else '' }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <input type="hidden" name="year" value="{{ year }}">
     <input type="hidden" name="month" value="{{ month }}">
 
@@ -90,6 +92,9 @@ function sendSalaryPayment(id, amount){
   form.append('invoice_type', 'salary');
   form.append('amount', amount);
   const csrf = document.querySelector('input[name="csrf_token"]');
+  const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+  if(tokenMeta){ form.append('csrf_token', tokenMeta.content); }
+
   if (csrf) form.append('csrf_token', csrf.value);
   fetch('{{ url_for('register_payment_ajax') }}', { method:'POST', body: form, credentials:'same-origin' })
     .then(r=>r.json()).then(d=>{ if(d.status==='success') location.reload(); else alert('Error'); })
