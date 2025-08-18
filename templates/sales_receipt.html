@@ -51,6 +51,8 @@
       <div>{{ _('Invoice') }}: {{ invoice.invoice_number }}</div>
       <div>{{ _('Date/Time') }}: {{ (invoice.created_at.strftime('%Y-%m-%d %H:%M') if invoice.created_at else invoice.date|string) }}</div>
       <div>{{ _('Branch') }}: {{ invoice.branch }}</div>
+      <div>{{ _('Payment') }}: {{ invoice.payment_method }}</div>
+
       <div>{{ _('Customer') }}: {{ invoice.customer_name or '-' }}</div>
       {% if invoice.customer_phone %}<div>{{ _('Phone') }}: {{ invoice.customer_phone }}</div>{% endif %}
     </div>
