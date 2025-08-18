@@ -1,6 +1,22 @@
-from app import app, db, bcrypt
-from models import User, Invoice, SalesInvoice, SalesInvoiceItem, Product, RawMaterial, Meal, MealIngredient, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Payment, Account, LedgerEntry
+#!/usr/bin/env python3
+"""
+Create User Script
+==================
+Script to create admin users for the restaurant system.
+"""
+
+import os
+import sys
+from getpass import getpass
+
+# Set environment to avoid eventlet issues
+os.environ.setdefault('USE_EVENTLET', '0')
+
+from app import create_app
+from extensions import db, bcrypt
+from models import User, Settings
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+
 # Optional models added by POS features
 try:
     from models import MenuCategory, Customer
@@ -17,6 +33,9 @@ def safe_commit(tag=''):
 
 
 def create_admin_user():
+    """Create an admin user with the new app factory pattern"""
+    app = create_app()
+
     with app.app_context():
         # Create tables (ensure all models are imported before this call)
         try:

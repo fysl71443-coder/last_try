@@ -6,11 +6,12 @@ import os
 
 # Set environment variable to avoid eventlet issues in production
 os.environ.setdefault('USE_EVENTLET', '0')
+os.environ.setdefault('FLASK_ENV', 'production')
 
 from app import create_app
 
 # Create the application instance
-application = create_app()
+application = create_app('production')
 
 if __name__ == "__main__":
     application.run()

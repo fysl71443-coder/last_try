@@ -15,65 +15,42 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 load_dotenv()
 
-# 3️⃣ Flask & extensions (without eventlet/socketio)
+# 3️⃣ Flask & extensions
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, make_response, current_app
-from extensions import db
-
-from flask_migrate import Migrate
-from flask_login import LoginManager, login_user, login_required, logout_user, current_user
-from flask_bcrypt import Bcrypt
-from flask_babel import Babel, gettext as _
-from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_login import login_user, login_required, logout_user, current_user
+from flask_babel import gettext as _
+from flask_wtf.csrf import CSRFError
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+# Import extensions
+from extensions import db, bcrypt, migrate, login_manager, babel, csrf
+from config import config
 
 # =========================
 # Flask App Factory
 # =========================
-def create_app():
+def create_app(config_name=None):
     """Create and configure the Flask application"""
     app = Flask(__name__)
 
-    # Secret key
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key')
+    # Load configuration
+    config_name = config_name or os.getenv('FLASK_ENV', 'default')
+    app.config.from_object(config[config_name])
+    # Initialize extensions
+    db.init_app(app)
+    bcrypt.init_app(app)
+    migrate.init_app(app, db)
+    login_manager.init_app(app)
+    babel.init_app(app)
+    csrf.init_app(app)
 
-    # Instance folder for SQLite (fallback)
-    basedir = os.path.abspath(os.path.dirname(__file__))
-    instance_dir = os.path.join(basedir, 'instance')
-    os.makedirs(instance_dir, exist_ok=True)
-
-    # Default DB: SQLite
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
-
-    # Override with production DB if available
-    _db_url = os.getenv('DATABASE_URL')
-    if _db_url:
-        if _db_url.startswith('postgres://'):
-            _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
-        app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
-
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-    # Babel / i18n
-    app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
-    @app.errorhandler(500)
-    def handle_internal_error(e):
-        try:
-            if request.path.startswith('/api/'):
-                return jsonify({'ok': False, 'error': 'Internal server error'}), 500
-        except Exception:
-            pass
-        return e
-
-    # CSRF protection
-    global csrf
-    csrf = CSRFProtect(app)
+    # Configure login manager
+    login_manager.login_view = 'login'
 
     # Proxy fix (Render)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-    # API-friendly error handlers
-    from flask import jsonify, request
-
+    # Error handlers
     @app.errorhandler(CSRFError)
     def handle_csrf_error(e):
         try:
@@ -91,12 +68,6 @@ def create_app():
         except Exception:
             pass
         return e
-
-    # Initialize other extensions (without socketio)
-    db.init_app(app)
-    migrate = Migrate(app, db)
-    login_manager = LoginManager(app)
-    bcrypt = Bcrypt(app)
 
     # Production-safe runtime schema patcher (avoid heavy migrations on legacy DB)
     try:
@@ -180,9 +151,6 @@ def create_app():
     except Exception as _patch_err:
         logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
 
-    # Login manager configuration
-    login_manager.login_view = 'login'
-
     # Basic error logging to file (errors only)
     logging.basicConfig(filename='app.log', level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -206,11 +174,9 @@ login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
 # Global socketio instance (will be initialized when running the server)
 socketio = None
 
-# Global CSRF instance
-csrf = None
-
 def csrf_exempt(f):
     """Decorator that exempts a route from CSRF protection if CSRF is available"""
+    from extensions import csrf
     if csrf:
         return csrf.exempt(f)
     return f
@@ -238,8 +204,6 @@ def get_locale():
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
 
 # Configure babel locale selector after app creation
-from flask_babel import Babel
-babel = Babel()
 babel.init_app(app, locale_selector=get_locale)
 @app.context_processor
 def inject_settings():
