@@ -2453,71 +2453,71 @@ def reports():
                 .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
             total_sales = float(sales_place) + float(sales_china)
 
-    # Purchases and Expenses
-    total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-        .filter(PurchaseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
-    total_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
-        .filter(ExpenseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        # Purchases and Expenses
+        total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
+            .filter(PurchaseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        total_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
+            .filter(ExpenseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
 
-    # Salaries within period: compute by month-year mapping to 1st day of month
-    salaries_rows = Salary.query.all()
-    total_salaries = 0.0
-    for s in salaries_rows:
-        try:
-            s_date = datetime(s.year, s.month, 1).date()
-            if start_dt <= s_date <= end_dt:
-                total_salaries += float(s.total_salary or 0)
-        except Exception:
-            continue
+        # Salaries within period: compute by month-year mapping to 1st day of month
+        salaries_rows = Salary.query.all()
+        total_salaries = 0.0
+        for s in salaries_rows:
+            try:
+                s_date = datetime(s.year, s.month, 1).date()
+                if start_dt <= s_date <= end_dt:
+                    total_salaries += float(s.total_salary or 0)
+            except Exception:
+                continue
 
-    profit = float(total_sales) - (float(total_purchases) + float(total_expenses) + float(total_salaries))
+        profit = float(total_sales) - (float(total_purchases) + float(total_expenses) + float(total_salaries))
 
-    # Line chart: daily sales
-    daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-        .group_by(SalesInvoice.date) \
-        .order_by(SalesInvoice.date.asc()).all()
-    line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
-    line_values = [float(r.t or 0) for r in daily_rows]
+        # Line chart: daily sales
+        daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+            .group_by(SalesInvoice.date) \
+            .order_by(SalesInvoice.date.asc()).all()
+        line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
+        line_values = [float(r.t or 0) for r in daily_rows]
 
-    # Payment method distribution across invoices
-    def pm_counts(model, date_col, method_col):
-        rows = db.session.query(getattr(model, method_col), func.count('*')) \
-            .filter(getattr(model, date_col).between(start_dt, end_dt)) \
-            .group_by(getattr(model, method_col)).all()
-        return { (k or 'unknown'): int(v) for k, v in rows }
+        # Payment method distribution across invoices
+        def pm_counts(model, date_col, method_col):
+            rows = db.session.query(getattr(model, method_col), func.count('*')) \
+                .filter(getattr(model, date_col).between(start_dt, end_dt)) \
+                .group_by(getattr(model, method_col)).all()
+            return { (k or 'unknown'): int(v) for k, v in rows }
 
-    pm_map = {}
-    for d in (pm_counts(SalesInvoice, 'date', 'payment_method'),
-              pm_counts(PurchaseInvoice, 'date', 'payment_method'),
-              pm_counts(ExpenseInvoice, 'date', 'payment_method')):
-        for k, v in d.items():
-            pm_map[k] = pm_map.get(k, 0) + v
-    pm_labels = list(pm_map.keys())
-    pm_values = [pm_map[k] for k in pm_labels]
+        pm_map = {}
+        for d in (pm_counts(SalesInvoice, 'date', 'payment_method'),
+                  pm_counts(PurchaseInvoice, 'date', 'payment_method'),
+                  pm_counts(ExpenseInvoice, 'date', 'payment_method')):
+            for k, v in d.items():
+                pm_map[k] = pm_map.get(k, 0) + v
+        pm_labels = list(pm_map.keys())
+        pm_values = [pm_map[k] for k in pm_labels]
 
-    # Comparison bars: totals
-    comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
-    comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
+        # Comparison bars: totals
+        comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
+        comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
 
-    # Cash flows from Payments table
-    start_dt_dt = datetime.combine(start_dt, datetime.min.time())
-    end_dt_dt = datetime.combine(end_dt, datetime.max.time())
-    inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-        Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
-    ).scalar() or 0)
-    outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-        Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
-    ).scalar() or 0)
-    net_cash = inflow - outflow
+        # Cash flows from Payments table
+        start_dt_dt = datetime.combine(start_dt, datetime.min.time())
+        end_dt_dt = datetime.combine(end_dt, datetime.max.time())
+        inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+            Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
+        ).scalar() or 0)
+        outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+            Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
+        ).scalar() or 0)
+        net_cash = inflow - outflow
 
-    # Top products by quantity
-    top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
-        .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-        .group_by(SalesInvoiceItem.product_name) \
-        .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
-        .limit(10).all()
+        # Top products by quantity
+        top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
+            .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+            .group_by(SalesInvoiceItem.product_name) \
+            .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
+            .limit(10).all()
         top_labels = [r[0] for r in top_rows]
 
         # Settings for labels/currency
