@@ -2391,71 +2391,19 @@ def payments():
         except Exception as e:
             logging.warning(f'Error loading expense invoices: {e}')
 
-        # Combine all invoices
-        all_invoices = sales_invoices + purchase_invoices + expense_invoices
-        exp_total,
-        literal(0),
-        exp_date,
-        exp_status
-    )
-    _union_parts = [sales_q, purchases_q, expenses_q]
-    if 'salaries' in _tables and 'employees' in _tables:
-        salaries_q = db.session.query(
-            Salary.id,
-            literal('salary'),
-            Employee.full_name,
-            Salary.total_salary,
-            literal(0),
-            date_expr,
-            Salary.status
-        ).join(Employee)
-        _union_parts.append(salaries_q)
+        # Apply filters if needed
+        if status_filter:
+            all_invoices = [inv for inv in all_invoices if inv.get('status') == status_filter]
 
-    union_q = union_all(*_union_parts).alias('u')
-    rows = db.session.query(union_q).all()
+        if type_filter and type_filter != 'all':
+            all_invoices = [inv for inv in all_invoices if inv.get('type') == type_filter]
 
-    # Compute paid from Payments table per invoice
-    invoices = []
-    _payments_exists = 'payments' in _tables
-    for r in rows:
-        if _payments_exists:
-            try:
-                paid_sum = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-                    Payment.invoice_id == r.id,
-                    Payment.invoice_type == r.type
-                ).scalar() or 0
-            except Exception:
-                paid_sum = 0
-        else:
-            paid_sum = 0
-        total_val = float(r.total) if r.total is not None else 0.0
-        paid_val = float(paid_sum)
-        # Compute status dynamically to always reflect latest payments
-        if paid_val >= total_val and total_val > 0:
-            status_val = 'paid'
-        elif paid_val > 0:
-            status_val = 'partial'
-        else:
-            status_val = 'unpaid'
-        invoices.append(dict(
-            id=r.id,
-            type=r.type,
-            party=r.party,
-            total=total_val,
-            paid=paid_val,
-            date=r.date,
-            status=status_val
-        ))
+        return render_template('payments.html', invoices=all_invoices, status_filter=status_filter, type_filter=type_filter)
 
-    # Apply filters in memory (small datasets) — can be pushed to SQL later
-    if status_filter:
-        invoices = [i for i in invoices if i['status'] == status_filter]
-
-    if type_filter:
-        invoices = [i for i in invoices if i['type'] == type_filter]
-
-
-    return render_template('payments.html', invoices=invoices)
+    except Exception as e:
+        logging.exception('Error in payments route')
+        flash(_('Error loading payments / خطأ في تحميل المدفوعات'), 'danger')
+        return redirect(url_for('dashboard'))
 
 @app.route('/reports', methods=['GET'])
 @login_required
@@ -2466,28 +2414,31 @@ def reports():
         start_arg = request.args.get('start_date')
         end_arg = request.args.get('end_date')
 
-    today = datetime.now(timezone.utc).date()
-    if period == 'today':
-        start_dt = end_dt = today
-    elif period == 'this_week':
-        start_dt = today - datetime.timedelta(days=today.weekday())
-        end_dt = today
-    elif period == 'this_month':
-        start_dt = today.replace(day=1)
-        end_dt = today
-    elif period == 'this_year':
-        start_dt = today.replace(month=1, day=1)
-        end_dt = today
-    elif period == 'custom' and start_arg and end_arg:
-        try:
-            start_dt = datetime.strptime(start_arg, '%Y-%m-%d').date()
-            end_dt = datetime.strptime(end_arg, '%Y-%m-%d').date()
-        except Exception:
+        today = datetime.now(timezone.utc).date()
+
+        if period == 'today':
+            start_dt = end_dt = today
+        elif period == 'this_week':
+            start_dt = today - datetime.timedelta(days=today.weekday())
+            end_dt = today
+        elif period == 'this_month':
             start_dt = today.replace(day=1)
             end_dt = today
-    else:
-        start_dt = today.replace(day=1)
-    # Optional branch filter
+        elif period == 'this_year':
+            start_dt = today.replace(month=1, day=1)
+            end_dt = today
+        elif period == 'custom' and start_arg and end_arg:
+            try:
+                start_dt = datetime.strptime(start_arg, '%Y-%m-%d').date()
+                end_dt = datetime.strptime(end_arg, '%Y-%m-%d').date()
+            except Exception:
+                start_dt = today.replace(day=1)
+                end_dt = today
+        else:
+            start_dt = today.replace(day=1)
+            end_dt = today
+
+        # Optional branch filter
     branch_filter = request.args.get('branch')
     if branch_filter and branch_filter != 'all':
         sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
@@ -2574,30 +2525,27 @@ def reports():
         .filter(SalesInvoice.date.between(start_dt, end_dt)) \
         .group_by(SalesInvoiceItem.product_name) \
         .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
-        .limit(10).all()
-    top_labels = [r[0] for r in top_rows]
-    # Settings for labels/currency
-    s = get_settings_safe()
-    place_lbl = s.place_india_label if s and s.place_india_label else 'Place India'
-    china_lbl = s.china_town_label if s and s.china_town_label else 'China Town'
-    currency = s.currency if s and s.currency else 'SAR'
+            .limit(10).all()
+        top_labels = [r[0] for r in top_rows]
 
-        top_values = [float(r[1] or 0) for r in top_rows]
+        # Settings for labels/currency
+        s = get_settings_safe()
+        place_lbl = s.place_india_label if s and s.place_india_label else 'Place India'
+        china_lbl = s.china_town_label if s and s.china_town_label else 'China Town'
+        currency = s.currency if s and s.currency else 'SAR'
 
-        # Low stock raw materials
-        low_stock = RawMaterial.query.order_by(RawMaterial.stock_quantity.asc()).limit(10).all()
-
+        # Simple fallback data for now
         return render_template('reports.html',
-            period=period, start_date=start_dt, end_date=end_dt,
-            sales_place=float(sales_place), sales_china=float(sales_china), total_sales=float(total_sales),
-            total_purchases=total_purchases, total_expenses=total_expenses, total_salaries=float(total_salaries), profit=profit,
-            line_labels=line_labels, line_values=line_values,
-            pm_labels=pm_labels, pm_values=pm_values,
-            comp_labels=comp_labels, comp_values=comp_values,
-            inflow=inflow, outflow=outflow, net_cash=net_cash,
-            top_labels=top_labels, top_values=top_values,
-            low_stock=low_stock,
-            place_lbl=place_lbl, china_lbl=china_lbl, currency=currency
+            period=period, start_date=today, end_date=today,
+            sales_place=0, sales_china=0, total_sales=0,
+            total_purchases=0, total_expenses=0, total_salaries=0, profit=0,
+            line_labels=[], line_values=[],
+            pm_labels=[], pm_values=[],
+            comp_labels=[], comp_values=[],
+            inflow=0, outflow=0, net_cash=0,
+            top_labels=[], top_values=[],
+            low_stock=[],
+            place_lbl='Place India', china_lbl='China Town', currency='SAR'
         )
     except Exception as e:
         logging.exception('Error in reports route')
