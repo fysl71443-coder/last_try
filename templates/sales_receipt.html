@@ -51,6 +51,7 @@
       <div>{{ _('Invoice') }}: {{ invoice.invoice_number }}</div>
       <div>{{ _('Date/Time') }}: {{ (invoice.created_at.astimezone().strftime('%Y-%m-%d %H:%M') if invoice.created_at else invoice.date|string) }}</div>
       <div>{{ _('Branch') }}: {{ invoice.branch }}</div>
+      {% if invoice.table_no %}<div>{{ _('Table') }}: {{ invoice.table_no }}</div>{% endif %}
       <div>{{ _('Payment') }}: {{ invoice.payment_method }}</div>
 
       <div>{{ _('Customer') }}: {{ invoice.customer_name or '-' }}</div>
@@ -58,6 +59,32 @@
     </div>
     <hr>
 
+    <!-- Adaptive layout based on number of items -->
+    {% set item_count = items|length %}
+    {% if item_count <= 2 %}
+    <!-- Detailed layout for 1-2 items -->
+    <table>
+      <thead>
+        <tr>
+          <th>{{ _('Item') }}</th>
+          <th class="right">{{ _('Price') }}</th>
+          <th class="right">{{ _('Qty') }}</th>
+          <th class="right">{{ _('Total') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td>{{ it.product_name }}</td>
+          <td class="right">{{ '%.2f'|format(it.price_before_tax) }}</td>
+          <td class="right">{{ '%.0f'|format(it.quantity) }}</td>
+          <td class="right">{{ '%.2f'|format(it.total_price) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <!-- Compact layout for 3+ items -->
     <table>
       <thead>
         <tr>
@@ -76,6 +103,7 @@
         {% endfor %}
       </tbody>
     </table>
+    {% endif %}
     <hr>
     <div class="small right">{{ _('Subtotal') }}: {{ '%.2f'|format(invoice.total_before_tax) }}</div>
     <div class="small right">{{ _('Tax') }}: {{ '%.2f'|format(invoice.tax_amount) }}</div>

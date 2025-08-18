@@ -58,6 +58,9 @@ body {
             <h3 class="mb-0">🍽️ {{ _('Meals Management / إدارة الوجبات') }}</h3>
         </div>
         <div class="col-md-6 text-end">
+            <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#importModal">
+                📥 {{ _('Import Meals / استيراد الوجبات') }}
+            </button>
             <a href="{{ url_for('raw_materials') }}" class="btn btn-outline-success me-2">
                 🥘 {{ _('Raw Materials / المواد الخام') }}
             </a>
@@ -340,5 +343,35 @@ body {
         calculateCosts();
     });
 </script>
+
+<!-- Import Meals Modal -->
+<div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('import_meals') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ _('Import Meals / استيراد الوجبات') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">{{ _('Select File / اختر الملف') }}</label>
+                        <input type="file" name="file" class="form-control" accept=".xlsx,.xls,.csv" required>
+                        <div class="form-text">{{ _('Supported formats: Excel (.xlsx, .xls), CSV / الصيغ المدعومة: إكسل، CSV') }}</div>
+                    </div>
+                    <div class="alert alert-info">
+                        <strong>{{ _('File Format / تنسيق الملف') }}:</strong><br>
+                        {{ _('Columns should be: Name, Name (Arabic), Category, Cost, Selling Price / الأعمدة يجب أن تكون: الاسم، الاسم بالعربية، الفئة، التكلفة، سعر البيع') }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel / إلغاء') }}</button>
+                    <button type="submit" class="btn btn-success">{{ _('Import / استيراد') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 {% endblock %}

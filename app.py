@@ -602,8 +602,24 @@ def sales_tables(branch_code):
     if not is_valid_branch(branch_code):
         flash(_('Unknown branch / فرع غير معروف'), 'danger')
         return redirect(url_for('sales'))
-    tables = list(range(1, 51))
-    return render_template('sales_tables.html', branch_code=branch_code, branch_label=BRANCH_CODES[branch_code], tables=tables)
+
+    # Get table statuses from database
+    from models import Table
+    table_statuses = {}
+    existing_tables = Table.query.filter_by(branch_code=branch_code).all()
+    for table in existing_tables:
+        table_statuses[table.table_number] = table.status
+
+    # Generate table list with status
+    tables_data = []
+    for n in range(1, 51):
+        status = table_statuses.get(n, 'available')
+        tables_data.append({'number': n, 'status': status})
+
+    return render_template('sales_tables.html',
+                         branch_code=branch_code,
+                         branch_label=BRANCH_CODES[branch_code],
+                         tables=tables_data)
 
 # Table invoice screen (split UI)
 @app.route('/sales/<branch_code>/table/<int:table_no>', methods=['GET'])
@@ -1094,6 +1110,7 @@ def api_sales_checkout():
             date=_now.date(),
             payment_method=payment_method,
             branch=branch_code,
+            table_no=table_no,
             customer_name=customer_name,
             customer_phone=customer_phone,
             total_before_tax=subtotal,
@@ -1107,6 +1124,18 @@ def api_sales_checkout():
         try:
             db.session.add(inv)
             db.session.flush()
+
+            # Update table status to occupied when order is created
+            from models import Table
+            table = Table.query.filter_by(branch_code=branch_code, table_number=table_no).first()
+            if not table:
+                table = Table(branch_code=branch_code, table_number=table_no, status='occupied', current_order_id=inv.id)
+                db.session.add(table)
+            else:
+                table.status = 'occupied'
+                table.current_order_id = inv.id
+                table.updated_at = _now
+
         except Exception as e:
             db.session.rollback()
             logging.exception('checkout flush failed')
@@ -1369,83 +1398,88 @@ def expenses():
                 item_before_tax = price * qty
                 discount = (item_before_tax + tax) * (discount_pct/100.0)
                 total_item = item_before_tax + tax - discount
+@app.route('/import_meals', methods=['POST'])
+@login_required
+def import_meals():
+    try:
+        if 'file' not in request.files:
+            flash(_('No file selected / لم يتم اختيار ملف'), 'danger')
+            return redirect(url_for('meals'))
 
-                # Add to invoice totals
-                total_before_tax += item_before_tax
-                total_tax += tax
-                total_discount += discount
+        file = request.files['file']
+        if file.filename == '':
+            flash(_('No file selected / لم يتم اختيار ملف'), 'danger')
+            return redirect(url_for('meals'))
 
-                # Create invoice item
-                inv_item = ExpenseInvoiceItem(
-                    invoice_id=invoice.id,
-                    description=item_form.form.description.data,
-                    quantity=qty,
-                    price_before_tax=price,
-                    tax=tax,
-                    discount=discount,
-                    total_price=total_item
+        if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+            flash(_('Invalid file format / صيغة ملف غير صالحة'), 'danger')
+            return redirect(url_for('meals'))
+
+        # Read file using pandas
+        try:
+            import pandas as pd
+            if file.filename.lower().endswith('.csv'):
+                df = pd.read_csv(file)
+            else:
+                df = pd.read_excel(file)
+        except ImportError:
+            flash(_('pandas library not installed / مكتبة pandas غير مثبتة'), 'danger')
+            return redirect(url_for('meals'))
+        except Exception as e:
+            flash(_('Error reading file / خطأ في قراءة الملف: %(error)s', error=str(e)), 'danger')
+            return redirect(url_for('meals'))
+
+        # Expected columns: Name, Name (Arabic), Category, Cost, Selling Price
+        expected_cols = ['Name', 'Name (Arabic)', 'Category', 'Cost', 'Selling Price']
+        if not all(col in df.columns for col in expected_cols):
+            flash(_('Invalid file format. Expected columns: %(cols)s / تنسيق ملف غير صالح. الأعمدة المطلوبة: %(cols)s',
+                   cols=', '.join(expected_cols)), 'danger')
+            return redirect(url_for('meals'))
+
+        # Import meals
+        imported_count = 0
+        from models import Meal
+
+        for _, row in df.iterrows():
+            try:
+                name = str(row['Name']).strip()
+                name_ar = str(row['Name (Arabic)']).strip() if pd.notna(row['Name (Arabic)']) else ''
+                category = str(row['Category']).strip() if pd.notna(row['Category']) else 'General'
+                cost = float(row['Cost']) if pd.notna(row['Cost']) else 0.0
+                selling_price = float(row['Selling Price']) if pd.notna(row['Selling Price']) else 0.0
+
+                if not name:
+                    continue
+
+                # Check if meal already exists
+                existing = Meal.query.filter_by(name=name).first()
+                if existing:
+                    continue  # Skip duplicates
+
+                meal = Meal(
+                    name=name,
+                    name_ar=name_ar,
+                    category=category,
+                    cost=cost,
+                    selling_price=selling_price,
+                    profit_margin_percent=((selling_price - cost) / cost * 100) if cost > 0 else 0
                 )
-                db.session.add(inv_item)
+                db.session.add(meal)
+                imported_count += 1
 
-        # Update invoice totals
-        total_after_tax_discount = total_before_tax + total_tax - total_discount
-        invoice.total_before_tax = total_before_tax
-        invoice.tax_amount = total_tax
-        invoice.discount_amount = total_discount
-        invoice.total_after_tax_discount = total_after_tax_discount
+            except Exception as e:
+                logging.warning(f'Error importing meal row: {e}')
+                continue
 
         db.session.commit()
-        # Post to ledger (Expense, VAT Input, Cash/AP)
-        try:
-            def get_or_create(code, name, type_):
-                acc = Account.query.filter_by(code=code).first()
-                if not acc:
-                    acc = Account(code=code, name=name, type=type_)
-                    db.session.add(acc); db.session.flush()
-                return acc
-            exp_acc = get_or_create('6000', 'Operating Expenses', 'EXPENSE')
-            vat_in_acc = get_or_create('1300', 'VAT Input', 'ASSET')
-            cash_acc = get_or_create('1000', 'Cash', 'ASSET')
-            ap_acc = get_or_create('2000', 'Accounts Payable', 'LIABILITY')
+        flash(_('Successfully imported %(count)s meals / تم استيراد %(count)s وجبة بنجاح', count=imported_count), 'success')
 
-            settle_cash_like = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC','cash','mada','visa','mastercard','bank','aks','gcc']
-            settle_acc = cash_acc if (invoice.payment_method in settle_cash_like) else ap_acc
-            db.session.add(LedgerEntry(date=invoice.date, account_id=exp_acc.id, debit=invoice.total_before_tax, credit=0, description=f'Expense {invoice.invoice_number}'))
-            db.session.add(LedgerEntry(date=invoice.date, account_id=vat_in_acc.id, debit=invoice.tax_amount, credit=0, description=f'VAT Input {invoice.invoice_number}'))
-            db.session.add(LedgerEntry(date=invoice.date, account_id=settle_acc.id, debit=0, credit=invoice.total_after_tax_discount, description=f'Settlement {invoice.invoice_number}'))
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logging.error('Ledger posting (expense) failed: %s', e, exc_info=True)
+    except Exception as e:
+        db.session.rollback()
+        logging.exception('Import meals failed')
+        flash(_('Import failed / فشل الاستيراد: %(error)s', error=str(e)), 'danger')
 
-
-        # Emit real-time update
-        socketio.emit('expense_update', {
-            'invoice_number': invoice_number,
-            'total': float(total_after_tax_discount)
-        })
-
-        flash(_('Expense invoice created successfully / تم إنشاء فاتورة المصروفات بنجاح'), 'success')
-        return redirect(url_for('expenses'))
-
-    # If POST but validation failed, show error hints
-    if request.method == 'POST' and not form.validate():
-        try:
-            for fname, errs in (form.errors or {}).items():
-                if not errs: continue
-                flash(f"{fname}: {', '.join([str(e) for e in errs])}", 'danger')
-        except Exception:
-            pass
-
-    # Set default date for new form
-    if request.method == 'GET':
-        form.date.data = datetime.now(timezone.utc).date()
-
-    # Pagination for expense invoices
-    page = int(request.args.get('page') or 1)
-    per_page = min(100, int(request.args.get('per_page') or 25))
-    pag = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).paginate(page=page, per_page=per_page, error_out=False)
-    return render_template('expenses.html', form=form, invoices=pag.items, pagination=pag)
+    return redirect(url_for('meals'))
 
 @app.route('/invoices')
 @login_required

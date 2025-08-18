@@ -58,6 +58,7 @@ class SalesInvoice(db.Model):
     date = db.Column(db.Date, default=datetime.utcnow)
     payment_method = db.Column(db.String(20), nullable=False)
     branch = db.Column(db.String(50), nullable=False)  # 'place_india' or 'china_town'
+    table_no = db.Column(db.Integer, nullable=True)  # Table number
     customer_name = db.Column(db.String(100), nullable=True)
     customer_phone = db.Column(db.String(30), nullable=True)
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
@@ -315,6 +316,21 @@ class Payment(db.Model):
     def __repr__(self):
         return f'<Payment {self.invoice_type} #{self.invoice_id} amount={self.amount_paid}>'
 
+
+class Table(db.Model):
+    __tablename__ = 'tables'
+    id = db.Column(db.Integer, primary_key=True)
+    branch_code = db.Column(db.String(20), nullable=False)  # place_india, china_town
+    table_number = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(20), default='available')  # available, occupied, reserved
+    current_order_id = db.Column(db.Integer, nullable=True)  # Reference to current active order
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('branch_code', 'table_number', name='unique_branch_table'),)
+
+    def __repr__(self):
+        return f'<Table {self.branch_code}-{self.table_number} ({self.status})>'
 
 class Settings(db.Model):
     __tablename__ = 'settings'
