@@ -12,6 +12,7 @@ import sys
 import logging
 import json
 import traceback
+import time
 from datetime import datetime, timedelta, timezone
 
 # 3️⃣ Load environment variables
@@ -2625,7 +2626,38 @@ def settings():
             s.receipt_extra_bottom_mm = int(request.form.get('receipt_extra_bottom_mm') or (s.receipt_extra_bottom_mm or 15))
         except Exception:
             pass
-        s.logo_url = (request.form.get('logo_url') or s.logo_url or '/static/chinese-logo.svg')
+        # Handle logo upload
+        if 'logo_file' in request.files and request.files['logo_file'].filename:
+            logo_file = request.files['logo_file']
+            if logo_file and logo_file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg')):
+                try:
+                    import os
+                    from werkzeug.utils import secure_filename
+
+                    # Create uploads directory if it doesn't exist
+                    upload_dir = os.path.join(app.static_folder, 'uploads')
+                    os.makedirs(upload_dir, exist_ok=True)
+
+                    # Generate unique filename
+                    filename = secure_filename(logo_file.filename)
+                    timestamp = str(int(time.time()))
+                    name, ext = os.path.splitext(filename)
+                    unique_filename = f"logo_{timestamp}{ext}"
+
+                    # Save file
+                    file_path = os.path.join(upload_dir, unique_filename)
+                    logo_file.save(file_path)
+
+                    # Update logo URL to point to uploaded file
+                    s.logo_url = f'/static/uploads/{unique_filename}'
+                    flash(_('Logo uploaded successfully / تم رفع الشعار بنجاح'), 'success')
+
+                except Exception as e:
+                    flash(_('Failed to upload logo / فشل رفع الشعار: %(error)s', error=str(e)), 'danger')
+        else:
+            # Use URL if no file uploaded
+            s.logo_url = (request.form.get('logo_url') or s.logo_url or '/static/chinese-logo.svg')
+
         s.receipt_show_logo = bool(request.form.get('receipt_show_logo'))
         s.receipt_show_tax_number = bool(request.form.get('receipt_show_tax_number'))
         s.receipt_footer_text = (request.form.get('receipt_footer_text') or s.receipt_footer_text or '')

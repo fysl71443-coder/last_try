@@ -5,7 +5,7 @@
 {% block content %}
 <div class="container py-4">
   <h3>الإعدادات العامة</h3>
-  <form method="post" class="row g-3">
+  <form method="post" enctype="multipart/form-data" class="row g-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <div class="col-md-6">
       <label class="form-label">اسم الشركة</label>
@@ -66,8 +66,21 @@
       <input type="number" name="receipt_font_size" class="form-control" value="{{ s.receipt_font_size or 12 }}">
     </div>
     <div class="col-md-6">
-      <label class="form-label">رابط الشعار (Logo URL)</label>
-      <input type="text" name="logo_url" class="form-control" value="{{ s.logo_url or '/static/chinese-logo.svg' }}">
+      <label class="form-label">الشعار (Logo)</label>
+      <div class="mb-2">
+        <input type="file" name="logo_file" class="form-control" accept="image/*" id="logoFile">
+        <div class="form-text">{{ _('Upload logo from computer / رفع الشعار من الكمبيوتر') }}</div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small">{{ _('Or enter logo URL / أو أدخل رابط الشعار') }}</label>
+        <input type="text" name="logo_url" class="form-control" value="{{ s.logo_url or '/static/chinese-logo.svg' }}">
+      </div>
+      {% if s and s.logo_url %}
+      <div class="mt-2">
+        <img src="{{ s.logo_url }}" alt="Current Logo" style="max-height: 60px; max-width: 200px;" class="border rounded">
+        <div class="form-text">{{ _('Current logo / الشعار الحالي') }}</div>
+      </div>
+      {% endif %}
     </div>
     <div class="col-md-6">
       <div class="form-check mt-4">
