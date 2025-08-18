@@ -2996,12 +2996,58 @@ def print_invoices(section):
     ar_font = register_ar_font()
     if ar_font:
         p.setFont(ar_font, 14)
-        p.drawString(50, y, shape_ar(company_name or "Company"))
-        y -= 20
+        p.drawString(40, y, shape_ar(company_name or "Company"))
+        y -= 22
         p.setFont(ar_font, 12)
-        p.drawString(50, y, shape_ar(f"Invoices - {section.title()}"))
+        p.drawString(40, y, shape_ar(f"Invoices - {section_norm.title()}"))
     else:
         p.setFont("Helvetica-Bold", 14)
+        p.drawString(40, y, company_name or "Company")
+        y -= 22
+        p.setFont("Helvetica", 12)
+        p.drawString(40, y, f"Invoices - {section_norm.title()}")
+    y -= 20
+
+    # Table header
+    if ar_font:
+        p.setFont(ar_font, 11)
+    else:
+        p.setFont("Helvetica-Bold", 11)
+    p.drawString(40, y, shape_ar("Invoice"))
+    p.drawString(140, y, shape_ar("Who"))
+    p.drawRightString(380, y, shape_ar("Total"))
+    p.drawString(400, y, shape_ar("Status"))
+    y -= 14
+    p.line(40, y, 520, y)
+    y -= 10
+
+    # Body rows
+    if ar_font:
+        p.setFont(ar_font, 10)
+    else:
+        p.setFont("Helvetica", 10)
+    for r in rows:
+        if y < 60:
+            p.showPage()
+            if ar_font:
+                p.setFont(ar_font, 10)
+            else:
+                p.setFont("Helvetica", 10)
+            y = 800
+        p.drawString(40, y, shape_ar(str(r.get('invoice_number') or '')))
+        p.drawString(140, y, shape_ar(str(r.get('who') or '-')))
+        p.drawRightString(380, y, f"{float(r.get('total') or 0):.2f}")
+        status = str(r.get('status') or '').title()
+        p.drawString(400, y, shape_ar(status))
+        y -= 14
+
+    p.showPage()
+    p.save()
+    buffer.seek(0)
+    return make_response(buffer.getvalue(), 200, {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': f'inline; filename="invoices_{section_norm}.pdf"'
+    })
 
 @app.route('/sales/<int:invoice_id>/print', methods=['GET'])
 @login_required

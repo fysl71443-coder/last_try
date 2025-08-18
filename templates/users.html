@@ -323,6 +323,21 @@
   document.getElementById('checkAll').onclick=()=>{ list.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=true); };
   document.getElementById('uncheckAll').onclick=()=>{ list.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=false); };
 
+  // toggle all perms when screen checkbox changes, and keep header in sync (bound once)
+  list.addEventListener('change', (e)=>{
+    const t = e.target;
+    if(t.classList.contains('screenCheck')){
+      const row = t.closest('.list-group-item');
+      row?.querySelectorAll('.permCheck').forEach(cb=> cb.checked = t.checked);
+    }
+    if(t.classList.contains('permCheck')){
+      const row = t.closest('.list-group-item');
+      const any = Array.from(row?.querySelectorAll('.permCheck')||[]).some(cb=>cb.checked);
+      const header = row?.querySelector('.screenCheck');
+      if(header) header.checked = any;
+    }
+  });
+
   const permsModal = new bootstrap.Modal(document.getElementById('permsModal'));
   btnPerms.onclick=async ()=>{
     const ids = selectedIds(); if(ids.length!==1) return;
@@ -337,24 +352,7 @@
       data.items.forEach(p=>{
         // tick screen if any permission
         const hasAny = p.view||p.add||p.edit||p.delete||p.print;
-  // toggle all perms when screen checkbox changes, and keep header in sync
-  list.addEventListener('change', (e)=>{
-    const t = e.target;
-    // screen header toggles its perms
-    if(t.classList.contains('screenCheck')){
-      const key = t.dataset.key;
-      const row = document.getElementById(`sc_${key}`).closest('.list-group-item');
-      row.querySelectorAll('.permCheck').forEach(cb=> cb.checked = t.checked);
-    }
-    // any perm change updates header state
-    if(t.classList.contains('permCheck')){
-      const key = t.id.split('_')[0];
-      const row = document.getElementById(`sc_${key}`).closest('.list-group-item');
-      const any = Array.from(row.querySelectorAll('.permCheck')).some(cb=>cb.checked);
-      const header = document.getElementById(`sc_${key}`);
-      if(header) header.checked = any;
-    }
-  });
+
 
   // branch change reloads perms if modal is open
   document.getElementById('branchSelect')?.addEventListener('change', async ()=>{
