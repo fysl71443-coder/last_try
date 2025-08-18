@@ -2,11 +2,7 @@
 # START OF APP.PY (Top)
 # =========================
 
-# 1️⃣ Eventlet monkey patch must be first
-import eventlet
-eventlet.monkey_patch()
-
-# 2️⃣ Standard libraries
+# 1️⃣ Standard libraries
 import os
 import sys
 import logging
@@ -15,11 +11,11 @@ import traceback
 import time
 from datetime import datetime, timedelta, timezone
 
-# 3️⃣ Load environment variables
+# 2️⃣ Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
 
-# 4️⃣ Flask & extensions
+# 3️⃣ Flask & extensions (without eventlet/socketio)
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, make_response, current_app
 from extensions import db
 
@@ -27,183 +23,197 @@ from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from flask_bcrypt import Bcrypt
 from flask_babel import Babel, gettext as _
-from flask_socketio import SocketIO
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # =========================
-# Flask App Configuration
+# Flask App Factory
 # =========================
-app = Flask(__name__)
+def create_app():
+    """Create and configure the Flask application"""
+    app = Flask(__name__)
 
-# Secret key
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key')
+    # Secret key
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key')
 
-# Instance folder for SQLite (fallback)
-basedir = os.path.abspath(os.path.dirname(__file__))
-instance_dir = os.path.join(basedir, 'instance')
-os.makedirs(instance_dir, exist_ok=True)
+    # Instance folder for SQLite (fallback)
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    instance_dir = os.path.join(basedir, 'instance')
+    os.makedirs(instance_dir, exist_ok=True)
 
-# Default DB: SQLite
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
+    # Default DB: SQLite
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
 
-# Override with production DB if available
-_db_url = os.getenv('DATABASE_URL')
-if _db_url:
-    if _db_url.startswith('postgres://'):
-        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
+    # Override with production DB if available
+    _db_url = os.getenv('DATABASE_URL')
+    if _db_url:
+        if _db_url.startswith('postgres://'):
+            _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+        app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Babel / i18n
-app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
-babel = Babel(app)
-@app.errorhandler(500)
-def handle_internal_error(e):
+    # Babel / i18n
+    app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
+    @app.errorhandler(500)
+    def handle_internal_error(e):
+        try:
+            if request.path.startswith('/api/'):
+                return jsonify({'ok': False, 'error': 'Internal server error'}), 500
+        except Exception:
+            pass
+        return e
+
+    # CSRF protection
+    global csrf
+    csrf = CSRFProtect(app)
+
+    # Proxy fix (Render)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+    # API-friendly error handlers
+    from flask import jsonify, request
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        try:
+            if request.path.startswith('/api/'):
+                return jsonify({'ok': False, 'error': f'CSRF error: {getattr(e, "description", str(e))}'}), 400
+        except Exception:
+            pass
+        return render_template('login.html', form=LoginForm()), 400
+
+    @app.errorhandler(500)
+    def handle_internal_error(e):
+        try:
+            if request.path.startswith('/api/'):
+                return jsonify({'ok': False, 'error': 'Internal server error'}), 500
+        except Exception:
+            pass
+        return e
+
+    # Initialize other extensions (without socketio)
+    db.init_app(app)
+    migrate = Migrate(app, db)
+    login_manager = LoginManager(app)
+    bcrypt = Bcrypt(app)
+
+    # Production-safe runtime schema patcher (avoid heavy migrations on legacy DB)
     try:
-        if request.path.startswith('/api/'):
-            return jsonify({'ok': False, 'error': 'Internal server error'}), 500
-    except Exception:
-        pass
-    return e
+        if os.getenv('RENDER') == 'true' or os.getenv('RENDER'):
+            with app.app_context():
+                from sqlalchemy import inspect as _sa_inspect, text as _sa_text
+                _insp = _sa_inspect(db.engine)
+                with db.engine.begin() as _conn:
+                    # 1) Ensure menu_categories table exists (idempotent)
+                    if 'menu_categories' not in _insp.get_table_names():
+                        _conn.execute(_sa_text(
+                            """
+                            CREATE TABLE IF NOT EXISTS menu_categories (
+                                id SERIAL PRIMARY KEY,
+                                name VARCHAR(200) UNIQUE NOT NULL,
+                                active BOOLEAN DEFAULT TRUE,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """
+                        ))
+                    # 2) Ensure Settings receipt columns and logo_url exist (idempotent)
+                    if 'settings' in _insp.get_table_names():
+                        existing_cols = {c['name'] for c in _insp.get_columns('settings')}
+                        def addcol(col_sql):
+                            _conn.execute(_sa_text(col_sql))
+                        if 'receipt_paper_width' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_paper_width VARCHAR(4)")
+                        if 'receipt_margin_top_mm' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_top_mm INTEGER")
+                        if 'receipt_margin_bottom_mm' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_bottom_mm INTEGER")
+                        if 'receipt_margin_left_mm' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_left_mm INTEGER")
+                        if 'receipt_margin_right_mm' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_right_mm INTEGER")
+                        if 'receipt_font_size' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_font_size INTEGER")
+                        if 'receipt_show_logo' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_logo BOOLEAN DEFAULT TRUE")
+                        if 'receipt_show_tax_number' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_tax_number BOOLEAN DEFAULT TRUE")
+                        if 'receipt_footer_text' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_footer_text VARCHAR(300)")
+                        if 'logo_url' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS logo_url VARCHAR(300)")
+                    # 3) Ensure customers table exists (idempotent)
+                    if 'customers' not in _insp.get_table_names():
+                        _conn.execute(_sa_text(
+                            """
+                            CREATE TABLE IF NOT EXISTS customers (
+                                id SERIAL PRIMARY KEY,
+                                name VARCHAR(200) NOT NULL,
+                                phone VARCHAR(50),
+                                discount_percent NUMERIC(5,2) DEFAULT 0,
+                                active BOOLEAN DEFAULT TRUE,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """
+                        ))
+                    # 4) Ensure sales_invoices.customer_phone exists (idempotent)
+                    if 'sales_invoices' in _insp.get_table_names():
+                        existing_cols_si = {c['name'] for c in _insp.get_columns('sales_invoices')}
+                        if 'customer_phone' not in existing_cols_si:
+                            _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30)"))
 
+                    # 5) Ensure menu_items table exists
+                    if 'menu_items' not in _insp.get_table_names():
+                        _conn.execute(_sa_text(
+                            """
+                            CREATE TABLE IF NOT EXISTS menu_items (
+                                id SERIAL PRIMARY KEY,
+                                category_id INTEGER NOT NULL REFERENCES menu_categories(id) ON DELETE CASCADE,
+                                meal_id INTEGER NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+                                price_override NUMERIC(12,2),
+                                display_order INTEGER,
+                                CONSTRAINT uq_category_meal UNIQUE (category_id, meal_id)
+                            )
+                            """
+                        ))
 
-# CSRF protection
-csrf = CSRFProtect(app)
+    except Exception as _patch_err:
+        logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
 
-# Proxy fix (Render)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    # Login manager configuration
+    login_manager.login_view = 'login'
 
-# API-friendly error handlers
-from flask import jsonify, request
+    # Basic error logging to file (errors only)
+    logging.basicConfig(filename='app.log', level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
 
-@app.errorhandler(CSRFError)
-def handle_csrf_error(e):
-    try:
-        if request.path.startswith('/api/'):
-            return jsonify({'ok': False, 'error': f'CSRF error: {getattr(e, "description", str(e))}'}), 400
-    except Exception:
-        pass
-    return render_template('login.html', form=LoginForm()), 400
+    # Import models after db created
+    from models import User, Invoice, SalesInvoice, SalesInvoiceItem, Product, RawMaterial, Meal, MealIngredient, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Employee, Salary, Payment, Account, LedgerEntry
 
-@app.errorhandler(500)
-def handle_internal_error(e):
-    try:
-        if request.path.startswith('/api/'):
-            return jsonify({'ok': False, 'error': 'Internal server error'}), 500
-    except Exception:
-        pass
-    return e
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
 
-# Initialize other extensions
-db.init_app(app)
-migrate = Migrate(app, db)
-login_manager = LoginManager(app)
-bcrypt = Bcrypt(app)
-socketio = SocketIO(app)
-
-# Production-safe runtime schema patcher (avoid heavy migrations on legacy DB)
-try:
-    if os.getenv('RENDER') == 'true' or os.getenv('RENDER'):
-        with app.app_context():
-            from sqlalchemy import inspect as _sa_inspect, text as _sa_text
-            _insp = _sa_inspect(db.engine)
-            with db.engine.begin() as _conn:
-                # 1) Ensure menu_categories table exists (idempotent)
-                if 'menu_categories' not in _insp.get_table_names():
-                    _conn.execute(_sa_text(
-                        """
-                        CREATE TABLE IF NOT EXISTS menu_categories (
-                            id SERIAL PRIMARY KEY,
-                            name VARCHAR(200) UNIQUE NOT NULL,
-                            active BOOLEAN DEFAULT TRUE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                        """
-                    ))
-                # 2) Ensure Settings receipt columns and logo_url exist (idempotent)
-                if 'settings' in _insp.get_table_names():
-                    existing_cols = {c['name'] for c in _insp.get_columns('settings')}
-                    def addcol(col_sql):
-                        _conn.execute(_sa_text(col_sql))
-                    if 'receipt_paper_width' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_paper_width VARCHAR(4)")
-                    if 'receipt_margin_top_mm' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_top_mm INTEGER")
-                    if 'receipt_margin_bottom_mm' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_bottom_mm INTEGER")
-                    if 'receipt_margin_left_mm' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_left_mm INTEGER")
-                    if 'receipt_margin_right_mm' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_right_mm INTEGER")
-                    if 'receipt_font_size' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_font_size INTEGER")
-                    if 'receipt_show_logo' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_logo BOOLEAN DEFAULT TRUE")
-                    if 'receipt_show_tax_number' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_tax_number BOOLEAN DEFAULT TRUE")
-                    if 'receipt_footer_text' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_footer_text VARCHAR(300)")
-                    if 'logo_url' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS logo_url VARCHAR(300)")
-                # 3) Ensure customers table exists (idempotent)
-                if 'customers' not in _insp.get_table_names():
-                    _conn.execute(_sa_text(
-                        """
-                        CREATE TABLE IF NOT EXISTS customers (
-                            id SERIAL PRIMARY KEY,
-                            name VARCHAR(200) NOT NULL,
-                            phone VARCHAR(50),
-                            discount_percent NUMERIC(5,2) DEFAULT 0,
-                            active BOOLEAN DEFAULT TRUE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                        """
-                    ))
-                # 4) Ensure sales_invoices.customer_phone exists (idempotent)
-                if 'sales_invoices' in _insp.get_table_names():
-                    existing_cols_si = {c['name'] for c in _insp.get_columns('sales_invoices')}
-                    if 'customer_phone' not in existing_cols_si:
-                        _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30)"))
-
-                # 5) Ensure menu_items table exists
-                if 'menu_items' not in _insp.get_table_names():
-                    _conn.execute(_sa_text(
-                        """
-                        CREATE TABLE IF NOT EXISTS menu_items (
-                            id SERIAL PRIMARY KEY,
-                            category_id INTEGER NOT NULL REFERENCES menu_categories(id) ON DELETE CASCADE,
-                            meal_id INTEGER NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
-                            price_override NUMERIC(12,2),
-                            display_order INTEGER,
-                            CONSTRAINT uq_category_meal UNIQUE (category_id, meal_id)
-                        )
-                        """
-                    ))
-
-except Exception as _patch_err:
-    logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
+    return app
 
 # =========================
-# END OF INITIALIZATION
+# Create app instance for use by flask commands
 # =========================
+app = create_app()
 
-# Routes and rest of app.py remain unchanged
+# Rate limiting for login attempts
+login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
 
-# Ensure SQLAlchemy track modifications disabled
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Global socketio instance (will be initialized when running the server)
+socketio = None
 
-# Babel / i18n
-app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
+# Global CSRF instance
+csrf = None
 
-from flask import session
-
-login_manager.login_view = 'login'
-
-# Basic error logging to file (errors only)
-logging.basicConfig(filename='app.log', level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
-
+def csrf_exempt(f):
+    """Decorator that exempts a route from CSRF protection if CSRF is available"""
+    if csrf:
+        return csrf.exempt(f)
+    return f
 
 def save_to_db(instance):
     try:
@@ -214,18 +224,6 @@ def save_to_db(instance):
         db.session.rollback()
         logging.error('Database Error: %s', e, exc_info=True)
         return False
-
-
-
-# Rate limiting for login attempts
-login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
-
-# Import models after db created
-from models import User, Invoice, SalesInvoice, SalesInvoiceItem, Product, RawMaterial, Meal, MealIngredient, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Employee, Salary, Payment, Account, LedgerEntry
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
 
 def get_locale():
     # language selection from query param, user pref, or accept headers
@@ -238,6 +236,11 @@ def get_locale():
     except Exception:
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
+
+# Configure babel locale selector after app creation
+from flask_babel import Babel
+babel = Babel()
+babel.init_app(app, locale_selector=get_locale)
 @app.context_processor
 def inject_settings():
     try:
@@ -254,7 +257,7 @@ def toggle_theme():
     session['theme'] = 'dark' if current != 'dark' else 'light'
     return redirect(request.referrer or url_for('dashboard'))
 
-babel.init_app(app, locale_selector=get_locale)
+
 
 # Make get_locale available in templates
 @app.context_processor
@@ -468,11 +471,12 @@ def sales_branch(branch_code):
         db.session.commit()
 
         # Emit and redirect on success
-        socketio.emit('sales_update', {
-            'invoice_number': invoice_number,
-            'branch': branch_code,
-            'total': float(total_after_tax_discount)
-        })
+        if socketio:
+            socketio.emit('sales_update', {
+                'invoice_number': invoice_number,
+                'branch': branch_code,
+                'total': float(total_after_tax_discount)
+            })
         flash(_('Invoice created successfully / تم إنشاء الفاتورة بنجاح'), 'success')
         return redirect(url_for('sales_branch', branch_code=branch_code))
 
@@ -1116,7 +1120,7 @@ def menu_toggle(cat_id):
 
 # Checkout API: create invoice + items + payment, then return receipt URL
 
-@csrf.exempt
+@csrf_exempt
 @app.route('/api/sales/checkout', methods=['POST'])
 @login_required
 def api_sales_checkout():
@@ -1415,11 +1419,12 @@ def purchases():
         db.session.commit()
 
         # Emit real-time update
-        socketio.emit('purchase_update', {
-            'invoice_number': invoice_number,
-            'supplier': form.supplier_name.data,
-            'total': float(total_after_tax_discount)
-        })
+        if socketio:
+            socketio.emit('purchase_update', {
+                'invoice_number': invoice_number,
+                'supplier': form.supplier_name.data,
+                'total': float(total_after_tax_discount)
+            })
 
         flash(_('Purchase invoice created and stock updated successfully / تم إنشاء فاتورة الشراء وتحديث المخزون بنجاح'), 'success')
         return redirect(url_for('purchases'))
@@ -2627,7 +2632,8 @@ def register_payment_ajax():
 
     # Emit socket event (if desired)
     try:
-        socketio.emit('payment_update', {'invoice_id': invoice_id, 'invoice_type': invoice_type, 'amount': amount})
+        if socketio:
+            socketio.emit('payment_update', {'invoice_id': invoice_id, 'invoice_type': invoice_type, 'amount': amount})
     except Exception:
         pass
 
@@ -3701,11 +3707,12 @@ def single_payment(invoice_id):
         db.session.commit()
 
         # Emit real-time update
-        socketio.emit('invoice_update', {
-            'invoice_id': invoice_id,
-            'new_status': invoice.status,
-            'paid_amount': invoice.paid_amount
-        })
+        if socketio:
+            socketio.emit('invoice_update', {
+                'invoice_id': invoice_id,
+                'new_status': invoice.status,
+                'paid_amount': invoice.paid_amount
+            })
 
         flash(_('Payment recorded successfully / تم تسجيل الدفعة بنجاح'), 'success')
 
@@ -3730,10 +3737,11 @@ def bulk_payment():
         db.session.commit()
 
         # Emit real-time update
-        socketio.emit('invoice_update', {
-            'bulk_update': True,
-            'updated_invoices': invoice_ids
-        })
+        if socketio:
+            socketio.emit('invoice_update', {
+                'bulk_update': True,
+                'updated_invoices': invoice_ids
+            })
 
         flash(_('Bulk payment recorded successfully / تم تسجيل الدفعة الجماعية بنجاح'), 'success')
 
@@ -3844,11 +3852,12 @@ def meals():
             db.session.commit()
 
             # Emit real-time update
-            socketio.emit('meal_update', {
-                'meal_name': meal.display_name,
-                'total_cost': float(meal.total_cost),
-                'selling_price': float(meal.selling_price)
-            })
+            if socketio:
+                socketio.emit('meal_update', {
+                    'meal_name': meal.display_name,
+                    'total_cost': float(meal.total_cost),
+                    'selling_price': float(meal.selling_price)
+                })
 
             flash(_('Meal created successfully / تم إنشاء الوجبة بنجاح'), 'success')
             return redirect(url_for('meals'))
@@ -3988,4 +3997,14 @@ def delete_expense_invoice(invoice_id):
         return redirect(url_for('expenses'))
 
 if __name__ == '__main__':
+    # Import eventlet and socketio only when running the server
+    import eventlet
+    eventlet.monkey_patch()
+
+    from flask_socketio import SocketIO
+
+    # Initialize SocketIO with the app and assign to global variable
+    socketio = SocketIO(app, cors_allowed_origins="*")
+
+    # Run the application with SocketIO
     socketio.run(app, host='0.0.0.0', port=8000, debug=True)
