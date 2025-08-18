@@ -4,34 +4,50 @@
   <meta charset="UTF-8">
   <title>{{ _('Receipt / إيصال') }} - {{ invoice.invoice_number }}</title>
   <style>
-    /* Thermal style based on Settings */
-    body { font-family: Arial, sans-serif; font-size: {{ (settings.receipt_font_size or 12) if settings else 12 }}px; }
-    .receipt { width: {{ '300' if (settings and settings.receipt_paper_width=='80') else '220' }}px; margin: 0 auto; }
+    /* Thermal receipt style - narrow format */
+    body {
+      font-family: Arial, sans-serif;
+      font-size: {{ (settings.receipt_font_size or 10) if settings else 10 }}px;
+      margin: 0; padding: 0;
+    }
+    .receipt {
+      width: {{ (settings.receipt_width or 148) if settings else 148 }}px;
+      margin: 0 auto;
+      padding: {{ (settings.receipt_margin_top_mm or 2) if settings else 2 }}mm;
+    }
     .center { text-align: center; }
     .right { text-align: right; }
-    .small { font-size: {{ ((settings.receipt_font_size or 12) - 2) if settings else 10 }}px; }
-    hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
-    table { width: 100%; }
-    th, td { font-size: {{ (settings.receipt_font_size or 12) if settings else 12 }}px; }
+    .left { text-align: left; }
+    .small { font-size: {{ ((settings.receipt_font_size or 10) - 1) if settings else 9 }}px; }
+    .tiny { font-size: {{ ((settings.receipt_font_size or 10) - 2) if settings else 8 }}px; }
+    hr { border: none; border-top: 1px dashed #000; margin: 2px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      font-size: {{ ((settings.receipt_font_size or 10) - 1) if settings else 9 }}px;
+      padding: 1px 2px;
+    }
+    .logo { max-height: {{ (settings.receipt_logo_height or 40) if settings else 40 }}px; margin-bottom: 2px; }
+    .company-name { font-weight: bold; font-size: {{ ((settings.receipt_font_size or 10) + 1) if settings else 11 }}px; margin: 1px 0; }
+    .totals { margin: 2px 0; }
   </style>
 </head>
 <body onload="window.print()">
   <div class="receipt">
     <div class="center">
       {% if settings and settings.receipt_show_logo %}
-        <img src="{{ settings.logo_url or '/static/chinese-logo.svg' }}" alt="logo" style="max-height:60px; margin-bottom:6px;">
+        <img src="{{ settings.logo_url or '/static/chinese-logo.svg' }}" alt="logo" class="logo">
       {% endif %}
-      <div><strong>{{ settings.company_name if settings else 'Restaurant' }}</strong></div>
+      <div class="company-name">{{ settings.company_name if settings else 'Restaurant' }}</div>
       {% if settings and settings.receipt_show_tax_number %}
       <div class="small">{{ _('Tax No.') }}: {{ settings.tax_number or '-' }}</div>
       {% endif %}
-      <div class="small">{{ settings.address if settings else '' }}</div>
-      <div class="small">{{ settings.phone if settings else '' }}</div>
+      {% if settings and settings.address %}<div class="small">{{ settings.address }}</div>{% endif %}
+      {% if settings and settings.phone %}<div class="small">{{ settings.phone }}</div>{% endif %}
     </div>
     <hr>
-    <div class="small">
+    <div class="small center">
       <div>{{ _('Invoice') }}: {{ invoice.invoice_number }}</div>
-      <div>{{ _('Date') }}: {{ invoice.date }}</div>
+      <div>{{ _('Date/Time') }}: {{ (invoice.created_at.strftime('%Y-%m-%d %H:%M') if invoice.created_at else invoice.date|string) }}</div>
       <div>{{ _('Branch') }}: {{ invoice.branch }}</div>
       <div>{{ _('Customer') }}: {{ invoice.customer_name or '-' }}</div>
       {% if invoice.customer_phone %}<div>{{ _('Phone') }}: {{ invoice.customer_phone }}</div>{% endif %}
