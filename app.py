@@ -1018,23 +1018,7 @@ def menu_toggle(cat_id):
 @app.route('/api/sales/checkout', methods=['POST'])
 @login_required
 def api_sales_checkout():
-    # Temporary debug handler: echo back request payload to verify endpoint wiring
-    try:
-        data = request.get_json(silent=True) or {}
-        branch = data.get('branch') or data.get('branch_code')
-        table = data.get('table') or data.get('table_no')
-        items = data.get('items')
-        customer_id = data.get('customer_id')
-        return jsonify({
-            'status': 'success',
-            'branch': branch,
-            'table': table,
-            'items': items,
-            'customer_id': customer_id
-        }), 200
-    except Exception as e:
-        current_app.logger.error("=== Checkout Error Traceback ===\n" + traceback.format_exc())
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    # Live logic: remove debug echo and proceed to real invoice creation
 
     try:
         from datetime import datetime as _dt
@@ -1160,12 +1144,6 @@ def api_sales_checkout():
         logging.exception('checkout top-level failed')
         return jsonify({'ok': False, 'error': str(e)}), 500
 
-
-        receipt_url = url_for('sales_receipt', invoice_id=inv.id)
-        return jsonify({'ok': True, 'invoice_id': inv.id, 'print_url': receipt_url})
-    except Exception as e:
-        logging.exception('checkout top-level failed')
-        return jsonify({'ok': False, 'error': str(e)}), 500
 
 # Receipt (80mm thermal style)
 @app.route('/sales/receipt/<int:invoice_id>')
