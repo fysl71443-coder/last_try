@@ -29,6 +29,8 @@
     .logo { max-height: {{ (settings.receipt_logo_height or 40) if settings else 40 }}px; margin-bottom: 2px; }
     .company-name { font-weight: bold; font-size: {{ ((settings.receipt_font_size or 10) + 1) if settings else 11 }}px; margin: 1px 0; }
     .totals { margin: 2px 0; }
+    /* Extra bottom space to make receipt longer (for stamp/signature) */
+    .spacer { height: {{ (settings.receipt_extra_bottom_mm or 15) if settings else 15 }}mm; }
   </style>
 </head>
 <body onload="window.print()">
@@ -87,6 +89,8 @@
 
 </body>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <div class="spacer"></div>
+
   <script>
     // ZATCA TLV QR per KSA e-invoicing (seller, VAT, timestamp, total, VAT amount)
     (function(){

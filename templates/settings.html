@@ -83,6 +83,14 @@
       <label class="form-label">نص تذييل الإيصال</label>
       <input type="text" name="receipt_footer_text" class="form-control" value="{{ s.receipt_footer_text or '' }}">
     </div>
+    <div class="col-md-3">
+      <label class="form-label">طول إضافي أسفل الإيصال (مم)</label>
+      <input type="number" step="1" min="0" name="receipt_extra_bottom_mm" class="form-control" value="{{ s.receipt_extra_bottom_mm or 15 }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">ارتفاع الشعار (px)</label>
+      <input type="number" step="1" min="20" name="receipt_logo_height" class="form-control" value="{{ s.receipt_logo_height or 40 }}">
+    </div>
 
     <div class="col-12 d-flex justify-content-end gap-2">
       <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">رجوع</a>

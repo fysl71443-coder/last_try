@@ -1530,6 +1530,89 @@ def invoices():
     return render_template('invoices.html', invoices=rows, current_type=current_type)
 
 
+@app.route('/invoices/delete', methods=['POST'])
+@login_required
+def invoices_delete():
+    # Admin-only for safety; can be relaxed later per-type permissions
+    if getattr(current_user, 'role', '') != 'admin':
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
+        return redirect(url_for('invoices', type=request.args.get('type') or 'all'))
+    from models import SalesInvoice, SalesInvoiceItem, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Payment
+    scope = (request.form.get('scope') or '').lower()
+    inv_type = (request.form.get('invoice_type') or '').lower()
+    ids = request.form.getlist('invoice_ids') or []
+    deleted = 0
+    try:
+        def delete_sales(ids_list):
+            nonlocal deleted
+            if ids_list:
+                SalesInvoiceItem.query.filter(SalesInvoiceItem.invoice_id.in_(ids_list)).delete(synchronize_session=False)
+                Payment.query.filter(Payment.invoice_type=='sales', Payment.invoice_id.in_(ids_list)).delete(synchronize_session=False)
+                deleted += SalesInvoice.query.filter(SalesInvoice.id.in_(ids_list)).delete(synchronize_session=False)
+            else:
+                # Delete all sales
+                SalesInvoiceItem.query.delete(synchronize_session=False)
+                Payment.query.filter_by(invoice_type='sales').delete(synchronize_session=False)
+                deleted += SalesInvoice.query.delete(synchronize_session=False)
+        def delete_purchase(ids_list):
+            nonlocal deleted
+            if ids_list:
+                PurchaseInvoiceItem.query.filter(PurchaseInvoiceItem.invoice_id.in_(ids_list)).delete(synchronize_session=False)
+                Payment.query.filter(Payment.invoice_type=='purchase', Payment.invoice_id.in_(ids_list)).delete(synchronize_session=False)
+                deleted += PurchaseInvoice.query.filter(PurchaseInvoice.id.in_(ids_list)).delete(synchronize_session=False)
+            else:
+                PurchaseInvoiceItem.query.delete(synchronize_session=False)
+                Payment.query.filter_by(invoice_type='purchase').delete(synchronize_session=False)
+                deleted += PurchaseInvoice.query.delete(synchronize_session=False)
+        def delete_expense(ids_list):
+            nonlocal deleted
+            if ids_list:
+                ExpenseInvoiceItem.query.filter(ExpenseInvoiceItem.invoice_id.in_(ids_list)).delete(synchronize_session=False)
+                Payment.query.filter(Payment.invoice_type=='expense', Payment.invoice_id.in_(ids_list)).delete(synchronize_session=False)
+                deleted += ExpenseInvoice.query.filter(ExpenseInvoice.id.in_(ids_list)).delete(synchronize_session=False)
+            else:
+                ExpenseInvoiceItem.query.delete(synchronize_session=False)
+                Payment.query.filter_by(invoice_type='expense').delete(synchronize_session=False)
+                deleted += ExpenseInvoice.query.delete(synchronize_session=False)
+
+        if scope == 'selected':
+            # Expect mixed types? Our table is unified but ids alone don't carry type. Prevent mixed delete for now.
+            # Require invoice_type parameter when deleting selected; otherwise assume current tab type
+            if not inv_type:
+                inv_type = (request.args.get('type') or request.form.get('current_type') or 'all').lower()
+            if inv_type == 'sales':
+                delete_sales([int(x) for x in ids])
+            elif inv_type in ['purchases','purchase']:
+                delete_purchase([int(x) for x in ids])
+            elif inv_type in ['expenses','expense']:
+                delete_expense([int(x) for x in ids])
+            else:
+                flash(_('Please select a specific type tab before deleting / اختر نوع الفواتير قبل الحذف'), 'warning')
+                return redirect(url_for('invoices', type='all'))
+        elif scope == 'type':
+            if inv_type == 'sales':
+                delete_sales([])
+            elif inv_type in ['purchases','purchase']:
+                delete_purchase([])
+            elif inv_type in ['expenses','expense']:
+                delete_expense([])
+            else:
+                flash(_('Unknown invoice type / نوع فواتير غير معروف'), 'danger')
+                return redirect(url_for('invoices', type='all'))
+        else:
+            flash(_('Invalid request / طلب غير صالح'), 'danger')
+            return redirect(url_for('invoices', type='all'))
+        db.session.commit()
+        flash(_('Deleted %(n)s invoices / تم حذف %(n)s فاتورة', n=deleted), 'success')
+    except Exception:
+        db.session.rollback()
+        logging.exception('invoices_delete failed')
+        flash(_('Delete failed / فشل الحذف'), 'danger')
+    # Redirect back preserving current tab
+    ret_type = inv_type if inv_type in ['sales','purchases','expenses'] else (request.args.get('type') or 'all')
+    return redirect(url_for('invoices', type=ret_type))
+
+
 @app.route('/invoices/<string:kind>/<int:invoice_id>')
 @login_required
 def view_invoice(kind, invoice_id):
@@ -2496,6 +2579,15 @@ def settings():
         s.receipt_paper_width = (request.form.get('receipt_paper_width') or s.receipt_paper_width or '80')
         try:
             s.receipt_font_size = int(request.form.get('receipt_font_size') or s.receipt_font_size or 12)
+        except Exception:
+            pass
+        # New configurable fields
+        try:
+            s.receipt_logo_height = int(request.form.get('receipt_logo_height') or (s.receipt_logo_height or 40))
+        except Exception:
+            pass
+        try:
+            s.receipt_extra_bottom_mm = int(request.form.get('receipt_extra_bottom_mm') or (s.receipt_extra_bottom_mm or 15))
         except Exception:
             pass
         s.logo_url = (request.form.get('logo_url') or s.logo_url or '/static/chinese-logo.svg')
