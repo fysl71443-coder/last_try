@@ -1983,18 +1983,85 @@ def fix_database_route():
 @app.route('/invoices')
 @login_required
 def invoices():
-    from sqlalchemy import func
-    # Normalize type
-    raw_type = (request.args.get('type') or 'all').lower()
-    if raw_type in ['purchases','purchase']: tfilter = 'purchase'
-    elif raw_type in ['expenses','expense']: tfilter = 'expense'
-    elif raw_type in ['sales','sale']: tfilter = 'sales'
-    else: tfilter = 'all'
+    try:
+        from sqlalchemy import func, text
+        # Normalize type
+        raw_type = (request.args.get('type') or 'all').lower()
+        if raw_type in ['purchases','purchase']: tfilter = 'purchase'
+        elif raw_type in ['expenses','expense']: tfilter = 'expense'
+        elif raw_type in ['sales','sale']: tfilter = 'sales'
+        else: tfilter = 'all'
 
-    # Build unified list from specialized invoices + payments
-    sales_q = SalesInvoice.query
-    purchase_q = PurchaseInvoice.query
-    expense_q = ExpenseInvoice.query
+        # Simple approach - get invoices directly without complex queries
+        rows = []
+
+        # Sales invoices
+        if tfilter in ['all', 'sales']:
+            try:
+                sales_invoices = SalesInvoice.query.order_by(SalesInvoice.date.desc()).all()
+                for inv in sales_invoices:
+                    rows.append({
+                        'id': inv.id,
+                        'invoice_number': inv.invoice_number,
+                        'invoice_type': 'sales',
+                        'customer_supplier': inv.customer_name or 'Customer',
+                        'total_amount': float(inv.total_after_tax_discount or 0),
+                        'paid_amount': 0,  # Will be calculated from payments
+                        'remaining_amount': float(inv.total_after_tax_discount or 0),
+                        'status': inv.status or 'unpaid',
+                        'due_date': inv.date
+                    })
+            except Exception as e:
+                logging.warning(f'Error loading sales invoices: {e}')
+
+        # Purchase invoices
+        if tfilter in ['all', 'purchase']:
+            try:
+                purchase_invoices = PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).all()
+                for inv in purchase_invoices:
+                    rows.append({
+                        'id': inv.id,
+                        'invoice_number': getattr(inv, 'invoice_number', inv.id),
+                        'invoice_type': 'purchase',
+                        'customer_supplier': getattr(inv, 'supplier_name', 'Supplier'),
+                        'total_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
+                        'paid_amount': 0,
+                        'remaining_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
+                        'status': getattr(inv, 'status', 'unpaid'),
+                        'due_date': inv.date
+                    })
+            except Exception as e:
+                logging.warning(f'Error loading purchase invoices: {e}')
+
+        # Expense invoices
+        if tfilter in ['all', 'expense']:
+            try:
+                expense_invoices = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).all()
+                for inv in expense_invoices:
+                    rows.append({
+                        'id': inv.id,
+                        'invoice_number': getattr(inv, 'invoice_number', inv.id),
+                        'invoice_type': 'expense',
+                        'customer_supplier': 'Expense',
+                        'total_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
+                        'paid_amount': 0,
+                        'remaining_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
+                        'status': getattr(inv, 'status', 'unpaid'),
+                        'due_date': inv.date
+                    })
+            except Exception as e:
+                logging.warning(f'Error loading expense invoices: {e}')
+
+        # Sort by date descending
+        rows.sort(key=lambda x: x['due_date'] if x['due_date'] else datetime.min.date(), reverse=True)
+
+        current_type = tfilter
+        return render_template('invoices.html', invoices=rows, current_type=current_type)
+
+    except Exception as e:
+        logging.exception('Error in invoices route')
+        flash(_('Error loading invoices / خطأ في تحميل الفواتير'), 'danger')
+        return redirect(url_for('dashboard'))
 
     rows = []
     def paid_map_for(kind, ids):
@@ -2388,10 +2455,11 @@ def payments():
 @app.route('/reports', methods=['GET'])
 @login_required
 def reports():
-    from sqlalchemy import func, cast, Date
-    period = request.args.get('period', 'this_month')
-    start_arg = request.args.get('start_date')
-    end_arg = request.args.get('end_date')
+    try:
+        from sqlalchemy import func, cast, Date, text
+        period = request.args.get('period', 'this_month')
+        start_arg = request.args.get('start_date')
+        end_arg = request.args.get('end_date')
 
     today = datetime.now(timezone.utc).date()
     if period == 'today':
@@ -2509,23 +2577,27 @@ def reports():
     china_lbl = s.china_town_label if s and s.china_town_label else 'China Town'
     currency = s.currency if s and s.currency else 'SAR'
 
-    top_values = [float(r[1] or 0) for r in top_rows]
+        top_values = [float(r[1] or 0) for r in top_rows]
 
-    # Low stock raw materials
-    low_stock = RawMaterial.query.order_by(RawMaterial.stock_quantity.asc()).limit(10).all()
+        # Low stock raw materials
+        low_stock = RawMaterial.query.order_by(RawMaterial.stock_quantity.asc()).limit(10).all()
 
-    return render_template('reports.html',
-        period=period, start_date=start_dt, end_date=end_dt,
-        sales_place=float(sales_place), sales_china=float(sales_china), total_sales=float(total_sales),
-        total_purchases=total_purchases, total_expenses=total_expenses, total_salaries=float(total_salaries), profit=profit,
-        line_labels=line_labels, line_values=line_values,
-        pm_labels=pm_labels, pm_values=pm_values,
-        comp_labels=comp_labels, comp_values=comp_values,
-        inflow=inflow, outflow=outflow, net_cash=net_cash,
-        top_labels=top_labels, top_values=top_values,
-        low_stock=low_stock,
-        place_lbl=place_lbl, china_lbl=china_lbl, currency=currency
-    )
+        return render_template('reports.html',
+            period=period, start_date=start_dt, end_date=end_dt,
+            sales_place=float(sales_place), sales_china=float(sales_china), total_sales=float(total_sales),
+            total_purchases=total_purchases, total_expenses=total_expenses, total_salaries=float(total_salaries), profit=profit,
+            line_labels=line_labels, line_values=line_values,
+            pm_labels=pm_labels, pm_values=pm_values,
+            comp_labels=comp_labels, comp_values=comp_values,
+            inflow=inflow, outflow=outflow, net_cash=net_cash,
+            top_labels=top_labels, top_values=top_values,
+            low_stock=low_stock,
+            place_lbl=place_lbl, china_lbl=china_lbl, currency=currency
+        )
+    except Exception as e:
+        logging.exception('Error in reports route')
+        flash(_('Error loading reports / خطأ في تحميل التقارير'), 'danger')
+        return redirect(url_for('dashboard'))
 
 
 
