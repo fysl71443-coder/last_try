@@ -687,7 +687,7 @@ def sales_table_manage(branch_code, table_number):
     # Get all draft orders for this table
     draft_orders = DraftOrder.query.filter_by(
         branch_code=branch_code,
-        table_number=table_number,
+        table_number=str(table_number),
         status='draft'
     ).order_by(DraftOrder.created_at.desc()).all()
 
@@ -721,7 +721,7 @@ def sales_table_invoice(branch_code, table_number):
         current_draft = DraftOrder.query.filter_by(
             id=draft_id,
             branch_code=branch_code,
-            table_number=table_number,
+            table_number=str(table_number),
             status='draft'
         ).first()
         if current_draft:
@@ -730,7 +730,7 @@ def sales_table_invoice(branch_code, table_number):
         # Create new draft order
         current_draft = DraftOrder(
             branch_code=branch_code,
-            table_number=table_number,
+            table_number=str(table_number),
             user_id=current_user.id,
             status='draft'
         )
@@ -1232,7 +1232,7 @@ def api_sales_checkout():
             date=_now.date(),
             payment_method=payment_method,
             branch=branch_code,
-            table_number=table_number,
+            table_number=str(table_number),
             customer_name=customer_name,
             customer_phone=customer_phone,
             total_before_tax=subtotal,
@@ -1675,7 +1675,7 @@ def cancel_draft_order(draft_id):
         # Update table status if no more drafts
         remaining_drafts = DraftOrder.query.filter_by(
             branch_code=branch_code,
-            table_number=table_number,
+            table_number=str(table_number),
             status='draft'
         ).count()
 
@@ -1734,9 +1734,10 @@ def add_item_to_draft(draft_id):
 
         # Update table status to reserved if this is the first item
         if len(draft.items) == 0:  # First item being added
-            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_number).first()
+            table_num_int = safe_table_number(draft.table_number)
+            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=table_num_int).first()
             if not table:
-                table = Table(branch_code=draft.branch_code, table_number=draft.table_number, status='reserved')
+                table = Table(branch_code=draft.branch_code, table_number=table_num_int, status='reserved')
                 db.session.add(table)
             else:
                 table.status = 'reserved'
@@ -1810,9 +1811,10 @@ def update_draft_order(draft_id):
 
         # Update table status to reserved if items exist
         if items_data:
-            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_number).first()
+            table_num_int = safe_table_number(draft.table_number)
+            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=table_num_int).first()
             if not table:
-                table = Table(branch_code=draft.branch_code, table_number=draft.table_number, status='reserved')
+                table = Table(branch_code=draft.branch_code, table_number=table_num_int, status='reserved')
                 db.session.add(table)
             else:
                 table.status = 'reserved'
@@ -1924,7 +1926,8 @@ def api_draft_checkout():
             status='draft'
         ).count()
 
-        table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_number).first()
+        table_num_int = safe_table_number(draft.table_number)
+        table = Table.query.filter_by(branch_code=draft.branch_code, table_number=table_num_int).first()
         if table:
             if remaining_drafts <= 1:  # This draft will be completed
                 table.status = 'available'
