@@ -191,10 +191,20 @@ def csrf_exempt(f):
         return csrf.exempt(f)
     return f
 
+def safe_db_commit(operation_name="database operation"):
+    """Safe database commit with proper error handling for eventlet"""
+    try:
+        db.session.commit()
+        return True
+    except Exception as e:
+        db.session.rollback()
+        print(f"Database commit error in {operation_name}: {e}")
+        return False
+
 def save_to_db(instance):
     try:
         db.session.add(instance)
-        db.session.commit()
+        safe_db_commit()
         return True
     except Exception as e:
         db.session.rollback()
@@ -303,10 +313,13 @@ def login():
 
             login_user(user, remember=form.remember.data)
             user.last_login()
-            db.session.commit()
-            login_attempts.pop(client_ip, None)  # reset attempts
-            flash(_('تم تسجيل الدخول بنجاح / Logged in successfully.'), 'success')
-            return redirect(url_for('dashboard'))
+            if safe_db_commit("login"):
+                login_attempts.pop(client_ip, None)  # reset attempts
+                flash(_('تم تسجيل الدخول بنجاح / Logged in successfully.'), 'success')
+                return redirect(url_for('dashboard'))
+            else:
+                flash(_('خطأ في تسجيل الدخول / Login error.'), 'danger')
+                return render_template('login.html', form=form)
 
         # Wrong credentials — increment counter
         if client_ip not in login_attempts:
@@ -444,7 +457,7 @@ def sales_branch(branch_code):
         invoice.tax_amount = total_tax
         invoice.discount_amount = total_discount
         invoice.total_after_tax_discount = total_after_tax_discount
-        db.session.commit()
+        safe_db_commit()
 
         # Emit and redirect on success
         if socketio:
@@ -549,7 +562,7 @@ def _seed_menu_categories_once():
         if to_add:
             for name in to_add:
                 db.session.add(MenuCategory(name=name))
-            db.session.commit()
+            safe_db_commit()
     except Exception:
         # Table may not exist yet; ignore
         pass
@@ -679,7 +692,7 @@ def sales_table_invoice(branch_code, table_number):
             status='draft'
         )
         db.session.add(current_draft)
-        db.session.commit()
+        safe_db_commit()
     # Load meals and categories (prefer MenuCategory if defined)
     try:
         meals = Meal.query.filter_by(active=True).all()
@@ -822,7 +835,7 @@ def customers():
             try:
                 c = Customer(name=name, phone=phone, discount_percent=discount_percent, active=True)
                 db.session.add(c)
-                db.session.commit()
+                safe_db_commit()
                 flash(_('Customer added successfully / تم إضافة العميل بنجاح'), 'success')
             except Exception:
                 db.session.rollback()
@@ -862,7 +875,7 @@ def customers_edit(cid):
         else:
             try:
                 c.name = name; c.phone = phone; c.discount_percent = discount_percent
-                db.session.commit()
+                safe_db_commit()
                 flash(_('Customer updated / تم تحديث العميل'), 'success')
                 return redirect(url_for('customers'))
             except Exception:
@@ -877,7 +890,7 @@ def customers_delete(cid):
     c = Customer.query.get_or_404(cid)
     try:
         db.session.delete(c)
-        db.session.commit()
+        safe_db_commit()
         flash(_('Customer deleted / تم حذف العميل'), 'success')
     except Exception:
         db.session.rollback()
@@ -890,7 +903,7 @@ def customers_toggle(cid):
     from models import Customer
     c = Customer.query.get_or_404(cid)
     c.active = not bool(c.active)
-    db.session.commit()
+    safe_db_commit()
     flash(_('Customer status updated / تم تحديث حالة العميل'), 'success')
     return redirect(url_for('customers'))
 
@@ -920,7 +933,7 @@ def customers_import_csv():
                 continue
             db.session.add(Customer(name=name, phone=phone, discount_percent=dp, active=True))
             added += 1
-        db.session.commit()
+        safe_db_commit()
         flash(_('%(n)s customers imported / تم استيراد %(n)s عميل', n=added), 'success')
     except Exception:
         db.session.rollback()
@@ -973,7 +986,7 @@ def menu():
             else:
                 cat = MenuCategory(name=name, active=True)
                 db.session.add(cat)
-                db.session.commit()
+                safe_db_commit()
                 flash(_('Category added / تم إضافة القسم'), 'success')
         return redirect(url_for('menu'))
     # List + optional items management
@@ -1022,7 +1035,7 @@ def menu_item_add():
             ex.display_order = display_order
         else:
             db.session.add(MenuItem(category_id=section_id, meal_id=meal_id, price_override=price_override, display_order=display_order))
-        db.session.commit()
+        safe_db_commit()
         flash(_('Item saved'), 'success')
     except Exception as e:
         db.session.rollback()
@@ -1039,7 +1052,7 @@ def menu_item_update(item_id):
         display_order = request.form.get('display_order')
         it.price_override = (None if price_override == '' else float(price_override))
         it.display_order = int(display_order) if (display_order or '').strip() else None
-        db.session.commit()
+        safe_db_commit()
         flash(_('Item updated'), 'success')
     except Exception:
         db.session.rollback()
@@ -1076,7 +1089,7 @@ def api_sales_void_check():
     it = MenuItem.query.get_or_404(item_id)
     try:
         db.session.delete(it)
-        db.session.commit()
+        safe_db_commit()
         flash(_('Item deleted'), 'success')
     except Exception:
         db.session.rollback()
@@ -1090,7 +1103,7 @@ def menu_toggle(cat_id):
     from models import MenuCategory
     cat = MenuCategory.query.get_or_404(cat_id)
     cat.active = not bool(cat.active)
-    db.session.commit()
+    safe_db_commit()
     flash(_('Category status updated / تم تحديث حالة القسم'), 'success')
     return redirect(url_for('menu'))
 
@@ -1227,7 +1240,7 @@ def api_sales_checkout():
         ))
 
         try:
-            db.session.commit()
+            safe_db_commit()
         except Exception as e:
             db.session.rollback()
             logging.exception('checkout commit failed')
@@ -1365,7 +1378,7 @@ def purchases():
         invoice.discount_amount = total_discount
         invoice.total_after_tax_discount = total_after_tax_discount
 
-        db.session.commit()
+        safe_db_commit()
 
         # Post to ledger (Inventory, VAT Input, Cash/AP)
         try:
@@ -1386,13 +1399,13 @@ def purchases():
             db.session.add(LedgerEntry(date=invoice.date, account_id=inv_acc.id, debit=invoice.total_before_tax, credit=0, description=f'Purchase {invoice.invoice_number}'))
             db.session.add(LedgerEntry(date=invoice.date, account_id=vat_in_acc.id, debit=invoice.tax_amount, credit=0, description=f'VAT Input {invoice.invoice_number}'))
             db.session.add(LedgerEntry(date=invoice.date, account_id=settle_acc.id, credit=invoice.total_after_tax_discount, debit=0, description=f'Settlement {invoice.invoice_number}'))
-            db.session.commit()
+            safe_db_commit()
         except Exception as e:
             db.session.rollback()
             logging.error('Ledger posting (purchase) failed: %s', e, exc_info=True)
 
 
-        db.session.commit()
+        safe_db_commit()
 
         # Emit real-time update
         if socketio:
@@ -1539,7 +1552,7 @@ def import_meals():
                 logging.warning(f'Error importing meal row: {e}')
                 continue
 
-        db.session.commit()
+        safe_db_commit()
         flash(_('Successfully imported %(count)s meals / تم استيراد %(count)s وجبة بنجاح', count=imported_count), 'success')
 
     except Exception as e:
@@ -1580,7 +1593,7 @@ def cancel_draft_order(draft_id):
                 table.status = 'available'
                 table.updated_at = datetime.utcnow()
 
-        db.session.commit()
+        safe_db_commit()
         return jsonify({'success': True})
 
     except Exception as e:
@@ -1637,7 +1650,7 @@ def add_item_to_draft(draft_id):
                 table.status = 'reserved'
                 table.updated_at = datetime.utcnow()
 
-        db.session.commit()
+        safe_db_commit()
         return jsonify({'success': True, 'item_id': draft_item.id})
 
     except Exception as e:
@@ -1713,7 +1726,7 @@ def update_draft_order(draft_id):
                 table.status = 'reserved'
                 table.updated_at = datetime.utcnow()
 
-        db.session.commit()
+        safe_db_commit()
         return jsonify({'success': True})
 
     except Exception as e:
@@ -1827,7 +1840,7 @@ def api_draft_checkout():
                 table.status = 'reserved'  # Still has other drafts
             table.updated_at = _now
 
-        db.session.commit()
+        safe_db_commit()
 
         # Return success with print URL
         print_url = url_for('sales_receipt', invoice_id=invoice.id)
@@ -2189,7 +2202,7 @@ def invoices_delete():
         else:
             flash(_('Invalid request / طلب غير صالح'), 'danger')
             return redirect(url_for('invoices', type='all'))
-        db.session.commit()
+        safe_db_commit()
         flash(_('Deleted %(n)s invoices / تم حذف %(n)s فاتورة', n=deleted), 'success')
     except Exception:
         db.session.rollback()
@@ -2263,7 +2276,7 @@ def employees():
                 status=form.status.data
             )
             db.session.add(emp)
-            db.session.commit()
+            safe_db_commit()
             flash(_('تم إضافة الموظف بنجاح / Employee added successfully'), 'success')
             return redirect(url_for('employees'))
         except Exception as e:
@@ -2303,7 +2316,7 @@ def salaries():
                 status=form.status.data
             )
             db.session.add(salary)
-            db.session.commit()
+            safe_db_commit()
             flash(_('تم حفظ الراتب بنجاح / Salary saved successfully'), 'success')
             return redirect(url_for('salaries'))
         except Exception:
@@ -2598,13 +2611,13 @@ def register_payment_ajax():
             # payment: credit cash, debit AP (or expense/salary direct, but we keep AP)
             db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=ap_acc.id, debit=amount, credit=0, description=f'Settle AP {invoice_type} #{invoice_id}'))
             db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=cash_acc.id, debit=0, credit=amount, description=f'Payment {invoice_type} #{invoice_id}'))
-        db.session.commit()
+        safe_db_commit()
     except Exception as e:
         db.session.rollback()
         logging.error('Ledger posting (payment) failed: %s', e, exc_info=True)
 
 
-    db.session.commit()
+    safe_db_commit()
 
     # Emit socket event (if desired)
     try:
@@ -2640,7 +2653,7 @@ def edit_employee(emp_id):
             emp.email = form.email.data.strip() if form.email.data else None
             emp.hire_date = form.hire_date.data
             emp.status = form.status.data
-            db.session.commit()
+            safe_db_commit()
             flash(_('تم تعديل بيانات الموظف / Employee updated'), 'success')
             return redirect(url_for('employees'))
         except Exception:
@@ -2658,7 +2671,7 @@ def delete_employee(emp_id):
             flash(_('لا يمكن حذف الموظف لوجود رواتب مرتبطة / Cannot delete employee with linked salaries'), 'danger')
             return redirect(url_for('employees'))
         db.session.delete(emp)
-        db.session.commit()
+        safe_db_commit()
         flash(_('تم حذف الموظف / Employee deleted'), 'info')
     except Exception:
         db.session.rollback()
@@ -2686,7 +2699,7 @@ def edit_salary(salary_id):
             sal.previous_salary_due = float(form.previous_salary_due.data or 0)
             sal.total_salary = sal.basic_salary + sal.allowances - sal.deductions + sal.previous_salary_due
             sal.status = form.status.data
-            db.session.commit()
+            safe_db_commit()
             flash(_('تم تعديل الراتب / Salary updated'), 'success')
             return redirect(url_for('salaries'))
         except Exception:
@@ -2931,7 +2944,7 @@ def delete_salary(salary_id):
     sal = Salary.query.get_or_404(salary_id)
     try:
         db.session.delete(sal)
-        db.session.commit()
+        safe_db_commit()
         flash(_('تم حذف الراتب / Salary deleted'), 'info')
     except Exception:
         db.session.rollback()
@@ -2974,7 +2987,7 @@ def salaries_monthly():
             db.session.add(s)
             created += 1
     if created:
-        db.session.commit()
+        safe_db_commit()
 
     # Fetch salaries for period with payments summary
     salaries_q = Salary.query.filter_by(year=year, month=month).join(Employee).order_by(Employee.full_name.asc())
@@ -3043,7 +3056,7 @@ def salaries_monthly_save():
         except Exception:
             continue
     if updated:
-        db.session.commit()
+        safe_db_commit()
         flash(_('تم حفظ التعديلات / Changes saved'), 'success')
     else:
         flash(_('No changes / لا توجد تعديلات'), 'info')
@@ -3066,7 +3079,7 @@ def settings_print_save():
     s.receipt_show_logo = bool(request.form.get('receipt_show_logo'))
     s.receipt_show_tax_number = bool(request.form.get('receipt_show_tax_number'))
     s.receipt_footer_text = (request.form.get('receipt_footer_text') or '').strip()
-    db.session.commit()
+    safe_db_commit()
     flash(_('Print settings saved / تم حفظ إعدادات الطباعة'), 'success')
     return redirect(url_for('settings'))
 
@@ -3156,7 +3169,7 @@ def settings():
         s.receipt_show_logo = bool(request.form.get('receipt_show_logo'))
         s.receipt_show_tax_number = bool(request.form.get('receipt_show_tax_number'))
         s.receipt_footer_text = (request.form.get('receipt_footer_text') or s.receipt_footer_text or '')
-        db.session.commit()
+        safe_db_commit()
         flash(_('Settings saved successfully / تم حفظ الإعدادات'), 'success')
         return redirect(url_for('settings'))
     return render_template('settings.html', s=s or Settings())
@@ -3188,7 +3201,7 @@ def change_password():
     # Update securely
     u.set_password(new, bcrypt)
     try:
-        db.session.commit()
+        safe_db_commit()
         # Sync session object
         try:
             current_user.password_hash = u.password_hash
@@ -3285,7 +3298,7 @@ def api_users_create():
     u = User(username=username, email=email, role=role, active=True)
     u.set_password(password, bcrypt)
     db.session.add(u)
-    db.session.commit()
+    safe_db_commit()
     return jsonify({'status':'ok','id':u.id})
 
 @app.route('/api/users/<int:uid>', methods=['PATCH'])
@@ -3300,7 +3313,7 @@ def api_users_update(uid):
         u.active = bool(payload['active'])
     if 'password' in payload and payload['password']:
         u.set_password(payload['password'], bcrypt)
-    db.session.commit()
+    safe_db_commit()
     return jsonify({'status':'ok'})
 
 @app.route('/api/users', methods=['DELETE'])
@@ -3313,7 +3326,7 @@ def api_users_delete():
     if not ids:
         return jsonify({'error':'no ids'}), 400
     User.query.filter(User.id.in_(ids)).delete(synchronize_session=False)
-    db.session.commit()
+    safe_db_commit()
     return jsonify({'status':'ok','deleted':len(ids)})
 
 # ----- Permissions enforcement helpers -----
@@ -3406,7 +3419,7 @@ def api_user_permissions_save(uid):
             can_print=bool(it.get('print'))
         )
         db.session.add(p)
-    db.session.commit()
+    safe_db_commit()
     return jsonify({'status':'ok','count':len(items)})
 
 
@@ -3680,7 +3693,7 @@ def single_payment(invoice_id):
     if payment_amount > 0:
         invoice.paid_amount += payment_amount
         invoice.update_status()
-        db.session.commit()
+        safe_db_commit()
 
         # Emit real-time update
         if socketio:
@@ -3710,7 +3723,7 @@ def bulk_payment():
                 invoice.paid_amount += payment_per_invoice
                 invoice.update_status()
 
-        db.session.commit()
+        safe_db_commit()
 
         # Emit real-time update
         if socketio:
@@ -3739,7 +3752,7 @@ def raw_materials():
             active=True
         )
         db.session.add(raw_material)
-        db.session.commit()
+        safe_db_commit()
 
         flash(_('Raw material added successfully / تم إضافة المادة الخام بنجاح'), 'success')
         return redirect(url_for('raw_materials'))
@@ -3825,7 +3838,7 @@ def meals():
             meal.total_cost = total_cost
             meal.calculate_selling_price()
 
-            db.session.commit()
+            safe_db_commit()
 
             # Emit real-time update
             if socketio:
@@ -3867,7 +3880,7 @@ def delete_raw_material(material_id):
     else:
         db.session.delete(material)
 
-    db.session.commit()
+    safe_db_commit()
     flash(_('Raw material deleted successfully / تم حذف المادة الخام بنجاح'), 'success')
     return redirect(url_for('raw_materials'))
 
@@ -3886,7 +3899,7 @@ def delete_meal(meal_id):
         MealIngredient.query.filter_by(meal_id=meal_id).delete()
         db.session.delete(meal)
 
-    db.session.commit()
+    safe_db_commit()
     flash(_('Meal deleted successfully / تم حذف الوجبة بنجاح'), 'success')
     return redirect(url_for('meals'))
 
@@ -3913,7 +3926,7 @@ def delete_purchase_invoice(invoice_id):
 
     # Delete invoice
     db.session.delete(invoice)
-    db.session.commit()
+    safe_db_commit()
 
     flash(_('Purchase invoice deleted and stock updated / تم حذف فاتورة الشراء وتحديث المخزون'), 'success')
     return redirect(url_for('purchases'))
@@ -3934,7 +3947,7 @@ def delete_sales_invoice(invoice_id):
 
     # Delete invoice
     db.session.delete(invoice)
-    db.session.commit()
+    safe_db_commit()
 
     flash(_('Sales invoice deleted successfully / تم حذف فاتورة المبيعات بنجاح'), 'success')
 
@@ -3961,7 +3974,7 @@ def delete_expense_invoice(invoice_id):
 
     # Delete invoice
     db.session.delete(invoice)
-    db.session.commit()
+    safe_db_commit()
 
     flash(_('Expense invoice deleted successfully / تم حذف فاتورة المصروفات بنجاح'), 'success')
 
