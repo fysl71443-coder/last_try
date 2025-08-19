@@ -8,9 +8,8 @@ if __name__ == "__main__":
     cmd = [
         "gunicorn",
         "wsgi:application",
-        "-k", "gevent",
-        "--workers", "3",
-        "--threads", "2",
+        "-k", "eventlet",
+        "--workers", "1",
         "--timeout", "120",
         f"--bind=0.0.0.0:{port}"
     ]

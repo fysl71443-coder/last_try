@@ -1,4 +1,5 @@
 import os
+from sqlalchemy.pool import NullPool
 
 class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -9,12 +10,12 @@ class Config:
     if DATABASE_URL:
         SQLALCHEMY_DATABASE_URI = DATABASE_URL
         SQLALCHEMY_ENGINE_OPTIONS = {
-            "pool_pre_ping": True,
-            "pool_size": 5,
-            "max_overflow": 10
+            "poolclass": NullPool,  # تجنب مشاكل connection pooling مع eventlet
+            "pool_pre_ping": True
         }
     else:
         SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
         SQLALCHEMY_ENGINE_OPTIONS = {
+            "poolclass": NullPool,  # تجنب مشاكل connection pooling مع eventlet
             "connect_args": {"check_same_thread": False}
         }
