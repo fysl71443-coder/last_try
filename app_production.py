@@ -36,6 +36,12 @@ block_eventlet()
 # Now import the main app (this will also register all routes)
 from app import app as main_app
 
+# Override database settings for production safety
+main_app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///app.db"
+main_app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "connect_args": {"check_same_thread": False}
+}
+
 # Use the main app instance (which has all routes registered)
 app = main_app
 

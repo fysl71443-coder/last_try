@@ -22,4 +22,4 @@ echo "👤 Creating admin user..."
 python create_user.py --default || echo "⚠️ User creation failed, continuing..."
 
 echo "🌐 Starting web server with sync workers..."
-exec gunicorn --worker-class sync --workers 1 --bind 0.0.0.0:$PORT app_production:app
+exec gunicorn --worker-class sync --workers 1 --bind 0.0.0.0:$PORT simple_app:app

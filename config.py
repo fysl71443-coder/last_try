@@ -6,7 +6,6 @@ Configuration settings for different environments.
 
 import os
 from dotenv import load_dotenv
-from sqlalchemy.pool import NullPool
 
 # Load environment variables
 load_dotenv()
@@ -22,9 +21,9 @@ class Config:
     instance_dir = os.path.join(basedir, 'instance')
     os.makedirs(instance_dir, exist_ok=True)
     
-    # Default DB: SQLite
-    SQLALCHEMY_DATABASE_URI = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
-    
+    # Simple SQLite database
+    SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
+
     # Override with production DB if available
     _db_url = os.getenv('DATABASE_URL')
     if _db_url:
@@ -34,13 +33,9 @@ class Config:
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # SQLAlchemy Engine Options for production stability
+    # SQLAlchemy Engine Options - simple and safe
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_pre_ping': True,
-        'pool_recycle': 300,
-        'pool_timeout': 20,
-        'max_overflow': 0,
-        'pool_size': 5
+        "connect_args": {"check_same_thread": False}
     }
 
     # Babel / i18n
@@ -64,14 +59,10 @@ class ProductionConfig(Config):
     DEBUG = False
     TESTING = False
 
-    # Production-specific SQLAlchemy settings - disable pooling completely
+    # Production SQLAlchemy settings - simple and safe
+    SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'poolclass': NullPool,  # Disable connection pooling
-        'pool_pre_ping': False,
-        'connect_args': {
-            'check_same_thread': False,  # For SQLite in production
-            'timeout': 20
-        }
+        "connect_args": {"check_same_thread": False}
     }
 
 class TestingConfig(Config):
