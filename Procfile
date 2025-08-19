@@ -1,1 +1,1 @@
-web: gunicorn wsgi:application -k gevent --workers 3 --threads 2 --timeout 120
+web: python run_gunicorn.py

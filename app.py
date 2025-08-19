@@ -173,8 +173,12 @@ app = create_app()
 # Rate limiting for login attempts
 login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
 
-# Global socketio instance (will be initialized when running the server)
-socketio = None
+# Global socketio instance
+try:
+    from flask_socketio import SocketIO
+    socketio = SocketIO(app, cors_allowed_origins="*")
+except ImportError:
+    socketio = None
 
 def csrf_exempt(f):
     """Decorator that exempts a route from CSRF protection if CSRF is available"""
