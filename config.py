@@ -32,15 +32,24 @@ class Config:
         SQLALCHEMY_DATABASE_URI = _db_url
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    
+
+    # SQLAlchemy Engine Options for production stability
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+        'pool_timeout': 20,
+        'max_overflow': 0,
+        'pool_size': 5
+    }
+
     # Babel / i18n
     BABEL_DEFAULT_LOCALE = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
     LANGUAGES = ['en', 'ar']
-    
+
     # CSRF settings
     WTF_CSRF_ENABLED = True
     WTF_CSRF_TIME_LIMIT = None
-    
+
     # Session settings
     PERMANENT_SESSION_LIFETIME = 86400  # 24 hours
 
@@ -53,6 +62,18 @@ class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     TESTING = False
+
+    # Production-specific SQLAlchemy settings
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+        'pool_timeout': 20,
+        'max_overflow': 0,
+        'pool_size': 1,  # Single connection for production
+        'connect_args': {
+            'check_same_thread': False  # For SQLite in production
+        }
+    }
 
 class TestingConfig(Config):
     """Testing configuration"""

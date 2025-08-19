@@ -1,13 +1,26 @@
 services:
   - type: web
-    name: flask-accounting-app
-    env: docker
-    repo: "fysl71443-coder/-"
-    branch: "erp-app"
-    plan: free
+    name: restaurant-system
+    env: python
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      python -m flask db upgrade || echo "Migration failed, continuing..."
+      python create_user.py --default || echo "User creation failed, continuing..."
+    startCommand: gunicorn --worker-class sync --workers 1 --bind 0.0.0.0:$PORT wsgi:application
     envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: USE_EVENTLET
+        value: "0"
+      - key: PYTHONPATH
+        value: /opt/render/project/src
       - key: SECRET_KEY
-        value: "change-me-please"
-      - key: DATABASE_URL
-        sync: false
-    dockerfilePath: Dockerfile
+        generateValue: true
+      - key: BABEL_DEFAULT_LOCALE
+        value: ar
+
+databases:
+  - name: restaurant-db
+    databaseName: restaurant_system
+    user: restaurant_user

@@ -159,7 +159,10 @@ def create_app(config_name=None):
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        try:
+            return db.session.get(User, int(user_id))
+        except Exception:
+            return None
 
     return app
 
@@ -167,9 +170,6 @@ def create_app(config_name=None):
 # Create app instance for use by flask commands
 # =========================
 app = create_app()
-
-# Configure babel locale selector after app creation
-babel.init_app(app, locale_selector=get_locale)
 
 # Rate limiting for login attempts
 login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
@@ -205,6 +205,9 @@ def get_locale():
     except Exception:
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
+
+# Configure babel locale selector after get_locale is defined
+babel.init_app(app, locale_selector=get_locale)
 
 # Babel will be configured after app creation
 @app.context_processor
