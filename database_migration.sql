@@ -12,6 +12,12 @@ ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT C
 ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS user_id INTEGER;
 
+-- 1.1. Fix existing data with NULL values
+UPDATE draft_orders SET table_number = '0' WHERE table_number IS NULL;
+UPDATE draft_orders SET status = 'draft' WHERE status IS NULL;
+UPDATE draft_orders SET branch_code = 'china_town' WHERE branch_code IS NULL;
+UPDATE draft_orders SET payment_method = 'CASH' WHERE payment_method IS NULL;
+
 -- 2. Ensure tables table has required columns
 ALTER TABLE tables ADD COLUMN IF NOT EXISTS branch_code VARCHAR(50);
 ALTER TABLE tables ADD COLUMN IF NOT EXISTS table_number INTEGER;

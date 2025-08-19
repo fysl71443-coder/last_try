@@ -610,6 +610,13 @@ PAYMENT_METHODS = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC']
 def is_valid_branch(code: str) -> bool:
     return code in BRANCH_CODES
 
+def safe_table_number(table_number) -> int:
+    """Safely convert table_number to int, default to 0 if None/invalid"""
+    try:
+        return int(table_number or 0)
+    except (ValueError, TypeError):
+        return 0
+
 @app.context_processor
 def inject_globals():
     return dict(PAYMENT_METHODS=PAYMENT_METHODS, BRANCH_CODES=BRANCH_CODES)
@@ -643,7 +650,9 @@ def sales_tables(branch_code):
     # Count active draft orders per table
     draft_orders = DraftOrder.query.filter_by(branch_code=branch_code, status='draft').all()
     for draft in draft_orders:
-        draft_counts[draft.table_number] = draft_counts.get(draft.table_number, 0) + 1
+        # Safe handling of table_number - convert to int, default to 0 if None/invalid
+        table_num = safe_table_number(draft.table_number)
+        draft_counts[table_num] = draft_counts.get(table_num, 0) + 1
 
     # Generate table list with status and draft count
     tables_data = []
@@ -1657,7 +1666,8 @@ def cancel_draft_order(draft_id):
             return jsonify({'success': False, 'error': 'Permission denied'}), 403
 
         branch_code = draft.branch_code
-        table_number = draft.table_number
+        # Safe handling of table_number
+        table_number = safe_table_number(draft.table_number)
 
         # Delete the draft order (cascade will delete items)
         db.session.delete(draft)
