@@ -168,6 +168,9 @@ def create_app(config_name=None):
 # =========================
 app = create_app()
 
+# Configure babel locale selector after app creation
+babel.init_app(app, locale_selector=get_locale)
+
 # Rate limiting for login attempts
 login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
 
@@ -203,8 +206,7 @@ def get_locale():
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
 
-# Configure babel locale selector after app creation
-babel.init_app(app, locale_selector=get_locale)
+# Babel will be configured after app creation
 @app.context_processor
 def inject_settings():
     try:
@@ -255,20 +257,20 @@ def get_settings_safe():
 
 
 from forms import LoginForm, SalesInvoiceForm, RawMaterialForm, MealForm, PurchaseInvoiceForm, ExpenseInvoiceForm, EmployeeForm, SalaryForm
+
 # Register blueprints
 try:
     from routes.vat import bp as vat_bp
     app.register_blueprint(vat_bp)
 except Exception as _e:
     pass
+
 # Register financials blueprint
 try:
     from routes.financials import bp as financials_bp
     app.register_blueprint(financials_bp)
 except Exception:
     pass
-
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -3959,6 +3961,8 @@ def delete_expense_invoice(invoice_id):
         return redirect(url_for('payments'))
     else:
         return redirect(url_for('expenses'))
+
+# App is already initialized above
 
 if __name__ == '__main__':
     # Import eventlet and socketio only when running the server
