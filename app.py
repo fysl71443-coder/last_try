@@ -301,63 +301,67 @@ except Exception:
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
+    form = LoginForm()
+
+    if form.validate_on_submit():
         try:
-            with app.app_context():  # ضمان سياق التطبيق
-                username = request.form.get('username')
-                password = request.form.get('password')
+            from models import User
+            from extensions import bcrypt
 
-                logger.info(f"Login attempt for username: {username}")
-                print(f"Login attempt for username: {username}")  # للتتبع
+            username = form.username.data
+            password = form.password.data
 
-                # البحث عن المستخدم
+            logger.info(f"Login attempt for username: {username}")
+            print(f"Login attempt for username: {username}")  # للتتبع
+
+            # البحث عن المستخدم
+            try:
+                user = User.query.filter_by(username=username).first()
+                print(f"User found: {user is not None}")
+            except Exception as db_error:
+                print(f"Database query error: {db_error}")
+                flash('خطأ في قاعدة البيانات / Database error', 'danger')
+                return render_template('login.html', form=form)
+
+            if user:
                 try:
-                    user = User.query.filter_by(username=username).first()
-                    print(f"User found: {user is not None}")
-                except Exception as db_error:
-                    print(f"Database query error: {db_error}")
-                    flash('خطأ في قاعدة البيانات / Database error', 'danger')
-                    return render_template('login.html')
+                    # التحقق من كلمة المرور
+                    password_valid = bcrypt.check_password_hash(user.password_hash, password)
+                    print(f"Password valid: {password_valid}")
 
-                if user:
-                    try:
-                        # التحقق من كلمة المرور
-                        password_valid = bcrypt.check_password_hash(user.password_hash, password)
-                        print(f"Password valid: {password_valid}")
+                    if password_valid:
+                        # تسجيل الدخول
+                        login_user(user, remember=form.remember.data)
 
-                        if password_valid:
-                            # تسجيل الدخول
-                            login_user(user)
+                        # تحديث آخر تسجيل دخول
+                        try:
+                            user.last_login()
+                            if safe_db_commit("login update"):
+                                print("Login successful, redirecting to dashboard")
+                                return redirect(url_for('dashboard'))
+                            else:
+                                print("Failed to update last login")
+                        except Exception as update_error:
+                            print(f"Error updating last login: {update_error}")
 
-                            # تحديث آخر تسجيل دخول
-                            try:
-                                user.last_login()
-                                if safe_db_commit("login update"):
-                                    print("Login successful, redirecting to dashboard")
-                                    return redirect(url_for('dashboard'))
-                                else:
-                                    print("Failed to update last login")
-                            except Exception as update_error:
-                                print(f"Error updating last login: {update_error}")
-
-                            # حتى لو فشل التحديث، نسمح بالدخول
-                            return redirect(url_for('dashboard'))
-                        else:
-                            flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
-                    except Exception as bcrypt_error:
-                        print(f"Bcrypt error: {bcrypt_error}")
-                        flash('خطأ في التحقق من كلمة المرور / Password verification error', 'danger')
-                else:
-                    flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
+                        # حتى لو فشل التحديث، نسمح بالدخول
+                        return redirect(url_for('dashboard'))
+                    else:
+                        flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
+                except Exception as bcrypt_error:
+                    print(f"Bcrypt error: {bcrypt_error}")
+                    flash('خطأ في التحقق من كلمة المرور / Password verification error', 'danger')
+            else:
+                flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
 
         except Exception as e:
             # طباعة الخطأ في سجل الخادم لتعرف السبب
             print(f"Login Error: {e}")
             import traceback
             traceback.print_exc()
-            return "Internal Server Error", 500
+            flash('خطأ في النظام / System error', 'danger')
 
-    return render_template('login.html')
+    return render_template('login.html', form=form)
 
 @app.route('/dashboard')
 @login_required
