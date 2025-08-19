@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """
 Development server with SocketIO support
+Requires: pip install -r requirements-dev.txt
 """
 import os
+import sys
 
 # Set development environment
 os.environ.setdefault('FLASK_ENV', 'development')
+os.environ.setdefault('USE_EVENTLET', '1')
 
-# Import eventlet and monkey patch first
-import eventlet
-eventlet.monkey_patch()
+try:
+    # Import eventlet and monkey patch first
+    import eventlet
+    eventlet.monkey_patch()
+    print("✅ Eventlet monkey patching applied for development")
+except ImportError:
+    print("❌ Eventlet not found. Install with: pip install -r requirements-dev.txt")
+    sys.exit(1)
 
 from flask_socketio import SocketIO
 from app import create_app
