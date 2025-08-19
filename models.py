@@ -336,11 +336,11 @@ class DraftOrder(db.Model):
     __tablename__ = 'draft_orders'
     id = db.Column(db.Integer, primary_key=True)
     branch_code = db.Column(db.String(50), nullable=False)
-    table_number = db.Column(db.String(50), nullable=False)  # Changed to VARCHAR(50) for PostgreSQL compatibility
+    table_number = db.Column(db.String(50), nullable=False, default='0')  # NOT NULL with default for PostgreSQL
     customer_name = db.Column(db.String(100), nullable=True)
     customer_phone = db.Column(db.String(20), nullable=True)
-    payment_method = db.Column(db.String(50), default='CASH')
-    status = db.Column(db.String(20), default='draft')  # draft, completed, cancelled
+    payment_method = db.Column(db.String(50), nullable=False, default='CASH')  # NOT NULL with default
+    status = db.Column(db.String(20), nullable=False, default='draft')  # NOT NULL with default
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)

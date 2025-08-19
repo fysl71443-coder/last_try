@@ -5,13 +5,19 @@
 ### Step 1: Execute These Commands on Your PostgreSQL Database
 
 ```sql
--- Essential columns for draft_orders table
-ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS table_number VARCHAR(50);
-ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft';
+-- Essential columns for draft_orders table with proper constraints
+ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS table_number VARCHAR(50) NOT NULL DEFAULT '0';
+ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'draft';
 
--- Fix existing data with NULL values
+-- Fix existing data with NULL values (run this BEFORE adding NOT NULL constraints)
 UPDATE draft_orders SET table_number = '0' WHERE table_number IS NULL;
 UPDATE draft_orders SET status = 'draft' WHERE status IS NULL;
+
+-- If columns already exist but without proper constraints, update them:
+ALTER TABLE draft_orders ALTER COLUMN table_number SET NOT NULL;
+ALTER TABLE draft_orders ALTER COLUMN table_number SET DEFAULT '0';
+ALTER TABLE draft_orders ALTER COLUMN status SET NOT NULL;
+ALTER TABLE draft_orders ALTER COLUMN status SET DEFAULT 'draft';
 ```
 
 ### Step 2: Optional - Complete Schema Setup
@@ -110,6 +116,31 @@ UPDATE draft_orders SET table_number = '0' WHERE table_number IS NULL;
 ```sql
 -- Fix NULL status values
 UPDATE draft_orders SET status = 'draft' WHERE status IS NULL;
+```
+
+### Check column types and constraints:
+```sql
+-- Verify column structure
+\d draft_orders
+
+-- Or use this query to check column details:
+SELECT column_name, data_type, is_nullable, column_default
+FROM information_schema.columns
+WHERE table_name = 'draft_orders'
+AND column_name IN ('table_number', 'status', 'branch_code', 'payment_method')
+ORDER BY column_name;
+```
+
+### If columns exist but with wrong type/constraints:
+```sql
+-- Update existing columns to match model requirements
+ALTER TABLE draft_orders ALTER COLUMN table_number TYPE VARCHAR(50);
+ALTER TABLE draft_orders ALTER COLUMN table_number SET NOT NULL;
+ALTER TABLE draft_orders ALTER COLUMN table_number SET DEFAULT '0';
+
+ALTER TABLE draft_orders ALTER COLUMN status TYPE VARCHAR(20);
+ALTER TABLE draft_orders ALTER COLUMN status SET NOT NULL;
+ALTER TABLE draft_orders ALTER COLUMN status SET DEFAULT 'draft';
 ```
 
 ---

@@ -1,13 +1,13 @@
 -- PostgreSQL Migration Script for Restaurant System
 -- This script ensures all required columns exist in the database
 
--- 1. Ensure draft_orders table has required columns
-ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS table_number VARCHAR(50);
-ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft';
-ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS branch_code VARCHAR(50);
+-- 1. Ensure draft_orders table has required columns with proper constraints
+ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS table_number VARCHAR(50) NOT NULL DEFAULT '0';
+ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'draft';
+ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS branch_code VARCHAR(50) NOT NULL DEFAULT 'china_town';
 ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS customer_name VARCHAR(100);
 ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(20);
-ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'CASH';
+ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) NOT NULL DEFAULT 'CASH';
 ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE draft_orders ADD COLUMN IF NOT EXISTS user_id INTEGER;
@@ -17,6 +17,43 @@ UPDATE draft_orders SET table_number = '0' WHERE table_number IS NULL;
 UPDATE draft_orders SET status = 'draft' WHERE status IS NULL;
 UPDATE draft_orders SET branch_code = 'china_town' WHERE branch_code IS NULL;
 UPDATE draft_orders SET payment_method = 'CASH' WHERE payment_method IS NULL;
+
+-- 1.2. Update column constraints if they exist but with wrong constraints
+-- Note: These commands will fail if columns don't exist, but that's expected
+DO $$
+BEGIN
+    -- Update table_number to NOT NULL if it exists
+    BEGIN
+        ALTER TABLE draft_orders ALTER COLUMN table_number SET NOT NULL;
+        ALTER TABLE draft_orders ALTER COLUMN table_number SET DEFAULT '0';
+    EXCEPTION
+        WHEN others THEN NULL; -- Ignore errors if column doesn't exist or already has constraints
+    END;
+
+    -- Update status to NOT NULL if it exists
+    BEGIN
+        ALTER TABLE draft_orders ALTER COLUMN status SET NOT NULL;
+        ALTER TABLE draft_orders ALTER COLUMN status SET DEFAULT 'draft';
+    EXCEPTION
+        WHEN others THEN NULL;
+    END;
+
+    -- Update payment_method to NOT NULL if it exists
+    BEGIN
+        ALTER TABLE draft_orders ALTER COLUMN payment_method SET NOT NULL;
+        ALTER TABLE draft_orders ALTER COLUMN payment_method SET DEFAULT 'CASH';
+    EXCEPTION
+        WHEN others THEN NULL;
+    END;
+
+    -- Update branch_code to NOT NULL if it exists
+    BEGIN
+        ALTER TABLE draft_orders ALTER COLUMN branch_code SET NOT NULL;
+        ALTER TABLE draft_orders ALTER COLUMN branch_code SET DEFAULT 'china_town';
+    EXCEPTION
+        WHEN others THEN NULL;
+    END;
+END $$;
 
 -- 2. Ensure tables table has required columns
 ALTER TABLE tables ADD COLUMN IF NOT EXISTS branch_code VARCHAR(50);
