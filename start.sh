@@ -21,5 +21,5 @@ python -m flask db upgrade || echo "⚠️ Migration failed, continuing..."
 echo "👤 Creating admin user..."
 python create_user.py --default || echo "⚠️ User creation failed, continuing..."
 
-echo "🌐 Starting web server with sync workers..."
-exec gunicorn --worker-class sync --workers 1 --bind 0.0.0.0:$PORT simple_app:app
+echo "🌐 Starting web server with gevent workers..."
+exec gunicorn simple_app:app -k gevent --workers 3 --threads 2 --timeout 120 --bind 0.0.0.0:$PORT

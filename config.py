@@ -9,7 +9,13 @@ class Config:
     if DATABASE_URL:
         # Render أو أي خدمة PostgreSQL
         SQLALCHEMY_DATABASE_URI = DATABASE_URL
-        SQLALCHEMY_ENGINE_OPTIONS = {}
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            "pool_pre_ping": True,
+            "pool_size": 5,
+            "max_overflow": 10,
+            "pool_timeout": 30,
+            "pool_recycle": 3600  # إعادة تدوير الاتصالات كل ساعة
+        }
     else:
         # تشغيل محلي باستخدام SQLite
         SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
