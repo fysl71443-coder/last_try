@@ -24,10 +24,10 @@ class EventletBlocker:
 if os.getenv('USE_EVENTLET', '1') == '0':
     sys.meta_path.insert(0, EventletBlocker())
 
-from app import create_app
+from app import app
 
-# Create the application instance
-application = create_app()
+# Use the main app instance (which has all routes registered)
+application = app
 
 if __name__ == "__main__":
     application.run(host='0.0.0.0', port=int(os.getenv('PORT', 8000)))
