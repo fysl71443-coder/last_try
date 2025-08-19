@@ -36,6 +36,9 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 # Import extensions
 from extensions import db, bcrypt, migrate, login_manager, babel, csrf
 
+# Import models to prevent import errors in routes
+from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem
+
 # =========================
 # Flask App Factory
 # =========================
@@ -2363,8 +2366,14 @@ def payments():
     status_filter = request.args.get('status')
     type_filter = request.args.get('type')
 
+    # Initialize all_invoices as empty list to prevent UnboundLocalError
+    all_invoices = []
+
     # Simple approach - get invoices directly from models
     try:
+        # Import required models
+        from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice
+
         # Sales invoices
         sales_invoices = []
         try:
@@ -2416,6 +2425,9 @@ def payments():
         except Exception as e:
             logging.warning(f'Error loading expense invoices: {e}')
 
+        # Combine all invoices into one list
+        all_invoices = sales_invoices + purchase_invoices + expense_invoices
+
         # Apply filters if needed
         if status_filter:
             all_invoices = [inv for inv in all_invoices if inv.get('status') == status_filter]
@@ -2428,7 +2440,7 @@ def payments():
     except Exception as e:
         logging.exception('Error in payments route')
         flash(_('Error loading payments / خطأ في تحميل المدفوعات'), 'danger')
-        return redirect(url_for('dashboard'))
+        return render_template('payments.html', invoices=all_invoices, status_filter=status_filter, type_filter=type_filter)
 
 @app.route('/reports', methods=['GET'])
 @login_required
