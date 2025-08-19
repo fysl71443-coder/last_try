@@ -24,7 +24,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import extensions
 from extensions import db, bcrypt, migrate, login_manager, babel, csrf
-from config import config
 
 # =========================
 # Flask App Factory
