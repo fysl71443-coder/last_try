@@ -2,6 +2,10 @@
 # START OF APP.PY (Top)
 # =========================
 
+# CRITICAL: Import eventlet and monkey patch FIRST
+import eventlet
+eventlet.monkey_patch()
+
 # 1️⃣ Standard libraries
 import os
 import sys
