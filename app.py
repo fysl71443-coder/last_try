@@ -795,12 +795,82 @@ def sales_table_invoice(branch_code, table_number):
 @login_required
 def api_menu_items(cat_id):
     from models import MenuItem, Meal
-    items = MenuItem.query.filter_by(category_id=cat_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
-    res = []
-    for it in items:
-        price = float(it.price_override) if it.price_override is not None else float(it.meal.selling_price or 0)
-        res.append({'id': it.id, 'meal_id': it.meal_id, 'name': it.meal.display_name, 'price': price})
-    return jsonify(res)
+    try:
+        items = MenuItem.query.filter_by(category_id=cat_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+        res = []
+        for it in items:
+            price = float(it.price_override) if it.price_override is not None else float(it.meal.selling_price or 0)
+            res.append({'id': it.id, 'meal_id': it.meal_id, 'name': it.meal.display_name, 'price': price})
+        current_app.logger.info(f"API: Found {len(res)} items for category {cat_id}")
+        return jsonify(res)
+    except Exception as e:
+        current_app.logger.error(f"API Error for category {cat_id}: {e}")
+        return jsonify([])
+
+# Debug route to check menu state
+@app.route('/api/debug/menu-state')
+@login_required
+def debug_menu_state():
+    from models import MenuCategory, MenuItem, Meal
+    try:
+        categories = MenuCategory.query.all()
+        meals = Meal.query.filter_by(active=True).all()
+        items = MenuItem.query.all()
+
+        result = {
+            'categories': [{'id': c.id, 'name': c.name, 'active': c.active} for c in categories],
+            'meals_count': len(meals),
+            'menu_items': [{'id': i.id, 'category_id': i.category_id, 'meal_id': i.meal_id, 'meal_name': i.meal.display_name if i.meal else 'N/A'} for i in items],
+            'cat_map': {c.name: c.id for c in categories if c.active}
+        }
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# Debug route to create sample menu items
+@app.route('/api/debug/create-sample-menu')
+@login_required
+def create_sample_menu():
+    from models import MenuCategory, MenuItem, Meal
+    try:
+        # Get first few categories and meals
+        categories = MenuCategory.query.filter_by(active=True).limit(5).all()
+        meals = Meal.query.filter_by(active=True).limit(10).all()
+
+        if not categories:
+            return jsonify({'error': 'No categories found. Please create categories first.'})
+
+        if not meals:
+            return jsonify({'error': 'No meals found. Please create meals first.'})
+
+        created_count = 0
+        for i, meal in enumerate(meals):
+            category = categories[i % len(categories)]  # Distribute meals across categories
+
+            # Check if item already exists
+            existing = MenuItem.query.filter_by(category_id=category.id, meal_id=meal.id).first()
+            if not existing:
+                menu_item = MenuItem(
+                    category_id=category.id,
+                    meal_id=meal.id,
+                    price_override=None,  # Use meal's default price
+                    display_order=i + 1
+                )
+                db.session.add(menu_item)
+                created_count += 1
+
+        safe_db_commit()
+
+        return jsonify({
+            'ok': True,
+            'message': f'Created {created_count} sample menu items',
+            'categories_used': len(categories),
+            'meals_used': len(meals)
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)})
 
     vat_rate = float(settings.vat_rate) if settings and settings.vat_rate is not None else 15.0
     from datetime import date as _date

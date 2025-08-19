@@ -154,8 +154,11 @@
 
   // Category name -> id map injected from server when available
   window.CAT_MAP = {{ cat_map_json | safe }};
+  console.log('🗺️ CAT_MAP loaded:', window.CAT_MAP);
 
   const meals = {{ meals_json | safe }};
+  console.log('🥘 Meals loaded:', meals.length, 'meals');
+  console.log('📂 Categories available:', {{ categories | tojson }});
   let currentCategory = null;
   const items = [];
   let currentDraftId = {{ current_draft.id if current_draft else 'null' }};
@@ -214,6 +217,9 @@
 
   async function selectCategory(cat, idx){
     currentCategory = cat;
+    console.log('🔍 Category selected:', cat);
+    console.log('🗺️ CAT_MAP:', window.CAT_MAP);
+
     // Open modal and populate with items in this category (from Menu API or fallback)
     const modalEl = document.getElementById('catModal');
     const modalTitle = document.getElementById('catModalTitle');
@@ -225,16 +231,31 @@
 
     // Try menu category mapping first
     const catId = (window.CAT_MAP && window.CAT_MAP[cat]) ? window.CAT_MAP[cat] : null;
+    console.log('🆔 Category ID found:', catId);
+
     let data = [];
     if(catId){
       try{
+        console.log('📡 Fetching items from API:', `/api/menu/${catId}/items`);
         const resp = await fetch(`/api/menu/${catId}/items`, { credentials: 'same-origin' });
-        data = await resp.json();
-      }catch(e){ data = []; }
+        console.log('📡 API Response status:', resp.status);
+        if(!resp.ok) {
+          console.error('❌ API Error:', resp.status, resp.statusText);
+          data = [];
+        } else {
+          data = await resp.json();
+          console.log('📦 API Data received:', data);
+        }
+      }catch(e){
+        console.error('❌ Fetch error:', e);
+        data = [];
+      }
+    } else {
+      console.log('⚠️ No category ID found, will use fallback');
     }
 
-    if(catId && Array.isArray(data)){
-      if(data.length === 0){ empty.classList.remove('d-none'); }
+    if(catId && Array.isArray(data) && data.length > 0){
+      console.log('✅ Using API data:', data.length, 'items');
       data.forEach(m => {
         const col = document.createElement('div');
         col.className = 'col-6 col-md-4 col-lg-3';
@@ -250,30 +271,53 @@
         grid.appendChild(col);
       });
     } else {
+      console.log('⚠️ Using fallback: local meals filter');
       // Fallback: local meals filter
       const filtered = meals.filter(m => m.category === cat);
-      if(filtered.length === 0){ empty.classList.remove('d-none'); }
-      filtered.forEach(m => {
-        const col = document.createElement('div');
-        col.className = 'col-6 col-md-4 col-lg-3';
-        const price = Number(m.price || 0);
-        const safeName = (m.name || '').replace(/`/g,'');
-        col.innerHTML = `
-          <div class="card meal-card h-100" onclick="addItemClose(${m.id})">
-            <div class="card-body d-flex flex-column justify-content-between">
-              <div class="fw-bold">${safeName}</div>
-              <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
-            </div>
-          </div>`;
-        grid.appendChild(col);
-      });
+      console.log('🔍 Filtered meals:', filtered.length, 'for category:', cat);
+
+      if(filtered.length === 0){
+        console.log('❌ No items found for category:', cat);
+        empty.classList.remove('d-none');
+        // Add helpful message to empty state
+        empty.innerHTML = `
+          <div class="alert alert-info">
+            <h6>{{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}</h6>
+            <p class="mb-0">{{ _('Please add meals to this category in the Menu admin page / يرجى إضافة وجبات لهذا القسم في صفحة إدارة القائمة') }}</p>
+            <small class="text-muted">Category: "${cat}"</small>
+          </div>
+        `;
+      } else {
+        console.log('✅ Found', filtered.length, 'items in fallback');
+        filtered.forEach(m => {
+          const col = document.createElement('div');
+          col.className = 'col-6 col-md-4 col-lg-3';
+          const price = Number(m.price || 0);
+          const safeName = (m.name || '').replace(/`/g,'');
+          col.innerHTML = `
+            <div class="card meal-card h-100" onclick="addItemClose(${m.id})">
+              <div class="card-body d-flex flex-column justify-content-between">
+                <div class="fw-bold">${safeName}</div>
+                <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
+              </div>
+            </div>`;
+          grid.appendChild(col);
+        });
+      }
     }
 
     // Reuse single modal instance to avoid double backdrops and stuck state
+    console.log('🎭 Opening modal...');
     if(window.bootstrap && bootstrap.Modal){
-      if(!window.__catModalInstance){ window.__catModalInstance = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true }); }
+      console.log('✅ Bootstrap Modal available');
+      if(!window.__catModalInstance){
+        console.log('🆕 Creating new modal instance');
+        window.__catModalInstance = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true });
+      }
+      console.log('📱 Showing modal');
       window.__catModalInstance.show();
     } else {
+      console.log('⚠️ Bootstrap not available, using fallback');
       // Fallback: no Bootstrap available => inline grid visible
       modalEl.classList.add('show');
       modalEl.style.display = 'block';
