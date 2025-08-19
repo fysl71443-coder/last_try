@@ -37,7 +37,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from extensions import db, bcrypt, migrate, login_manager, babel, csrf
 
 # Import models to prevent import errors in routes
-from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User
+from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, ExpenseInvoiceItem
 
 # =========================
 # Flask App Factory
@@ -1512,6 +1512,54 @@ def expenses():
                 item_before_tax = price * qty
                 discount = (item_before_tax + tax) * (discount_pct/100.0)
                 total_item = item_before_tax + tax - discount
+
+                # Create expense item
+                expense_item = ExpenseInvoiceItem(
+                    invoice_id=invoice.id,
+                    description=item_form.form.description.data,
+                    quantity=qty,
+                    price_before_tax=price,
+                    tax_amount=tax,
+                    discount_amount=discount,
+                    total_amount=total_item
+                )
+                db.session.add(expense_item)
+
+                # Update totals
+                total_before_tax += item_before_tax
+                total_tax += tax
+                total_discount += discount
+
+        # Update invoice totals
+        invoice.total_before_tax = total_before_tax
+        invoice.tax_amount = total_tax
+        invoice.discount_amount = total_discount
+        invoice.total_after_tax_discount = total_before_tax + total_tax - total_discount
+
+        # Create payment record
+        if invoice.total_after_tax_discount > 0:
+            payment = Payment(
+                invoice_id=invoice.id,
+                invoice_type='expense',
+                amount_paid=invoice.total_after_tax_discount,
+                payment_method=form.payment_method.data,
+                payment_date=datetime.now(timezone.utc),
+                user_id=current_user.id
+            )
+            db.session.add(payment)
+
+        if safe_db_commit("expense invoice creation"):
+            flash(_('Expense invoice created successfully / تم إنشاء فاتورة المصروفات بنجاح'), 'success')
+            return redirect(url_for('expenses'))
+        else:
+            flash(_('Error creating expense invoice / خطأ في إنشاء فاتورة المصروفات'), 'danger')
+
+    # GET request - show form and existing invoices
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    pag = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    return render_template('expenses.html', form=form, invoices=pag.items, pagination=pag)
+
 
 @app.route('/import_meals', methods=['POST'])
 @login_required
