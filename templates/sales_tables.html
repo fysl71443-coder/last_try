@@ -19,7 +19,7 @@
     <div class="col-6 col-sm-4 col-md-3 col-lg-2">
       <a class="card text-center text-decoration-none shadow-sm h-100 border-0
          {% if table.status == 'occupied' %}bg-warning text-dark{% elif table.status == 'reserved' %}bg-info text-white{% else %}bg-light{% endif %}"
-         href="{{ url_for('sales_table_manage', branch_code=branch_code, table_no=table.number) }}">
+         href="{{ url_for('sales_table_manage', branch_code=branch_code, table_number=table.number) }}">
         <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 80px;">
           <div>
             <div class="fw-bold" style="font-size: 1.25rem;">{{ table.number }}</div>

@@ -37,7 +37,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from extensions import db, bcrypt, migrate, login_manager, babel, csrf
 
 # Import models to prevent import errors in routes
-from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, ExpenseInvoiceItem
+from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, ExpenseInvoiceItem, UserPermission, Table, DraftOrder, DraftOrderItem
 
 # =========================
 # Flask App Factory
