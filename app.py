@@ -1922,7 +1922,7 @@ def api_draft_checkout():
         # Update table status
         remaining_drafts = DraftOrder.query.filter_by(
             branch_code=draft.branch_code,
-            table_number=draft.table_number,
+            table_number=str(draft.table_number),
             status='draft'
         ).count()
 
