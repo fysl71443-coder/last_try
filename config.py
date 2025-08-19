@@ -6,6 +6,7 @@ Configuration settings for different environments.
 
 import os
 from dotenv import load_dotenv
+from sqlalchemy.pool import NullPool
 
 # Load environment variables
 load_dotenv()
@@ -63,15 +64,13 @@ class ProductionConfig(Config):
     DEBUG = False
     TESTING = False
 
-    # Production-specific SQLAlchemy settings
+    # Production-specific SQLAlchemy settings - disable pooling completely
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_pre_ping': True,
-        'pool_recycle': 300,
-        'pool_timeout': 20,
-        'max_overflow': 0,
-        'pool_size': 1,  # Single connection for production
+        'poolclass': NullPool,  # Disable connection pooling
+        'pool_pre_ping': False,
         'connect_args': {
-            'check_same_thread': False  # For SQLite in production
+            'check_same_thread': False,  # For SQLite in production
+            'timeout': 20
         }
     }
 

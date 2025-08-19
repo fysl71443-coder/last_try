@@ -11,9 +11,9 @@ python-dotenv==1.0.0
 Flask-Babel==3.0.0
 Flask-SocketIO==5.3.6
 reportlab==4.0.4
-# Production server (sync workers only)
+# Production server
 gunicorn==21.2.0
-# eventlet==0.36.1  # Only for development with SocketIO
+eventlet==0.36.1  # Required by Render deployment (will be disabled via env vars)
 # Arabic text shaping for PDF
 arabic-reshaper>=3.0.0
 python-bidi>=0.4.2
