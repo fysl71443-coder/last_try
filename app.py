@@ -29,13 +29,13 @@ from config import config
 # =========================
 # Flask App Factory
 # =========================
-def create_app(config_name=None):
+def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
 
     # Load configuration
-    config_name = config_name or os.getenv('FLASK_ENV', 'default')
-    app.config.from_object(config[config_name])
+    from config import Config
+    app.config.from_object(Config)
     # Initialize extensions
     db.init_app(app)
     bcrypt.init_app(app)

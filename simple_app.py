@@ -25,20 +25,10 @@ from extensions import db, bcrypt, migrate, login_manager, babel, csrf
 def create_simple_app():
     """Create a simple Flask app with minimal config"""
     app = Flask(__name__)
-    
-    # Simple configuration
-    app.config.update({
-        'SECRET_KEY': os.getenv('SECRET_KEY', 'simple-secret-key'),
-        'SQLALCHEMY_DATABASE_URI': "sqlite:///app.db",
-        'SQLALCHEMY_ENGINE_OPTIONS': {
-            "connect_args": {"check_same_thread": False}
-        },
-        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
-        'DEBUG': False,
-        'TESTING': False,
-        'WTF_CSRF_ENABLED': True,
-        'BABEL_DEFAULT_LOCALE': 'ar',
-    })
+
+    # Load configuration from config.py
+    from config import Config
+    app.config.from_object(Config)
     
     # Initialize extensions
     db.init_app(app)

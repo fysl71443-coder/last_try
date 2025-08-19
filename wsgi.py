@@ -27,7 +27,7 @@ if os.getenv('USE_EVENTLET', '1') == '0':
 from app import create_app
 
 # Create the application instance
-application = create_app('production')
+application = create_app()
 
 if __name__ == "__main__":
     application.run(host='0.0.0.0', port=int(os.getenv('PORT', 8000)))

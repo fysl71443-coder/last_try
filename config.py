@@ -1,45 +1,21 @@
-"""
-Application Configuration
-========================
-Configuration settings for different environments.
-"""
-
 import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 class Config:
-    """Base configuration class"""
-    
-    # Secret key
-    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-key-change-in-production')
-    
-    # Database configuration
-    basedir = os.path.abspath(os.path.dirname(__file__))
-    instance_dir = os.path.join(basedir, 'instance')
-    os.makedirs(instance_dir, exist_ok=True)
-    
-    # Simple SQLite database
-    SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
+    # إذا DATABASE_URL موجودة (من Render أو أي خدمة) نستخدمها
+    if os.getenv("DATABASE_URL"):
+        SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
+    else:
+        # تشغيل محلي باستخدام SQLite
+        SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            "connect_args": {"check_same_thread": False}
+        }
 
-    # Override with production DB if available
-    _db_url = os.getenv('DATABASE_URL')
-    if _db_url:
-        if _db_url.startswith('postgres://'):
-            _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
-        SQLALCHEMY_DATABASE_URI = _db_url
-    
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-
-    # SQLAlchemy Engine Options - simple and safe
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "connect_args": {"check_same_thread": False}
-    }
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret_key")
 
     # Babel / i18n
-    BABEL_DEFAULT_LOCALE = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
+    BABEL_DEFAULT_LOCALE = os.getenv('BABEL_DEFAULT_LOCALE', 'ar')
     LANGUAGES = ['en', 'ar']
 
     # CSRF settings
@@ -49,33 +25,5 @@ class Config:
     # Session settings
     PERMANENT_SESSION_LIFETIME = 86400  # 24 hours
 
-class DevelopmentConfig(Config):
-    """Development configuration"""
-    DEBUG = True
-    TESTING = False
-
-class ProductionConfig(Config):
-    """Production configuration"""
-    DEBUG = False
-    TESTING = False
-
-    # Production SQLAlchemy settings - simple and safe
-    SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "connect_args": {"check_same_thread": False}
-    }
-
-class TestingConfig(Config):
-    """Testing configuration"""
-    DEBUG = True
-    TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
-    WTF_CSRF_ENABLED = False
-
-# Configuration dictionary
-config = {
-    'development': DevelopmentConfig,
-    'production': ProductionConfig,
-    'testing': TestingConfig,
-    'default': DevelopmentConfig
-}
+    # Debug mode
+    DEBUG = os.getenv('FLASK_ENV') != 'production'
