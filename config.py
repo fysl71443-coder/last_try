@@ -11,11 +11,13 @@ class Config:
         SQLALCHEMY_DATABASE_URI = DATABASE_URL
         SQLALCHEMY_ENGINE_OPTIONS = {
             "poolclass": NullPool,  # تجنب مشاكل connection pooling مع eventlet
-            "pool_pre_ping": True
+            "pool_pre_ping": True,
+            "echo": False  # تعطيل SQL logging في الإنتاج
         }
     else:
         SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
         SQLALCHEMY_ENGINE_OPTIONS = {
             "poolclass": NullPool,  # تجنب مشاكل connection pooling مع eventlet
-            "connect_args": {"check_same_thread": False}
+            "connect_args": {"check_same_thread": False},
+            "echo": True  # تفعيل SQL logging للتطوير
         }

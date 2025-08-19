@@ -15,6 +15,13 @@ import traceback
 import time
 from datetime import datetime, timedelta, timezone
 
+# Configure logging for debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # 2️⃣ Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
@@ -294,43 +301,63 @@ except Exception:
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    form = LoginForm()
-    client_ip = request.remote_addr
+    if request.method == 'POST':
+        try:
+            with app.app_context():  # ضمان سياق التطبيق
+                username = request.form.get('username')
+                password = request.form.get('password')
 
-    # Check if blocked
-    if client_ip in login_attempts:
-        attempts_info = login_attempts[client_ip]
-        if attempts_info["count"] >= 5 and datetime.now(timezone.utc) - attempts_info["last_attempt"] < timedelta(minutes=10):
-            flash(_('Too many attempts. Try again later. / عدد المحاولات كبير، حاول لاحقاً.'), 'danger')
-            return render_template('login.html', form=form)
+                logger.info(f"Login attempt for username: {username}")
+                print(f"Login attempt for username: {username}")  # للتتبع
 
-    if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        if user and bcrypt.check_password_hash(user.password_hash, form.password.data):
-            if not user.active:
-                flash(_('حسابك غير مفعل / Your account is not active.'), 'danger')
-                return render_template('login.html', form=form)
+                # البحث عن المستخدم
+                try:
+                    user = User.query.filter_by(username=username).first()
+                    print(f"User found: {user is not None}")
+                except Exception as db_error:
+                    print(f"Database query error: {db_error}")
+                    flash('خطأ في قاعدة البيانات / Database error', 'danger')
+                    return render_template('login.html')
 
-            login_user(user, remember=form.remember.data)
-            user.last_login()
-            if safe_db_commit("login"):
-                login_attempts.pop(client_ip, None)  # reset attempts
-                flash(_('تم تسجيل الدخول بنجاح / Logged in successfully.'), 'success')
-                return redirect(url_for('dashboard'))
-            else:
-                flash(_('خطأ في تسجيل الدخول / Login error.'), 'danger')
-                return render_template('login.html', form=form)
+                if user:
+                    try:
+                        # التحقق من كلمة المرور
+                        password_valid = bcrypt.check_password_hash(user.password_hash, password)
+                        print(f"Password valid: {password_valid}")
 
-        # Wrong credentials — increment counter
-        if client_ip not in login_attempts:
-            login_attempts[client_ip] = {"count": 1, "last_attempt": datetime.now(timezone.utc)}
-        else:
-            login_attempts[client_ip]["count"] += 1
-            login_attempts[client_ip]["last_attempt"] = datetime.now(timezone.utc)
+                        if password_valid:
+                            # تسجيل الدخول
+                            login_user(user)
 
-        flash(_('اسم المستخدم أو كلمة المرور غير صحيحة / Invalid credentials.'), 'danger')
+                            # تحديث آخر تسجيل دخول
+                            try:
+                                user.last_login()
+                                if safe_db_commit("login update"):
+                                    print("Login successful, redirecting to dashboard")
+                                    return redirect(url_for('dashboard'))
+                                else:
+                                    print("Failed to update last login")
+                            except Exception as update_error:
+                                print(f"Error updating last login: {update_error}")
 
-    return render_template('login.html', form=form)
+                            # حتى لو فشل التحديث، نسمح بالدخول
+                            return redirect(url_for('dashboard'))
+                        else:
+                            flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
+                    except Exception as bcrypt_error:
+                        print(f"Bcrypt error: {bcrypt_error}")
+                        flash('خطأ في التحقق من كلمة المرور / Password verification error', 'danger')
+                else:
+                    flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
+
+        except Exception as e:
+            # طباعة الخطأ في سجل الخادم لتعرف السبب
+            print(f"Login Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return "Internal Server Error", 500
+
+    return render_template('login.html')
 
 @app.route('/dashboard')
 @login_required
