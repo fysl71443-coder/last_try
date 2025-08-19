@@ -37,7 +37,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from extensions import db, bcrypt, migrate, login_manager, babel, csrf
 
 # Import models to prevent import errors in routes
-from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem
+from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User
 
 # =========================
 # Flask App Factory
@@ -2438,6 +2438,12 @@ def payments():
         return render_template('payments.html', invoices=all_invoices, status_filter=status_filter, type_filter=type_filter)
 
     except Exception as e:
+        # Rollback any failed database transactions
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
         logging.exception('Error in payments route')
         flash(_('Error loading payments / خطأ في تحميل المدفوعات'), 'danger')
         return render_template('payments.html', invoices=all_invoices, status_filter=status_filter, type_filter=type_filter)
@@ -2475,61 +2481,108 @@ def reports():
             start_dt = today.replace(day=1)
             end_dt = today
 
-        # Optional branch filter
+        # Optional branch filter - with error handling
         branch_filter = request.args.get('branch')
-        if branch_filter and branch_filter != 'all':
-            sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
-                .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter).scalar() or 0
-            sales_china = 0
-            total_sales = float(sales_place)
-        else:
-            # Sales totals by branch
-            sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
-                .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'place_india').scalar() or 0
-            sales_china = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
-                .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
-            total_sales = float(sales_place) + float(sales_china)
+        sales_place = 0
+        sales_china = 0
+        total_sales = 0
 
-        # Purchases and Expenses
-        total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-            .filter(PurchaseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
-        total_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
-            .filter(ExpenseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        try:
+            if branch_filter and branch_filter != 'all':
+                sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+                    .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter).scalar() or 0
+                sales_china = 0
+                total_sales = float(sales_place)
+            else:
+                # Sales totals by branch
+                sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+                    .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'place_india').scalar() or 0
+                sales_china = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+                    .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
+                total_sales = float(sales_place) + float(sales_china)
+        except Exception as e:
+            logging.warning(f'Error calculating sales totals: {e}')
+            db.session.rollback()
+            sales_place = sales_china = total_sales = 0
+
+        # Purchases and Expenses - with error handling
+        total_purchases = 0
+        total_expenses = 0
+        total_salaries = 0
+
+        try:
+            total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
+                .filter(PurchaseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        except Exception as e:
+            logging.warning(f'Error calculating purchases: {e}')
+            db.session.rollback()
+            total_purchases = 0
+
+        try:
+            total_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
+                .filter(ExpenseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        except Exception as e:
+            logging.warning(f'Error calculating expenses: {e}')
+            db.session.rollback()
+            total_expenses = 0
 
         # Salaries within period: compute by month-year mapping to 1st day of month
-        salaries_rows = Salary.query.all()
-        total_salaries = 0.0
-        for s in salaries_rows:
-            try:
-                s_date = datetime(s.year, s.month, 1).date()
-                if start_dt <= s_date <= end_dt:
-                    total_salaries += float(s.total_salary or 0)
-            except Exception:
-                continue
+        try:
+            salaries_rows = Salary.query.all()
+            for s in salaries_rows:
+                try:
+                    s_date = datetime(s.year, s.month, 1).date()
+                    if start_dt <= s_date <= end_dt:
+                        total_salaries += float(s.total_salary or 0)
+                except Exception:
+                    continue
+        except Exception as e:
+            logging.warning(f'Error calculating salaries: {e}')
+            db.session.rollback()
+            total_salaries = 0
 
         profit = float(total_sales) - (float(total_purchases) + float(total_expenses) + float(total_salaries))
 
-        # Line chart: daily sales
-        daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
-            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-            .group_by(SalesInvoice.date) \
-            .order_by(SalesInvoice.date.asc()).all()
-        line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
-        line_values = [float(r.t or 0) for r in daily_rows]
+        # Line chart: daily sales - with error handling
+        line_labels = []
+        line_values = []
 
-        # Payment method distribution across invoices
+        try:
+            daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
+                .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+                .group_by(SalesInvoice.date) \
+                .order_by(SalesInvoice.date.asc()).all()
+            line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
+            line_values = [float(r.t) if r.t is not None else 0.0 for r in daily_rows]
+        except Exception as e:
+            logging.warning(f'Error generating daily sales chart: {e}')
+            db.session.rollback()
+            line_labels = []
+            line_values = []
+
+        # Payment method distribution across invoices - with error handling
         def pm_counts(model, date_col, method_col):
-            rows = db.session.query(getattr(model, method_col), func.count('*')) \
-                .filter(getattr(model, date_col).between(start_dt, end_dt)) \
-                .group_by(getattr(model, method_col)).all()
-            return { (k or 'unknown'): int(v) for k, v in rows }
+            try:
+                rows = db.session.query(getattr(model, method_col), func.count('*')) \
+                    .filter(getattr(model, date_col).between(start_dt, end_dt)) \
+                    .group_by(getattr(model, method_col)).all()
+                return { (k or 'unknown'): int(v) for k, v in rows }
+            except Exception as e:
+                logging.warning(f'Error getting payment method counts for {model.__name__}: {e}')
+                db.session.rollback()
+                return {}
 
         pm_map = {}
-        for d in (pm_counts(SalesInvoice, 'date', 'payment_method'),
-                  pm_counts(PurchaseInvoice, 'date', 'payment_method'),
-                  pm_counts(ExpenseInvoice, 'date', 'payment_method')):
-            for k, v in d.items():
-                pm_map[k] = pm_map.get(k, 0) + v
+        try:
+            for d in (pm_counts(SalesInvoice, 'date', 'payment_method'),
+                      pm_counts(PurchaseInvoice, 'date', 'payment_method'),
+                      pm_counts(ExpenseInvoice, 'date', 'payment_method')):
+                for k, v in d.items():
+                    pm_map[k] = pm_map.get(k, 0) + v
+        except Exception as e:
+            logging.warning(f'Error processing payment method data: {e}')
+            pm_map = {}
+
         pm_labels = list(pm_map.keys())
         pm_values = [pm_map[k] for k in pm_labels]
 
@@ -2537,25 +2590,54 @@ def reports():
         comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
         comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
 
-        # Cash flows from Payments table
-        start_dt_dt = datetime.combine(start_dt, datetime.min.time())
-        end_dt_dt = datetime.combine(end_dt, datetime.max.time())
-        inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-            Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
-        ).scalar() or 0)
-        outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-            Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
-        ).scalar() or 0)
-        net_cash = inflow - outflow
+        # Cash flows from Payments table - with error handling
+        inflow = 0
+        outflow = 0
+        net_cash = 0
 
-        # Top products by quantity
-        top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
-            .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
-            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-            .group_by(SalesInvoiceItem.product_name) \
-            .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
-            .limit(10).all()
-        top_labels = [r[0] for r in top_rows]
+        try:
+            start_dt_dt = datetime.combine(start_dt, datetime.min.time())
+            end_dt_dt = datetime.combine(end_dt, datetime.max.time())
+            inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
+            ).scalar() or 0)
+            outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
+            ).scalar() or 0)
+            net_cash = inflow - outflow
+        except Exception as e:
+            logging.warning(f'Error calculating cash flows: {e}')
+            db.session.rollback()
+            inflow = outflow = net_cash = 0
+
+        # Top products by quantity - with error handling
+        top_labels = []
+        top_values = []
+
+        try:
+            top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
+                .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
+                .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+                .group_by(SalesInvoiceItem.product_name) \
+                .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
+                .limit(10).all()
+            top_labels = [r[0] for r in top_rows]
+            top_values = [float(r[1]) for r in top_rows]
+        except Exception as e:
+            logging.warning(f'Error getting top products: {e}')
+            db.session.rollback()
+            top_labels = []
+            top_values = []
+
+        # Low stock items - with error handling
+        low_stock = []
+        try:
+            low_stock_rows = RawMaterial.query.filter(RawMaterial.current_stock <= RawMaterial.minimum_stock).all()
+            low_stock = [{'name': r.name, 'current': r.current_stock, 'minimum': r.minimum_stock} for r in low_stock_rows]
+        except Exception as e:
+            logging.warning(f'Error getting low stock items: {e}')
+            db.session.rollback()
+            low_stock = []
 
         # Settings for labels/currency
         s = get_settings_safe()
@@ -2563,9 +2645,32 @@ def reports():
         china_lbl = s.china_town_label if s and s.china_town_label else 'China Town'
         currency = s.currency if s and s.currency else 'SAR'
 
-        # Simple fallback data for now
+        # Return template with actual calculated data
         return render_template('reports.html',
-            period=period, start_date=today, end_date=today,
+            period=period, start_date=start_dt, end_date=end_dt,
+            sales_place=sales_place, sales_china=sales_china, total_sales=total_sales,
+            total_purchases=total_purchases, total_expenses=total_expenses, total_salaries=total_salaries, profit=profit,
+            line_labels=line_labels, line_values=line_values,
+            pm_labels=pm_labels, pm_values=pm_values,
+            comp_labels=comp_labels, comp_values=comp_values,
+            inflow=inflow, outflow=outflow, net_cash=net_cash,
+            top_labels=top_labels, top_values=top_values,
+            low_stock=low_stock,
+            place_lbl=place_lbl, china_lbl=china_lbl, currency=currency
+        )
+    except Exception as e:
+        # Rollback any failed database transactions
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+        logging.exception('Error in reports route')
+        flash(_('Error loading reports / خطأ في تحميل التقارير'), 'danger')
+
+        # Return safe fallback data instead of redirect
+        return render_template('reports.html',
+            period='this_month', start_date=datetime.now().date(), end_date=datetime.now().date(),
             sales_place=0, sales_china=0, total_sales=0,
             total_purchases=0, total_expenses=0, total_salaries=0, profit=0,
             line_labels=[], line_values=[],
@@ -2576,10 +2681,6 @@ def reports():
             low_stock=[],
             place_lbl='Place India', china_lbl='China Town', currency='SAR'
         )
-    except Exception as e:
-        logging.exception('Error in reports route')
-        flash(_('Error loading reports / خطأ في تحميل التقارير'), 'danger')
-        return redirect(url_for('dashboard'))
 
 
 
