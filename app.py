@@ -1506,11 +1506,10 @@ def purchases():
             cash_acc = get_or_create('1000', 'Cash', 'ASSET')
             ap_acc = get_or_create('2000', 'Accounts Payable', 'LIABILITY')
 
-            settle_cash_like = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC','cash','mada','visa','mastercard','bank','aks','gcc']
-            settle_acc = cash_acc if (invoice.payment_method in settle_cash_like) else ap_acc
+            # Always record purchases as payable at creation; payment will be registered later
             db.session.add(LedgerEntry(date=invoice.date, account_id=inv_acc.id, debit=invoice.total_before_tax, credit=0, description=f'Purchase {invoice.invoice_number}'))
             db.session.add(LedgerEntry(date=invoice.date, account_id=vat_in_acc.id, debit=invoice.tax_amount, credit=0, description=f'VAT Input {invoice.invoice_number}'))
-            db.session.add(LedgerEntry(date=invoice.date, account_id=settle_acc.id, credit=invoice.total_after_tax_discount, debit=0, description=f'Settlement {invoice.invoice_number}'))
+            db.session.add(LedgerEntry(date=invoice.date, account_id=ap_acc.id, credit=invoice.total_after_tax_discount, debit=0, description=f'AP for {invoice.invoice_number}'))
             safe_db_commit()
         except Exception as e:
             db.session.rollback()
@@ -1614,17 +1613,7 @@ def expenses():
         invoice.discount_amount = total_discount
         invoice.total_after_tax_discount = total_before_tax + total_tax - total_discount
 
-        # Create payment record
-        if invoice.total_after_tax_discount > 0:
-            payment = Payment(
-                invoice_id=invoice.id,
-                invoice_type='expense',
-                amount_paid=invoice.total_after_tax_discount,
-                payment_method=form.payment_method.data,
-                payment_date=datetime.now(timezone.utc),
-                user_id=current_user.id
-            )
-            db.session.add(payment)
+        # Do not create payment automatically; will remain unpaid until user registers a payment
 
         if safe_db_commit("expense invoice creation"):
             flash(_('Expense invoice created successfully / تم إنشاء فاتورة المصروفات بنجاح'), 'success')
@@ -2477,7 +2466,7 @@ def salaries():
                 deductions=deductions,
                 previous_salary_due=prev_due,
                 total_salary=total,
-                status=form.status.data
+                status='unpaid'
             )
             db.session.add(salary)
             safe_db_commit()
