@@ -29,7 +29,7 @@
         <div class="row g-2">
           {% for c in categories %}
           <div class="col-6 col-md-4 col-lg-3">
-            <div class="card cat-card p-2 h-100" onclick="selectCategory('{{ c }}', {{ loop.index0 }})">
+            <div class="card cat-card p-2 h-100">
               <div class="card-body d-flex align-items-center justify-content-center">
                 <div class="fw-bold text-center">{{ c }}</div>
               </div>
@@ -143,8 +143,8 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.cat-card').forEach((el, i)=>{
-      el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectCategory(el.innerText.trim(), i);} });
-      el.addEventListener('click', ()=> selectCategory(el.innerText.trim(), i));
+      el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); window.selectCategory(el.innerText.trim(), i);} });
+      el.addEventListener('click', ()=> window.selectCategory(el.innerText.trim(), i));
       el.setAttribute('tabindex','0');
     });
     // expose codes for external script
@@ -215,7 +215,7 @@
     renderItems();
   }
 
-  async function selectCategory(cat, idx){
+  window.selectCategory = async function(cat, idx){
     currentCategory = cat;
     console.log('🔍 Category selected:', cat);
     console.log('🗺️ CAT_MAP:', window.CAT_MAP);
