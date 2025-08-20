@@ -152,7 +152,7 @@
     document.getElementById('btnVoidInvoice')?.addEventListener('click', ()=> window.voidInvoice && window.voidInvoice());
     // expose codes for external script
     document.body.dataset.branch = '{{ branch_code }}';
-    document.body.dataset.table = '{{ table_no }}';
+    document.body.dataset.table = '{{ table_number }}';
   });
 
   // Category name -> id map injected from server when available
@@ -445,7 +445,7 @@
       // Regular checkout
       payload = {
         branch_code: '{{ branch_code }}',
-        table_no: {{ table_no }},
+        table_no: {{ table_number }},
         items: items.map(x => ({ meal_id: x.meal_id, qty: x.qty })),
         customer_name: document.getElementById('custName').value,
         customer_phone: document.getElementById('custPhone').value,
