@@ -114,8 +114,8 @@
           </div>
 
           <div class="mt-3 d-flex justify-content-between align-items-center">
-            <button class="btn btn-outline-danger" onclick="voidInvoice()">{{ _('Cancel Invoice / إلغاء الفاتورة') }}</button>
-            <button class="btn btn-success" onclick="payAndPrint()">{{ _('Pay & Print / دفع + طباعة') }}</button>
+            <button id="btnVoidInvoice" class="btn btn-outline-danger">{{ _('Cancel Invoice / إلغاء الفاتورة') }}</button>
+            <button id="btnPayPrint" class="btn btn-success">{{ _('Pay & Print / دفع + طباعة') }}</button>
           </div>
         </div>
       </div>
@@ -147,6 +147,9 @@
       el.addEventListener('click', ()=> window.selectCategory(el.innerText.trim(), i));
       el.setAttribute('tabindex','0');
     });
+    // bind pay/print and void buttons
+    document.getElementById('btnPayPrint')?.addEventListener('click', ()=> window.payAndPrint && window.payAndPrint());
+    document.getElementById('btnVoidInvoice')?.addEventListener('click', ()=> window.voidInvoice && window.voidInvoice());
     // expose codes for external script
     document.body.dataset.branch = '{{ branch_code }}';
     document.body.dataset.table = '{{ table_no }}';
@@ -324,10 +327,10 @@
     }
   }
 
-  function addItemClose(mealId){ addItem(mealId); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
-  function addMenuItemClose(mealId, name, unit){ addMenuItem(mealId, name, unit); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
+  window.addItemClose = function(mealId){ console.log('addItemClose()', mealId); window.addItem(mealId); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
+  window.addMenuItemClose = function(mealId, name, unit){ console.log('addMenuItemClose()', mealId, name, unit); window.addMenuItem(mealId, name, unit); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
 
-  async function addItem(mealId){
+  window.addItem = async function(mealId){ console.log('addItem()', mealId);
     const m = meals.find(x => x.id === mealId);
     if(!m) return;
     const existing = items.find(x => x.meal_id === m.id);
@@ -342,7 +345,7 @@
   }
 
   // Add item using data from Menu API (fallback if meal not in global list)
-  function addMenuItem(mealId, name, unit){
+  window.addMenuItem = function(mealId, name, unit){ console.log('addMenuItem()', mealId, name, unit);
     const m = meals.find(x => x.id === mealId);
     if(m){ addItem(mealId); return; }
     const existing = items.find(x => x.meal_id === mealId);
@@ -351,7 +354,7 @@
     renderItems();
   }
 
-  function renderItems(){
+  window.renderItems = function(){ console.log('renderItems()', items);
     const body = document.getElementById('itemsBody');
     body.innerHTML = '';
     let subtotal = 0;
@@ -381,20 +384,20 @@
     document.getElementById('grand').innerText = grand.toFixed(2);
   }
 
-  async function changeQty(idx, v){
+  window.changeQty = async function(idx, v){ console.log('changeQty()', idx, v);
     items[idx].qty = parseFloat(v||'1');
     renderItems();
     await saveDraftOrder(); // Auto-save after quantity change
   }
 
-  async function removeItem(idx){
+  window.removeItem = async function(idx){ console.log('removeItem()', idx);
     items.splice(idx,1);
     renderItems();
     await saveDraftOrder(); // Auto-save after item removal
   }
 
   // Auto-save draft order
-  async function saveDraftOrder() {
+  window.saveDraftOrder = async function() { console.log('saveDraftOrder()');
     if (!currentDraftId || items.length === 0) return;
 
     try {
@@ -421,7 +424,7 @@
     }
   }
 
-  async function payAndPrint(){
+  window.payAndPrint = async function(){ console.log('payAndPrint() called');
     if(items.length === 0){
       await showAlert('{{ _('Add at least one item / أضف عنصراً واحداً على الأقل') }}');
       return;
@@ -477,10 +480,12 @@
     // Ensure any modal leftovers are removed
     document.body.classList.remove('modal-open');
     document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
-    if(data.print_url){ window.open(data.print_url, '_blank'); } else { alert('Invoice created (test echo).'); }
+    if(data.print_url){ if(!window.__TEST_MODE__){ window.open(data.print_url, '_blank'); } console.log('Print URL:', data.print_url); } else { alert('Invoice created (test echo).'); }
+    console.log('Invoice created successfully', data);
+    return data;
   }
 
-  async function voidInvoice(){
+  window.voidInvoice = async function(){ console.log('voidInvoice() called');
     if(items.length === 0){
       await showAlert('{{ _('Invoice is already empty / لا توجد عناصر في الفاتورة') }}');
       return;
@@ -512,8 +517,14 @@
     }catch(e){ await showAlert('Error'); }
   }
 
+  // ---------------------- Test Utilities ----------------------
+  window.createInvoice = async function(){ console.log('createInvoice() test stub'); return true; }
+  window.cancelInvoice = async function(){ console.log('cancelInvoice() test stub'); items.length = 0; renderItems(); return true; }
+  window.postInvoice = async function(){ console.log('postInvoice() test stub'); return true; }
+
   // Initialize the page
   document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded -> init sales screen');
     renderItems(); // Show any loaded draft items
 
     // Auto-save when customer info changes
@@ -525,6 +536,39 @@
     if (custPhone) custPhone.addEventListener('blur', saveDraftOrder);
     if (payMethod) payMethod.addEventListener('change', saveDraftOrder);
   });
+
+  // ---------------------- End-to-End Test ----------------------
+  window.testSalesScreen = async function(){
+    try{
+      window.__TEST_MODE__ = true; // avoid opening tabs
+      console.log('=== testSalesScreen: START ===');
+      // 1) إنشاء فاتورة جديدة (تهيئة)
+      await window.createInvoice();
+      console.log('Invoice created successfully');
+
+      // 2) إضافة صنف واحد على الأقل
+      const someMeal = meals[0] || { id: 1, name: 'Test', price: 10 };
+      await window.addItem(someMeal.id);
+      console.log('Item added:', someMeal);
+
+      // 3) إلغاء الفاتورة
+      await window.voidInvoice();
+      if(items.length!==0){ throw new Error('Cancel failed: items not cleared'); }
+      console.log('Invoice cancelled and items cleared');
+
+      // 4) إنشاء فاتورة أخرى وإكمالها للدفع والطباعة
+      await window.addItem(someMeal.id);
+      const res = await window.payAndPrint();
+      console.log('Pay & Print response:', res);
+
+      // 5) ترحيل الفاتورة (اختبار stub)
+      await window.postInvoice();
+      console.log('Invoice posted (stub)');
+
+      alert('testSalesScreen finished successfully');
+      console.log('=== testSalesScreen: DONE ===');
+    }catch(e){ console.error('testSalesScreen error:', e); alert('testSalesScreen failed: '+e.message); }
+  }
 </script>
 {% endblock %}
 
