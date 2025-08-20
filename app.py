@@ -166,8 +166,12 @@ def create_app():
     except Exception as _patch_err:
         logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
 
-    # Basic error logging to file (errors only)
-    logging.basicConfig(filename='app.log', level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
+    # Local rotating error logging
+    try:
+        from logging_setup import setup_logging
+        setup_logging(app)
+    except Exception as _log_err:
+        logging.error('Failed to initialize local rotating error logging: %s', _log_err)
 
     # Import models after db created
     from models import User, Invoice, SalesInvoice, SalesInvoiceItem, Product, RawMaterial, Meal, MealIngredient, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Employee, Salary, Payment, Account, LedgerEntry
