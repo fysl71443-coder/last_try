@@ -145,6 +145,8 @@ def create_app():
                         existing_cols_si = {c['name'] for c in _insp.get_columns('sales_invoices')}
                         if 'customer_phone' not in existing_cols_si:
                             _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30)"))
+                        if 'customer_id' not in existing_cols_si:
+                            _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_id INTEGER"))
 
                     # 5) Ensure menu_items table exists
                     if 'menu_items' not in _insp.get_table_names():
@@ -1309,7 +1311,7 @@ def api_sales_checkout():
             tax_amount=tax_total,
             discount_amount=discount_val,
             total_after_tax_discount=grand_total,
-            status='paid',
+            status='unpaid',  # Will be posted as paid upon printing the receipt
             user_id=current_user.id
         )
 
@@ -1344,13 +1346,7 @@ def api_sales_checkout():
                 total_price=float(it.get('total') or 0)
             ))
 
-        # Record payment
-        db.session.add(Payment(
-            invoice_id=inv.id,
-            invoice_type='sales',
-            amount_paid=grand_total,
-            payment_method=payment_method
-        ))
+        # Do not record payment here; posting occurs on print
 
         try:
             safe_db_commit()
@@ -1381,6 +1377,8 @@ def sales_receipt(invoice_id):
 @login_required
 def purchases():
     import json
+    from decimal import Decimal
+    from decimal import Decimal
 
     # Get raw materials for dropdown
     raw_materials = RawMaterial.query.filter_by(active=True).all()
@@ -1455,8 +1453,9 @@ def purchases():
                     total_tax += tax
                     total_discount += discount
 
-                    # Update raw material stock quantity
-                    raw_material.stock_quantity += qty
+                    # Update raw material stock quantity (ensure Decimal arithmetic)
+                    qty_dec = Decimal(str(qty))
+                    raw_material.stock_quantity = (raw_material.stock_quantity or 0) + qty_dec
 
                     # Update cost per unit (weighted average)
                     if raw_material.stock_quantity > 0:
@@ -1568,7 +1567,7 @@ def expenses():
             invoice_number=invoice_number,
             date=form.date.data,
             payment_method=form.payment_method.data,
-            status='paid',  # Expenses are usually paid immediately
+            status='unpaid',  # Will remain unpaid until user registers a payment
             total_before_tax=0,  # Will be calculated
             tax_amount=0,  # Will be calculated
             discount_amount=0,  # Will be calculated
@@ -1598,9 +1597,9 @@ def expenses():
                     description=item_form.form.description.data,
                     quantity=qty,
                     price_before_tax=price,
-                    tax_amount=tax,
-                    discount_amount=discount,
-                    total_amount=total_item
+                    tax=tax,
+                    discount=discount,
+                    total_price=total_item
                 )
                 db.session.add(expense_item)
 
