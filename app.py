@@ -239,6 +239,15 @@ def get_locale():
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
 
+# Expose get_locale to Jinja templates
+@app.context_processor
+def inject_get_locale():
+    try:
+        return dict(get_locale=get_locale)
+    except Exception:
+        return {}
+
+
 # Configure babel locale selector after get_locale is defined
 babel.init_app(app, locale_selector=get_locale)
 
