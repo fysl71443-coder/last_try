@@ -1413,6 +1413,18 @@ def purchases():
     } for m in raw_materials])
 
     if form.validate_on_submit():
+        valid_count = 0
+        for item_form in form.items.entries:
+            try:
+                if item_form.raw_material_id.data and int(item_form.raw_material_id.data) != 0 and \
+                   (item_form.quantity.data is not None) and (item_form.price_before_tax.data is not None):
+                    valid_count += 1
+            except Exception:
+                continue
+        if valid_count == 0:
+            flash(_('Please add at least one valid item / الرجاء إضافة عنصر واحد على الأقل'), 'danger')
+            return render_template('purchases.html', form=form, invoices=PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).limit(50).all(), materials_json=materials_json)
+
         # Generate invoice number
         last_invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
@@ -1448,7 +1460,7 @@ def purchases():
 
         # Add invoice items and update stock
         for item_form in form.items.entries:
-            if item_form.raw_material_id.data and item_form.raw_material_id.data != 0:  # Valid material selected
+            if item_form.raw_material_id.data and int(item_form.raw_material_id.data) != 0:  # Valid material selected
                 raw_material = RawMaterial.query.get(item_form.raw_material_id.data)
                 if raw_material:
                     qty = float(item_form.quantity.data)
@@ -2507,7 +2519,7 @@ def payments():
                     'type': 'sales',
                     'party': inv.customer_name or 'Customer',
                     'total': float(inv.total_after_tax_discount or 0),
-                    'paid': 0,  # Will be calculated from payments
+                    'paid': float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type=='sales', Payment.invoice_id==inv.id).scalar() or 0),
                     'date': inv.date,
                     'status': inv.status or 'unpaid'
                 })
@@ -2524,7 +2536,7 @@ def payments():
                     'type': 'purchase',
                     'party': getattr(inv, 'supplier_name', 'Supplier'),
                     'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                    'paid': 0,
+                    'paid': float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type=='purchase', Payment.invoice_id==inv.id).scalar() or 0),
                     'date': inv.date,
                     'status': getattr(inv, 'status', 'unpaid')
                 })
@@ -2541,14 +2553,25 @@ def payments():
                     'type': 'expense',
                     'party': 'Expense',
                     'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                    'paid': 0,
+                    'paid': float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type=='expense', Payment.invoice_id==inv.id).scalar() or 0),
                     'date': inv.date,
                     'status': getattr(inv, 'status', 'unpaid')
                 })
         except Exception as e:
             logging.warning(f'Error loading expense invoices: {e}')
 
-        # Combine all invoices into one list
+        # Combine all invoices into one list with recomputed status from paid
+        def compute_status(total, paid):
+            try:
+                if paid >= total: return 'paid'
+                if paid > 0: return 'partial'
+                return 'unpaid'
+            except Exception:
+                return 'unpaid'
+        # recompute status per invoice
+        for arr in (sales_invoices, purchase_invoices, expense_invoices):
+            for it in arr:
+                it['status'] = compute_status(float(it['total']), float(it['paid']))
         all_invoices = sales_invoices + purchase_invoices + expense_invoices
 
         # Apply filters if needed
