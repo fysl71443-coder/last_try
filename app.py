@@ -166,8 +166,12 @@ def create_app():
     except Exception as _patch_err:
         logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
 
-    # Basic error logging to file (errors only)
-    logging.basicConfig(filename='app.log', level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
+    # Local rotating error logging
+    try:
+        from logging_setup import setup_logging
+        setup_logging(app)
+    except Exception as _log_err:
+        logging.error('Failed to initialize local rotating error logging: %s', _log_err)
 
     # Import models after db created
     from models import User, Invoice, SalesInvoice, SalesInvoiceItem, Product, RawMaterial, Meal, MealIngredient, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Employee, Salary, Payment, Account, LedgerEntry
@@ -234,6 +238,15 @@ def get_locale():
     except Exception:
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
+
+# Expose get_locale to Jinja templates
+@app.context_processor
+def inject_get_locale():
+    try:
+        return dict(get_locale=get_locale)
+    except Exception:
+        return {}
+
 
 # Configure babel locale selector after get_locale is defined
 babel.init_app(app, locale_selector=get_locale)
@@ -738,6 +751,16 @@ def sales_table_invoice(branch_code, table_number):
         )
         db.session.add(current_draft)
         safe_db_commit()
+
+# POS alias route to table invoice (back-compat for tests)
+@app.route('/pos/<branch_code>/table/<int:table_number>')
+@login_required
+def pos_table_alias(branch_code, table_number):
+    try:
+        return redirect(url_for('sales_table_invoice', branch_code=branch_code, table_number=table_number))
+    except Exception:
+        abort(404)
+
     # Load meals and categories (prefer MenuCategory if defined)
     try:
         meals = Meal.query.filter_by(active=True).all()
@@ -1400,6 +1423,18 @@ def purchases():
     } for m in raw_materials])
 
     if form.validate_on_submit():
+        valid_count = 0
+        for item_form in form.items.entries:
+            try:
+                if item_form.raw_material_id.data and int(item_form.raw_material_id.data) != 0 and \
+                   (item_form.quantity.data is not None) and (item_form.price_before_tax.data is not None):
+                    valid_count += 1
+            except Exception:
+                continue
+        if valid_count == 0:
+            flash(_('Please add at least one valid item / الرجاء إضافة عنصر واحد على الأقل'), 'danger')
+            return render_template('purchases.html', form=form, invoices=PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).limit(50).all(), materials_json=materials_json)
+
         # Generate invoice number
         last_invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
@@ -1435,7 +1470,7 @@ def purchases():
 
         # Add invoice items and update stock
         for item_form in form.items.entries:
-            if item_form.raw_material_id.data and item_form.raw_material_id.data != 0:  # Valid material selected
+            if item_form.raw_material_id.data and int(item_form.raw_material_id.data) != 0:  # Valid material selected
                 raw_material = RawMaterial.query.get(item_form.raw_material_id.data)
                 if raw_material:
                     qty = float(item_form.quantity.data)
@@ -1943,7 +1978,7 @@ def api_draft_checkout():
             tax_amount=tax_total,
             discount_amount=0,
             total_after_tax_discount=grand_total,
-            status='paid',
+            status='unpaid',
             user_id=current_user.id,
             created_at=_now
         )
@@ -1954,7 +1989,7 @@ def api_draft_checkout():
         for draft_item in draft.items:
             invoice_item = SalesInvoiceItem(
                 invoice_id=invoice.id,
-                meal_id=draft_item.meal_id,
+
                 product_name=draft_item.product_name,
                 quantity=draft_item.quantity,
                 price_before_tax=draft_item.price_before_tax,
@@ -1964,15 +1999,6 @@ def api_draft_checkout():
             )
             db.session.add(invoice_item)
 
-        # Create payment record
-        payment = Payment(
-            invoice_id=invoice.id,
-            invoice_type='sales',
-            amount_paid=grand_total,
-            payment_method=payment_method,
-            payment_date=_now
-        )
-        db.session.add(payment)
 
         # Mark draft as completed
         draft.status = 'completed'
@@ -2503,7 +2529,7 @@ def payments():
                     'type': 'sales',
                     'party': inv.customer_name or 'Customer',
                     'total': float(inv.total_after_tax_discount or 0),
-                    'paid': 0,  # Will be calculated from payments
+                    'paid': float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type=='sales', Payment.invoice_id==inv.id).scalar() or 0),
                     'date': inv.date,
                     'status': inv.status or 'unpaid'
                 })
@@ -2520,7 +2546,7 @@ def payments():
                     'type': 'purchase',
                     'party': getattr(inv, 'supplier_name', 'Supplier'),
                     'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                    'paid': 0,
+                    'paid': float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type=='purchase', Payment.invoice_id==inv.id).scalar() or 0),
                     'date': inv.date,
                     'status': getattr(inv, 'status', 'unpaid')
                 })
@@ -2537,14 +2563,25 @@ def payments():
                     'type': 'expense',
                     'party': 'Expense',
                     'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                    'paid': 0,
+                    'paid': float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type=='expense', Payment.invoice_id==inv.id).scalar() or 0),
                     'date': inv.date,
                     'status': getattr(inv, 'status', 'unpaid')
                 })
         except Exception as e:
             logging.warning(f'Error loading expense invoices: {e}')
 
-        # Combine all invoices into one list
+        # Combine all invoices into one list with recomputed status from paid
+        def compute_status(total, paid):
+            try:
+                if paid >= total: return 'paid'
+                if paid > 0: return 'partial'
+                return 'unpaid'
+            except Exception:
+                return 'unpaid'
+        # recompute status per invoice
+        for arr in (sales_invoices, purchase_invoices, expense_invoices):
+            for it in arr:
+                it['status'] = compute_status(float(it['total']), float(it['paid']))
         all_invoices = sales_invoices + purchase_invoices + expense_invoices
 
         # Apply filters if needed
@@ -2685,11 +2722,12 @@ def reports():
                 rows = db.session.query(getattr(model, method_col), func.count('*')) \
                     .filter(getattr(model, date_col).between(start_dt, end_dt)) \
                     .group_by(getattr(model, method_col)).all()
-                return { (k or 'unknown'): int(v) for k, v in rows }
+                return {r[0]: int(r[1]) for r in rows}
             except Exception as e:
                 logging.warning(f'Error getting payment method counts for {model.__name__}: {e}')
                 db.session.rollback()
                 return {}
+
 
         pm_map = {}
         try:
@@ -2697,6 +2735,8 @@ def reports():
                       pm_counts(PurchaseInvoice, 'date', 'payment_method'),
                       pm_counts(ExpenseInvoice, 'date', 'payment_method')):
                 for k, v in d.items():
+
+
                     pm_map[k] = pm_map.get(k, 0) + v
         except Exception as e:
             logging.warning(f'Error processing payment method data: {e}')
@@ -2728,6 +2768,24 @@ def reports():
             logging.warning(f'Error calculating cash flows: {e}')
             db.session.rollback()
             inflow = outflow = net_cash = 0
+            for k, v in d.items():
+                pm_map[k or 'unknown'] = pm_map.get(k or 'unknown', 0) + v
+        except Exception as e:
+            logging.warning(f'Error processing payment method data: {e}')
+            pm_map = {}
+
+        pm_labels = list(pm_map.keys())
+        pm_values = [pm_map[k] for k in pm_labels]
+
+        # Comparison bars: totals
+        comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
+        comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
+
+        # Cash flows from Payments table - with error handling
+        inflow = 0
+        outflow = 0
+        net_cash = 0
+
 
         # Top products by quantity - with error handling
         top_labels = []
