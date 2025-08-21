@@ -445,7 +445,7 @@
       // Regular checkout
       payload = {
         branch_code: '{{ branch_code }}',
-        table_no: {{ table_number }},
+        table_number: {{ table_number }},
         items: items.map(x => ({ meal_id: x.meal_id, qty: x.qty })),
         customer_name: document.getElementById('custName').value,
         customer_phone: document.getElementById('custPhone').value,
