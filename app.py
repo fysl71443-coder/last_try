@@ -744,6 +744,13 @@ def sales_table_invoice(branch_code, table_number):
     else:
         # Create new draft order
         current_draft = DraftOrder(
+            branch_code=branch_code,
+            table_number=str(table_number),
+            user_id=current_user.id,
+            status='draft'
+        )
+        db.session.add(current_draft)
+        safe_db_commit()
 
 # POS alias route to table invoice (back-compat for tests)
 @app.route('/pos/<branch_code>/table/<int:table_number>')
@@ -754,13 +761,6 @@ def pos_table_alias(branch_code, table_number):
     except Exception:
         abort(404)
 
-            branch_code=branch_code,
-            table_number=str(table_number),
-            user_id=current_user.id,
-            status='draft'
-        )
-        db.session.add(current_draft)
-        safe_db_commit()
     # Load meals and categories (prefer MenuCategory if defined)
     try:
         meals = Meal.query.filter_by(active=True).all()
