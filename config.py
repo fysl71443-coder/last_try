@@ -8,11 +8,14 @@ class Config:
     DATABASE_URL = os.getenv("DATABASE_URL")
 
     if DATABASE_URL:
+        # Normalize postgres:// to postgresql:// (Render compatibility)
+        if DATABASE_URL.startswith('postgres://'):
+            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
         SQLALCHEMY_DATABASE_URI = DATABASE_URL
         SQLALCHEMY_ENGINE_OPTIONS = {
-            "poolclass": NullPool,  # تجنب مشاكل connection pooling مع eventlet
+            "poolclass": NullPool,
             "pool_pre_ping": True,
-            "echo": False  # تعطيل SQL logging في الإنتاج
+            "echo": False
         }
     else:
         SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"

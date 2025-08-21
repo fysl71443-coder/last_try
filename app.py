@@ -2,9 +2,14 @@
 # START OF APP.PY (Top)
 # =========================
 
-# CRITICAL: Import eventlet and monkey patch FIRST
-import eventlet
-eventlet.monkey_patch()
+# Optional async monkey patching with eventlet based on env (hosting-compatible)
+_USE_EVENTLET = os.getenv('USE_EVENTLET', '1').lower() not in ('0','false','no')
+if _USE_EVENTLET:
+    try:
+        import eventlet
+        eventlet.monkey_patch()
+    except Exception:
+        pass
 
 # 1️⃣ Standard libraries
 import os
@@ -37,7 +42,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from extensions import db, bcrypt, migrate, login_manager, babel, csrf
 
 # Import models to prevent import errors in routes
-from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, ExpenseInvoiceItem, UserPermission, Table, DraftOrder, DraftOrderItem
+from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, ExpenseInvoiceItem, PurchaseInvoiceItem, UserPermission, Table, DraftOrder, DraftOrderItem
 
 # =========================
 # Flask App Factory
@@ -752,15 +757,6 @@ def sales_table_invoice(branch_code, table_number):
         db.session.add(current_draft)
         safe_db_commit()
 
-# POS alias route to table invoice (back-compat for tests)
-@app.route('/pos/<branch_code>/table/<int:table_number>')
-@login_required
-def pos_table_alias(branch_code, table_number):
-    try:
-        return redirect(url_for('sales_table_invoice', branch_code=branch_code, table_number=table_number))
-    except Exception:
-        abort(404)
-
     # Load meals and categories (prefer MenuCategory if defined)
     try:
         meals = Meal.query.filter_by(active=True).all()
@@ -814,6 +810,15 @@ def pos_table_alias(branch_code, table_number):
     except Exception as e:
         current_app.logger.error("=== Table View Error Traceback ===\n" + traceback.format_exc())
         return f"Error loading table: {e}", 500
+
+# POS alias route to table invoice (back-compat for tests)
+@app.route('/pos/<branch_code>/table/<int:table_number>')
+@login_required
+def pos_table_alias(branch_code, table_number):
+    try:
+        return redirect(url_for('sales_table_invoice', branch_code=branch_code, table_number=table_number))
+    except Exception:
+        abort(404)
 
 # API: items by category
 @app.route('/api/menu/<int:cat_id>/items')
