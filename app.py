@@ -2170,23 +2170,41 @@ def invoices():
         elif raw_type in ['sales','sale']: tfilter = 'sales'
         else: tfilter = 'all'
 
-        # Simple approach - get invoices directly without complex queries
+        # Build invoices and compute paid amounts from Payments, recompute status
         rows = []
+        def paid_map_for(kind, ids):
+            if not ids:
+                return {}
+            mm = db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)) \
+                .filter(Payment.invoice_type == kind, Payment.invoice_id.in_(ids)) \
+                .group_by(Payment.invoice_id).all()
+            return {pid: float(total or 0) for (pid, total) in mm}
+        def status_from(total, paid):
+            try:
+                if paid >= total: return 'paid'
+                if paid > 0: return 'partial'
+                return 'unpaid'
+            except Exception:
+                return 'unpaid'
 
         # Sales invoices
         if tfilter in ['all', 'sales']:
             try:
-                sales_invoices = SalesInvoice.query.order_by(SalesInvoice.date.desc()).all()
-                for inv in sales_invoices:
+                sales_list = SalesInvoice.query.order_by(SalesInvoice.date.desc()).all()
+                sales_paid = paid_map_for('sales', [s.id for s in sales_list])
+                for inv in sales_list:
+                    total = float(inv.total_after_tax_discount or 0)
+                    paid = sales_paid.get(inv.id, 0.0)
+                    remaining = max(total - paid, 0.0)
                     rows.append({
                         'id': inv.id,
                         'invoice_number': inv.invoice_number,
                         'invoice_type': 'sales',
                         'customer_supplier': inv.customer_name or 'Customer',
-                        'total_amount': float(inv.total_after_tax_discount or 0),
-                        'paid_amount': 0,  # Will be calculated from payments
-                        'remaining_amount': float(inv.total_after_tax_discount or 0),
-                        'status': inv.status or 'unpaid',
+                        'total_amount': total,
+                        'paid_amount': paid,
+                        'remaining_amount': remaining,
+                        'status': status_from(total, paid),
                         'due_date': inv.date
                     })
             except Exception as e:
@@ -2195,17 +2213,21 @@ def invoices():
         # Purchase invoices
         if tfilter in ['all', 'purchase']:
             try:
-                purchase_invoices = PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).all()
-                for inv in purchase_invoices:
+                purchase_list = PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).all()
+                purchase_paid = paid_map_for('purchase', [p.id for p in purchase_list])
+                for inv in purchase_list:
+                    total = float(getattr(inv, 'total_after_tax_discount', 0) or 0)
+                    paid = purchase_paid.get(inv.id, 0.0)
+                    remaining = max(total - paid, 0.0)
                     rows.append({
                         'id': inv.id,
                         'invoice_number': getattr(inv, 'invoice_number', inv.id),
                         'invoice_type': 'purchase',
                         'customer_supplier': getattr(inv, 'supplier_name', 'Supplier'),
-                        'total_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                        'paid_amount': 0,
-                        'remaining_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                        'status': getattr(inv, 'status', 'unpaid'),
+                        'total_amount': total,
+                        'paid_amount': paid,
+                        'remaining_amount': remaining,
+                        'status': status_from(total, paid),
                         'due_date': inv.date
                     })
             except Exception as e:
@@ -2214,17 +2236,21 @@ def invoices():
         # Expense invoices
         if tfilter in ['all', 'expense']:
             try:
-                expense_invoices = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).all()
-                for inv in expense_invoices:
+                expense_list = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).all()
+                expense_paid = paid_map_for('expense', [x.id for x in expense_list])
+                for inv in expense_list:
+                    total = float(getattr(inv, 'total_after_tax_discount', 0) or 0)
+                    paid = expense_paid.get(inv.id, 0.0)
+                    remaining = max(total - paid, 0.0)
                     rows.append({
                         'id': inv.id,
                         'invoice_number': getattr(inv, 'invoice_number', inv.id),
                         'invoice_type': 'expense',
                         'customer_supplier': 'Expense',
-                        'total_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                        'paid_amount': 0,
-                        'remaining_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                        'status': getattr(inv, 'status', 'unpaid'),
+                        'total_amount': total,
+                        'paid_amount': paid,
+                        'remaining_amount': remaining,
+                        'status': status_from(total, paid),
                         'due_date': inv.date
                     })
             except Exception as e:
