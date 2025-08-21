@@ -2728,15 +2728,6 @@ def reports():
                 db.session.rollback()
                 return {}
 
-            try:
-                rows = db.session.query(getattr(model, method_col), func.count('*')) \
-                    .filter(getattr(model, date_col).between(start_dt, end_dt)) \
-                    .group_by(getattr(model, method_col)).all()
-                return { (k or 'unknown'): int(v) for k, v in rows }
-            except Exception as e:
-                logging.warning(f'Error getting payment method counts for {model.__name__}: {e}')
-                db.session.rollback()
-                return {}
 
         pm_map = {}
         try:
@@ -2745,29 +2736,6 @@ def reports():
                       pm_counts(ExpenseInvoice, 'date', 'payment_method')):
                 for k, v in d.items():
 
-# Minimal branch sales report endpoints for smoke test compatibility
-@app.route('/reports/branch_sales')
-@login_required
-def reports_branch_sales():
-    try:
-        year = int(request.args.get('year') or datetime.now().year)
-        month = int(request.args.get('month') or datetime.now().month)
-        branch = (request.args.get('branch') or 'place_india')
-        # Minimal safe response for smoke tests
-        return render_template('report_branch_sales.html', year=year, month=month, branch=branch)
-    except Exception:
-        return "Report not available", 200
-
-@app.route('/reports/branch_sales/print')
-@login_required
-def reports_branch_sales_print():
-    try:
-        year = int(request.args.get('year') or datetime.now().year)
-        month = int(request.args.get('month') or datetime.now().month)
-        branch = (request.args.get('branch') or 'place_india')
-        return render_template('report_branch_sales_print.html', year=year, month=month, branch=branch)
-    except Exception:
-        return "Report print not available", 200
 
                     pm_map[k] = pm_map.get(k, 0) + v
         except Exception as e:
@@ -2800,6 +2768,24 @@ def reports_branch_sales_print():
             logging.warning(f'Error calculating cash flows: {e}')
             db.session.rollback()
             inflow = outflow = net_cash = 0
+            for k, v in d.items():
+                pm_map[k or 'unknown'] = pm_map.get(k or 'unknown', 0) + v
+        except Exception as e:
+            logging.warning(f'Error processing payment method data: {e}')
+            pm_map = {}
+
+        pm_labels = list(pm_map.keys())
+        pm_values = [pm_map[k] for k in pm_labels]
+
+        # Comparison bars: totals
+        comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
+        comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
+
+        # Cash flows from Payments table - with error handling
+        inflow = 0
+        outflow = 0
+        net_cash = 0
+
 
         # Top products by quantity - with error handling
         top_labels = []
