@@ -1956,7 +1956,7 @@ def api_draft_checkout():
             tax_amount=tax_total,
             discount_amount=0,
             total_after_tax_discount=grand_total,
-            status='paid',
+            status='unpaid',
             user_id=current_user.id,
             created_at=_now
         )
@@ -1967,7 +1967,7 @@ def api_draft_checkout():
         for draft_item in draft.items:
             invoice_item = SalesInvoiceItem(
                 invoice_id=invoice.id,
-                meal_id=draft_item.meal_id,
+
                 product_name=draft_item.product_name,
                 quantity=draft_item.quantity,
                 price_before_tax=draft_item.price_before_tax,
@@ -1977,15 +1977,6 @@ def api_draft_checkout():
             )
             db.session.add(invoice_item)
 
-        # Create payment record
-        payment = Payment(
-            invoice_id=invoice.id,
-            invoice_type='sales',
-            amount_paid=grand_total,
-            payment_method=payment_method,
-            payment_date=_now
-        )
-        db.session.add(payment)
 
         # Mark draft as completed
         draft.status = 'completed'
