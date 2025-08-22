@@ -186,6 +186,10 @@ body {
           <div class="dashboard-icon">🔑</div>
           <h6>{{ _('Users & Permissions / إدارة المستخدمين والصلاحيات') }}</h6>
         </div>
+      </a>
+    </div>
+    {% endif %}
+
   {% if getattr(current_user,'role','')=='user' %}
   <div class="mt-4">
     <div class="alert alert-info">
