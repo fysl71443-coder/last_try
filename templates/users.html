@@ -398,8 +398,7 @@
       items.push(obj);
     });
     try{
-      const res = await fetch(`/api/users/${uid}/permissions`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items, branch_scope: scope }) });
-      if(!res.ok){ throw new Error(await res.text()); }
+      await api('POST', `/api/users/${uid}/permissions`, { items, branch_scope: scope });
       // re-fetch to reflect saved values
       const res2 = await fetch(`/api/users/${uid}/permissions?branch_scope=${scope}`);
       const data = await res2.json();
