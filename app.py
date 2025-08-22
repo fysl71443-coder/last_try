@@ -2,6 +2,8 @@
 # START OF APP.PY (Top)
 # =========================
 
+import os
+
 # Optional async monkey patching with eventlet based on env (hosting-compatible)
 _USE_EVENTLET = os.getenv('USE_EVENTLET', '1').lower() not in ('0','false','no')
 if _USE_EVENTLET:
