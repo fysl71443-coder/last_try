@@ -2936,6 +2936,13 @@ def register_payment_ajax():
 
     # Register payment
     pay = Payment(invoice_id=invoice_id, invoice_type=invoice_type, amount_paid=amount, payment_method=method)
+    # Ensure payment_date is set now to avoid None in ledger posting
+    try:
+        from datetime import datetime as _dt
+        if not getattr(pay, 'payment_date', None):
+            pay.payment_date = _dt.utcnow()
+    except Exception:
+        pass
     db.session.add(pay)
 
     # Update invoice paid and status according to invoice type
@@ -2982,14 +2989,19 @@ def register_payment_ajax():
         ar_acc = get_or_create('1100', 'Accounts Receivable', 'ASSET')
         ap_acc = get_or_create('2000', 'Accounts Payable', 'LIABILITY')
 
+        # Robust date for ledger (fallback to today if missing)
+        try:
+            _pdate = pay.payment_date.date() if getattr(pay, 'payment_date', None) else datetime.utcnow().date()
+        except Exception:
+            _pdate = datetime.utcnow().date()
         if invoice_type == 'sales':
             # receipt: debit cash, credit AR
-            db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=cash_acc.id, debit=amount, credit=0, description=f'Receipt sales #{invoice_id}'))
-            db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=ar_acc.id, debit=0, credit=amount, description=f'Settle AR sales #{invoice_id}'))
+            db.session.add(LedgerEntry(date=_pdate, account_id=cash_acc.id, debit=amount, credit=0, description=f'Receipt sales #{invoice_id}'))
+            db.session.add(LedgerEntry(date=_pdate, account_id=ar_acc.id, debit=0, credit=amount, description=f'Settle AR sales #{invoice_id}'))
         elif invoice_type in ['purchase','expense','salary']:
             # payment: credit cash, debit AP (or expense/salary direct, but we keep AP)
-            db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=ap_acc.id, debit=amount, credit=0, description=f'Settle AP {invoice_type} #{invoice_id}'))
-            db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=cash_acc.id, debit=0, credit=amount, description=f'Payment {invoice_type} #{invoice_id}'))
+            db.session.add(LedgerEntry(date=_pdate, account_id=ap_acc.id, debit=amount, credit=0, description=f'Settle AP {invoice_type} #{invoice_id}'))
+            db.session.add(LedgerEntry(date=_pdate, account_id=cash_acc.id, debit=0, credit=amount, description=f'Payment {invoice_type} #{invoice_id}'))
         safe_db_commit()
     except Exception as e:
         db.session.rollback()
