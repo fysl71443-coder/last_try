@@ -98,11 +98,13 @@
           {% endif %}
           <a class="btn btn-outline-secondary" href="?lang=en">English</a>
           <a class="btn btn-outline-primary" href="?lang=ar">العربية</a>
+          {% if current_user.is_authenticated and (getattr(current_user,'role','')!='user') %}
           <form method="post" action="{{ url_for('toggle_theme') }}" class="d-inline">
             <button class="btn btn-sm btn-outline-dark" type="submit">
               <i class="fa fa-moon"></i> {{ 'Dark' if (session.get('theme') or (settings.default_theme if settings else 'light'))=='light' else 'Light' }}
             </button>
           </form>
+          {% endif %}
           {% if current_user.is_authenticated %}
             <a class="btn btn-outline-danger" href="{{ url_for('logout') }}">{{ _('Logout / خروج') }}</a>
           {% endif %}

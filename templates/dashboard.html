@@ -29,6 +29,7 @@ body {
   <h3 class="mb-4">{{ _('Dashboard / لوحة التحكم') }}</h3>
 
   <!-- شريط التنقل السريع -->
+  {% if getattr(current_user,'role','')!='user' %}
   <div class="row mb-4">
     <div class="col-12">
       <div class="card">
@@ -58,6 +59,7 @@ body {
       </div>
     </div>
   </div>
+  {% endif %}
 
   <div class="row g-4">
     <div class="col-md-3 col-sm-6">
@@ -68,6 +70,7 @@ body {
         </div>
       </a>
     </div>
+    {% if getattr(current_user,'role','')!='user' %}
 
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('purchases') }}" class="text-decoration-none text-dark">
@@ -183,6 +186,14 @@ body {
           <div class="dashboard-icon">🔑</div>
           <h6>{{ _('Users & Permissions / إدارة المستخدمين والصلاحيات') }}</h6>
         </div>
+  {% if getattr(current_user,'role','')=='user' %}
+  <div class="mt-4">
+    <div class="alert alert-info">
+      {{ _('Sales users only see sales. Use the top menu to access your branch sales tables.') }}
+    </div>
+  </div>
+  {% endif %}
+
       </a>
     </div>
   </div>

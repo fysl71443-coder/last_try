@@ -393,6 +393,7 @@ def login():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    # If user is a branch sales user, template will hide other modules.
     return render_template('dashboard.html')
 
 @app.route('/logout')
@@ -2118,6 +2119,57 @@ def fix_database_route():
             results.append(f"⚠️ Error with tables table: {e}")
 
         # 3. Create draft_orders table if missing
+
+    # 4. Seed branch-specific users with sales permissions (admin only)
+    @app.route('/admin/seed_branch_users', methods=['GET'])
+    @login_required
+    def seed_branch_users():
+        if not hasattr(current_user, 'role') or current_user.role != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        from models import User, UserPermission
+        created = []
+        updated = []
+        try:
+            def ensure_user(username, password, email=None):
+                u = User.query.filter_by(username=username).first()
+                if u:
+                    # Update password if provided
+                    if password:
+                        u.set_password(password, bcrypt)
+                        updated.append(username)
+                else:
+                    u = User(username=username, email=email, role='user', active=True)
+                    u.set_password(password, bcrypt)
+                    db.session.add(u)
+                    created.append(username)
+                db.session.flush()
+                return u
+
+            # Default credentials (change after first login)
+            place_user = ensure_user('place_india', 'Place@123')
+            china_user = ensure_user('china_town', 'China@123')
+
+            # Grant sales permissions per branch (view/add/print)
+            def grant_sales(u, scope):
+                # remove existing sales perms for this scope
+                UserPermission.query.filter_by(user_id=u.id, screen_key='sales', branch_scope=scope).delete(synchronize_session=False)
+                p = UserPermission(user_id=u.id, screen_key='sales', branch_scope=scope,
+                                   can_view=True, can_add=True, can_edit=False, can_delete=False, can_print=True)
+                db.session.add(p)
+
+            grant_sales(place_user, 'place_india')
+            grant_sales(china_user, 'china_town')
+
+            safe_db_commit()
+            return jsonify({'ok': True, 'created': created, 'updated': updated,
+                            'credentials': {
+                                'place_india': {'username': 'place_india', 'password': 'Place@123'},
+                                'china_town': {'username': 'china_town', 'password': 'China@123'}
+                            }})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'ok': False, 'error': str(e)}), 500
+
         try:
             with db.engine.connect() as conn:
                 conn.execute(text("""
