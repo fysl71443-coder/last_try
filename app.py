@@ -1968,6 +1968,8 @@ def api_draft_checkout():
         from models import DraftOrder, SalesInvoice, SalesInvoiceItem, Payment, Table
 
         data = request.get_json() or {}
+        current_app.logger.debug('api_draft_checkout payload: %s', data)
+
         draft_id = data.get('draft_id')
 
         if not draft_id:
@@ -3789,6 +3791,7 @@ def api_user_permissions_get(uid):
     ]
     return jsonify({'items': out})
 
+@csrf_exempt
 @app.route('/api/users/<int:uid>/permissions', methods=['POST'])
 @login_required
 def api_user_permissions_save(uid):
