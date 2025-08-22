@@ -121,8 +121,15 @@
     </div>
     <div class="center small" style="margin-top:6px;">{{ _('Thank you / شكراً لكم') }}</div>
     <script>
-      // Defer window.print until after first paint
-      requestAnimationFrame(()=> setTimeout(()=> window.print(), 50));
+      (function(){
+        function closeWindow(){ try{ window.close(); }catch(e){} }
+        // Close immediately after the print dialog is closed (printed or cancelled)
+        window.addEventListener('afterprint', ()=> setTimeout(closeWindow, 100));
+        // Defer print a tick for styles/images
+        requestAnimationFrame(()=> setTimeout(()=> window.print(), 50));
+        // Safety fallback: auto-close if afterprint is not fired
+        setTimeout(closeWindow, 30000);
+      })();
     </script>
 </body>
 {% if not qr_data_url %}

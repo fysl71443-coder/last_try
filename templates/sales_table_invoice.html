@@ -504,40 +504,25 @@
     document.body.classList.remove('modal-open');
     document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
     if(data.print_url){
-      try{
-        const htmlRes = await fetch(data.print_url, { credentials:'same-origin' });
-        const html = await htmlRes.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        // Extract style and receipt content
-        const styleEl = doc.querySelector('style');
-        if(styleEl){
-          const existing = document.getElementById('printStyle');
-          if(existing) existing.remove();
-          const s = document.createElement('style'); s.id = 'printStyle'; s.textContent = styleEl.textContent; document.head.appendChild(s);
-        }
-        const receipt = doc.querySelector('.receipt');
-        const container = document.getElementById('invoice');
-        if(receipt && container){
-          container.innerHTML = '';
-          container.appendChild(receipt.cloneNode(true));
-          container.style.display = 'block';
-          // Ensure images (logo/QR) loaded before print
-          function printInvoice(){
-            const onAfter = ()=>{ cleanupPrint(); window.removeEventListener('afterprint', onAfter); };
-            window.addEventListener('afterprint', onAfter);
-            window.print();
+      // Open print window and auto-close after print/cancel
+      const printWindow = window.open(data.print_url, '_blank', 'width=800,height=600,scrollbars=yes');
+      if(printWindow){
+        printWindow.focus();
+        // Monitor print window for close/print completion
+        const checkClosed = setInterval(()=>{
+          if(printWindow.closed){
+            clearInterval(checkClosed);
+            console.log('Print window closed by user');
           }
-          const img = container.querySelector('img');
-          if(img && !img.complete){ img.onload = ()=> printInvoice(); }
-          else { printInvoice(); }
-        } else {
-          // Fallback: open in same tab (avoid new tab)
-          document.write(html); document.close(); setTimeout(()=> window.print(), 50);
-        }
-      }catch(err){
-        console.error('Print inject failed:', err);
-        alert('Print failed');
+        }, 500);
+        // Auto-close after reasonable time if still open
+        setTimeout(()=>{
+          if(!printWindow.closed){
+            printWindow.close();
+            clearInterval(checkClosed);
+            console.log('Print window auto-closed');
+          }
+        }, 30000); // 30 seconds timeout
       }
     } else {
       alert('Invoice created (test echo).');
