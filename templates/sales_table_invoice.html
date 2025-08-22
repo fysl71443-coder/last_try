@@ -8,6 +8,15 @@
   .meal-card { cursor: pointer; }
   @media (max-width: 992px) { .split { grid-template-columns: 1fr; } }
 </style>
+<style>
+  /* Print only the injected invoice container */
+  @media print {
+    body * { visibility: hidden !important; }
+    #invoice, #invoice * { visibility: visible !important; }
+    #invoice { position: absolute; left: 0; top: 0; width: 100%; }
+  }
+</style>
+
 {% set back_url = url_for('sales_tables', branch_code=branch_code) %}
 
 <div class="container-fluid py-3">
@@ -20,6 +29,8 @@
       <a class="btn btn-outline-secondary" href="{{ url_for('sales_tables', branch_code=branch_code) }}">← {{ _('Back to Tables / رجوع للطاولات') }}</a>
     </div>
   </div>
+
+  <div id="invoice" style="display:none;"></div>
 
   <div class="split">
     <!-- Right: Categories and Meals -->
@@ -480,7 +491,41 @@
     // Ensure any modal leftovers are removed
     document.body.classList.remove('modal-open');
     document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
-    if(data.print_url){ if(!window.__TEST_MODE__){ window.open(data.print_url, '_blank'); } console.log('Print URL:', data.print_url); } else { alert('Invoice created (test echo).'); }
+    if(data.print_url){
+      try{
+        const htmlRes = await fetch(data.print_url, { credentials:'same-origin' });
+        const html = await htmlRes.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        // Extract style and receipt content
+        const styleEl = doc.querySelector('style');
+        if(styleEl){
+          const existing = document.getElementById('printStyle');
+          if(existing) existing.remove();
+          const s = document.createElement('style'); s.id = 'printStyle'; s.textContent = styleEl.textContent; document.head.appendChild(s);
+        }
+        const receipt = doc.querySelector('.receipt');
+        const container = document.getElementById('invoice');
+        if(receipt && container){
+          container.innerHTML = '';
+          container.appendChild(receipt.cloneNode(true));
+          container.style.display = 'block';
+          // Ensure images (logo/QR) loaded before print
+          function printInvoice(){ window.print(); }
+          const img = container.querySelector('img');
+          if(img && !img.complete){ img.onload = ()=> printInvoice(); }
+          else { printInvoice(); }
+        } else {
+          // Fallback: open in same tab (avoid new tab)
+          document.write(html); document.close(); setTimeout(()=> window.print(), 50);
+        }
+      }catch(err){
+        console.error('Print inject failed:', err);
+        alert('Print failed');
+      }
+    } else {
+      alert('Invoice created (test echo).');
+    }
     console.log('Invoice created successfully', data);
     return data;
   }
