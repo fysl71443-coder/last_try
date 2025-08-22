@@ -1402,7 +1402,29 @@ def sales_receipt(invoice_id):
     invoice = SalesInvoice.query.get_or_404(invoice_id)
     items = SalesInvoiceItem.query.filter_by(invoice_id=invoice_id).all()
     settings = get_settings_safe()
-    return render_template('sales_receipt.html', invoice=invoice, items=items, settings=settings)
+
+    # Build ZATCA TLV QR on server to avoid client-side JS cost and CDN delay
+    qr_data_url = None
+    try:
+        import base64, io
+        import qrcode
+        # Compose TLV payload: seller(1), vat(2), timestamp(3), total(4), vat amount(5)
+        def _tlv(tag, b):
+            return bytes([tag & 0xFF, len(b) & 0xFF]) + b
+        seller = (settings.company_name or '').strip().encode('utf-8') if settings else b''
+        vat = (settings.tax_number or '').strip().encode('utf-8') if settings else b''
+        ts = (invoice.created_at.astimezone().isoformat() if invoice.created_at else str(invoice.date)).encode('utf-8')
+        total = (f"{float(invoice.total_after_tax_discount or 0):.2f}").encode('utf-8')
+        vat_amt = (f"{float(invoice.tax_amount or 0):.2f}").encode('utf-8')
+        payload = base64.b64encode(_tlv(1, seller) + _tlv(2, vat) + _tlv(3, ts) + _tlv(4, total) + _tlv(5, vat_amt)).decode('ascii')
+        img = qrcode.make(payload)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        qr_data_url = 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode('ascii')
+    except Exception:
+        qr_data_url = None  # Fallback to client-side QR if available
+
+    return render_template('sales_receipt.html', invoice=invoice, items=items, settings=settings, qr_data_url=qr_data_url)
 
 
 @app.route('/purchases', methods=['GET', 'POST'])

@@ -33,11 +33,11 @@
     .spacer { height: {{ (settings.receipt_extra_bottom_mm or 15) if settings else 15 }}mm; }
   </style>
 </head>
-<body onload="window.print()">
+<body>
   <div class="receipt">
     <div class="center">
       {% if settings and settings.receipt_show_logo %}
-        <img src="{{ settings.logo_url or '/static/chinese-logo.svg' }}" alt="logo" class="logo">
+        <img src="{{ settings.logo_url or '/static/chinese-logo.svg' }}" alt="logo" class="logo" loading="lazy">
       {% endif %}
       <div class="company-name">{{ settings.company_name if settings else 'Restaurant' }}</div>
       {% if settings and settings.receipt_show_tax_number %}
@@ -113,50 +113,32 @@
   </div>
     <hr>
     <div class="center">
-      <div id="qr" style="width:96px;height:96px;margin:0 auto;"></div>
+      {% if qr_data_url %}
+        <img src="{{ qr_data_url }}" alt="QR" width="96" height="96"/>
+      {% else %}
+        <div id="qr" style="width:96px;height:96px;margin:0 auto;"></div>
+      {% endif %}
     </div>
     <div class="center small" style="margin-top:6px;">{{ _('Thank you / شكراً لكم') }}</div>
-
+    <script>
+      // Defer window.print until after first paint
+      requestAnimationFrame(()=> setTimeout(()=> window.print(), 50));
+    </script>
 </body>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <div class="spacer"></div>
-
+{% if not qr_data_url %}
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <div class="spacer"></div>
   <script>
-    // ZATCA TLV QR per KSA e-invoicing (seller, VAT, timestamp, total, VAT amount)
     (function(){
       try{
         const el = document.getElementById('qr');
         if(!el) return;
-        const enc = new TextEncoder();
-        function tlv(tag, bytes){
-          const out = new Uint8Array(2 + bytes.length);
-          out[0] = tag & 0xFF; out[1] = bytes.length & 0xFF;
-          out.set(bytes, 2); return out;
-        }
-        function concat(arrs){
-          let len = 0; arrs.forEach(a=> len += a.length);
-          const out = new Uint8Array(len); let o=0;
-          arrs.forEach(a=>{ out.set(a, o); o += a.length; });
-          return out;
-        }
-        function b64(bytes){
-          let bin = ''; for(let i=0;i<bytes.length;i++){ bin += String.fromCharCode(bytes[i]); }
-          return btoa(bin);
-        }
-        const seller = enc.encode("{{ (settings.company_name or '').strip() }}");
-        const vat = enc.encode("{{ (settings.tax_number or '').strip() }}");
-        const ts = enc.encode("{{ (invoice.created_at.astimezone().isoformat() if invoice.created_at else invoice.date|string) }}");
-        const total = enc.encode("{{ '%.2f'|format(invoice.total_after_tax_discount) }}");
-        const vatAmt = enc.encode("{{ '%.2f'|format(invoice.tax_amount) }}");
-        const bytes = concat([
-          tlv(1, seller), tlv(2, vat), tlv(3, ts), tlv(4, total), tlv(5, vatAmt)
-        ]);
-        const payload = b64(bytes);
-        // Render QR
-        new QRCode(el, { text: payload, width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
-      }catch(e){ /* ignore */ }
+        // minimal client QR if server-side generation not available
+        new QRCode(el, { text: '{{ invoice.invoice_number }}', width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
+      }catch(e){}
     })();
   </script>
+{% endif %}
 
 </html>
 
