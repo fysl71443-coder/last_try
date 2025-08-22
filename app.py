@@ -2552,6 +2552,8 @@ def payments():
     # Simple approach - get invoices directly from models
     try:
         # Import required models
+        from sqlalchemy import func
+
         from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice
 
         # Sales invoices
@@ -2629,12 +2631,11 @@ def payments():
         return render_template('payments.html', invoices=all_invoices, status_filter=status_filter, type_filter=type_filter)
 
     except Exception as e:
-        # Rollback any failed database transactions
+        # Rollback any failed database transactions and show whatever we have
         try:
             db.session.rollback()
         except Exception:
             pass
-
         logging.exception('Error in payments route')
         flash(_('Error loading payments / خطأ في تحميل المدفوعات'), 'danger')
         return render_template('payments.html', invoices=all_invoices, status_filter=status_filter, type_filter=type_filter)
