@@ -141,6 +141,18 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+  // Single-window print cleanup helper
+  function cleanupPrint(){
+    try{
+      const container = document.getElementById('invoice');
+      if(container){ container.innerHTML=''; container.style.display='none'; }
+      const st = document.getElementById('printStyle');
+      if(st){ st.remove(); }
+    }catch(e){/* ignore */}
+  }
+  window.cleanupPrint = cleanupPrint;
+  window.addEventListener('afterprint', ()=> setTimeout(cleanupPrint, 50));
+
         <div id="catEmpty" class="alert alert-info d-none">{{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}</div>
         <div class="row g-2" id="catGrid"></div>
       </div>
@@ -511,7 +523,11 @@
           container.appendChild(receipt.cloneNode(true));
           container.style.display = 'block';
           // Ensure images (logo/QR) loaded before print
-          function printInvoice(){ window.print(); }
+          function printInvoice(){
+            const onAfter = ()=>{ cleanupPrint(); window.removeEventListener('afterprint', onAfter); };
+            window.addEventListener('afterprint', onAfter);
+            window.print();
+          }
           const img = container.querySelector('img');
           if(img && !img.complete){ img.onload = ()=> printInvoice(); }
           else { printInvoice(); }
