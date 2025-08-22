@@ -2194,6 +2194,61 @@ def fix_database_route():
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+
+@app.route('/admin/seed_branch_users', methods=['GET'])
+@login_required
+def admin_seed_branch_users():
+    """Create or update branch-scoped sales users and permissions.
+    Admin-only. Idempotent and safe to re-run.
+    Users:
+      - place_india / place02563 -> sales perms for branch_scope='place_india'
+      - china_town / china02554 -> sales perms for branch_scope='china_town'
+    """
+    try:
+        if getattr(current_user, 'role', '') != 'admin':
+            return jsonify({'ok': False, 'error': 'Admin access required'}), 403
+
+        from models import User, UserPermission
+        created, updated = [], []
+
+        def ensure_user(username: str, password: str):
+            u = User.query.filter_by(username=username).first()
+            if u:
+                if password:
+                    u.set_password(password, bcrypt)
+                    updated.append(username)
+            else:
+                u = User(username=username, role='user', active=True)
+                u.set_password(password, bcrypt)
+                db.session.add(u)
+                created.append(username)
+            db.session.flush()
+            return u
+
+        place_user = ensure_user('place_india', 'place02563')
+        china_user = ensure_user('china_town', 'china02554')
+
+        def grant_sales(u, scope: str):
+            # remove existing sales permissions for any scope to avoid duplicates
+            UserPermission.query.filter_by(user_id=u.id, screen_key='sales').delete(synchronize_session=False)
+            p = UserPermission(user_id=u.id, screen_key='sales', branch_scope=scope,
+                               can_view=True, can_add=True, can_edit=False, can_delete=False, can_print=True)
+            db.session.add(p)
+
+        grant_sales(place_user, 'place_india')
+        grant_sales(china_user, 'china_town')
+
+        db.session.commit()
+        return jsonify({'ok': True, 'created': created, 'updated': updated,
+                        'credentials': {
+                            'place_india': {'username': 'place_india', 'password': 'place02563'},
+                            'china_town': {'username': 'china_town', 'password': 'china02554'}
+                        }})
+    except Exception as e:
+        db.session.rollback()
+        logging.exception('admin_seed_branch_users failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 @app.route('/invoices')
 @login_required
 def invoices():
