@@ -2145,9 +2145,9 @@ def fix_database_route():
                 db.session.flush()
                 return u
 
-            # Default credentials (change after first login)
-            place_user = ensure_user('place_india', 'Place@123')
-            china_user = ensure_user('china_town', 'China@123')
+            # Default credentials (requested)
+            place_user = ensure_user('place_india', 'place02563')
+            china_user = ensure_user('china_town', 'china02554')
 
             # Grant sales permissions per branch (view/add/print)
             def grant_sales(u, scope):
@@ -2163,8 +2163,8 @@ def fix_database_route():
             safe_db_commit()
             return jsonify({'ok': True, 'created': created, 'updated': updated,
                             'credentials': {
-                                'place_india': {'username': 'place_india', 'password': 'Place@123'},
-                                'china_town': {'username': 'china_town', 'password': 'China@123'}
+                                'place_india': {'username': 'place_india', 'password': 'place02563'},
+                                'china_town': {'username': 'china_town', 'password': 'china02554'}
                             }})
         except Exception as e:
             db.session.rollback()
