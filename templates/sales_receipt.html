@@ -36,8 +36,8 @@
 <body>
   <div class="receipt">
     <div class="center">
-      {% if settings and settings.receipt_show_logo %}
-        <img src="{{ settings.logo_url or '/static/chinese-logo.svg' }}" alt="logo" class="logo" loading="lazy">
+      {% if settings and (settings.receipt_show_logo|default(true)) %}
+        <img id="logo" src="{{ settings.logo_url or url_for('static', filename='logo.svg') }}" alt="logo" class="logo">
       {% endif %}
       <div class="company-name">{{ settings.company_name if settings else 'Restaurant' }}</div>
       {% if settings and settings.receipt_show_tax_number %}
@@ -125,8 +125,25 @@
         function closeWindow(){ try{ window.close(); }catch(e){} }
         // Close immediately after the print dialog is closed (printed or cancelled)
         window.addEventListener('afterprint', ()=> setTimeout(closeWindow, 100));
-        // Defer print a tick for styles/images
-        requestAnimationFrame(()=> setTimeout(()=> window.print(), 50));
+        // Ensure logo and QR images are loaded before printing
+        function triggerPrint(){
+          // Guard to prevent double prints
+          if (window.__printed__) return; window.__printed__ = true;
+          requestAnimationFrame(()=> setTimeout(()=> window.print(), 20));
+        }
+        function readyToPrint(){
+          const imgs = Array.from(document.images || []);
+          const pending = imgs.filter(img => !img.complete);
+          if (pending.length === 0) { triggerPrint(); }
+          else {
+            let left = pending.length;
+            pending.forEach(img => img.addEventListener('load', ()=>{ left--; if(left===0) triggerPrint(); }, { once:true }));
+            // Also add a max wait in case some images fail to load
+            setTimeout(triggerPrint, 1200);
+          }
+        }
+        if (document.readyState === 'complete' || document.readyState === 'interactive') readyToPrint();
+        else document.addEventListener('DOMContentLoaded', readyToPrint);
         // Safety fallback: auto-close if afterprint is not fired
         setTimeout(closeWindow, 30000);
       })();
