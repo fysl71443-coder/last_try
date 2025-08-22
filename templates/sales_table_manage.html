@@ -112,24 +112,32 @@
 <script>
 async function cancelDraft(draftId) {
   const confirmed = await showConfirm('{{ _("Cancel this draft order? This cannot be undone. / إلغاء هذا الطلب المسودة؟ لا يمكن التراجع عن هذا الإجراء.") }}');
-  if (confirmed) {
-    try {
-      const response = await fetch(`/api/draft_orders/${draftId}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
-        }
-      });
-      const data = await response.json();
-      if (data.success) {
-        location.reload();
-      } else {
-        await showAlert(data.error || '{{ _("Failed to cancel order / فشل إلغاء الطلب") }}');
-      }
-    } catch (error) {
-      await showAlert('{{ _("Error cancelling order / خطأ في إلغاء الطلب") }}');
+  if (!confirmed) return;
+
+  // Require supervisor (admin) password
+  const pwd = await showPrompt('{{ _("Enter supervisor password to confirm cancellation / أدخل كلمة مرور المشرف لتأكيد الإلغاء") }}', '');
+  if (pwd === null || pwd.trim() === '') {
+    await showAlert('{{ _("Cancellation aborted. Supervisor password is required / تم إلغاء العملية. كلمة مرور المشرف مطلوبة") }}');
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/draft_orders/${draftId}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      },
+      body: JSON.stringify({ supervisor_password: pwd })
+    });
+    const data = await response.json();
+    if (data.success) {
+      location.reload();
+    } else {
+      await showAlert(data.error || '{{ _("Failed to cancel order / فشل إلغاء الطلب") }}');
     }
+  } catch (error) {
+    await showAlert('{{ _("Error cancelling order / خطأ في إلغاء الطلب") }}');
   }
 }
 </script>

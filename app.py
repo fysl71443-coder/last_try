@@ -1786,6 +1786,23 @@ def cancel_draft_order(draft_id):
 
         draft = DraftOrder.query.get_or_404(draft_id)
 
+        # Require supervisor password for cancellation
+        try:
+            payload = request.get_json(silent=True) or {}
+            pwd = (payload.get('supervisor_password') or '').strip()
+            settings = get_settings_safe()
+            expected = None
+            if settings and getattr(settings, 'void_password', None):
+                expected = str(settings.void_password)
+            elif settings and getattr(settings, 'tax_number', None):
+                expected = str(settings.tax_number)
+            else:
+                expected = '0000'
+            if pwd != str(expected):
+                return jsonify({'success': False, 'error': _('Supervisor password required or incorrect / كلمة مرور المشرف مطلوبة أو غير صحيحة')}), 400
+        except Exception:
+            return jsonify({'success': False, 'error': _('Supervisor password check failed / فشل التحقق من كلمة مرور المشرف')}), 400
+
         # Check permissions (user can cancel their own drafts or admin can cancel any)
         if draft.user_id != current_user.id and getattr(current_user, 'role', '') != 'admin':
             return jsonify({'success': False, 'error': 'Permission denied'}), 403
