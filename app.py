@@ -4082,10 +4082,15 @@ def api_user_permissions_get(uid):
     scope_map = {'place':'place_india', 'china':'china_town'}
     canon_scope = scope_map.get(scope, scope)
     q = UserPermission.query.filter_by(user_id=uid)
+    from sqlalchemy import or_
     if canon_scope and canon_scope != 'all':
-        # Include both the branch-specific and global ('all') permissions, then aggregate (union)
-        from sqlalchemy import or_
-        q = q.filter(or_(UserPermission.branch_scope == canon_scope, UserPermission.branch_scope == 'all'))
+        # Include branch-specific, global ('all'), and legacy short scopes to be backward compatible
+        q = q.filter(or_(
+            UserPermission.branch_scope == canon_scope,
+            UserPermission.branch_scope == 'all',
+            UserPermission.branch_scope == 'place',
+            UserPermission.branch_scope == 'china'
+        ))
     perms = q.all()
     # Aggregate by screen_key: effective permission is OR across scopes
     agg = {}
@@ -4098,17 +4103,11 @@ def api_user_permissions_get(uid):
         agg[k]['edit'] = agg[k]['edit'] or bool(p.can_edit)
         agg[k]['delete'] = agg[k]['delete'] or bool(p.can_delete)
         agg[k]['print'] = agg[k]['print'] or bool(p.can_print)
-    out = list(agg.values()) if (canon_scope and canon_scope != 'all') else [
-        {
-            'screen_key': p.screen_key,
-            'branch_scope': p.branch_scope,
-            'view': p.can_view,
-            'add': p.can_add,
-            'edit': p.can_edit,
-            'delete': p.can_delete,
-            'print': p.can_print,
-        } for p in perms
-    ]
+    if not canon_scope or canon_scope == 'all':
+        # For 'all' scope: aggregate across all scopes so UI shows effective overall perms
+        out = list(agg.values())
+    else:
+        out = list(agg.values())
     return jsonify({'items': out})
 
 @csrf_exempt
