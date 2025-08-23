@@ -4123,6 +4123,62 @@ def api_user_permissions_save(uid):
     scope_map = {'place':'place_india', 'china':'china_town'}
     branch_scope = scope_map.get(scope_in, scope_in)
     # Remove existing for this branch scope, then insert new
+
+# Admin-only debug endpoint to inspect effective permissions for a user
+@app.route('/api/debug/effective_permissions', methods=['GET'])
+@login_required
+def debug_effective_permissions():
+    # Extra safe: admin only
+    if getattr(current_user, 'role', '') != 'admin':
+        return jsonify({'error': 'forbidden'}), 403
+    try:
+        # Identify target user
+        uname = (request.args.get('username') or '').strip()
+        uid_arg = (request.args.get('uid') or '').strip()
+        target = None
+        if uname:
+            target = User.query.filter_by(username=uname).first()
+        elif uid_arg:
+            try:
+                target = User.query.get(int(uid_arg))
+            except Exception:
+                target = None
+        if not target:
+            return jsonify({'error': 'user not found'}), 404
+        # Branch scope handling: same canonicalization and aggregation logic as API
+        scope = (request.args.get('branch_scope') or '').strip().lower()
+        scope_map = {'place':'place_india', 'china':'china_town'}
+        canon_scope = scope_map.get(scope, scope)
+        from models import UserPermission
+        from sqlalchemy import or_
+        q = UserPermission.query.filter_by(user_id=target.id)
+        if canon_scope and canon_scope != 'all':
+            q = q.filter(or_(
+                UserPermission.branch_scope == canon_scope,
+                UserPermission.branch_scope == 'all',
+                UserPermission.branch_scope == 'place',
+                UserPermission.branch_scope == 'china'
+            ))
+        perms = q.all()
+        agg = {}
+        for p in perms:
+            k = p.screen_key
+            if k not in agg:
+                agg[k] = {'screen_key': k, 'view': False, 'add': False, 'edit': False, 'delete': False, 'print': False}
+            agg[k]['view'] = agg[k]['view'] or bool(p.can_view)
+            agg[k]['add'] = agg[k]['add'] or bool(p.can_add)
+            agg[k]['edit'] = agg[k]['edit'] or bool(p.can_edit)
+            agg[k]['delete'] = agg[k]['delete'] or bool(p.can_delete)
+            agg[k]['print'] = agg[k]['print'] or bool(p.can_print)
+        out = list(agg.values())
+        return jsonify({'username': target.username, 'branch_scope': canon_scope or 'all', 'items': out})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': 'internal', 'detail': str(e)}), 500
+
     UserPermission.query.filter_by(user_id=uid, branch_scope=branch_scope).delete(synchronize_session=False)
     for it in items:
         key = (it.get('screen_key') or '').strip()
