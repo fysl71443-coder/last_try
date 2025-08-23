@@ -201,6 +201,21 @@ def create_app():
                             except Exception:
                                 pass
 
+                        # 8) Ensure employee_salary_defaults table exists (idempotent)
+                        if 'employee_salary_defaults' not in _insp.get_table_names():
+                            _conn.execute(_sa_text(
+                                """
+                                CREATE TABLE IF NOT EXISTS employee_salary_defaults (
+                                    id SERIAL PRIMARY KEY,
+                                    employee_id INTEGER UNIQUE NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                                    base_salary NUMERIC(12,2) DEFAULT 0 NOT NULL,
+                                    allowances NUMERIC(12,2) DEFAULT 0 NOT NULL,
+                                    deductions NUMERIC(12,2) DEFAULT 0 NOT NULL,
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                )
+                                """
+                            ))
+
 
     except Exception as _patch_err:
         logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
@@ -2732,10 +2747,39 @@ def employees():
             )
             db.session.add(emp)
             safe_db_commit()
+            # Create default salary row
+            try:
+                from models import EmployeeSalaryDefault
+                d = EmployeeSalaryDefault(
+                    employee_id=emp.id,
+                    base_salary=form.base_salary.data or 0,
+                    allowances=form.allowances.data or 0,
+                    deductions=form.deductions.data or 0,
+                )
+                db.session.add(d)
+                safe_db_commit()
+            except Exception:
+                db.session.rollback()
             flash(_('تم إضافة الموظف بنجاح / Employee added successfully'), 'success')
             return redirect(url_for('employees'))
         except Exception as e:
             db.session.rollback()
+
+    # Pre-fill from defaults when employee selected
+    if request.method == 'POST' and not form.errors:
+        from models import EmployeeSalaryDefault
+        try:
+            d = EmployeeSalaryDefault.query.filter_by(employee_id=form.employee_id.data).first()
+            if d:
+                if not form.basic_salary.data: form.basic_salary.data = float(d.base_salary or 0)
+                if not form.allowances.data: form.allowances.data = float(d.allowances or 0)
+                if not form.deductions.data: form.deductions.data = float(d.deductions or 0)
+                # Recompute total
+                total = (float(form.basic_salary.data or 0) + float(form.allowances.data or 0) - float(form.deductions.data or 0) + float(form.previous_salary_due.data or 0))
+                form.total_salary.data = total
+        except Exception:
+            pass
+
             flash(_('تعذرت إضافة الموظف. تحقق من أن رقم الموظف والهوية غير مكررين. / Could not add employee. Ensure code and national id are unique.'), 'danger')
     employees_list = Employee.query.order_by(Employee.full_name.asc()).all()
     return render_template('employees.html', form=form, employees=employees_list)
@@ -3245,6 +3289,30 @@ def register_payment_ajax():
 
 # Employees: Edit
 
+# Employees: Edit defaults
+@app.route('/employees/<int:emp_id>/defaults', methods=['GET','POST'])
+@login_required
+def edit_employee_defaults(emp_id):
+    from models import Employee, EmployeeSalaryDefault
+    emp = Employee.query.get_or_404(emp_id)
+    d = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
+    if request.method == 'POST':
+        try:
+            if not d:
+                d = EmployeeSalaryDefault(employee_id=emp.id)
+                db.session.add(d)
+            d.base_salary = float(request.form.get('base_salary') or 0)
+            d.allowances = float(request.form.get('allowances') or 0)
+            d.deductions = float(request.form.get('deductions') or 0)
+            safe_db_commit()
+            flash(_('Defaults updated / تم تحديث الافتراضات'), 'success')
+            return redirect(url_for('employees'))
+        except Exception:
+            db.session.rollback()
+            flash(_('Failed to update defaults / فشل تحديث الافتراضات'), 'danger')
+    return render_template('employee_defaults_edit.html', emp=emp, d=d)
+
+
 # Deprecated inline VAT route is replaced by blueprint
 
 @app.route('/employees/<int:emp_id>/edit', methods=['GET', 'POST'])
@@ -3592,11 +3660,17 @@ def salaries_monthly():
     emps = Employee.query.filter_by(status='active').order_by(Employee.full_name.asc()).all()
     existing = {(s.employee_id, s.year, s.month): s for s in Salary.query.filter_by(year=year, month=month).all()}
     created = 0
+    from models import EmployeeSalaryDefault
     for e in emps:
         if (e.id, year, month) not in existing:
+            d = EmployeeSalaryDefault.query.filter_by(employee_id=e.id).first()
+            basic = float(getattr(d, 'base_salary', 0) or 0)
+            allow = float(getattr(d, 'allowances', 0) or 0)
+            ded = float(getattr(d, 'deductions', 0) or 0)
+            total = basic + allow - ded
             s = Salary(employee_id=e.id, year=year, month=month,
-                       basic_salary=0, allowances=0, deductions=0, previous_salary_due=0,
-                       total_salary=0, status='due')
+                       basic_salary=basic, allowances=allow, deductions=ded, previous_salary_due=0,
+                       total_salary=total, status='due')
             db.session.add(s)
             created += 1
     if created:
@@ -3644,6 +3718,16 @@ def salaries_monthly_save():
             return redirect(url_for('salaries_monthly', year=request.form.get('year'), month=request.form.get('month')))
     except Exception:
         pass
+
+@app.route('/api/employee/<int:emp_id>/salary_defaults')
+@login_required
+def api_employee_salary_defaults(emp_id):
+    from models import EmployeeSalaryDefault
+    d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
+    if not d:
+        return jsonify({'base_salary': 0, 'allowances': 0, 'deductions': 0})
+    return jsonify({'base_salary': float(d.base_salary or 0), 'allowances': float(d.allowances or 0), 'deductions': float(d.deductions or 0)})
+
     # Expect fields like basic_salary_<id>, allowances_<id>, deductions_<id>, previous_salary_due_<id>
     updated = 0
     for key, val in request.form.items():
@@ -4541,6 +4625,12 @@ def delete_purchase_invoice(invoice_id):
     # Delete invoice
     db.session.delete(invoice)
     safe_db_commit()
+
+    # Signal UI of purchases page to refresh after deletion when coming from invoices
+    referer = request.headers.get('Referer', '')
+    if 'invoices' in referer:
+        # If user deleted from All Invoices page, go back there but with flash that purchases should update
+        return redirect(url_for('invoices', type='purchase'))
 
     flash(_('Purchase invoice deleted and stock updated / تم حذف فاتورة الشراء وتحديث المخزون'), 'success')
     return redirect(url_for('purchases'))

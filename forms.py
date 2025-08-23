@@ -145,6 +145,10 @@ class EmployeeForm(FlaskForm):
     email = StringField(_l('Email / البريد الإلكتروني'))
     hire_date = DateField(_l('Hire Date / تاريخ التعيين'), format='%Y-%m-%d')
     status = SelectField(_l('Status / الحالة'), choices=[('active', _l('Active / نشط')), ('inactive', _l('Inactive / غير نشط'))], default='active')
+    # Defaults section
+    base_salary = DecimalField(_l('Default Basic Salary / الراتب الأساسي الافتراضي'), validators=[Optional(), NumberRange(min=0)], places=2, default=0)
+    allowances = DecimalField(_l('Default Allowances / البدلات الافتراضية'), validators=[Optional(), NumberRange(min=0)], places=2, default=0)
+    deductions = DecimalField(_l('Default Deductions / الاستقطاعات الافتراضية'), validators=[Optional(), NumberRange(min=0)], places=2, default=0)
     submit = SubmitField(_l('Save Employee / حفظ الموظف'))
 
 class SalaryForm(FlaskForm):

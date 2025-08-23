@@ -306,6 +306,16 @@ class Salary(db.Model):
     status = db.Column(db.String(20), default='due')  # paid/due/partial
 
 
+
+class EmployeeSalaryDefault(db.Model):
+    __tablename__ = 'employee_salary_defaults'
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False, unique=True)
+    base_salary = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    allowances = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    deductions = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 # Payments
 class Payment(db.Model):
     __tablename__ = 'payments'
