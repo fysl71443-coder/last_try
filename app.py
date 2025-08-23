@@ -4083,9 +4083,22 @@ def api_user_permissions_get(uid):
     canon_scope = scope_map.get(scope, scope)
     q = UserPermission.query.filter_by(user_id=uid)
     if canon_scope and canon_scope != 'all':
-        q = q.filter_by(branch_scope=canon_scope)
+        # Include both the branch-specific and global ('all') permissions, then aggregate (union)
+        from sqlalchemy import or_
+        q = q.filter(or_(UserPermission.branch_scope == canon_scope, UserPermission.branch_scope == 'all'))
     perms = q.all()
-    out = [
+    # Aggregate by screen_key: effective permission is OR across scopes
+    agg = {}
+    for p in perms:
+        k = p.screen_key
+        if k not in agg:
+            agg[k] = {'screen_key': k, 'view': False, 'add': False, 'edit': False, 'delete': False, 'print': False}
+        agg[k]['view'] = agg[k]['view'] or bool(p.can_view)
+        agg[k]['add'] = agg[k]['add'] or bool(p.can_add)
+        agg[k]['edit'] = agg[k]['edit'] or bool(p.can_edit)
+        agg[k]['delete'] = agg[k]['delete'] or bool(p.can_delete)
+        agg[k]['print'] = agg[k]['print'] or bool(p.can_print)
+    out = list(agg.values()) if (canon_scope and canon_scope != 'all') else [
         {
             'screen_key': p.screen_key,
             'branch_scope': p.branch_scope,
