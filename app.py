@@ -4634,17 +4634,35 @@ def meals():
 @app.route('/delete_raw_material/<int:material_id>', methods=['POST'])
 @login_required
 def delete_raw_material(material_id):
+    # Ensure required models are available even if globals change
+    from models import RawMaterial, MealIngredient, PurchaseInvoiceItem
+
     material = RawMaterial.query.get_or_404(material_id)
 
     # Check if material is used in any meals
-    meals_using_material = MealIngredient.query.filter_by(raw_material_id=material_id).all()
+    try:
+        meals_using_material = MealIngredient.query.filter_by(raw_material_id=material_id).all()
+    except Exception:
+        meals_using_material = []
     if meals_using_material:
-        meal_names = [ingredient.meal.display_name for ingredient in meals_using_material]
-        flash(_('Cannot delete material. It is used in meals: {}').format(', '.join(meal_names)), 'error')
+        # Be robust if some relations are missing
+        meal_names = []
+        for ingredient in meals_using_material:
+            try:
+                if getattr(ingredient, 'meal', None) and getattr(ingredient.meal, 'display_name', None):
+                    meal_names.append(ingredient.meal.display_name)
+                else:
+                    meal_names.append(str(getattr(ingredient, 'meal_id', 'Unknown')))
+            except Exception:
+                meal_names.append('Unknown')
+        flash(_('Cannot delete material. It is used in meals: {}').format(', '.join(meal_names)), 'warning')
         return redirect(url_for('raw_materials'))
 
     # Check if material is used in any purchase invoices
-    purchase_items = PurchaseInvoiceItem.query.filter_by(raw_material_id=material_id).all()
+    try:
+        purchase_items = PurchaseInvoiceItem.query.filter_by(raw_material_id=material_id).all()
+    except Exception:
+        purchase_items = []
     if purchase_items:
         flash(_('Cannot delete material. It has purchase history. Material will be deactivated instead.'), 'warning')
         material.active = False
