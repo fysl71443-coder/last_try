@@ -200,6 +200,7 @@ class PurchaseInvoice(db.Model):
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
     date = db.Column(db.Date, default=datetime.utcnow)
     supplier_name = db.Column(db.String(200), nullable=True)
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
     payment_method = db.Column(db.String(20), nullable=False)  # مدى, فيزا, بنك, كاش, ...
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
     tax_amount = db.Column(db.Numeric(12, 2), nullable=False)
@@ -209,6 +210,7 @@ class PurchaseInvoice(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
+    supplier = db.relationship('Supplier', lazy=True)
     items = db.relationship('PurchaseInvoiceItem', backref='invoice', lazy=True)
 
     def __repr__(self):
@@ -393,8 +395,22 @@ class Settings(db.Model):
 
     logo_url = db.Column(db.String(300), default='/static/chinese-logo.svg')  # receipt logo
 
+
+class Supplier(db.Model):
+    __tablename__ = 'suppliers'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, nullable=False)
+    phone = db.Column(db.String(50), nullable=True)
+    email = db.Column(db.String(100), nullable=True)
+    address = db.Column(db.String(300), nullable=True)
+    tax_number = db.Column(db.String(50), nullable=True)
+    contact_person = db.Column(db.String(100), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
     def __repr__(self):
-        return f'<Settings {self.company_name or "Settings"}>'
+        return f'<Supplier {self.name}>'
 
 
 class Customer(db.Model):

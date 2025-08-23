@@ -83,8 +83,21 @@ body {
                 </div>
                 <div class="col-md-6">
                     {{ form.supplier_name.label(class_='form-label') }}
-                    {{ form.supplier_name(class_='form-control') }}
+                    <input name="supplier_name" list="suppliers-list" class="form-control" value="{{ form.supplier_name.data or '' }}" placeholder="{{ _('Type or select supplier') }}">
+                    <datalist id="suppliers-list">
+                      {% for s in suppliers_list or [] %}
+                        <option value="{{ s.name }}">{{ s.phone or '' }} {{ s.contact_person or '' }}</option>
+                      {% endfor %}
+                    </datalist>
                 </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-12">
+                    <div id="supplier-details" class="small text-muted"></div>
+                    <input type="hidden" name="supplier_id" id="supplier_id" value="">
+                  </div>
+                </div>
+
             </div>
 
             <!-- عناصر الفاتورة -->
@@ -344,6 +357,48 @@ body {
             calculateTotals();
         }
     });
+
+
+<script>
+(function(){
+  const SUPPLIERS = JSON.parse({{ (suppliers_json or '[]') | tojson | safe }});
+  const input = document.querySelector('input[name="supplier_name"]');
+  const details = document.getElementById('supplier-details');
+  const hiddenId = document.getElementById('supplier_id');
+
+  function renderDetails(s){
+    if(!s){ details.textContent=''; hiddenId.value=''; return; }
+    const parts = [];
+    if(s.contact_person) parts.push(`{{ _('Contact') }}: ${s.contact_person}`);
+    if(s.phone) parts.push(`{{ _('Phone') }}: ${s.phone}`);
+    if(s.email) parts.push(`{{ _('Email') }}: ${s.email}`);
+    if(s.tax_number) parts.push(`{{ _('Tax') }}: ${s.tax_number}`);
+    if(s.address) parts.push(`{{ _('Address') }}: ${s.address}`);
+    details.textContent = parts.join(' | ');
+    hiddenId.value = s.id || '';
+  }
+
+  function matchSupplierByName(name){
+    if(!name) return null;
+    const n = name.trim().toLowerCase();
+    return SUPPLIERS.find(s => (s.name||'').toLowerCase() === n) || null;
+  }
+
+  if(input){
+    input.addEventListener('change', ()=>{
+      const s = matchSupplierByName(input.value);
+      renderDetails(s);
+    });
+    input.addEventListener('blur', ()=>{
+      const s = matchSupplierByName(input.value);
+      renderDetails(s);
+    });
+    // initial
+    const s0 = matchSupplierByName(input.value);
+    renderDetails(s0);
+  }
+})();
+</script>
 
     // View invoice details
     function viewInvoice(invoiceId) {

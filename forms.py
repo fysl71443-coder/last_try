@@ -111,6 +111,21 @@ class ExpenseInvoiceItemForm(FlaskForm):
     discount = DecimalField(_l('Discount %% / نسبة الخصم %%'), validators=[Optional(), NumberRange(min=0, max=100)], places=2)
 
 # Expense Invoice Form
+
+# Supplier Form
+class SupplierForm(FlaskForm):
+    class Meta:
+        csrf = False
+    name = StringField(_l('Supplier Name / اسم المورد'), validators=[DataRequired()])
+    phone = StringField(_l('Phone / الهاتف'))
+    email = StringField(_l('Email / البريد الإلكتروني'))
+    address = StringField(_l('Address / العنوان'))
+    tax_number = StringField(_l('Tax Number / الرقم الضريبي'))
+    contact_person = StringField(_l('Contact Person / شخص التواصل'))
+    notes = StringField(_l('Notes / ملاحظات'))
+    active = BooleanField(_l('Active / نشط'), default=True)
+    submit = SubmitField(_l('Save / حفظ'))
+
 class ExpenseInvoiceForm(FlaskForm):
     class Meta:
         csrf = False

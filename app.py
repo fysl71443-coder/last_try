@@ -168,9 +168,49 @@ def create_app():
                                 price_override NUMERIC(12,2),
                                 display_order INTEGER,
                                 CONSTRAINT uq_category_meal UNIQUE (category_id, meal_id)
+                        if 'suppliers' not in _insp.get_table_names():
+                            _conn.execute(_sa_text(
+                                """
+                                CREATE TABLE IF NOT EXISTS suppliers (
+                                    id SERIAL PRIMARY KEY,
+                                    name VARCHAR(200) UNIQUE NOT NULL,
+                                    phone VARCHAR(50),
+                                    email VARCHAR(100),
+                                    address VARCHAR(300),
+                                    tax_number VARCHAR(50),
+                                    contact_person VARCHAR(100),
+                                    notes TEXT,
+                                    active BOOLEAN DEFAULT TRUE,
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                )
+                                """
+                        -- add supplier_id to purchase_invoices if missing
+                        IF 'purchase_invoices' = ANY (ARRAY(SELECT table_name FROM information_schema.tables WHERE table_name='purchase_invoices')) THEN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='purchase_invoices' AND column_name='supplier_id'
+                            ) THEN
+                                ALTER TABLE purchase_invoices ADD COLUMN supplier_id INTEGER;
+                            END IF;
+                        -- add FK if not exists (best-effort; ignore if DB doesn’t support)
+                        BEGIN
+                            ALTER TABLE purchase_invoices
+                            ADD CONSTRAINT fk_purchase_supplier
+                            FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;
+                        EXCEPTION WHEN others THEN
+                            -- ignore if already exists or lack of perms
+                            NULL;
+                        END;
+
+                        END IF;
+
+                            ))
+
                             )
                             """
                         ))
+
+            <a class="btn btn-outline-secondary" href="{{ url_for('suppliers') }}">{{ _('Suppliers / الموردون') }}</a>
 
     except Exception as _patch_err:
         logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
@@ -1048,6 +1088,93 @@ def customers_delete(cid):
 @app.route('/customers/<int:cid>/toggle', methods=['POST'])
 @login_required
 def customers_toggle(cid):
+
+# ---------------------- Suppliers ----------------------
+@app.route('/suppliers', methods=['GET'])
+@login_required
+def suppliers():
+    from models import Supplier
+    q = (request.args.get('q') or '').strip()
+    query = Supplier.query
+    if q:
+        like = f"%{q}%"
+        query = query.filter((Supplier.name.ilike(like)) | (Supplier.phone.ilike(like)) | (Supplier.email.ilike(like)))
+    items = query.order_by(Supplier.name.asc()).all()
+    return render_template('suppliers.html', suppliers=items)
+
+@app.route('/suppliers', methods=['POST'])
+@login_required
+def suppliers_create():
+    if not can_perm('users','edit') and getattr(current_user,'role','')!='admin':
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
+        return redirect(url_for('suppliers'))
+    from models import Supplier
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        flash(_('Name is required / الاسم مطلوب'), 'danger')
+        return redirect(url_for('suppliers'))
+    s = Supplier(
+        name=name,
+        contact_person=(request.form.get('contact_person') or '').strip(),
+        phone=(request.form.get('phone') or '').strip(),
+        email=(request.form.get('email') or '').strip(),
+        address=(request.form.get('address') or '').strip(),
+        tax_number=(request.form.get('tax_number') or '').strip(),
+        notes=(request.form.get('notes') or '').strip(),
+        active=bool(request.form.get('active')),
+    )
+    db.session.add(s)
+    safe_db_commit()
+    flash(_('Supplier added / تم إضافة المورد'), 'success')
+    return redirect(url_for('suppliers'))
+
+@app.route('/suppliers/<int:sid>/edit', methods=['GET','POST'])
+@login_required
+def suppliers_edit(sid):
+    from models import Supplier
+    s = Supplier.query.get_or_404(sid)
+    if request.method == 'POST':
+        if not can_perm('users','edit') and getattr(current_user,'role','')!='admin':
+            flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
+            return redirect(url_for('suppliers'))
+        s.name = (request.form.get('name') or '').strip()
+        s.contact_person = (request.form.get('contact_person') or '').strip()
+        s.phone = (request.form.get('phone') or '').strip()
+        s.email = (request.form.get('email') or '').strip()
+        s.address = (request.form.get('address') or '').strip()
+        s.tax_number = (request.form.get('tax_number') or '').strip()
+        s.notes = (request.form.get('notes') or '').strip()
+        s.active = bool(request.form.get('active'))
+        safe_db_commit()
+        flash(_('Supplier updated / تم تحديث المورد'), 'success')
+        return redirect(url_for('suppliers'))
+    return render_template('suppliers_edit.html', s=s)
+
+@app.route('/suppliers/<int:sid>/toggle', methods=['POST'])
+@login_required
+def suppliers_toggle(sid):
+    from models import Supplier
+    s = Supplier.query.get_or_404(sid)
+    s.active = not bool(s.active)
+    safe_db_commit()
+    flash(_('Status changed / تم تغيير الحالة'), 'info')
+    return redirect(url_for('suppliers'))
+
+@app.route('/suppliers/<int:sid>/delete', methods=['POST'])
+@login_required
+def suppliers_delete(sid):
+    from models import Supplier, PurchaseInvoice
+    s = Supplier.query.get_or_404(sid)
+    # Prevent delete if supplier in use in purchases
+    in_use = PurchaseInvoice.query.filter(PurchaseInvoice.supplier_name == s.name).count()
+    if in_use:
+        flash(_('Supplier is used in purchase invoices. Deactivate instead. / المورد مستخدم في فواتير الشراء. قم بتعطيله بدلاً من الحذف.'), 'warning')
+        return redirect(url_for('suppliers'))
+    db.session.delete(s)
+    safe_db_commit()
+    flash(_('Supplier deleted / تم حذف المورد'), 'success')
+    return redirect(url_for('suppliers'))
+
     from models import Customer
     c = Customer.query.get_or_404(cid)
     c.active = not bool(c.active)
@@ -1437,6 +1564,24 @@ def purchases():
 
     # Get raw materials for dropdown
     raw_materials = RawMaterial.query.filter_by(active=True).all()
+    # Suppliers list for auto-complete
+    try:
+        from models import Supplier
+        suppliers_list = Supplier.query.filter_by(active=True).order_by(Supplier.name.asc()).all()
+        suppliers_json = json.dumps([
+            {
+                'id': s.id,
+                'name': s.name,
+                'phone': s.phone,
+                'email': s.email,
+                'address': s.address,
+                'tax_number': s.tax_number,
+                'contact_person': s.contact_person
+            } for s in suppliers_list
+        ])
+    except Exception:
+        suppliers_list = []
+        suppliers_json = '[]'
     material_choices = [(0, _('Select Raw Material / اختر المادة الخام'))] + [(m.id, m.display_name) for m in raw_materials]
 
     form = PurchaseInvoiceForm()
@@ -1465,7 +1610,7 @@ def purchases():
                 continue
         if valid_count == 0:
             flash(_('Please add at least one valid item / الرجاء إضافة عنصر واحد على الأقل'), 'danger')
-            return render_template('purchases.html', form=form, invoices=PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).limit(50).all(), materials_json=materials_json)
+            return render_template('purchases.html', form=form, invoices=PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).limit(50).all(), materials_json=materials_json, suppliers_list=suppliers_list, suppliers_json=suppliers_json)
 
         # Generate invoice number
         last_invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
@@ -1489,6 +1634,7 @@ def purchases():
             invoice_number=invoice_number,
             date=form.date.data,
             supplier_name=form.supplier_name.data,
+            supplier_id=int(request.form.get('supplier_id') or 0) or None,
             payment_method=form.payment_method.data,
             total_before_tax=0,  # Will be calculated
             tax_amount=0,  # Will be calculated
@@ -1604,7 +1750,7 @@ def purchases():
     page = int(request.args.get('page') or 1)
     per_page = min(100, int(request.args.get('per_page') or 25))
     pag = PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).paginate(page=page, per_page=per_page, error_out=False)
-    return render_template('purchases.html', form=form, invoices=pag.items, pagination=pag, materials_json=materials_json)
+    return render_template('purchases.html', form=form, invoices=pag.items, pagination=pag, materials_json=materials_json, suppliers_list=suppliers_list, suppliers_json=suppliers_json)
 
 @app.route('/expenses', methods=['GET', 'POST'])
 @login_required
@@ -3135,12 +3281,15 @@ def edit_employee(emp_id):
 def delete_employee(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     try:
-        if emp.salaries and len(emp.salaries) > 0:
-            flash(_('لا يمكن حذف الموظف لوجود رواتب مرتبطة / Cannot delete employee with linked salaries'), 'danger')
-            return redirect(url_for('employees'))
+        # Delete related salaries first, then employee
+        try:
+            from models import Salary
+            Salary.query.filter_by(employee_id=emp.id).delete(synchronize_session=False)
+        except Exception:
+            pass
         db.session.delete(emp)
         safe_db_commit()
-        flash(_('تم حذف الموظف / Employee deleted'), 'info')
+        flash(_('تم حذف الموظف وجميع رواتبه / Employee and related salaries deleted'), 'info')
     except Exception:
         db.session.rollback()
         flash(_('تعذر حذف الموظف / Could not delete employee'), 'danger')
