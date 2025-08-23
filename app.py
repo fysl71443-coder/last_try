@@ -4077,10 +4077,13 @@ def api_user_permissions_get(uid):
     if not can_perm('users','view'):
         return jsonify({'error':'forbidden'}), 403
     User.query.get_or_404(uid)
-    scope = request.args.get('branch_scope')
+    scope = (request.args.get('branch_scope') or '').strip().lower()
+    # map short scope values to canonical
+    scope_map = {'place':'place_india', 'china':'china_town'}
+    canon_scope = scope_map.get(scope, scope)
     q = UserPermission.query.filter_by(user_id=uid)
-    if scope:
-        q = q.filter_by(branch_scope=scope)
+    if canon_scope and canon_scope != 'all':
+        q = q.filter_by(branch_scope=canon_scope)
     perms = q.all()
     out = [
         {
@@ -4104,7 +4107,9 @@ def api_user_permissions_save(uid):
     User.query.get_or_404(uid)
     payload = request.get_json(force=True) or {}
     items = payload.get('items') or []
-    branch_scope = (payload.get('branch_scope') or 'all').lower()
+    scope_in = (payload.get('branch_scope') or 'all').strip().lower()
+    scope_map = {'place':'place_india', 'china':'china_town'}
+    branch_scope = scope_map.get(scope_in, scope_in)
     # Remove existing for this branch scope, then insert new
     UserPermission.query.filter_by(user_id=uid, branch_scope=branch_scope).delete(synchronize_session=False)
     for it in items:
