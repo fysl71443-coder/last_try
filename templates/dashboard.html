@@ -29,19 +29,23 @@ body {
   <h3 class="mb-4">{{ _('Dashboard / لوحة التحكم') }}</h3>
 
   <!-- شريط التنقل السريع -->
-  {% if (current_user.role|default('')) != 'user' %}
   <div class="row mb-4">
     <div class="col-12">
       <div class="card">
         <div class="card-body">
           <h6 class="card-title mb-3">🚀 {{ _('Quick Access / الوصول السريع') }}</h6>
           <div class="d-flex flex-wrap gap-2">
+            {% if can('sales','view') %}
             <a href="{{ url_for('sales') }}" class="btn btn-primary btn-sm">
               💰 {{ _('New Sale / مبيعة جديدة') }}
             </a>
+            {% endif %}
+            {% if can('purchases','view') %}
             <a href="{{ url_for('purchases') }}" class="btn btn-warning btn-sm">
               🛒 {{ _('New Purchase / شراء جديد') }}
             </a>
+            {% endif %}
+            {% if can('inventory','view') %}
             <a href="{{ url_for('raw_materials') }}" class="btn btn-success btn-sm">
               🥘 {{ _('Add Material / إضافة مادة') }}
             </a>
@@ -51,17 +55,20 @@ body {
             <a href="{{ url_for('inventory') }}" class="btn btn-secondary btn-sm">
               📦 {{ _('View Inventory / عرض المخزون') }}
             </a>
+            {% endif %}
+            {% if can('expenses','view') %}
             <a href="{{ url_for('expenses') }}" class="btn btn-danger btn-sm">
               💸 {{ _('Add Expense / إضافة مصروف') }}
             </a>
+            {% endif %}
           </div>
         </div>
       </div>
     </div>
   </div>
-  {% endif %}
 
   <div class="row g-4">
+    {% if can('sales','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('sales') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -70,8 +77,9 @@ body {
         </div>
       </a>
     </div>
-    {% if (current_user.role|default('')) != 'user' %}
+    {% endif %}
 
+    {% if can('purchases','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('purchases') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -80,6 +88,7 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
 	    <div class="col-md-3 col-sm-6">
 	      <a href="{{ url_for('suppliers') }}" class="text-decoration-none text-dark">
@@ -91,6 +100,7 @@ body {
 	    </div>
 
 
+    {% if can('expenses','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('expenses') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -99,7 +109,9 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
+    {% if can('sales','view') or can('purchases','view') or can('expenses','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('invoices') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -108,7 +120,9 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
+    {% if can('inventory','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('inventory') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -117,7 +131,9 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
+    {% if can('salaries','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('employees') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -126,7 +142,9 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
+    {% if can('sales','view') or can('purchases','view') or can('expenses','view') or can('salaries','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('payments') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -135,7 +153,9 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
+    {% if can('reports','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('reports') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -144,7 +164,9 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
+    {% if can('vat','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('vat.vat_dashboard') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -153,7 +175,9 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
+    {% if can('financials','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('financials.income_statement') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -162,7 +186,9 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
+    {% if can('sales','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('customers') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -171,7 +197,9 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
+    {% if can('inventory','view') or can('sales','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('menu') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -180,6 +208,7 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('settings') }}" class="text-decoration-none text-dark">
