@@ -4123,6 +4123,20 @@ def api_user_permissions_save(uid):
     scope_map = {'place':'place_india', 'china':'china_town'}
     branch_scope = scope_map.get(scope_in, scope_in)
     # Remove existing for this branch scope, then insert new
+    UserPermission.query.filter_by(user_id=uid, branch_scope=branch_scope).delete(synchronize_session=False)
+    for it in items:
+        key = (it.get('screen_key') or '').strip()
+        if not key:
+            continue
+        p = UserPermission(
+            user_id=uid, screen_key=key, branch_scope=branch_scope,
+            can_view=bool(it.get('view')), can_add=bool(it.get('add')),
+            can_edit=bool(it.get('edit')), can_delete=bool(it.get('delete')),
+            can_print=bool(it.get('print'))
+        )
+        db.session.add(p)
+    safe_db_commit()
+    return jsonify({'status':'ok','count':len(items)})
 
 # Admin-only debug endpoint to inspect effective permissions for a user
 @app.route('/api/debug/effective_permissions', methods=['GET'])
@@ -4178,20 +4192,6 @@ def debug_effective_permissions():
         except Exception:
             pass
         return jsonify({'error': 'internal', 'detail': str(e)}), 500
-
-    UserPermission.query.filter_by(user_id=uid, branch_scope=branch_scope).delete(synchronize_session=False)
-    for it in items:
-        key = (it.get('screen_key') or '').strip()
-        if not key: continue
-        p = UserPermission(
-            user_id=uid, screen_key=key, branch_scope=branch_scope,
-            can_view=bool(it.get('view')), can_add=bool(it.get('add')),
-            can_edit=bool(it.get('edit')), can_delete=bool(it.get('delete')),
-            can_print=bool(it.get('print'))
-        )
-        db.session.add(p)
-    safe_db_commit()
-    return jsonify({'status':'ok','count':len(items)})
 
 
 # Retention: 12 months with PDF export
