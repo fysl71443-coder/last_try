@@ -1078,6 +1078,12 @@ def customers_delete(cid):
 @app.route('/customers/<int:cid>/toggle', methods=['POST'])
 @login_required
 def customers_toggle(cid):
+    # Toggle active/inactive for customer
+    c.active = not bool(c.active)
+    safe_db_commit()
+    flash(_('Status changed / تم تغيير الحالة'), 'info')
+    return redirect(url_for('customers'))
+
 
 # ---------------------- Suppliers ----------------------
 @app.route('/suppliers', methods=['GET'])
