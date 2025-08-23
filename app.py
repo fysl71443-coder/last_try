@@ -168,6 +168,11 @@ def create_app():
                                 price_override NUMERIC(12,2),
                                 display_order INTEGER,
                                 CONSTRAINT uq_category_meal UNIQUE (category_id, meal_id)
+                            )
+                            """
+                        ))
+
+                        # 6) Ensure suppliers table exists (idempotent)
                         if 'suppliers' not in _insp.get_table_names():
                             _conn.execute(_sa_text(
                                 """
@@ -184,33 +189,18 @@ def create_app():
                                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                                 )
                                 """
-                        -- add supplier_id to purchase_invoices if missing
-                        IF 'purchase_invoices' = ANY (ARRAY(SELECT table_name FROM information_schema.tables WHERE table_name='purchase_invoices')) THEN
-                            IF NOT EXISTS (
-                                SELECT 1 FROM information_schema.columns
-                                WHERE table_name='purchase_invoices' AND column_name='supplier_id'
-                            ) THEN
-                                ALTER TABLE purchase_invoices ADD COLUMN supplier_id INTEGER;
-                            END IF;
-                        -- add FK if not exists (best-effort; ignore if DB doesn’t support)
-                        BEGIN
-                            ALTER TABLE purchase_invoices
-                            ADD CONSTRAINT fk_purchase_supplier
-                            FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;
-                        EXCEPTION WHEN others THEN
-                            -- ignore if already exists or lack of perms
-                            NULL;
-                        END;
-
-                        END IF;
-
                             ))
 
-                            )
-                            """
-                        ))
+                        # 7) Ensure purchase_invoices.supplier_id exists and add FK (best effort)
+                        if 'purchase_invoices' in _insp.get_table_names():
+                            existing_cols_pi = {c['name'] for c in _insp.get_columns('purchase_invoices')}
+                            if 'supplier_id' not in existing_cols_pi:
+                                _conn.execute(_sa_text("ALTER TABLE purchase_invoices ADD COLUMN IF NOT EXISTS supplier_id INTEGER"))
+                            try:
+                                _conn.execute(_sa_text("ALTER TABLE purchase_invoices ADD CONSTRAINT fk_purchase_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL"))
+                            except Exception:
+                                pass
 
-            <a class="btn btn-outline-secondary" href="{{ url_for('suppliers') }}">{{ _('Suppliers / الموردون') }}</a>
 
     except Exception as _patch_err:
         logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
