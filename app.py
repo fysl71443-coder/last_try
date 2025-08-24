@@ -46,7 +46,7 @@ from extensions import db, bcrypt, migrate, login_manager, babel, csrf
 # Import models to prevent import errors in routes
 from models import Invoice
 
-from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, ExpenseInvoiceItem, PurchaseInvoiceItem, UserPermission, Table, DraftOrder, DraftOrderItem, Account, LedgerEntry
+from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, MealIngredient, ExpenseInvoiceItem, PurchaseInvoiceItem, UserPermission, Table, DraftOrder, DraftOrderItem, Account, LedgerEntry
 
 # =========================
 # Flask App Factory
@@ -1923,8 +1923,6 @@ def import_meals():
         imported_count = 0
         from models import Meal
 
-        print(f"DEBUG: Starting to process {len(df)} rows")  # Debug
-
         for idx, row in df.iterrows():
             try:
                 name = str(row[col_mapping['Name']]).strip()
@@ -1933,16 +1931,12 @@ def import_meals():
                 cost = float(row[col_mapping['Cost']]) if pd.notna(row[col_mapping['Cost']]) else 0.0
                 selling_price = float(row[col_mapping['Selling Price']]) if pd.notna(row[col_mapping['Selling Price']]) else 0.0
 
-                print(f"DEBUG: Row {idx}: name='{name}', cost={cost}, price={selling_price}")  # Debug
-
                 if not name or name.lower() in ['nan', 'none', '']:
-                    print(f"DEBUG: Skipping row {idx} - empty name")  # Debug
                     continue
 
                 # Check if meal already exists
                 existing = Meal.query.filter_by(name=name).first()
                 if existing:
-                    print(f"DEBUG: Skipping row {idx} - duplicate name '{name}'")  # Debug
                     continue  # Skip duplicates
 
                 meal = Meal(
@@ -1956,20 +1950,15 @@ def import_meals():
                 )
                 db.session.add(meal)
                 imported_count += 1
-                print(f"DEBUG: Added meal {imported_count}: '{name}'")  # Debug
 
             except Exception as e:
-                print(f"DEBUG: Error importing meal row {idx}: {e}")  # Debug
                 logging.warning(f'Error importing meal row {idx}: {e}')
                 continue
 
-        print(f"DEBUG: About to commit {imported_count} meals to database")  # Debug
         commit_success = safe_db_commit("meal import")
         if commit_success:
-            print(f"DEBUG: Successfully committed {imported_count} meals")  # Debug
             flash(_('Successfully imported %(count)s meals / تم استيراد %(count)s وجبة بنجاح', count=imported_count), 'success')
         else:
-            print(f"DEBUG: Failed to commit meals to database")  # Debug
             flash(_('Failed to save meals to database / فشل حفظ الوجبات في قاعدة البيانات'), 'danger')
 
     except Exception as e:
