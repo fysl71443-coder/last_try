@@ -1894,7 +1894,7 @@ def import_meals():
         imported_count = 0
         from models import Meal
 
-        for _, row in df.iterrows():
+        for idx, row in df.iterrows():
             try:
                 name = str(row['Name']).strip()
                 name_ar = str(row['Name (Arabic)']).strip() if pd.notna(row['Name (Arabic)']) else ''

@@ -11,6 +11,7 @@ python-dotenv==1.0.0
 Flask-Babel==3.0.0
 Flask-SocketIO==5.3.6
 reportlab==4.0.4
+pandas>=1.5.0
 # Production server with async support
 gunicorn==21.2.0
 gevent==23.9.1  # For gevent workers
