@@ -1872,14 +1872,23 @@ def import_meals():
         # Read file using pandas
         try:
             import pandas as pd
+            print(f"DEBUG: pandas version: {pd.__version__}")  # Debug info
             if file.filename.lower().endswith('.csv'):
                 df = pd.read_csv(file)
             else:
-                df = pd.read_excel(file)
-        except ImportError:
-            flash(_('pandas library not installed / مكتبة pandas غير مثبتة'), 'danger')
+                # For Excel files, we need openpyxl
+                df = pd.read_excel(file, engine='openpyxl')
+        except ImportError as e:
+            print(f"DEBUG: ImportError details: {e}")  # Debug info
+            if 'pandas' in str(e):
+                flash(_('pandas library not installed / مكتبة pandas غير مثبتة'), 'danger')
+            elif 'openpyxl' in str(e):
+                flash(_('openpyxl library required for Excel files / مكتبة openpyxl مطلوبة لملفات Excel'), 'danger')
+            else:
+                flash(_('Required library not installed: %(error)s / مكتبة مطلوبة غير مثبتة: %(error)s', error=str(e)), 'danger')
             return redirect(url_for('meals'))
         except Exception as e:
+            print(f"DEBUG: General error: {e}")  # Debug info
             flash(_('Error reading file / خطأ في قراءة الملف: %(error)s', error=str(e)), 'danger')
             return redirect(url_for('meals'))
 
@@ -4779,6 +4788,47 @@ def delete_expense_invoice(invoice_id):
         return redirect(url_for('payments'))
     else:
         return redirect(url_for('expenses'))
+
+# Health check endpoint
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok', 'message': 'App is running'})
+
+# Test endpoint for debugging dependencies
+@app.route('/test-dependencies')
+def test_dependencies():
+    """Test endpoint to check if pandas and other dependencies are available"""
+    results = {}
+
+    # Test pandas
+    try:
+        import pandas as pd
+        results['pandas'] = {'status': 'OK', 'version': pd.__version__}
+    except ImportError as e:
+        results['pandas'] = {'status': 'MISSING', 'error': str(e)}
+    except Exception as e:
+        results['pandas'] = {'status': 'ERROR', 'error': str(e)}
+
+    # Test openpyxl
+    try:
+        import openpyxl
+        results['openpyxl'] = {'status': 'OK', 'version': openpyxl.__version__}
+    except ImportError as e:
+        results['openpyxl'] = {'status': 'MISSING', 'error': str(e)}
+    except Exception as e:
+        results['openpyxl'] = {'status': 'ERROR', 'error': str(e)}
+
+    # Test Flask-Babel
+    try:
+        from flask_babel import gettext as _
+        test_msg = _('Test message')
+        results['flask_babel'] = {'status': 'OK', 'test': test_msg}
+    except ImportError as e:
+        results['flask_babel'] = {'status': 'MISSING', 'error': str(e)}
+    except Exception as e:
+        results['flask_babel'] = {'status': 'ERROR', 'error': str(e)}
+
+    return jsonify(results)
 
 # App is already initialized above
 

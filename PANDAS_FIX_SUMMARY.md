@@ -16,12 +16,13 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 
 ## ✅ Solutions Applied
 
-### 1. **Added pandas to requirements.txt**
+### 1. **Added pandas and openpyxl to requirements.txt**
 ```diff
 Flask-Babel==3.0.0
 Flask-SocketIO==5.3.6
 reportlab==4.0.4
 + pandas>=1.5.0
++ openpyxl>=3.0.0
 # Production server with async support
 ```
 
@@ -33,6 +34,22 @@ reportlab==4.0.4
 ```
 
 **Explanation**: Changed the throwaway variable from `_` to `idx` to avoid shadowing the Flask-Babel `_()` function.
+
+### 3. **Enhanced error handling and debugging**
+**File**: `app.py` (lines 1872-1893)
+```diff
+- except ImportError:
+-     flash(_('pandas library not installed'), 'danger')
++ except ImportError as e:
++     if 'pandas' in str(e):
++         flash(_('pandas library not installed'), 'danger')
++     elif 'openpyxl' in str(e):
++         flash(_('openpyxl library required for Excel files'), 'danger')
+```
+
+### 4. **Added debugging endpoints**
+- `/health` - Basic health check
+- `/test-dependencies` - Test all critical dependencies
 
 ## 🧪 Testing
 
