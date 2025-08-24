@@ -1892,11 +1892,31 @@ def import_meals():
             flash(_('Error reading file / خطأ في قراءة الملف: %(error)s', error=str(e)), 'danger')
             return redirect(url_for('meals'))
 
-        # Expected columns: Name, Name (Arabic), Category, Cost, Selling Price
-        expected_cols = ['Name', 'Name (Arabic)', 'Category', 'Cost', 'Selling Price']
-        if not all(col in df.columns for col in expected_cols):
-            flash(_('Invalid file format. Expected columns: %(cols)s / تنسيق ملف غير صالح. الأعمدة المطلوبة: %(cols)s',
-                   cols=', '.join(expected_cols)), 'danger')
+        # Normalize column names (case-insensitive matching)
+        df.columns = df.columns.str.strip()  # Remove extra spaces
+        col_mapping = {}
+
+        # Map actual columns to expected columns (case-insensitive)
+        for col in df.columns:
+            col_lower = col.lower()
+            if col_lower == 'name':
+                col_mapping['Name'] = col
+            elif col_lower in ['name (arabic)', 'name(arabic)', 'arabic name', 'arabic_name']:
+                col_mapping['Name (Arabic)'] = col
+            elif col_lower == 'category':
+                col_mapping['Category'] = col
+            elif col_lower == 'cost':
+                col_mapping['Cost'] = col
+            elif col_lower in ['selling price', 'selling_price', 'price']:
+                col_mapping['Selling Price'] = col
+
+        # Check if we have the required columns
+        required_cols = ['Name', 'Cost', 'Selling Price']  # Arabic name and category are optional
+        missing_cols = [col for col in required_cols if col not in col_mapping]
+
+        if missing_cols:
+            flash(_('Missing required columns: %(cols)s / أعمدة مطلوبة مفقودة: %(cols)s. Available columns: %(available)s',
+                   cols=', '.join(missing_cols), available=', '.join(df.columns)), 'danger')
             return redirect(url_for('meals'))
 
         # Import meals
@@ -1905,11 +1925,11 @@ def import_meals():
 
         for idx, row in df.iterrows():
             try:
-                name = str(row['Name']).strip()
-                name_ar = str(row['Name (Arabic)']).strip() if pd.notna(row['Name (Arabic)']) else ''
-                category = str(row['Category']).strip() if pd.notna(row['Category']) else 'General'
-                cost = float(row['Cost']) if pd.notna(row['Cost']) else 0.0
-                selling_price = float(row['Selling Price']) if pd.notna(row['Selling Price']) else 0.0
+                name = str(row[col_mapping['Name']]).strip()
+                name_ar = str(row[col_mapping.get('Name (Arabic)', '')]).strip() if col_mapping.get('Name (Arabic)') and pd.notna(row[col_mapping.get('Name (Arabic)', '')]) else ''
+                category = str(row[col_mapping.get('Category', '')]).strip() if col_mapping.get('Category') and pd.notna(row[col_mapping.get('Category', '')]) else 'General'
+                cost = float(row[col_mapping['Cost']]) if pd.notna(row[col_mapping['Cost']]) else 0.0
+                selling_price = float(row[col_mapping['Selling Price']]) if pd.notna(row[col_mapping['Selling Price']]) else 0.0
 
                 if not name:
                     continue
