@@ -2191,17 +2191,23 @@ def api_draft_checkout():
         data = request.get_json() or {}
         current_app.logger.debug('api_draft_checkout payload: %s', data)
 
-
+        # Debug logging
+        print(f"DEBUG: api_draft_checkout called with data: {data}")
 
         draft_id = data.get('draft_id')
 
         if not draft_id:
+            print(f"DEBUG: No draft_id provided in data: {data}")
             return jsonify({'ok': False, 'error': 'Draft ID required'}), 400
 
         draft = DraftOrder.query.get_or_404(draft_id)
 
+        # Debug logging
+        print(f"DEBUG: Draft order {draft_id} status: '{draft.status}', items count: {len(draft.items)}")
+
         if draft.status != 'draft':
-            return jsonify({'ok': False, 'error': 'Invalid draft order'}), 400
+            print(f"DEBUG: Invalid draft status - expected 'draft', got '{draft.status}'")
+            return jsonify({'ok': False, 'error': f'Invalid draft order status: {draft.status}'}), 400
 
         # Get form data
         customer_name = data.get('customer_name', '').strip()
