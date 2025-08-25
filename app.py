@@ -1356,18 +1356,11 @@ def api_sales_void_check():
     try:
         data = request.get_json(silent=True) or {}
         pwd = (data.get('password') or '').strip()
-        # Determine expected password from settings, fall back to '0000'
-        settings = get_settings_safe()
-        expected = None
-        if settings and getattr(settings, 'void_password', None):
-            expected = str(settings.void_password)
-        elif settings and getattr(settings, 'tax_number', None):
-            expected = str(settings.tax_number)
-        else:
-            expected = '0000'
-        if pwd == str(expected):
+        # Fixed password for cancellation: 1991
+        expected = '1991'
+        if pwd == expected:
             return jsonify({'ok': True})
-        return jsonify({'ok': False, 'error': 'Wrong password'}), 400
+        return jsonify({'ok': False, 'error': _('Incorrect password / كلمة السر غير صحيحة')}), 400
     except Exception as e:
         current_app.logger.error("=== Void Check Error Traceback ===\n" + traceback.format_exc())
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -4762,6 +4755,12 @@ def delete_purchase_invoice(invoice_id):
 @app.route('/delete_sales_invoice/<int:invoice_id>', methods=['POST'])
 @login_required
 def delete_sales_invoice(invoice_id):
+    # Check for password in form data
+    password = request.form.get('password', '').strip()
+    if password != '1991':
+        flash(_('Incorrect password / كلمة السر غير صحيحة'), 'danger')
+        return redirect(url_for('sales'))
+
     invoice = SalesInvoice.query.get_or_404(invoice_id)
 
     # Delete related payments first

@@ -552,7 +552,7 @@
       });
       const data = await resp.json().catch(()=>({ok:false,error:'Invalid response'}));
       if(!resp.ok || !data.ok){
-        await showAlert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}');
+        await showAlert('{{ _('Incorrect password / كلمة السر غير صحيحة') }}');
         return;
       }
       // Clear invoice items and totals
