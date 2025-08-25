@@ -173,6 +173,21 @@
     // bind pay/print and void buttons
     document.getElementById('btnPayPrint')?.addEventListener('click', ()=> window.payAndPrint && window.payAndPrint());
     document.getElementById('btnVoidInvoice')?.addEventListener('click', ()=> window.voidInvoice && window.voidInvoice());
+
+    // Add protection for payment method changes
+    const payMethodSelect = document.getElementById('payMethod');
+    if (payMethodSelect) {
+      payMethodSelect.addEventListener('change', function(e) {
+        try {
+          console.log('Payment method changed to:', e.target.value);
+          // This is safe - just log the change
+        } catch (error) {
+          console.error('Error handling payment method change:', error);
+          // Reset to CASH if there's an error
+          e.target.value = 'CASH';
+        }
+      });
+    }
     // expose codes for external script
     document.body.dataset.branch = '{{ branch_code }}';
     document.body.dataset.table = '{{ table_number }}';
@@ -506,23 +521,63 @@
     document.body.classList.remove('modal-open');
     document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
     if(data.print_url){
-      // Open print window and auto-close after print/cancel
+      // Open print window and handle print confirmation
       const printWindow = window.open(data.print_url, '_blank', 'width=800,height=600,scrollbars=yes');
       if(printWindow){
         printWindow.focus();
+
+        // Function to confirm print and register payment
+        const confirmPrintAndPay = async () => {
+          try {
+            const confirmRes = await fetch('/api/invoice/confirm-print', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                invoice_id: data.invoice_id,
+                payment_method: data.payment_method,
+                total_amount: data.total_amount
+              })
+            });
+
+            if (confirmRes.ok) {
+              console.log('Payment registered successfully');
+              // Clear items and reset form
+              items = [];
+              renderItems();
+              document.getElementById('custName').value = '';
+              document.getElementById('custPhone').value = '';
+              document.getElementById('discountPct').value = '0';
+              // Reset payment method to default but don't cause errors
+              try {
+                document.getElementById('payMethod').value = 'CASH';
+              } catch(e) {
+                console.log('Payment method reset skipped');
+              }
+            } else {
+              console.error('Failed to register payment');
+            }
+          } catch (e) {
+            console.error('Error confirming print:', e);
+          }
+        };
+
         // Monitor print window for close/print completion
         const checkClosed = setInterval(()=>{
           if(printWindow.closed){
             clearInterval(checkClosed);
-            console.log('Print window closed by user');
+            console.log('Print window closed by user - confirming payment');
+            confirmPrintAndPay();
           }
         }, 500);
+
         // Auto-close after reasonable time if still open
         setTimeout(()=>{
           if(!printWindow.closed){
             printWindow.close();
             clearInterval(checkClosed);
-            console.log('Print window auto-closed');
+            console.log('Print window auto-closed - confirming payment');
+            confirmPrintAndPay();
           }
         }, 30000); // 30 seconds timeout
       }

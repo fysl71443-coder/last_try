@@ -1549,7 +1549,13 @@ def api_sales_checkout():
             return jsonify({'ok': False, 'error': str(e)}), 500
 
         receipt_url = url_for('sales_receipt', invoice_id=inv.id)
-        return jsonify({'ok': True, 'invoice_id': inv.id, 'print_url': receipt_url})
+        return jsonify({
+            'ok': True,
+            'invoice_id': inv.id,
+            'print_url': receipt_url,
+            'total_amount': float(grand_total),
+            'payment_method': payment_method
+        })
 
     except Exception as e:
         logging.exception('checkout top-level failed')
@@ -2300,12 +2306,62 @@ def api_draft_checkout():
             'ok': True,
             'status': 'success',
             'invoice_id': invoice.id,
-            'print_url': print_url
+            'print_url': print_url,
+            'total_amount': float(grand_total),
+            'payment_method': payment_method
         })
 
     except Exception as e:
         db.session.rollback()
         logging.exception('API draft checkout failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# API: Confirm print completion and register payment
+@app.route('/api/invoice/confirm-print', methods=['POST'])
+@login_required
+def confirm_print_and_pay():
+    """Confirm that invoice was printed and register payment"""
+    try:
+        data = request.get_json() or {}
+        invoice_id = data.get('invoice_id')
+        payment_method = data.get('payment_method', 'CASH')
+        total_amount = float(data.get('total_amount', 0))
+
+        if not invoice_id or not total_amount:
+            return jsonify({'ok': False, 'error': 'Missing invoice_id or total_amount'}), 400
+
+        # Get the invoice
+        from models import SalesInvoice, Payment
+        invoice = SalesInvoice.query.get(invoice_id)
+        if not invoice:
+            return jsonify({'ok': False, 'error': 'Invoice not found'}), 404
+
+        # Check if already paid
+        if invoice.status == 'paid':
+            return jsonify({'ok': True, 'message': 'Already paid'})
+
+        # Create payment record
+        payment = Payment(
+            invoice_type='sales',
+            invoice_id=invoice_id,
+            amount_paid=total_amount,
+            payment_method=payment_method,
+            payment_date=get_saudi_now(),
+            user_id=current_user.id
+        )
+        db.session.add(payment)
+
+        # Update invoice status to paid
+        invoice.status = 'paid'
+
+        db.session.commit()
+
+        return jsonify({'ok': True, 'message': 'Payment registered successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        logging.exception('confirm_print_and_pay failed')
         return jsonify({'ok': False, 'error': str(e)}), 500
 @app.route('/admin/fix_database', methods=['GET'])
 @login_required
