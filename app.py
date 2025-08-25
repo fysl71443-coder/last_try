@@ -1406,6 +1406,10 @@ def api_sales_checkout():
         tax_pct = float(data.get('tax_pct') or 15)
         payment_method = data.get('payment_method') or 'CASH'
 
+        # Debug logging
+        print(f"DEBUG: Checkout data - discount_pct: {discount_pct}, tax_pct: {tax_pct}")
+        print(f"DEBUG: Raw data: {data}")
+
         if not is_valid_branch(branch_code) or not items:
             return jsonify({'ok': False, 'error': 'Invalid branch or empty items'}), 400
 
@@ -1462,6 +1466,9 @@ def api_sales_checkout():
         discount_val = (subtotal + tax_total) * (discount_pct / 100.0)
         grand_total = (subtotal + tax_total) - discount_val
 
+        # Debug logging
+        print(f"DEBUG: Calculations - subtotal: {subtotal}, tax_total: {tax_total}, discount_val: {discount_val}, grand_total: {grand_total}")
+
         # Persist invoice
         inv = SalesInvoice(
             invoice_number=invoice_number,
@@ -1482,6 +1489,9 @@ def api_sales_checkout():
         try:
             db.session.add(inv)
             db.session.flush()
+
+            # Debug logging
+            print(f"DEBUG: Invoice saved - ID: {inv.id}, discount_amount: {inv.discount_amount}, total_after_tax_discount: {inv.total_after_tax_discount}")
 
             # Update table status to occupied when order is created
             from models import Table

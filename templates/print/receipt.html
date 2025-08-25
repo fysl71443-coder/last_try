@@ -59,9 +59,8 @@
       <tfoot>
         <tr class="total-row"><td colspan="3">{{ _('Subtotal / المجموع الفرعي') }}</td><td class="right">{{ '%.2f'|format(inv.total_before_tax) }}</td></tr>
         <tr class="total-row"><td colspan="3">{{ _('VAT 15%% / ضريبة القيمة المضافة') }}</td><td class="right">{{ '%.2f'|format(inv.tax_amount) }}</td></tr>
-        {% if inv.discount_amount and inv.discount_amount > 0 %}
-        <tr class="total-row" style="color: #d63384;"><td colspan="3">{{ _('Discount / الخصم') }}</td><td class="right">-{{ '%.2f'|format(inv.discount_amount) }}</td></tr>
-        {% endif %}
+        <!-- Debug: Always show discount for testing -->
+        <tr class="total-row" style="color: #d63384;"><td colspan="3">{{ _('Discount / الخصم') }} ({{ inv.discount_amount }})</td><td class="right">-{{ '%.2f'|format(inv.discount_amount or 0) }}</td></tr>
         <tr class="total-row" style="font-weight: bold; border-top: 2px solid #000;"><td colspan="3">{{ _('Total / الإجمالي') }}</td><td class="right">{{ '%.2f'|format(inv.total_after_tax_discount) }}</td></tr>
       </tfoot>
     </table>
