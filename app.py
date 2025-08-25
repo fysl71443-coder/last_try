@@ -22,6 +22,17 @@ import traceback
 import time
 from datetime import datetime, timedelta, timezone
 
+# Saudi Arabia timezone (UTC+3)
+SAUDI_TZ = timezone(timedelta(hours=3))
+
+def get_saudi_now():
+    """Get current datetime in Saudi Arabia timezone (UTC+3)"""
+    return datetime.now(SAUDI_TZ)
+
+def get_saudi_today():
+    """Get current date in Saudi Arabia timezone"""
+    return get_saudi_now().date()
+
 # Configure logging for debugging
 logging.basicConfig(
     level=logging.INFO,
@@ -492,7 +503,7 @@ def sales_branch(branch_code):
 
     # Default date
     if request.method == 'GET':
-        form.date.data = datetime.now(timezone.utc).date()
+        form.date.data = get_saudi_today()
 
     # Handle submit
     if form.validate_on_submit():
@@ -501,11 +512,11 @@ def sales_branch(branch_code):
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
             try:
                 last_num = int(last_invoice.invoice_number.split('-')[-1])
-                invoice_number = f'SAL-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
+                invoice_number = f'SAL-{get_saudi_now().year}-{last_num + 1:03d}'
             except Exception:
-                invoice_number = f'SAL-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
+                invoice_number = f'SAL-{get_saudi_now().strftime("%Y%m%d%H%M%S")}'
         else:
-            invoice_number = f'SAL-{datetime.now(timezone.utc).year}-001'
+            invoice_number = f'SAL-{get_saudi_now().year}-001'
 
         # Totals
         total_before_tax = 0.0
@@ -641,11 +652,11 @@ def sales_all():
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
             try:
                 last_num = int(last_invoice.invoice_number.split('-')[-1])
-                invoice_number = f'SAL-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
+                invoice_number = f'SAL-{get_saudi_now().year}-{last_num + 1:03d}'
             except Exception:
-                invoice_number = f'SAL-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
+                invoice_number = f'SAL-{get_saudi_now().strftime("%Y%m%d%H%M%S")}'
         else:
-            invoice_number = f'SAL-{datetime.now(timezone.utc).year}-001'
+            invoice_number = f'SAL-{get_saudi_now().year}-001'
 
 # Seed default menu categories once (safe, best-effort)
 MENU_SEEDED = False
@@ -1429,12 +1440,7 @@ def api_sales_checkout():
             new_num = 1
 
         # Get current datetime in Saudi Arabia timezone (UTC+3)
-        try:
-            from datetime import timezone as _tz
-            saudi_tz = _tz(timedelta(hours=3))
-            _now = _dt.now(saudi_tz)
-        except Exception:
-            _now = _dt.now()
+        _now = get_saudi_now()
 
         invoice_number = f"SAL-{_now.year}-{new_num:03d}"
 
@@ -2202,9 +2208,7 @@ def api_draft_checkout():
 
 
         # Generate invoice number
-        from datetime import datetime as _dt, timezone, timedelta
-        saudi_tz = timezone(timedelta(hours=3))
-        _now = _dt.now(saudi_tz)
+        _now = get_saudi_now()
 
         last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
         invoice_number = (last_invoice.id + 1) if last_invoice else 1
@@ -2972,7 +2976,7 @@ def reports():
         start_arg = request.args.get('start_date')
         end_arg = request.args.get('end_date')
 
-        today = datetime.now(timezone.utc).date()
+        today = get_saudi_today()
 
         if period == 'today':
             start_dt = end_dt = today
@@ -3440,13 +3444,13 @@ def salaries_statements():
         pass
     # Year/month
     try:
-        year = int(request.args.get('year') or datetime.now(timezone.utc).year)
+        year = int(request.args.get('year') or get_saudi_now().year)
     except Exception:
-        year = datetime.now(timezone.utc).year
+        year = get_saudi_now().year
     try:
-        month = int(request.args.get('month') or datetime.now(timezone.utc).month)
+        month = int(request.args.get('month') or get_saudi_now().month)
     except Exception:
-        month = datetime.now(timezone.utc).month
+        month = get_saudi_now().month
 
     from sqlalchemy import func
     qs = Salary.query.filter_by(year=year, month=month).join(Employee).order_by(Employee.full_name.asc())
@@ -3686,13 +3690,13 @@ def salaries_monthly():
         pass
     # Select year/month
     try:
-        year = int(request.values.get('year') or datetime.now(timezone.utc).year)
+        year = int(request.values.get('year') or get_saudi_now().year)
     except Exception:
-        year = datetime.now(timezone.utc).year
+        year = get_saudi_now().year
     try:
-        month = int(request.values.get('month') or datetime.now(timezone.utc).month)
+        month = int(request.values.get('month') or get_saudi_now().month)
     except Exception:
-        month = datetime.now(timezone.utc).month
+        month = get_saudi_now().month
 
     # Ensure salary rows exist for all active employees
     emps = Employee.query.filter_by(status='active').order_by(Employee.full_name.asc()).all()
@@ -4237,7 +4241,7 @@ def debug_effective_permissions():
 @login_required
 def invoices_retention_view():
     # Show invoices older than 12 months (approx 365 days)
-    cutoff = datetime.now(timezone.utc).date() - timedelta(days=365)
+    cutoff = get_saudi_today() - timedelta(days=365)
     sales_old = SalesInvoice.query.filter(SalesInvoice.date < cutoff).order_by(SalesInvoice.date.desc()).limit(200).all()
     purchases_old = PurchaseInvoice.query.filter(PurchaseInvoice.date < cutoff).order_by(PurchaseInvoice.date.desc()).limit(200).all()
     expenses_old = ExpenseInvoice.query.filter(ExpenseInvoice.date < cutoff).order_by(ExpenseInvoice.date.desc()).limit(200).all()
@@ -4251,7 +4255,7 @@ def invoices_retention_export_view():
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
     import io
-    cutoff = datetime.now(timezone.utc).date() - timedelta(days=365)
+    cutoff = get_saudi_today() - timedelta(days=365)
     kind = (request.args.get('type') or 'all').lower()
     # Collect
     sales = SalesInvoice.query.filter(SalesInvoice.date < cutoff).order_by(SalesInvoice.date.asc()).all() if kind in ['all','sales'] else []
