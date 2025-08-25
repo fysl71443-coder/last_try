@@ -1,4 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+# Saudi Arabia timezone (UTC+3)
+SAUDI_TZ = timezone(timedelta(hours=3))
+
+def get_saudi_now():
+    """Get current datetime in Saudi Arabia timezone (UTC+3)"""
+    return datetime.now(SAUDI_TZ), timezone
 from flask_login import UserMixin
 from extensions import db
 
@@ -55,7 +62,7 @@ class SalesInvoice(db.Model):
     __tablename__ = 'sales_invoices'
     id = db.Column(db.Integer, primary_key=True)
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
-    date = db.Column(db.Date, default=datetime.utcnow)
+    date = db.Column(db.Date, default=lambda: get_saudi_now().date())
     payment_method = db.Column(db.String(20), nullable=False)
     branch = db.Column(db.String(50), nullable=False)  # 'place_india' or 'china_town'
     table_number = db.Column(db.Integer, nullable=True)  # Table number
@@ -67,7 +74,7 @@ class SalesInvoice(db.Model):
     discount_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     total_after_tax_discount = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(db.String(20), default='unpaid')  # paid, partial, unpaid
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     items = db.relationship('SalesInvoiceItem', backref='invoice', lazy=True)

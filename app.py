@@ -33,6 +33,19 @@ def get_saudi_today():
     """Get current date in Saudi Arabia timezone"""
     return get_saudi_now().date()
 
+@app.template_filter('saudi_time')
+def saudi_time_filter(dt):
+    """Convert datetime to Saudi Arabia timezone for display"""
+    if not dt:
+        return ''
+    if dt.tzinfo is None:
+        # Assume it's already in Saudi time if no timezone info
+        return dt.strftime('%H:%M')
+    else:
+        # Convert to Saudi time
+        saudi_dt = dt.astimezone(SAUDI_TZ)
+        return saudi_dt.strftime('%H:%M')
+
 # Configure logging for debugging
 logging.basicConfig(
     level=logging.INFO,
@@ -1486,7 +1499,8 @@ def api_sales_checkout():
             discount_amount=discount_val,
             total_after_tax_discount=grand_total,
             status='unpaid',  # Will be posted as paid upon printing the receipt
-            user_id=current_user.id
+            user_id=current_user.id,
+            created_at=_now  # Explicitly set Saudi time
         )
 
         try:
@@ -2228,7 +2242,7 @@ def api_draft_checkout():
             total_after_tax_discount=grand_total,
             status='unpaid',
             user_id=current_user.id,
-            created_at=_now
+            created_at=_now  # Explicitly set Saudi time
         )
         db.session.add(invoice)
         db.session.flush()

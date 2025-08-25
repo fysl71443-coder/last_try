@@ -32,7 +32,7 @@
 
     <div class="small">
       <div>{{ _('Invoice') }}: {{ inv.invoice_number or inv.id }}</div>
-      <div>{{ _('Date/Time') }}: {{ inv.date }} {{ inv.created_at.strftime('%H:%M') if inv.created_at else '' }}</div>
+      <div>{{ _('Date/Time') }}: {{ inv.date }} {{ inv.created_at|saudi_time }}</div>
       <div>{{ _('Customer') }}: {{ inv.customer_name or _('Cash customer') }}</div>
       {% if inv.customer_phone %}<div>{{ _('Phone') }}: {{ inv.customer_phone }}</div>{% endif %}
     </div>
