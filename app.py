@@ -1406,9 +1406,7 @@ def api_sales_checkout():
         tax_pct = float(data.get('tax_pct') or 15)
         payment_method = data.get('payment_method') or 'CASH'
 
-        # Debug logging
-        print(f"DEBUG: Checkout data - discount_pct: {discount_pct}, tax_pct: {tax_pct}")
-        print(f"DEBUG: Raw data: {data}")
+
 
         if not is_valid_branch(branch_code) or not items:
             return jsonify({'ok': False, 'error': 'Invalid branch or empty items'}), 400
@@ -1466,8 +1464,7 @@ def api_sales_checkout():
         discount_val = (subtotal + tax_total) * (discount_pct / 100.0)
         grand_total = (subtotal + tax_total) - discount_val
 
-        # Debug logging
-        print(f"DEBUG: Calculations - subtotal: {subtotal}, tax_total: {tax_total}, discount_val: {discount_val}, grand_total: {grand_total}")
+
 
         # Persist invoice
         inv = SalesInvoice(
@@ -1490,8 +1487,7 @@ def api_sales_checkout():
             db.session.add(inv)
             db.session.flush()
 
-            # Debug logging
-            print(f"DEBUG: Invoice saved - ID: {inv.id}, discount_amount: {inv.discount_amount}, total_after_tax_discount: {inv.total_after_tax_discount}")
+
 
             # Update table status to occupied when order is created
             from models import Table
@@ -2175,23 +2171,17 @@ def api_draft_checkout():
         data = request.get_json() or {}
         current_app.logger.debug('api_draft_checkout payload: %s', data)
 
-        # Debug logging
-        print(f"DEBUG: api_draft_checkout called with data: {data}")
+
 
         draft_id = data.get('draft_id')
 
         if not draft_id:
-            print(f"DEBUG: No draft_id provided in data: {data}")
             return jsonify({'ok': False, 'error': 'Draft ID required'}), 400
 
         draft = DraftOrder.query.get_or_404(draft_id)
 
-        # Debug logging
-        print(f"DEBUG: Draft order {draft_id} status: '{draft.status}', items count: {len(draft.items)}")
-
         if draft.status != 'draft':
-            print(f"DEBUG: Invalid draft status - expected 'draft', got '{draft.status}'")
-            return jsonify({'ok': False, 'error': f'Invalid draft order status: {draft.status}'}), 400
+            return jsonify({'ok': False, 'error': 'Invalid draft order'}), 400
 
         # Get form data
         customer_name = data.get('customer_name', '').strip()
@@ -2199,8 +2189,7 @@ def api_draft_checkout():
         payment_method = data.get('payment_method', 'CASH')
         discount_pct = float(data.get('discount_pct') or 0)
 
-        # Debug logging
-        print(f"DEBUG: Draft checkout - discount_pct: {discount_pct}, payment_method: {payment_method}")
+
 
         # Calculate totals
         subtotal = sum(float(item.price_before_tax * item.quantity) for item in draft.items)
@@ -2210,8 +2199,7 @@ def api_draft_checkout():
         discount_val = (subtotal + tax_total) * (discount_pct / 100.0)
         grand_total = (subtotal + tax_total) - discount_val
 
-        # Debug logging
-        print(f"DEBUG: Draft calculations - subtotal: {subtotal}, tax_total: {tax_total}, discount_val: {discount_val}, grand_total: {grand_total}")
+
 
         # Generate invoice number
         from datetime import datetime as _dt, timezone, timedelta
@@ -2241,8 +2229,7 @@ def api_draft_checkout():
         db.session.add(invoice)
         db.session.flush()
 
-        # Debug logging
-        print(f"DEBUG: Draft invoice saved - ID: {invoice.id}, discount_amount: {invoice.discount_amount}, total_after_tax_discount: {invoice.total_after_tax_discount}")
+
 
         # Copy items from draft to invoice
         for draft_item in draft.items:
