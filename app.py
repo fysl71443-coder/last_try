@@ -33,18 +33,7 @@ def get_saudi_today():
     """Get current date in Saudi Arabia timezone"""
     return get_saudi_now().date()
 
-@app.template_filter('saudi_time')
-def saudi_time_filter(dt):
-    """Convert datetime to Saudi Arabia timezone for display"""
-    if not dt:
-        return ''
-    if dt.tzinfo is None:
-        # Assume it's already in Saudi time if no timezone info
-        return dt.strftime('%H:%M')
-    else:
-        # Convert to Saudi time
-        saudi_dt = dt.astimezone(SAUDI_TZ)
-        return saudi_dt.strftime('%H:%M')
+
 
 # Configure logging for debugging
 logging.basicConfig(
@@ -82,6 +71,20 @@ def create_app():
     # Load configuration
     from config import Config
     app.config.from_object(Config)
+
+    # Add template filter for Saudi time
+    @app.template_filter('saudi_time')
+    def saudi_time_filter(dt):
+        """Convert datetime to Saudi Arabia timezone for display"""
+        if not dt:
+            return ''
+        if dt.tzinfo is None:
+            # Assume it's already in Saudi time if no timezone info
+            return dt.strftime('%H:%M')
+        else:
+            # Convert to Saudi time
+            saudi_dt = dt.astimezone(SAUDI_TZ)
+            return saudi_dt.strftime('%H:%M')
     # Initialize extensions
     db.init_app(app)
     bcrypt.init_app(app)
