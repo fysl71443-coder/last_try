@@ -20,14 +20,20 @@ import logging
 import json
 import traceback
 import time
+import os
+import pytz
 from datetime import datetime, timedelta, timezone
 
-# Saudi Arabia timezone (UTC+3)
-SAUDI_TZ = timezone(timedelta(hours=3))
+# ========================
+# ضبط التوقيت على السعودية
+# ========================
+os.environ['TZ'] = 'Asia/Riyadh'
+time.tzset()
+KSA_TZ = pytz.timezone("Asia/Riyadh")
 
 def get_saudi_now():
-    """Get current datetime in Saudi Arabia timezone (UTC+3)"""
-    return datetime.now(SAUDI_TZ)
+    """Get current datetime in Saudi Arabia timezone"""
+    return datetime.now(KSA_TZ)
 
 def get_saudi_today():
     """Get current date in Saudi Arabia timezone"""
@@ -83,8 +89,16 @@ def create_app():
             return dt.strftime('%H:%M')
         else:
             # Convert to Saudi time
-            saudi_dt = dt.astimezone(SAUDI_TZ)
+            saudi_dt = dt.astimezone(KSA_TZ)
             return saudi_dt.strftime('%H:%M')
+
+    # Add template context processor for current Saudi time
+    @app.context_processor
+    def inject_saudi_time():
+        return {
+            'current_saudi_time': get_saudi_now(),
+            'current_saudi_date': get_saudi_today()
+        }
     # Initialize extensions
     db.init_app(app)
     bcrypt.init_app(app)
@@ -263,6 +277,12 @@ def create_app():
             return db.session.get(User, int(user_id))
         except Exception:
             return None
+
+    # Add test route for timezone
+    @app.route('/test-time')
+    def test_time():
+        now_ksa = get_saudi_now().strftime("%Y-%m-%d %H:%M:%S %Z")
+        return f"الوقت الحالي في السعودية: {now_ksa}"
 
     return app
 

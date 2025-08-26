@@ -15,7 +15,10 @@ class Config:
         SQLALCHEMY_ENGINE_OPTIONS = {
             "poolclass": NullPool,
             "pool_pre_ping": True,
-            "echo": False
+            "echo": False,
+            "connect_args": {
+                "options": "-c timezone=Asia/Riyadh"
+            }
         }
     else:
         SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"

@@ -1,11 +1,12 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+import pytz
 
-# Saudi Arabia timezone (UTC+3)
-SAUDI_TZ = timezone(timedelta(hours=3))
+# Saudi Arabia timezone
+KSA_TZ = pytz.timezone("Asia/Riyadh")
 
 def get_saudi_now():
-    """Get current datetime in Saudi Arabia timezone (UTC+3)"""
-    return datetime.now(SAUDI_TZ), timezone
+    """Get current datetime in Saudi Arabia timezone"""
+    return datetime.now(KSA_TZ)
 from flask_login import UserMixin
 from extensions import db
 
