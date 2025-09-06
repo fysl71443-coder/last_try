@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Edit Supplier / تعديل المورد') }}{% endblock %}
+{% block content %}
+<div class="container py-3">
+  <h3>{{ _('Edit Supplier / تعديل المورد') }}</h3>
+  <div class="card"><div class="card-body">
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">{{ _('Name / الاسم') }}</label>
+          <input name="name" class="form-control" value="{{ s.name }}" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">{{ _('Contact Person / شخص التواصل') }}</label>
+          <input name="contact_person" class="form-control" value="{{ s.contact_person or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ _('Phone / الهاتف') }}</label>
+          <input name="phone" class="form-control" value="{{ s.phone or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ _('Email / البريد الإلكتروني') }}</label>
+          <input name="email" type="email" class="form-control" value="{{ s.email or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ _('Tax Number / الرقم الضريبي') }}</label>
+          <input name="tax_number" class="form-control" value="{{ s.tax_number or '' }}">
+        </div>
+        <div class="col-md-12">
+          <label class="form-label">{{ _('Address / العنوان') }}</label>
+          <input name="address" class="form-control" value="{{ s.address or '' }}">
+        </div>
+        <div class="col-md-12">
+          <label class="form-label">{{ _('Notes / ملاحظات') }}</label>
+          <input name="notes" class="form-control" value="{{ s.notes or '' }}">
+        </div>
+        <div class="col-md-3 form-check mt-2">
+          <input type="checkbox" name="active" id="active" class="form-check-input" {% if s.active %}checked{% endif %}>
+          <label for="active" class="form-check-label">{{ _('Active / نشط') }}</label>
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary">{{ _('Save / حفظ') }}</button>
+          <a class="btn btn-secondary" href="{{ url_for('suppliers') }}">{{ _('Back / رجوع') }}</a>
+        </div>
+      </div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}
+

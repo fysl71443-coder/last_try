@@ -12,7 +12,10 @@
     return Array.from(table.querySelectorAll('.rowSel:checked')).map(cb=>cb.closest('tr').dataset.id);
   }
   async function api(method, url, body){
-    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: body?JSON.stringify(body):undefined });
+    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+    const headers = { 'Content-Type':'application/json' };
+    if(token){ headers['X-CSRFToken'] = token; }
+    const res = await fetch(url, { method, headers, credentials:'same-origin', body: body?JSON.stringify(body):undefined });
     if(!res.ok){ const t=await res.text(); throw new Error(t||res.status); }
     return res.json();
   }

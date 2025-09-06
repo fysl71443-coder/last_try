@@ -17,15 +17,15 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
         <div class="row g-3">
-          <div class="col-md-4">{{ form.employee_id.label(class_='form-label') }}{{ form.employee_id(class_='form-select') }}</div>
+          <div class="col-md-4">{{ form.employee_id.label(class_='form-label') }}{{ form.employee_id(class_='form-select', id='employee_id') }}</div>
           <div class="col-md-2">{{ form.year.label(class_='form-label') }}{{ form.year(class_='form-control') }}</div>
           <div class="col-md-2">{{ form.month.label(class_='form-label') }}{{ form.month(class_='form-select') }}</div>
           <div class="col-md-2">{{ form.status.label(class_='form-label') }}{{ form.status(class_='form-select') }}</div>
-          <div class="col-md-2">{{ form.basic_salary.label(class_='form-label') }}{{ form.basic_salary(class_='form-control') }}</div>
-          <div class="col-md-2">{{ form.allowances.label(class_='form-label') }}{{ form.allowances(class_='form-control') }}</div>
-          <div class="col-md-2">{{ form.deductions.label(class_='form-label') }}{{ form.deductions(class_='form-control') }}</div>
-          <div class="col-md-2">{{ form.previous_salary_due.label(class_='form-label') }}{{ form.previous_salary_due(class_='form-control') }}</div>
-          <div class="col-md-2">{{ form.total_salary.label(class_='form-label') }}{{ form.total_salary(class_='form-control', readonly=True) }}</div>
+          <div class="col-md-2">{{ form.basic_salary.label(class_='form-label') }}{{ form.basic_salary(class_='form-control', id='basic_salary') }}</div>
+          <div class="col-md-2">{{ form.allowances.label(class_='form-label') }}{{ form.allowances(class_='form-control', id='allowances') }}</div>
+          <div class="col-md-2">{{ form.deductions.label(class_='form-label') }}{{ form.deductions(class_='form-control', id='deductions') }}</div>
+          <div class="col-md-2">{{ form.previous_salary_due.label(class_='form-label') }}{{ form.previous_salary_due(class_='form-control', id='previous_salary_due') }}</div>
+          <div class="col-md-2">{{ form.total_salary.label(class_='form-label') }}{{ form.total_salary(class_='form-control', readonly=True, id='total_salary') }}</div>
         </div>
         <div class="text-end mt-3">
           {{ form.submit(class_='btn btn-success') }}
@@ -92,6 +92,38 @@ async function handleDeleteSalary(event, name) {
   </div>
   {% endif %}
 </div>
+
+
+<script>
+(function(){
+  const empSelect = document.getElementById('employee_id');
+  async function fetchDefaults(empId){
+    if(!empId) return null;
+    try{
+      const r = await fetch(`/api/employee/${empId}/salary_defaults`);
+      if(!r.ok) return null;
+      return await r.json();
+    }catch(e){ return null; }
+  }
+  async function applyDefaults(){
+    const empId = empSelect && empSelect.value;
+    const data = await fetchDefaults(empId);
+    if(!data) return;
+    const basic = document.getElementById('basic_salary');
+    const allow = document.getElementById('allowances');
+    const ded = document.getElementById('deductions');
+    if(basic && !basic.value) basic.value = (data.base_salary||0);
+    if(allow && !allow.value) allow.value = (data.allowances||0);
+    if(ded && !ded.value) ded.value = (data.deductions||0);
+    // Trigger recalc
+    document.dispatchEvent(new Event('input'));
+  }
+  if(empSelect){
+    empSelect.addEventListener('change', applyDefaults);
+    document.addEventListener('DOMContentLoaded', applyDefaults);
+  }
+})();
+</script>
 
 <script>
 function recalc() {
