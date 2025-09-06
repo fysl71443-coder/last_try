@@ -379,6 +379,18 @@ class Settings(db.Model):
     china_town_label = db.Column(db.String(100), default='China Town')
     currency = db.Column(db.String(10), default='SAR')
     default_theme = db.Column(db.String(10), default='light')  # 'light' or 'dark'
+
+    # Branch-specific settings
+    # China Town settings
+    china_town_void_password = db.Column(db.String(50), default='1991')
+    china_town_vat_rate = db.Column(db.Numeric(5, 2), default=15.00)
+    china_town_discount_rate = db.Column(db.Numeric(5, 2), default=0.00)
+
+    # Palace India settings
+    place_india_void_password = db.Column(db.String(50), default='1991')
+    place_india_vat_rate = db.Column(db.Numeric(5, 2), default=15.00)
+    place_india_discount_rate = db.Column(db.Numeric(5, 2), default=0.00)
+
     # Receipt print settings (sales invoices only)
     receipt_paper_width = db.Column(db.String(4), default='80')  # '80' or '58'
     receipt_margin_top_mm = db.Column(db.Integer, default=5)

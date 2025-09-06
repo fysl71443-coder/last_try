@@ -4,110 +4,197 @@
 {% block title %}الإعدادات{% endblock %}
 {% block content %}
 <div class="container py-4">
-  <h3>الإعدادات العامة</h3>
-  <form method="post" enctype="multipart/form-data" class="row g-3">
+  <!-- Navigation Tabs -->
+  <ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab">
+        🏢 الإعدادات العامة
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="china-tab" data-bs-toggle="tab" data-bs-target="#china" type="button" role="tab">
+        🏮 China Town Settings
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="india-tab" data-bs-toggle="tab" data-bs-target="#india" type="button" role="tab">
+        🏛️ Palace India Settings
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="print-tab" data-bs-toggle="tab" data-bs-target="#print" type="button" role="tab">
+        🖨️ إعدادات الطباعة
+      </button>
+    </li>
+  </ul>
+
+  <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-    <div class="col-md-6">
-      <label class="form-label">اسم الشركة</label>
-      <input type="text" name="company_name" class="form-control" value="{{ s.company_name or '' }}">
-    </div>
-    <div class="col-md-6">
-      <label class="form-label">الرقم الضريبي</label>
-      <input type="text" name="tax_number" class="form-control" value="{{ s.tax_number or '' }}">
-    </div>
-    <div class="col-md-8">
-      <label class="form-label">العنوان</label>
-      <input type="text" name="address" class="form-control" value="{{ s.address or '' }}">
-    </div>
-    <div class="col-md-4">
-      <label class="form-label">الهاتف</label>
-      <input type="text" name="phone" class="form-control" value="{{ s.phone or '' }}">
-    </div>
-    <div class="col-md-6">
-      <label class="form-label">البريد الإلكتروني</label>
-      <input type="email" name="email" class="form-control" value="{{ s.email or '' }}">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">نسبة VAT (%)</label>
-      <input type="number" step="0.01" name="vat_rate" class="form-control" value="{{ s.vat_rate or 15 }}">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">العملة</label>
-      <input type="text" name="currency" class="form-control" value="{{ s.currency or 'SAR' }}">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">سمة الواجهة الافتراضية</label>
-      <select name="default_theme" class="form-select">
-        <option value="light" {% if s.default_theme!='dark' %}selected{% endif %}>نهاري</option>
-        <option value="dark" {% if s.default_theme=='dark' %}selected{% endif %}>ليلي</option>
-      </select>
+
+    <div class="tab-content" id="settingsTabContent">
+      <!-- General Settings Tab -->
+      <div class="tab-pane fade show active" id="general" role="tabpanel">
+        <div class="row g-3">
+          <div class="col-12">
+            <h4>الإعدادات العامة للشركة</h4>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">اسم الشركة</label>
+            <input type="text" name="company_name" class="form-control" value="{{ s.company_name or '' }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">الرقم الضريبي</label>
+            <input type="text" name="tax_number" class="form-control" value="{{ s.tax_number or '' }}">
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">العنوان</label>
+            <input type="text" name="address" class="form-control" value="{{ s.address or '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">الهاتف</label>
+            <input type="text" name="phone" class="form-control" value="{{ s.phone or '' }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">البريد الإلكتروني</label>
+            <input type="email" name="email" class="form-control" value="{{ s.email or '' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">نسبة VAT العامة (%)</label>
+            <input type="number" step="0.01" name="vat_rate" class="form-control" value="{{ s.vat_rate or 15 }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">العملة</label>
+            <input type="text" name="currency" class="form-control" value="{{ s.currency or 'SAR' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">سمة الواجهة الافتراضية</label>
+            <select name="default_theme" class="form-select">
+              <option value="light" {% if s.default_theme!='dark' %}selected{% endif %}>نهاري</option>
+              <option value="dark" {% if s.default_theme=='dark' %}selected{% endif %}>ليلي</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">تسمية فرع Place India</label>
+            <input type="text" name="place_india_label" class="form-control" value="{{ s.place_india_label or 'Place India' }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">تسمية فرع China Town</label>
+            <input type="text" name="china_town_label" class="form-control" value="{{ s.china_town_label or 'China Town' }}">
+          </div>
+        </div>
+      </div>
+
+      <!-- China Town Settings Tab -->
+      <div class="tab-pane fade" id="china" role="tabpanel">
+        <div class="row g-3">
+          <div class="col-12">
+            <h4>🏮 إعدادات China Town</h4>
+            <p class="text-muted">إعدادات خاصة بفرع China Town</p>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">كلمة سر حذف الأصناف</label>
+            <input type="password" name="china_town_void_password" class="form-control" value="{{ s.china_town_void_password or '1991' }}">
+            <div class="form-text">كلمة السر المطلوبة لحذف الأصناف من الفاتورة</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">نسبة الضريبة (%)</label>
+            <input type="number" step="0.01" name="china_town_vat_rate" class="form-control" value="{{ s.china_town_vat_rate or 15 }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">نسبة الخصم الافتراضية (%)</label>
+            <input type="number" step="0.01" name="china_town_discount_rate" class="form-control" value="{{ s.china_town_discount_rate or 0 }}">
+          </div>
+        </div>
+      </div>
+
+      <!-- Palace India Settings Tab -->
+      <div class="tab-pane fade" id="india" role="tabpanel">
+        <div class="row g-3">
+          <div class="col-12">
+            <h4>🏛️ إعدادات Palace India</h4>
+            <p class="text-muted">إعدادات خاصة بفرع Palace India</p>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">كلمة سر حذف الأصناف</label>
+            <input type="password" name="place_india_void_password" class="form-control" value="{{ s.place_india_void_password or '1991' }}">
+            <div class="form-text">كلمة السر المطلوبة لحذف الأصناف من الفاتورة</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">نسبة الضريبة (%)</label>
+            <input type="number" step="0.01" name="place_india_vat_rate" class="form-control" value="{{ s.place_india_vat_rate or 15 }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">نسبة الخصم الافتراضية (%)</label>
+            <input type="number" step="0.01" name="place_india_discount_rate" class="form-control" value="{{ s.place_india_discount_rate or 0 }}">
+          </div>
+        </div>
+      </div>
+
+      <!-- Print Settings Tab -->
+      <div class="tab-pane fade" id="print" role="tabpanel">
+        <div class="row g-3">
+
+          <div class="col-12">
+            <h4>🖨️ إعدادات الإيصال والطباعة</h4>
+            <p class="text-muted">إعدادات طباعة الفواتير والإيصالات</p>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">عرض الورق (مم)</label>
+            <select name="receipt_paper_width" class="form-select">
+              <option value="80" {% if s.receipt_paper_width=='80' %}selected{% endif %}>80mm</option>
+              <option value="58" {% if s.receipt_paper_width=='58' %}selected{% endif %}>58mm</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">حجم الخط</label>
+            <input type="number" name="receipt_font_size" class="form-control" value="{{ s.receipt_font_size or 12 }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">الشعار (Logo)</label>
+            <div class="mb-2">
+              <input type="file" name="logo_file" class="form-control" accept="image/*" id="logoFile">
+              <div class="form-text">{{ _('Upload logo from computer / رفع الشعار من الكمبيوتر') }}</div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small">{{ _('Or enter logo URL / أو أدخل رابط الشعار') }}</label>
+              <input type="text" name="logo_url" class="form-control" value="{{ s.logo_url or '/static/chinese-logo.svg' }}">
+            </div>
+            {% if s and s.logo_url %}
+            <div class="mt-2">
+              <img src="{{ s.logo_url }}" alt="Current Logo" style="max-height: 60px; max-width: 200px;" class="border rounded">
+              <div class="form-text">{{ _('Current logo / الشعار الحالي') }}</div>
+            </div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <div class="form-check mt-4">
+              <input class="form-check-input" type="checkbox" name="receipt_show_logo" id="recLogo" {% if s.receipt_show_logo %}checked{% endif %}>
+              <label class="form-check-label" for="recLogo">إظهار الشعار</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="receipt_show_tax_number" id="recTax" {% if s.receipt_show_tax_number %}checked{% endif %}>
+              <label class="form-check-label" for="recTax">إظهار الرقم الضريبي</label>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">نص تذييل الإيصال</label>
+            <input type="text" name="receipt_footer_text" class="form-control" value="{{ s.receipt_footer_text or '' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">طول إضافي أسفل الإيصال (مم)</label>
+            <input type="number" step="1" min="0" name="receipt_extra_bottom_mm" class="form-control" value="{{ s.receipt_extra_bottom_mm or 15 }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">ارتفاع الشعار (px)</label>
+            <input type="number" step="1" min="20" name="receipt_logo_height" class="form-control" value="{{ s.receipt_logo_height or 40 }}">
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="col-md-6">
-      <label class="form-label">تسمية فرع Place India</label>
-      <input type="text" name="place_india_label" class="form-control" value="{{ s.place_india_label or 'Place India' }}">
-    </div>
-    <div class="col-md-6">
-      <label class="form-label">تسمية فرع China Town</label>
-      <input type="text" name="china_town_label" class="form-control" value="{{ s.china_town_label or 'China Town' }}">
-    </div>
-
-    <hr class="my-4">
-    <h4>إعدادات الإيصال والطباعة</h4>
-    <div class="col-md-3">
-      <label class="form-label">عرض الورق (مم)</label>
-      <select name="receipt_paper_width" class="form-select">
-        <option value="80" {% if s.receipt_paper_width=='80' %}selected{% endif %}>80mm</option>
-        <option value="58" {% if s.receipt_paper_width=='58' %}selected{% endif %}>58mm</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">حجم الخط</label>
-      <input type="number" name="receipt_font_size" class="form-control" value="{{ s.receipt_font_size or 12 }}">
-    </div>
-    <div class="col-md-6">
-      <label class="form-label">الشعار (Logo)</label>
-      <div class="mb-2">
-        <input type="file" name="logo_file" class="form-control" accept="image/*" id="logoFile">
-        <div class="form-text">{{ _('Upload logo from computer / رفع الشعار من الكمبيوتر') }}</div>
-      </div>
-      <div class="mb-2">
-        <label class="form-label small">{{ _('Or enter logo URL / أو أدخل رابط الشعار') }}</label>
-        <input type="text" name="logo_url" class="form-control" value="{{ s.logo_url or '/static/chinese-logo.svg' }}">
-      </div>
-      {% if s and s.logo_url %}
-      <div class="mt-2">
-        <img src="{{ s.logo_url }}" alt="Current Logo" style="max-height: 60px; max-width: 200px;" class="border rounded">
-        <div class="form-text">{{ _('Current logo / الشعار الحالي') }}</div>
-      </div>
-      {% endif %}
-    </div>
-    <div class="col-md-6">
-      <div class="form-check mt-4">
-        <input class="form-check-input" type="checkbox" name="receipt_show_logo" id="recLogo" {% if s.receipt_show_logo %}checked{% endif %}>
-        <label class="form-check-label" for="recLogo">إظهار الشعار</label>
-      </div>
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="receipt_show_tax_number" id="recTax" {% if s.receipt_show_tax_number %}checked{% endif %}>
-        <label class="form-check-label" for="recTax">إظهار الرقم الضريبي</label>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <label class="form-label">نص تذييل الإيصال</label>
-      <input type="text" name="receipt_footer_text" class="form-control" value="{{ s.receipt_footer_text or '' }}">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">طول إضافي أسفل الإيصال (مم)</label>
-      <input type="number" step="1" min="0" name="receipt_extra_bottom_mm" class="form-control" value="{{ s.receipt_extra_bottom_mm or 15 }}">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">ارتفاع الشعار (px)</label>
-      <input type="number" step="1" min="20" name="receipt_logo_height" class="form-control" value="{{ s.receipt_logo_height or 40 }}">
-    </div>
-
-    <div class="col-12 d-flex justify-content-end gap-2">
+    <div class="mt-4 d-flex justify-content-end gap-2">
       <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">رجوع</a>
-      <button class="btn btn-primary" type="submit">حفظ</button>
+      <button class="btn btn-primary" type="submit">حفظ الإعدادات</button>
     </div>
   </form>
 </div>

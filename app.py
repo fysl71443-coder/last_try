@@ -506,10 +506,490 @@ def sales_branch(branch_code):
 @login_required
 def sales():
     branches = [
-        {'code': 'china_town', 'label': 'China Town', 'url': url_for('sales_tables', branch_code='china_town')},
-        {'code': 'place_india', 'label': 'Place India', 'url': url_for('sales_tables', branch_code='place_india')},
+        {'code': 'china_town', 'label': 'China Town', 'url': url_for('china_town_sales')},
+        {'code': 'place_india', 'label': 'Place India', 'url': url_for('palace_india_sales')},
     ]
     return render_template('sales_branches.html', branches=branches)
+
+# China Town Sales POS
+@app.route('/sales/china_town')
+@login_required
+def china_town_sales():
+    """China Town POS System"""
+    return render_template('china_town_sales.html')
+
+# Palace India Sales POS
+@app.route('/sales/palace_india')
+@login_required
+def palace_india_sales():
+    """Palace India POS System"""
+    return render_template('palace_india_sales.html')
+
+# API: Get categories for POS
+@app.route('/api/pos/<branch>/categories')
+@login_required
+def get_pos_categories(branch):
+    """Get menu categories for POS system"""
+    try:
+        from models import MenuCategory
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Get active categories
+        categories = MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).all()
+
+        result = []
+        for cat in categories:
+            result.append({
+                'id': cat.id,
+                'name': cat.name
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Get menu items for a specific category
+@app.route('/api/pos/<branch>/categories/<int:category_id>/items')
+@login_required
+def get_pos_category_items(branch, category_id):
+    """Get menu items for a specific category"""
+    try:
+        from models import MenuItem, Meal
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Get menu items for this category
+        items = MenuItem.query.filter_by(category_id=category_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+
+        result = []
+        for item in items:
+            # Use price override if available, otherwise use meal selling price
+            price = float(item.price_override) if item.price_override is not None else float(item.meal.selling_price or 0)
+
+            result.append({
+                'id': item.id,
+                'meal_id': item.meal_id,
+                'name': item.meal.display_name,
+                'price': round(price, 2)
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Search customers by phone or name
+@app.route('/api/pos/<branch>/customers/search')
+@login_required
+def search_pos_customers(branch):
+    """Search customers by phone or name for POS"""
+    try:
+        from models import Customer
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        query = (request.args.get('q') or '').strip()
+        if not query:
+            return jsonify([])
+
+        # Search by name or phone
+        customers = Customer.query.filter(
+            (Customer.name.ilike(f"%{query}%")) | (Customer.phone.ilike(f"%{query}%"))
+        ).filter_by(active=True).order_by(Customer.name.asc()).limit(10).all()
+
+        result = []
+        for customer in customers:
+            result.append({
+                'id': customer.id,
+                'name': customer.name,
+                'phone': customer.phone or '',
+                'discount_percent': float(customer.discount_percent or 0)
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Print draft invoice (unpaid)
+@app.route('/api/pos/<branch>/print_draft', methods=['POST'])
+@login_required
+def print_draft_invoice(branch):
+    """Print draft invoice with UNPAID notice"""
+    try:
+        data = request.get_json()
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Validate required data
+        if not data.get('items') or not data.get('table_number'):
+            return jsonify({'error': 'Missing required data'}), 400
+
+        # Generate draft invoice HTML
+        invoice_html = generate_draft_invoice_html(branch, data)
+
+        return jsonify({
+            'success': True,
+            'invoice_html': invoice_html,
+            'message': 'Draft invoice ready for printing'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Process payment and print final invoice
+@app.route('/api/pos/<branch>/process_payment', methods=['POST'])
+@login_required
+def process_payment(branch):
+    """Process payment and create final invoice"""
+    try:
+        data = request.get_json()
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Validate required data
+        required_fields = ['items', 'table_number', 'payment_method']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'Missing {field}'}), 400
+
+        # Create sales invoice in database
+        invoice_id = create_sales_invoice(branch, data)
+
+        # Generate final invoice HTML
+        invoice_html = generate_final_invoice_html(branch, data, invoice_id)
+
+        return jsonify({
+            'success': True,
+            'invoice_id': invoice_id,
+            'invoice_html': invoice_html,
+            'message': 'Payment processed successfully'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Verify void password
+@app.route('/api/pos/<branch>/verify_void_password', methods=['POST'])
+@login_required
+def verify_void_password(branch):
+    """Verify password for voiding items"""
+    try:
+        data = request.get_json()
+        password = data.get('password', '')
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Get branch-specific password from settings
+        settings = get_settings_safe()
+        if branch == 'china_town':
+            correct_password = settings.china_town_void_password if settings else '1991'
+        else:  # palace_india
+            correct_password = settings.place_india_void_password if settings else '1991'
+
+        is_valid = password == correct_password
+
+        return jsonify({
+            'valid': is_valid,
+            'message': 'Password verified' if is_valid else 'Invalid password'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Helper functions for POS system
+def generate_draft_invoice_html(branch, data):
+    """Generate HTML for draft invoice with UNPAID notice"""
+    from datetime import datetime
+
+    settings = get_settings_safe()
+    branch_label = 'China Town' if branch == 'china_town' else 'Palace India'
+
+    # Calculate totals
+    subtotal = sum(float(item.get('price', 0)) * int(item.get('quantity', 1)) for item in data['items'])
+    discount_rate = float(data.get('customer_discount', 0))
+    discount_amount = subtotal * (discount_rate / 100)
+    subtotal_after_discount = subtotal - discount_amount
+
+    # Get branch-specific tax rate
+    if branch == 'china_town':
+        tax_rate = float(settings.china_town_vat_rate) if settings else 15.0
+    else:
+        tax_rate = float(settings.place_india_vat_rate) if settings else 15.0
+
+    tax_amount = subtotal_after_discount * (tax_rate / 100)
+    total = subtotal_after_discount + tax_amount
+
+    # Generate HTML
+    html = f"""
+    <div class="invoice-container" style="max-width: 300px; font-family: Arial, sans-serif; font-size: 12px;">
+        <div class="header" style="text-align: center; margin-bottom: 20px;">
+            <h2 style="margin: 0;">{branch_label}</h2>
+            <p style="margin: 5px 0;">Table #{data['table_number']}</p>
+            <p style="margin: 5px 0;">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        </div>
+
+        <div class="customer-info" style="margin-bottom: 15px;">
+            <p style="margin: 2px 0;"><strong>Customer:</strong> {data.get('customer_name', 'Walk-in Customer')}</p>
+            <p style="margin: 2px 0;"><strong>Phone:</strong> {data.get('customer_phone', 'N/A')}</p>
+            <p style="margin: 2px 0;"><strong>Discount:</strong> {discount_rate}%</p>
+        </div>
+
+        <div class="items" style="margin-bottom: 15px;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 1px solid #ccc;">
+                        <th style="text-align: left; padding: 5px;">Item</th>
+                        <th style="text-align: center; padding: 5px;">Qty</th>
+                        <th style="text-align: right; padding: 5px;">Price</th>
+                        <th style="text-align: right; padding: 5px;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+
+    for item in data['items']:
+        item_total = float(item.get('price', 0)) * int(item.get('quantity', 1))
+        html += f"""
+                    <tr>
+                        <td style="padding: 3px;">{item.get('name', '')}</td>
+                        <td style="text-align: center; padding: 3px;">{item.get('quantity', 1)}</td>
+                        <td style="text-align: right; padding: 3px;">{item.get('price', 0):.2f}</td>
+                        <td style="text-align: right; padding: 3px;">{item_total:.2f}</td>
+                    </tr>
+        """
+
+    html += f"""
+                </tbody>
+            </table>
+        </div>
+
+        <div class="totals" style="border-top: 1px solid #ccc; padding-top: 10px;">
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Subtotal:</span> <span>{subtotal:.2f} SAR</span>
+            </p>
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Discount ({discount_rate}%):</span> <span>-{discount_amount:.2f} SAR</span>
+            </p>
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Tax ({tax_rate}%):</span> <span>{tax_amount:.2f} SAR</span>
+            </p>
+            <p style="margin: 5px 0; display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                <span>Total:</span> <span>{total:.2f} SAR</span>
+            </p>
+        </div>
+
+        <div class="unpaid-notice" style="text-align: center; margin-top: 20px; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
+            <strong style="color: #856404;">⚠️ UNPAID / غير مدفوعة</strong>
+        </div>
+
+        <div class="footer" style="text-align: center; margin-top: 15px; font-size: 10px; color: #666;">
+            <p>Thank you for your visit!</p>
+        </div>
+    </div>
+    """
+
+    return html
+
+def generate_final_invoice_html(branch, data, invoice_id):
+    """Generate HTML for final paid invoice"""
+    from datetime import datetime
+
+    settings = get_settings_safe()
+    branch_label = 'China Town' if branch == 'china_town' else 'Palace India'
+
+    # Calculate totals (same as draft)
+    subtotal = sum(float(item.get('price', 0)) * int(item.get('quantity', 1)) for item in data['items'])
+    discount_rate = float(data.get('customer_discount', 0))
+    discount_amount = subtotal * (discount_rate / 100)
+    subtotal_after_discount = subtotal - discount_amount
+
+    # Get branch-specific tax rate
+    if branch == 'china_town':
+        tax_rate = float(settings.china_town_vat_rate) if settings else 15.0
+    else:
+        tax_rate = float(settings.place_india_vat_rate) if settings else 15.0
+
+    tax_amount = subtotal_after_discount * (tax_rate / 100)
+    total = subtotal_after_discount + tax_amount
+
+    # Generate HTML (similar to draft but without UNPAID notice)
+    html = f"""
+    <div class="invoice-container" style="max-width: 300px; font-family: Arial, sans-serif; font-size: 12px;">
+        <div class="header" style="text-align: center; margin-bottom: 20px;">
+            <h2 style="margin: 0;">{branch_label}</h2>
+            <p style="margin: 5px 0;">Invoice #{invoice_id}</p>
+            <p style="margin: 5px 0;">Table #{data['table_number']}</p>
+            <p style="margin: 5px 0;">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        </div>
+
+        <div class="customer-info" style="margin-bottom: 15px;">
+            <p style="margin: 2px 0;"><strong>Customer:</strong> {data.get('customer_name', 'Walk-in Customer')}</p>
+            <p style="margin: 2px 0;"><strong>Phone:</strong> {data.get('customer_phone', 'N/A')}</p>
+            <p style="margin: 2px 0;"><strong>Discount:</strong> {discount_rate}%</p>
+            <p style="margin: 2px 0;"><strong>Payment:</strong> {data.get('payment_method', 'Cash').title()}</p>
+        </div>
+
+        <div class="items" style="margin-bottom: 15px;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 1px solid #ccc;">
+                        <th style="text-align: left; padding: 5px;">Item</th>
+                        <th style="text-align: center; padding: 5px;">Qty</th>
+                        <th style="text-align: right; padding: 5px;">Price</th>
+                        <th style="text-align: right; padding: 5px;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+
+    for item in data['items']:
+        item_total = float(item.get('price', 0)) * int(item.get('quantity', 1))
+        html += f"""
+                    <tr>
+                        <td style="padding: 3px;">{item.get('name', '')}</td>
+                        <td style="text-align: center; padding: 3px;">{item.get('quantity', 1)}</td>
+                        <td style="text-align: right; padding: 3px;">{item.get('price', 0):.2f}</td>
+                        <td style="text-align: right; padding: 3px;">{item_total:.2f}</td>
+                    </tr>
+        """
+
+    html += f"""
+                </tbody>
+            </table>
+        </div>
+
+        <div class="totals" style="border-top: 1px solid #ccc; padding-top: 10px;">
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Subtotal:</span> <span>{subtotal:.2f} SAR</span>
+            </p>
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Discount ({discount_rate}%):</span> <span>-{discount_amount:.2f} SAR</span>
+            </p>
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Tax ({tax_rate}%):</span> <span>{tax_amount:.2f} SAR</span>
+            </p>
+            <p style="margin: 5px 0; display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                <span>Total:</span> <span>{total:.2f} SAR</span>
+            </p>
+        </div>
+
+        <div class="paid-notice" style="text-align: center; margin-top: 20px; padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px;">
+            <strong style="color: #155724;">✅ PAID</strong>
+        </div>
+
+        <div class="footer" style="text-align: center; margin-top: 15px; font-size: 10px; color: #666;">
+            <p>Thank you for your visit!</p>
+        </div>
+    </div>
+    """
+
+    return html
+
+def create_sales_invoice(branch, data):
+    """Create sales invoice in database"""
+    from models import SalesInvoice, SalesInvoiceItem, MenuItem
+    from datetime import datetime, timezone
+
+    try:
+        # Generate invoice number
+        last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
+        if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
+            try:
+                last_num = int(last_invoice.invoice_number.split('-')[-1])
+                invoice_number = f'SAL-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
+            except Exception:
+                invoice_number = f'SAL-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
+        else:
+            invoice_number = f'SAL-{datetime.now(timezone.utc).year}-001'
+
+        # Calculate totals
+        subtotal = sum(float(item.get('price', 0)) * int(item.get('quantity', 1)) for item in data['items'])
+        discount_rate = float(data.get('customer_discount', 0))
+        discount_amount = subtotal * (discount_rate / 100)
+        subtotal_after_discount = subtotal - discount_amount
+
+        # Get branch-specific tax rate
+        settings = get_settings_safe()
+        if branch == 'china_town':
+            tax_rate = float(settings.china_town_vat_rate) if settings else 15.0
+        else:
+            tax_rate = float(settings.place_india_vat_rate) if settings else 15.0
+
+        tax_amount = subtotal_after_discount * (tax_rate / 100)
+        total = subtotal_after_discount + tax_amount
+
+        # Determine customer name - use customer name if available, otherwise table number
+        customer_name = data.get('customer_name', f"Table {data['table_number']}")
+        if not customer_name or customer_name.strip() == '':
+            customer_name = f"Table {data['table_number']}"
+
+        # Create invoice
+        invoice = SalesInvoice(
+            invoice_number=invoice_number,
+            date=datetime.now(timezone.utc).date(),
+            branch=branch,
+            customer_name=customer_name,
+            customer_phone=data.get('customer_phone', ''),
+            payment_method=data.get('payment_method', 'cash'),
+            total_before_tax=subtotal,
+            tax_amount=tax_amount,
+            discount_amount=discount_amount,
+            total_after_tax_discount=total,
+            status='paid',
+            user_id=current_user.id
+        )
+
+        db.session.add(invoice)
+        db.session.flush()  # Get invoice ID
+
+        # Add invoice items
+        for item_data in data['items']:
+            # Find the menu item
+            menu_item = MenuItem.query.get(item_data.get('id'))
+            if menu_item:
+                item_price = float(item_data.get('price', 0))
+                item_quantity = int(item_data.get('quantity', 1))
+                item_total = item_price * item_quantity
+
+                item = SalesInvoiceItem(
+                    invoice_id=invoice.id,
+                    product_name=item_data.get('name', ''),
+                    quantity=item_quantity,
+                    price_before_tax=item_price,
+                    tax=0,  # Tax is calculated on total
+                    discount=0,
+                    total_price=item_total
+                )
+                db.session.add(item)
+
+        db.session.commit()
+        return invoice_number
+
+    except Exception as e:
+        db.session.rollback()
+        raise e
+
+# Legacy sales redirect page
+@app.route('/sales/legacy')
+@login_required
+def sales_legacy():
+    """Show upgrade notice and redirect to new system"""
+    return render_template('sales_redirect.html')
 
 # Old unified sales screen kept under /sales/all for backward links
 @app.route('/sales/all', methods=['GET', 'POST'])
@@ -2453,71 +2933,71 @@ def reports():
                 .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
             total_sales = float(sales_place) + float(sales_china)
 
-    # Purchases and Expenses
-    total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-        .filter(PurchaseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
-    total_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
-        .filter(ExpenseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        # Purchases and Expenses
+        total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
+            .filter(PurchaseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        total_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
+            .filter(ExpenseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
 
-    # Salaries within period: compute by month-year mapping to 1st day of month
-    salaries_rows = Salary.query.all()
-    total_salaries = 0.0
-    for s in salaries_rows:
-        try:
-            s_date = datetime(s.year, s.month, 1).date()
-            if start_dt <= s_date <= end_dt:
-                total_salaries += float(s.total_salary or 0)
-        except Exception:
-            continue
+        # Salaries within period: compute by month-year mapping to 1st day of month
+        salaries_rows = Salary.query.all()
+        total_salaries = 0.0
+        for s in salaries_rows:
+            try:
+                s_date = datetime(s.year, s.month, 1).date()
+                if start_dt <= s_date <= end_dt:
+                    total_salaries += float(s.total_salary or 0)
+            except Exception:
+                continue
 
-    profit = float(total_sales) - (float(total_purchases) + float(total_expenses) + float(total_salaries))
+        profit = float(total_sales) - (float(total_purchases) + float(total_expenses) + float(total_salaries))
 
-    # Line chart: daily sales
-    daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-        .group_by(SalesInvoice.date) \
-        .order_by(SalesInvoice.date.asc()).all()
-    line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
-    line_values = [float(r.t or 0) for r in daily_rows]
+        # Line chart: daily sales
+        daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+            .group_by(SalesInvoice.date) \
+            .order_by(SalesInvoice.date.asc()).all()
+        line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
+        line_values = [float(r.t or 0) for r in daily_rows]
 
-    # Payment method distribution across invoices
-    def pm_counts(model, date_col, method_col):
-        rows = db.session.query(getattr(model, method_col), func.count('*')) \
-            .filter(getattr(model, date_col).between(start_dt, end_dt)) \
-            .group_by(getattr(model, method_col)).all()
-        return { (k or 'unknown'): int(v) for k, v in rows }
+        # Payment method distribution across invoices
+        def pm_counts(model, date_col, method_col):
+            rows = db.session.query(getattr(model, method_col), func.count('*')) \
+                .filter(getattr(model, date_col).between(start_dt, end_dt)) \
+                .group_by(getattr(model, method_col)).all()
+            return { (k or 'unknown'): int(v) for k, v in rows }
 
-    pm_map = {}
-    for d in (pm_counts(SalesInvoice, 'date', 'payment_method'),
-              pm_counts(PurchaseInvoice, 'date', 'payment_method'),
-              pm_counts(ExpenseInvoice, 'date', 'payment_method')):
-        for k, v in d.items():
-            pm_map[k] = pm_map.get(k, 0) + v
-    pm_labels = list(pm_map.keys())
-    pm_values = [pm_map[k] for k in pm_labels]
+        pm_map = {}
+        for d in (pm_counts(SalesInvoice, 'date', 'payment_method'),
+                  pm_counts(PurchaseInvoice, 'date', 'payment_method'),
+                  pm_counts(ExpenseInvoice, 'date', 'payment_method')):
+            for k, v in d.items():
+                pm_map[k] = pm_map.get(k, 0) + v
+        pm_labels = list(pm_map.keys())
+        pm_values = [pm_map[k] for k in pm_labels]
 
-    # Comparison bars: totals
-    comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
-    comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
+        # Comparison bars: totals
+        comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
+        comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
 
-    # Cash flows from Payments table
-    start_dt_dt = datetime.combine(start_dt, datetime.min.time())
-    end_dt_dt = datetime.combine(end_dt, datetime.max.time())
-    inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-        Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
-    ).scalar() or 0)
-    outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-        Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
-    ).scalar() or 0)
-    net_cash = inflow - outflow
+        # Cash flows from Payments table
+        start_dt_dt = datetime.combine(start_dt, datetime.min.time())
+        end_dt_dt = datetime.combine(end_dt, datetime.max.time())
+        inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+            Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
+        ).scalar() or 0)
+        outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+            Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
+        ).scalar() or 0)
+        net_cash = inflow - outflow
 
-    # Top products by quantity
-    top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
-        .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-        .group_by(SalesInvoiceItem.product_name) \
-        .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
-        .limit(10).all()
+        # Top products by quantity
+        top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
+            .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+            .group_by(SalesInvoiceItem.product_name) \
+            .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
+            .limit(10).all()
         top_labels = [r[0] for r in top_rows]
 
         # Settings for labels/currency
@@ -3124,6 +3604,27 @@ def settings():
         s.place_india_label = request.form.get('place_india_label') or 'Place India'
         s.china_town_label = request.form.get('china_town_label') or 'China Town'
         s.default_theme = (request.form.get('default_theme') or 'light').lower()
+
+        # Branch-specific settings
+        s.china_town_void_password = request.form.get('china_town_void_password') or '1991'
+        try:
+            s.china_town_vat_rate = float(request.form.get('china_town_vat_rate') or 15)
+        except Exception:
+            s.china_town_vat_rate = 15.0
+        try:
+            s.china_town_discount_rate = float(request.form.get('china_town_discount_rate') or 0)
+        except Exception:
+            s.china_town_discount_rate = 0.0
+
+        s.place_india_void_password = request.form.get('place_india_void_password') or '1991'
+        try:
+            s.place_india_vat_rate = float(request.form.get('place_india_vat_rate') or 15)
+        except Exception:
+            s.place_india_vat_rate = 15.0
+        try:
+            s.place_india_discount_rate = float(request.form.get('place_india_discount_rate') or 0)
+        except Exception:
+            s.place_india_discount_rate = 0.0
         # Receipt settings
         s.receipt_paper_width = (request.form.get('receipt_paper_width') or s.receipt_paper_width or '80')
         try:
