@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="{{ get_locale() }}" dir="{{ 'rtl' if get_locale() == 'ar' else 'ltr' }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>صفحة الدفع - نظام المطعم</title>
+    <title>{{ _('Payment Page') }} - {{ _('Restaurant System') }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -11,6 +11,20 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
+        }
+
+        /* RTL/LTR Support */
+        [dir="rtl"] {
+            text-align: right;
+        }
+        [dir="ltr"] {
+            text-align: left;
+        }
+
+        /* Language toggle styling */
+        .language-toggle .btn {
+            margin: 0 2px;
+            font-size: 0.85rem;
         }
         
         .payment-container {
@@ -175,8 +189,16 @@
         <div class="payment-container">
             <!-- Header -->
             <div class="payment-header">
-                <h2><i class="fas fa-credit-card"></i> صفحة الدفع</h2>
-                <p class="mb-0">اختر طريقة الدفع المناسبة</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2><i class="fas fa-credit-card"></i> {{ _('Payment Page') }}</h2>
+                        <p class="mb-0">{{ _('Choose the appropriate payment method') }}</p>
+                    </div>
+                    <div class="language-toggle">
+                        <a class="btn btn-outline-light btn-sm me-2" href="?lang=en">English</a>
+                        <a class="btn btn-outline-light btn-sm" href="?lang=ar">العربية</a>
+                    </div>
+                </div>
             </div>
             
             <div class="row p-4">
@@ -259,38 +281,38 @@
                 
                 <!-- Payment Methods (Left Side) -->
                 <div class="col-md-5">
-                    <h4 class="mb-3"><i class="fas fa-money-bill-wave"></i> طرق الدفع</h4>
-                    
+                    <h4 class="mb-3"><i class="fas fa-money-bill-wave"></i> {{ _('Payment Methods') }}</h4>
+
                     <div class="payment-methods">
                         <button class="payment-btn cash" onclick="submitPayment('cash')">
                             <i class="fas fa-money-bill-wave fa-2x"></i>
-                            <span>💵 نقد</span>
+                            <span>💵 {{ _('Cash') }}</span>
                         </button>
-                        
+
                         <button class="payment-btn card" onclick="submitPayment('card')">
                             <i class="fas fa-credit-card fa-2x"></i>
-                            <span>💳 بطاقة</span>
+                            <span>💳 {{ _('Card') }}</span>
                         </button>
-                        
+
                         <button class="payment-btn transfer" onclick="submitPayment('transfer')">
                             <i class="fas fa-university fa-2x"></i>
-                            <span>🏦 تحويل</span>
+                            <span>🏦 {{ _('Transfer') }}</span>
                         </button>
-                        
+
                         <button class="payment-btn other" onclick="submitPayment('other')">
                             <i class="fas fa-ellipsis-h fa-2x"></i>
-                            <span>📌 أخرى</span>
+                            <span>📌 {{ _('Other') }}</span>
                         </button>
                     </div>
-                    
+
                     <!-- Action Buttons -->
                     <div class="action-buttons">
                         <button class="btn btn-print" onclick="printInvoice()">
-                            <i class="fas fa-print"></i> طباعة قبل الدفع
+                            <i class="fas fa-print"></i> {{ _('Print Before Payment') }}
                         </button>
-                        
+
                         <button class="btn btn-back" onclick="goBack()">
-                            <i class="fas fa-arrow-right"></i> العودة
+                            <i class="fas fa-arrow-right"></i> {{ _('Back') }}
                         </button>
                     </div>
                     

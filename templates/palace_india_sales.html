@@ -1,17 +1,32 @@
 {% extends 'base.html' %}
-{% block title %}🏛️ Palace India - Sales{% endblock %}
+{% block title %}🏛️ Palace India - {{ _('Sales') }}{% endblock %}
 {% block content %}
 
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="{{ get_locale() }}" dir="{{ 'rtl' if get_locale() == 'ar' else 'ltr' }}">
 <head>
   <meta charset="UTF-8">
-  <title>POS - Palace India</title>
+  <title>{{ _('POS') }} - Palace India</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { 
+    body {
       background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
       min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* RTL/LTR Support */
+    [dir="rtl"] {
+      text-align: right;
+    }
+    [dir="ltr"] {
+      text-align: left;
+    }
+
+    /* Language toggle styling */
+    .language-toggle .btn {
+      margin: 0 2px;
+      font-size: 0.85rem;
     }
     .categories { 
       max-height: 80vh; 
@@ -157,95 +172,108 @@
 <body>
 
 <div class="container-fluid p-3">
+  <!-- Language Toggle -->
+  <div class="row mb-3">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <h2 class="text-white mb-0">🏰 Palace India - {{ _('Point of Sale System') }}</h2>
+        <div class="language-toggle">
+          <a class="btn btn-outline-light btn-sm me-2" href="?lang=en">English</a>
+          <a class="btn btn-outline-light btn-sm" href="?lang=ar">العربية</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="row">
-    
-    <!-- العمود الأيسر: الأقسام -->
+
+    <!-- {{ _('Categories') }} -->
     <div class="col-2">
-      <h5 class="fw-bold mb-3 text-white">📋 الأقسام</h5>
+      <h5 class="fw-bold mb-3 text-white">📋 {{ _('Categories') }}</h5>
       <div class="list-group categories" id="categoriesList">
         <div class="text-center text-white p-3">
           <div class="spinner-border" role="status">
-            <span class="visually-hidden">Loading...</span>
+            <span class="visually-hidden">{{ _('Loading...') }}</span>
           </div>
-          <p class="mt-2">جاري تحميل الأقسام...</p>
+          <p class="mt-2">{{ _('Loading categories...') }}</p>
         </div>
       </div>
     </div>
-    
-    <!-- العمود الأوسط: المنتجات -->
+
+    <!-- {{ _('Products') }} -->
     <div class="col-7">
-      <h5 class="fw-bold mb-3 text-white">🍽️ المنتجات</h5>
-      <input type="text" class="form-control mb-3 search-box" placeholder="🔍 ابحث عن منتج..." id="productSearch">
-      
+      <h5 class="fw-bold mb-3 text-white">🍽️ {{ _('Products') }}</h5>
+      <input type="text" class="form-control mb-3 search-box" placeholder="🔍 {{ _('Search for product...') }}" id="productSearch">
+
       <div class="row g-3 products-container" id="productsGrid">
         <div class="col-12 text-center text-white p-5">
-          <p>اختر قسماً لعرض المنتجات</p>
+          <p>{{ _('Select a category to display products') }}</p>
         </div>
       </div>
     </div>
-    
-    <!-- العمود الأيمن: الفاتورة -->
+
+    <!-- {{ _('Invoice') }} -->
     <div class="col-3">
       <div class="invoice-section border p-3 bg-white rounded shadow-sm invoice">
         <div class="invoice-header">
-          <h5 class="fw-bold mb-0 text-center">🧾 الفاتورة</h5>
+          <h5 class="fw-bold mb-0 text-center">🧾 {{ _('Invoice') }}</h5>
         </div>
-        
+
         <div class="mb-3">
-          <label class="form-label">🪑 رقم الطاولة</label>
+          <label class="form-label">🪑 {{ _('Table Number') }}</label>
           <select class="form-select" id="tableSelect">
-            <option value="">اختر الطاولة</option>
+            <option value="">{{ _('Select Table') }}</option>
           </select>
         </div>
-        
-        <!-- بحث العملاء -->
+
+        <!-- {{ _('Customer Search') }} -->
         <div class="mb-3">
-          <label class="form-label">👤 العميل</label>
+          <label class="form-label">👤 {{ _('Customer') }}</label>
           <div class="input-group">
-            <input type="text" class="form-control" placeholder="رقم الهاتف أو الاسم" id="customerSearch">
+            <input type="text" class="form-control" placeholder="{{ _('Phone number or name') }}" id="customerSearch">
             <button class="btn btn-outline-secondary" type="button" id="searchCustomerBtn">🔍</button>
           </div>
           <div id="customerResults" class="mt-2"></div>
           <div id="selectedCustomer" class="customer-info" style="display: none;"></div>
         </div>
-        
+
         <div class="mb-3">
-          <label class="form-label">💰 خصم (%)</label>
+          <label class="form-label">💰 {{ _('Discount') }} (%)</label>
           <input type="number" class="form-control" value="0" id="discountInput" readonly>
         </div>
-        
-        <!-- قائمة الأصناف -->
+
+        <!-- {{ _('Items List') }} -->
         <div class="mb-3">
-          <h6>الأصناف:</h6>
+          <h6>{{ _('Items') }}:</h6>
           <div id="invoiceItems" style="max-height: 200px; overflow-y: auto;">
-            <p class="text-muted text-center">لا توجد أصناف</p>
+            <p class="text-muted text-center">{{ _('No items') }}</p>
           </div>
         </div>
-        
-        <!-- الإجماليات -->
+
+        <!-- {{ _('Totals') }} -->
         <div class="total-section">
           <div class="d-flex justify-content-between">
-            <span>المجموع الفرعي:</span>
+            <span>{{ _('Subtotal') }}:</span>
             <span id="subtotal">0.00 SAR</span>
           </div>
           <div class="d-flex justify-content-between">
-            <span>الخصم:</span>
+            <span>{{ _('Discount') }}:</span>
             <span id="discountAmount">0.00 SAR</span>
           </div>
           <div class="d-flex justify-content-between">
-            <span>الضريبة (15%):</span>
+            <span>{{ _('Tax') }} (15%):</span>
             <span id="taxAmount">0.00 SAR</span>
           </div>
           <hr>
           <div class="d-flex justify-content-between fw-bold">
-            <span>الإجمالي:</span>
+            <span>{{ _('Total') }}:</span>
             <span id="totalAmount">0.00 SAR</span>
           </div>
         </div>
-        
+
         <div class="d-grid gap-2 mt-3">
-          <button class="btn btn-print" onclick="printUnpaid()">🖨️ طباعة (غير مدفوعة)</button>
-          <button class="btn btn-payment" onclick="goToPayment()">💳 دفع و طباعة</button>
+          <button class="btn btn-print" onclick="printUnpaid()">🖨️ {{ _('Print (Unpaid)') }}</button>
+          <button class="btn btn-payment" onclick="goToPayment()">💳 {{ _('Pay & Print') }}</button>
         </div>
       </div>
     </div>

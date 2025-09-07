@@ -1,0 +1,160 @@
+# English translations for Restaurant System.
+# Copyright (C) 2024 Restaurant System
+# This file is distributed under the same license as the Restaurant System project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2024.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Restaurant System 1.0\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2024-01-01 12:00+0000\n"
+"PO-Revision-Date: 2024-01-01 12:00+0000\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.12.1\n"
+
+# POS System translations (English - keep original)
+msgid "Point of Sale System"
+msgstr "Point of Sale System"
+
+msgid "POS"
+msgstr "POS"
+
+msgid "Sales"
+msgstr "Sales"
+
+msgid "Categories"
+msgstr "Categories"
+
+msgid "Products"
+msgstr "Products"
+
+msgid "Invoice"
+msgstr "Invoice"
+
+msgid "Loading..."
+msgstr "Loading..."
+
+msgid "Loading categories..."
+msgstr "Loading categories..."
+
+msgid "Search for product..."
+msgstr "Search for product..."
+
+msgid "Select a category to display products"
+msgstr "Select a category to display products"
+
+msgid "Table Number"
+msgstr "Table Number"
+
+msgid "Select Table"
+msgstr "Select Table"
+
+msgid "Customer"
+msgstr "Customer"
+
+msgid "Customer Search"
+msgstr "Customer Search"
+
+msgid "Phone number or name"
+msgstr "Phone number or name"
+
+msgid "Discount"
+msgstr "Discount"
+
+msgid "Items"
+msgstr "Items"
+
+msgid "Items List"
+msgstr "Items List"
+
+msgid "No items"
+msgstr "No items"
+
+msgid "Totals"
+msgstr "Totals"
+
+msgid "Subtotal"
+msgstr "Subtotal"
+
+msgid "Tax"
+msgstr "Tax"
+
+msgid "Total"
+msgstr "Total"
+
+msgid "Print (Unpaid)"
+msgstr "Print (Unpaid)"
+
+msgid "Pay & Print"
+msgstr "Pay & Print"
+
+msgid "No categories found"
+msgstr "No categories found"
+
+msgid "Error loading categories"
+msgstr "Error loading categories"
+
+# Payment page translations
+msgid "Payment Page"
+msgstr "Payment Page"
+
+msgid "Restaurant System"
+msgstr "Restaurant System"
+
+msgid "Choose the appropriate payment method"
+msgstr "Choose the appropriate payment method"
+
+msgid "Payment Methods"
+msgstr "Payment Methods"
+
+msgid "Cash"
+msgstr "Cash"
+
+msgid "Card"
+msgstr "Card"
+
+msgid "Transfer"
+msgstr "Transfer"
+
+msgid "Other"
+msgstr "Other"
+
+msgid "Press F1"
+msgstr "Press F1"
+
+msgid "Press F2"
+msgstr "Press F2"
+
+msgid "Press F3"
+msgstr "Press F3"
+
+msgid "Press F4"
+msgstr "Press F4"
+
+msgid "Print Before Payment"
+msgstr "Print Before Payment"
+
+msgid "Back Without Payment"
+msgstr "Back Without Payment"
+
+msgid "Back"
+msgstr "Back"
+
+msgid "Press Ctrl+P"
+msgstr "Press Ctrl+P"
+
+msgid "Press Escape"
+msgstr "Press Escape"
+
+# Common UI elements
+msgid "Welcome"
+msgstr "Welcome"
+
+msgid "Table Selection"
+msgstr "Table Selection"

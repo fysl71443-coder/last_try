@@ -1,0 +1,160 @@
+# Arabic translations for Restaurant System.
+# Copyright (C) 2024 Restaurant System
+# This file is distributed under the same license as the Restaurant System project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2024.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Restaurant System 1.0\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2024-01-01 12:00+0000\n"
+"PO-Revision-Date: 2024-01-01 12:00+0000\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ar\n"
+"Language-Team: ar <LL@li.org>\n"
+"Plural-Forms: nplurals=6; plural=n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 ? 4 : 5;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.12.1\n"
+
+# POS System translations
+msgid "Point of Sale System"
+msgstr "نظام نقاط البيع"
+
+msgid "POS"
+msgstr "نقاط البيع"
+
+msgid "Sales"
+msgstr "المبيعات"
+
+msgid "Categories"
+msgstr "الأقسام"
+
+msgid "Products"
+msgstr "المنتجات"
+
+msgid "Invoice"
+msgstr "الفاتورة"
+
+msgid "Loading..."
+msgstr "جاري التحميل..."
+
+msgid "Loading categories..."
+msgstr "جاري تحميل الأقسام..."
+
+msgid "Search for product..."
+msgstr "ابحث عن منتج..."
+
+msgid "Select a category to display products"
+msgstr "اختر قسماً لعرض المنتجات"
+
+msgid "Table Number"
+msgstr "رقم الطاولة"
+
+msgid "Select Table"
+msgstr "اختر الطاولة"
+
+msgid "Customer"
+msgstr "العميل"
+
+msgid "Customer Search"
+msgstr "بحث العملاء"
+
+msgid "Phone number or name"
+msgstr "رقم الهاتف أو الاسم"
+
+msgid "Discount"
+msgstr "خصم"
+
+msgid "Items"
+msgstr "الأصناف"
+
+msgid "Items List"
+msgstr "قائمة الأصناف"
+
+msgid "No items"
+msgstr "لا توجد أصناف"
+
+msgid "Totals"
+msgstr "الإجماليات"
+
+msgid "Subtotal"
+msgstr "المجموع الفرعي"
+
+msgid "Tax"
+msgstr "الضريبة"
+
+msgid "Total"
+msgstr "الإجمالي"
+
+msgid "Print (Unpaid)"
+msgstr "طباعة (غير مدفوعة)"
+
+msgid "Pay & Print"
+msgstr "دفع و طباعة"
+
+msgid "No categories found"
+msgstr "لا توجد أقسام"
+
+msgid "Error loading categories"
+msgstr "خطأ في تحميل الأقسام"
+
+# Payment page translations
+msgid "Payment Page"
+msgstr "صفحة الدفع"
+
+msgid "Restaurant System"
+msgstr "نظام المطعم"
+
+msgid "Choose the appropriate payment method"
+msgstr "اختر طريقة الدفع المناسبة"
+
+msgid "Payment Methods"
+msgstr "طرق الدفع"
+
+msgid "Cash"
+msgstr "نقد"
+
+msgid "Card"
+msgstr "بطاقة"
+
+msgid "Transfer"
+msgstr "تحويل"
+
+msgid "Other"
+msgstr "أخرى"
+
+msgid "Press F1"
+msgstr "اضغط F1"
+
+msgid "Press F2"
+msgstr "اضغط F2"
+
+msgid "Press F3"
+msgstr "اضغط F3"
+
+msgid "Press F4"
+msgstr "اضغط F4"
+
+msgid "Print Before Payment"
+msgstr "طباعة قبل الدفع"
+
+msgid "Back Without Payment"
+msgstr "العودة بدون دفع"
+
+msgid "Back"
+msgstr "العودة"
+
+msgid "Press Ctrl+P"
+msgstr "اضغط Ctrl+P"
+
+msgid "Press Escape"
+msgstr "اضغط Escape"
+
+# Common UI elements
+msgid "Welcome"
+msgstr "مرحباً"
+
+msgid "Table Selection"
+msgstr "اختيار الطاولة"
