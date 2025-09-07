@@ -65,6 +65,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import extensions
 from extensions import db, bcrypt, migrate, login_manager, babel, csrf
+from db_helpers import safe_db_commit, reset_db_session, safe_db_operation, handle_db_error
 
 # Import models to prevent import errors in routes
 from models import Invoice
@@ -399,15 +400,7 @@ def csrf_exempt(f):
         return csrf.exempt(f)
     return f
 
-def safe_db_commit(operation_name="database operation"):
-    """Safe database commit with proper error handling for eventlet"""
-    try:
-        db.session.commit()
-        return True
-    except Exception as e:
-        db.session.rollback()
-        print(f"Database commit error in {operation_name}: {e}")
-        return False
+# Database helper functions are now imported from db_helpers.py
 
 def save_to_db(instance):
     try:
@@ -963,49 +956,53 @@ def confirm_payment():
 
         invoice_number = f"SAL-{now.year}-{invoice_num:04d}"
 
-        # Create invoice
-        invoice = SalesInvoice(
-            invoice_number=invoice_number,
-            date=now.date(),
-            payment_method=payment_method.upper(),
-            branch=branch_code,
-            customer_name=customer_name or None,
-            customer_phone=customer_phone or None,
-            table_number=table_number or None,
-            total_before_tax=subtotal,
-            discount_amount=discount_amount,
-            tax_amount=tax_amount,
-            total_after_tax_discount=total,
-            status='paid',
-            user_id=current_user.id
-        )
-
-        db.session.add(invoice)
-        db.session.flush()  # Get invoice ID
-
-        # Add invoice items
-        for item in cart:
-            invoice_item = SalesInvoiceItem(
-                invoice_id=invoice.id,
-                product_name=item.get('name', ''),
-                quantity=int(item.get('qty', 0)),
-                price_before_tax=float(item.get('price', 0)),
-                tax=float(item.get('price', 0)) * int(item.get('qty', 0)) * 0.15,
-                discount=0,
-                total_price=float(item.get('price', 0)) * int(item.get('qty', 0)) * 1.15
+        def create_invoice_operation():
+            # Create invoice
+            invoice = SalesInvoice(
+                invoice_number=invoice_number,
+                date=now.date(),
+                payment_method=payment_method.upper(),
+                branch=branch_code,
+                customer_name=customer_name or None,
+                customer_phone=customer_phone or None,
+                table_number=table_number or None,
+                total_before_tax=subtotal,
+                discount_amount=discount_amount,
+                tax_amount=tax_amount,
+                total_after_tax_discount=total,
+                status='paid',
+                user_id=current_user.id
             )
-            db.session.add(invoice_item)
 
-        # Add payment record
-        payment_record = Payment(
-            invoice_id=invoice.id,
-            invoice_type='sales',
-            amount_paid=total,
-            payment_method=payment_method.upper()
-        )
-        db.session.add(payment_record)
+            db.session.add(invoice)
+            db.session.flush()  # Get invoice ID
 
-        db.session.commit()
+            # Add invoice items
+            for item in cart:
+                invoice_item = SalesInvoiceItem(
+                    invoice_id=invoice.id,
+                    product_name=item.get('name', ''),
+                    quantity=int(item.get('qty', 0)),
+                    price_before_tax=float(item.get('price', 0)),
+                    tax=float(item.get('price', 0)) * int(item.get('qty', 0)) * 0.15,
+                    discount=0,
+                    total_price=float(item.get('price', 0)) * int(item.get('qty', 0)) * 1.15
+                )
+                db.session.add(invoice_item)
+
+            # Add payment record
+            payment_record = Payment(
+                invoice_id=invoice.id,
+                invoice_type='sales',
+                amount_paid=total,
+                payment_method=payment_method.upper()
+            )
+            db.session.add(payment_record)
+
+            return invoice
+
+        # Execute with retry logic
+        invoice = safe_db_operation(create_invoice_operation, "create sales invoice")
 
         # Clear cart from session
         session.pop('cart', None)
@@ -1022,8 +1019,9 @@ def confirm_payment():
         })
 
     except Exception as e:
-        db.session.rollback()
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        reset_db_session()
+        error_message = handle_db_error(e, "إنشاء فاتورة المبيعات")
+        return jsonify({'status': 'error', 'message': error_message}), 500
 
 # Save cart to session route
 @app.route('/api/save_cart_session', methods=['POST'])
@@ -2384,11 +2382,9 @@ def api_sales_checkout():
             created_at=_now  # Explicitly set Saudi time
         )
 
-        try:
+        def create_checkout_operation():
             db.session.add(inv)
             db.session.flush()
-
-
 
             # Update table status to occupied when order is created
             from models import Table
@@ -2401,10 +2397,17 @@ def api_sales_checkout():
                 table.current_order_id = inv.id
                 table.updated_at = _now
 
+            return inv
+
+        try:
+            inv = safe_db_operation(create_checkout_operation, "checkout invoice creation")
+            if not inv:
+                return jsonify({'ok': False, 'error': 'فشل في إنشاء الفاتورة'}), 500
         except Exception as e:
-            db.session.rollback()
+            reset_db_session()
             logging.exception('checkout flush failed')
-            return jsonify({'ok': False, 'error': str(e)}), 500
+            error_message = handle_db_error(e, "إنشاء فاتورة الطاولة")
+            return jsonify({'ok': False, 'error': error_message}), 500
 
         for it in invoice_items:
             db.session.add(SalesInvoiceItem(
@@ -2419,12 +2422,26 @@ def api_sales_checkout():
 
         # Do not record payment here; posting occurs on print
 
+        def add_items_operation():
+            for it in invoice_items:
+                db.session.add(SalesInvoiceItem(
+                    invoice_id=inv.id,
+                    product_name=str(it.get('name') or ''),
+                    quantity=float(it.get('qty') or 0),
+                    price_before_tax=float(it.get('price_before_tax') or 0),
+                    tax=float(it.get('tax') or 0),
+                    discount=0,
+                    total_price=float(it.get('total') or 0)
+                ))
+            return True
+
         try:
-            safe_db_commit()
+            safe_db_operation(add_items_operation, "add invoice items")
         except Exception as e:
-            db.session.rollback()
+            reset_db_session()
             logging.exception('checkout commit failed')
-            return jsonify({'ok': False, 'error': str(e)}), 500
+            error_message = handle_db_error(e, "حفظ أصناف الفاتورة")
+            return jsonify({'ok': False, 'error': error_message}), 500
 
         receipt_url = url_for('sales_receipt', invoice_id=inv.id)
         return jsonify({
