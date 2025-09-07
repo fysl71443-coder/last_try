@@ -20,3 +20,6 @@ python-bidi>=0.4.2
 
 # Optional: QR code image generation for ZATCA TLV on receipts
 qrcode[pil]>=7.4.2
+
+# Fix pytz compatibility issue
+pytz==2022.7
