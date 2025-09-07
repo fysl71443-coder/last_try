@@ -269,12 +269,14 @@ document.addEventListener('DOMContentLoaded', function() {
 // Load categories
 async function loadCategories() {
     try {
-        const response = await fetch(`/api/pos/${currentBranch}/categories`);
-        const data = await response.json();
+        const response = await fetch('/api/categories', {
+            headers: {'X-CSRFToken': getCsrf()}
+        });
+        const categories = await response.json();
 
         const categoriesList = document.getElementById('categoriesList');
-        if (data.categories && data.categories.length > 0) {
-            categoriesList.innerHTML = data.categories.map(cat =>
+        if (categories && categories.length > 0) {
+            categoriesList.innerHTML = categories.map(cat =>
                 `<button class="list-group-item list-group-item-action category-btn" data-category-id="${cat.id}">
                     ${cat.name}
                 </button>`
@@ -291,12 +293,14 @@ async function loadCategories() {
 // Load products for category
 async function loadProducts(categoryId) {
     try {
-        const response = await fetch(`/api/pos/${currentBranch}/categories/${categoryId}/items`);
-        const data = await response.json();
+        const response = await fetch(`/api/items?category_id=${categoryId}`, {
+            headers: {'X-CSRFToken': getCsrf()}
+        });
+        const items = await response.json();
 
         const productsGrid = document.getElementById('productsGrid');
-        if (data.items && data.items.length > 0) {
-            productsGrid.innerHTML = data.items.map(item =>
+        if (items && items.length > 0) {
+            productsGrid.innerHTML = items.map(item =>
                 `<div class="col-4">
                     <div class="card product-card p-2" data-item='${JSON.stringify(item)}'>
                         <div class="card-body text-center">
