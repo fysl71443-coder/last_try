@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فاتورة رقم {{ invoice.id }}</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: white;
+            color: #333;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .invoice-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .invoice-header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        .invoice-header p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+        
+        .invoice-info {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .invoice-info div {
+            flex: 1;
+        }
+        
+        .invoice-info h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+            font-size: 16px;
+        }
+        
+        .invoice-info p {
+            margin: 5px 0;
+            color: #6c757d;
+        }
+        
+        .invoice-items {
+            padding: 0;
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+        }
+        
+        .items-table th {
+            background: #495057;
+            color: white;
+            padding: 15px;
+            text-align: right;
+            font-weight: bold;
+            border-bottom: 2px solid #343a40;
+        }
+        
+        .items-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #dee2e6;
+            text-align: right;
+        }
+        
+        .items-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .items-table tr:hover {
+            background: #e9ecef;
+        }
+        
+        .invoice-totals {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 2px solid #dee2e6;
+        }
+        
+        .totals-table {
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+        }
+        
+        .totals-table td {
+            padding: 8px 0;
+            border: none;
+        }
+        
+        .totals-table .total-label {
+            font-weight: bold;
+            text-align: right;
+            padding-right: 20px;
+        }
+        
+        .totals-table .total-amount {
+            font-weight: bold;
+            text-align: left;
+            color: #495057;
+        }
+        
+        .grand-total {
+            border-top: 2px solid #495057;
+            font-size: 18px;
+            color: #495057;
+        }
+        
+        .invoice-footer {
+            padding: 20px 30px;
+            text-align: center;
+            background: #343a40;
+            color: white;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .status-paid {
+            background: #28a745;
+            color: white;
+        }
+        
+        .status-unpaid {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .status-draft {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            
+            .invoice-container {
+                border: none;
+                border-radius: 0;
+                box-shadow: none;
+            }
+            
+            .no-print {
+                display: none;
+            }
+        }
+        
+        .print-actions {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="invoice-header">
+            <h1>{{ invoice.branch_code|title if invoice.branch_code else 'مطعم' }}</h1>
+            <p>فاتورة مبيعات رقم: {{ invoice.id }}</p>
+        </div>
+        
+        <div class="invoice-info">
+            <div>
+                <h3>معلومات الفاتورة</h3>
+                <p><strong>رقم الفاتورة:</strong> {{ invoice.id }}</p>
+                <p><strong>التاريخ:</strong> {{ invoice.date.strftime('%Y-%m-%d') if invoice.date else 'غير محدد' }}</p>
+                <p><strong>الوقت:</strong> {{ invoice.date.strftime('%H:%M') if invoice.date else 'غير محدد' }}</p>
+                <p><strong>الحالة:</strong> 
+                    {% if paid %}
+                        <span class="status-badge status-paid">مدفوعة</span>
+                    {% else %}
+                        <span class="status-badge status-unpaid">غير مدفوعة</span>
+                    {% endif %}
+                </p>
+            </div>
+            
+            <div>
+                <h3>معلومات العميل</h3>
+                {% if invoice.customer_name %}
+                    <p><strong>الاسم:</strong> {{ invoice.customer_name }}</p>
+                {% endif %}
+                {% if invoice.customer_phone %}
+                    <p><strong>الهاتف:</strong> {{ invoice.customer_phone }}</p>
+                {% endif %}
+                {% if invoice.table_number %}
+                    <p><strong>رقم الطاولة:</strong> {{ invoice.table_number }}</p>
+                {% endif %}
+                {% if not invoice.customer_name and not invoice.customer_phone and not invoice.table_number %}
+                    <p class="text-muted">لا توجد معلومات عميل</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="invoice-items">
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>المجموع</th>
+                        <th>السعر</th>
+                        <th>الكمية</th>
+                        <th>الصنف</th>
+                        <th>#</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in invoice.items %}
+                    <tr>
+                        <td>{{ "%.2f"|format(item.quantity * item.unit_price) }} ر.س</td>
+                        <td>{{ "%.2f"|format(item.unit_price) }} ر.س</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ loop.index }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #6c757d;">لا توجد أصناف</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="invoice-totals">
+            <table class="totals-table">
+                <tr>
+                    <td class="total-label">المجموع الفرعي:</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.subtotal or 0) }} ر.س</td>
+                </tr>
+                {% if invoice.discount_amount and invoice.discount_amount > 0 %}
+                <tr>
+                    <td class="total-label">الخصم:</td>
+                    <td class="total-amount">- {{ "%.2f"|format(invoice.discount_amount) }} ر.س</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td class="total-label">الضريبة (15%):</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.tax_amount or 0) }} ر.س</td>
+                </tr>
+                <tr class="grand-total">
+                    <td class="total-label">الإجمالي:</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.total_amount or 0) }} ر.س</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="invoice-footer">
+            <p>شكراً لزيارتكم - نتطلع لخدمتكم مرة أخرى</p>
+            <p>{{ invoice.branch_code|title if invoice.branch_code else 'مطعم' }} | الرياض، المملكة العربية السعودية</p>
+        </div>
+        
+        <div class="print-actions no-print">
+            <button onclick="window.print()" class="btn btn-primary">🖨️ طباعة</button>
+            <button onclick="window.close()" class="btn btn-secondary">إغلاق</button>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-print when page loads (optional)
+        // window.onload = function() { window.print(); }
+    </script>
+</body>
+</html>

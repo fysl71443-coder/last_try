@@ -316,25 +316,70 @@ body {
         alert('Meal details for ID: ' + mealId + ' (Feature coming soon)');
     }
 
-    function deleteMeal(mealId, mealName) {
-        if (confirm('{{ _("Are you sure you want to delete") }} "' + mealName + '"?\n\n{{ _("This action cannot be undone. If the meal has sales history, it will be deactivated instead.") }}')) {
-            // Create a form and submit it
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/delete_meal/' + mealId;
+    async function deleteMeal(mealId, mealName) {
+        if (!confirm('{{ _("Are you sure you want to delete") }} "' + mealName + '"?\n\n{{ _("This action cannot be undone. If the meal has sales history, it will be deactivated instead.") }}')) {
+            return;
+        }
 
-            // Add CSRF token if available
-            const csrfToken = document.querySelector('input[name="csrf_token"]');
-            if (csrfToken) {
-                const tokenInput = document.createElement('input');
-                tokenInput.type = 'hidden';
-                tokenInput.name = 'csrf_token';
-                tokenInput.value = csrfToken.value;
-                form.appendChild(tokenInput);
+        const password = prompt('أدخل كلمة المرور لحذف الوجبة (1991):');
+        if (!password) return;
+
+        try {
+            const res = await fetch(`/api/meals/${mealId}/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrf()
+                },
+                body: JSON.stringify({ password })
+            });
+
+            const data = await res.json();
+            if (!data.ok) {
+                alert(data.error === 'invalid_password' ? 'كلمة المرور غير صحيحة' : data.error);
+                return;
             }
 
-            document.body.appendChild(form);
-            form.submit();
+            if (data.deactivated) {
+                alert('تم تعطيل الوجبة (لها تاريخ مبيعات)');
+            } else {
+                alert('تم حذف الوجبة بنجاح');
+            }
+            location.reload();
+        } catch (error) {
+            console.error('Error:', error);
+            alert('حدث خطأ أثناء الحذف');
+        }
+    }
+
+    async function deleteAllMeals() {
+        const ok = confirm('سيتم حذف جميع الوجبات! هل أنت متأكد؟');
+        if (!ok) return;
+
+        const password = prompt('أدخل كلمة المرور لحذف جميع الوجبات (1991):');
+        if (!password) return;
+
+        try {
+            const res = await fetch('/api/meals/delete-all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrf()
+                },
+                body: JSON.stringify({ password })
+            });
+
+            const data = await res.json();
+            if (!data.ok) {
+                alert(data.error === 'invalid_password' ? 'كلمة المرور غير صحيحة' : data.error);
+                return;
+            }
+
+            alert(`تم حذف ${data.deleted} وجبة بنجاح`);
+            location.reload();
+        } catch (error) {
+            console.error('Error:', error);
+            alert('حدث خطأ أثناء الحذف');
         }
     }
 

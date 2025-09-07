@@ -5,6 +5,13 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret_key")
 
+    # CSRF Protection settings
+    WTF_CSRF_TIME_LIMIT = None  # No time limit for CSRF tokens
+    WTF_CSRF_SSL_STRICT = False  # Allow CSRF over HTTP for development
+
+    # Admin settings
+    ADMIN_DELETE_PASSWORD = os.getenv('ADMIN_DELETE_PASSWORD', '1991')
+
     DATABASE_URL = os.getenv("DATABASE_URL")
 
     if DATABASE_URL:

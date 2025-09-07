@@ -141,9 +141,10 @@
                 </td>
                 <td></td>
                 <td class="text-nowrap">
-                  <form method="post" action="{{ url_for('menu_item_delete', item_id=it.id) }}" class="d-inline">
+                  <form method="post" action="{{ url_for('menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return deleteMenuItem(event, this)">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                    <button class="btn btn-xs btn-outline-danger" style="padding:4px 8px; font-size:12px" onclick="return confirm('{{ _('Remove item? / حذف العنصر؟') }}')">{{ _('Delete') }}</button>
+                    <input type="hidden" name="password" class="password-field"/>
+                    <button class="btn btn-xs btn-outline-danger" style="padding:4px 8px; font-size:12px">{{ _('Delete') }}</button>
                   </form>
                 </td>
               </tr>
@@ -167,6 +168,77 @@
       if(el){ el.scrollIntoView({behavior:'smooth', block:'start'}); el.querySelector('select[name=meal_id]')?.focus(); }
     }
   })();
+
+  // Delete menu item with password protection
+  function deleteMenuItem(event, form) {
+    event.preventDefault();
+
+    if (!confirm('{{ _('Remove item? / حذف العنصر؟') }}')) {
+      return false;
+    }
+
+    const password = prompt('أدخل كلمة المرور لحذف العنصر (1991):');
+    if (!password) {
+      return false;
+    }
+
+    // Set password in hidden field
+    form.querySelector('.password-field').value = password;
+
+    // Submit form
+    form.submit();
+    return true;
+  }
+
+  // Delete functions for API calls
+  async function deleteOne(itemId) {
+    const password = prompt('أدخل كلمة المرور لحذف الصنف (1991):');
+    if (!password) return;
+
+    const res = await fetch(`/api/items/${itemId}/delete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrf()
+      },
+      body: JSON.stringify({ password })
+    });
+
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.error === 'invalid_password' ? 'كلمة المرور غير صحيحة' : data.error);
+      return;
+    }
+
+    alert('تم حذف الصنف بنجاح');
+    location.reload();
+  }
+
+  async function deleteAll() {
+    const ok = confirm('سيتم حذف جميع الأصناف! هل أنت متأكد؟');
+    if (!ok) return;
+
+    const password = prompt('أدخل كلمة المرور لحذف جميع الأصناف (1991):');
+    if (!password) return;
+
+    const res = await fetch('/api/items/delete-all', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrf()
+      },
+      body: JSON.stringify({ password })
+    });
+
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.error === 'invalid_password' ? 'كلمة المرور غير صحيحة' : data.error);
+      return;
+    }
+
+    alert(`تم حذف ${data.deleted} صنف بنجاح`);
+    location.reload();
+  }
 </script>
     </div>
   </div>

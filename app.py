@@ -295,6 +295,16 @@ def create_app():
 # =========================
 app = create_app()
 
+# =========================
+# Security Helper Functions
+# =========================
+import hmac
+
+def verify_admin_password(pw: str) -> bool:
+    """Verify admin password for delete operations"""
+    required = str(app.config.get('ADMIN_DELETE_PASSWORD', '1991'))
+    return hmac.compare_digest(str(pw or ''), required)
+
 # Rate limiting for login attempts
 login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
 
@@ -1873,6 +1883,18 @@ def menu_item_update(item_id):
 @login_required
 def menu_item_delete(item_id):
     from models import MenuItem
+
+    # Check password for delete operation
+    password = request.form.get('password', '').strip()
+    if not verify_admin_password(password):
+        flash(_('Incorrect password / كلمة السر غير صحيحة'), 'danger')
+        return redirect(url_for('menu'))
+
+    item = MenuItem.query.get_or_404(item_id)
+    db.session.delete(item)
+    safe_db_commit()
+    flash(_('Menu item deleted / تم حذف عنصر القائمة'), 'success')
+    return redirect(url_for('menu'))
 # API: sales void password check
 @app.route('/api/sales/void-check', methods=['POST'])
 @login_required
@@ -5531,6 +5553,131 @@ def test_dependencies():
     return jsonify(results)
 
 # App is already initialized above
+
+# =========================
+# Protected Delete API Routes
+# =========================
+
+@app.route('/api/items/<int:item_id>/delete', methods=['POST'])
+@login_required
+def api_delete_item(item_id):
+    """Delete a single menu item with password protection"""
+    try:
+        data = request.get_json(silent=True) or request.form
+        if not verify_admin_password(data.get('password')):
+            return jsonify({'ok': False, 'error': 'invalid_password'}), 403
+
+        from models import MenuItem
+        item = MenuItem.query.get_or_404(item_id)
+        db.session.delete(item)
+        safe_db_commit()
+        return jsonify({'ok': True, 'message': 'Item deleted successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/items/delete-all', methods=['POST'])
+@login_required
+def api_delete_all_items():
+    """Delete all menu items with password protection"""
+    try:
+        data = request.get_json(silent=True) or request.form
+        if not verify_admin_password(data.get('password')):
+            return jsonify({'ok': False, 'error': 'invalid_password'}), 403
+
+        from models import MenuItem
+        count = MenuItem.query.count()
+        MenuItem.query.delete()
+        safe_db_commit()
+        return jsonify({'ok': True, 'deleted': count, 'message': f'Deleted {count} items'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/meals/<int:meal_id>/delete', methods=['POST'])
+@login_required
+def api_delete_meal(meal_id):
+    """Delete a single meal with password protection"""
+    try:
+        data = request.get_json(silent=True) or request.form
+        if not verify_admin_password(data.get('password')):
+            return jsonify({'ok': False, 'error': 'invalid_password'}), 403
+
+        meal = Meal.query.get_or_404(meal_id)
+
+        # Check if meal is used in any sales invoices
+        sales_items = SalesInvoiceItem.query.filter_by(product_name=meal.display_name).all()
+        if sales_items:
+            meal.active = False
+            safe_db_commit()
+            return jsonify({'ok': True, 'deactivated': True, 'message': 'Meal deactivated (has sales history)'})
+        else:
+            # Delete meal ingredients first
+            MealIngredient.query.filter_by(meal_id=meal_id).delete()
+            db.session.delete(meal)
+            safe_db_commit()
+            return jsonify({'ok': True, 'deleted': True, 'message': 'Meal deleted successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/meals/delete-all', methods=['POST'])
+@login_required
+def api_delete_all_meals():
+    """Delete all meals with password protection"""
+    try:
+        data = request.get_json(silent=True) or request.form
+        if not verify_admin_password(data.get('password')):
+            return jsonify({'ok': False, 'error': 'invalid_password'}), 403
+
+        # Get count before deletion
+        count = Meal.query.count()
+
+        # Delete all meal ingredients first
+        MealIngredient.query.delete()
+        # Delete all meals
+        Meal.query.delete()
+        safe_db_commit()
+        return jsonify({'ok': True, 'deleted': count, 'message': f'Deleted {count} meals'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+# =========================
+# Print and Payment API Routes
+# =========================
+
+@app.route('/invoices/<int:invoice_id>/print-preview')
+@login_required
+def print_unpaid_invoice(invoice_id):
+    """Print preview for unpaid invoice (GET route to avoid CSRF)"""
+    try:
+        invoice = SalesInvoice.query.get_or_404(invoice_id)
+        return render_template('invoice_print.html', invoice=invoice, paid=False)
+    except Exception as e:
+        flash(_('Error loading invoice / خطأ في تحميل الفاتورة'), 'danger')
+        return redirect(url_for('invoices'))
+
+@app.route('/invoices/<int:invoice_id>/pay-and-print', methods=['POST'])
+@login_required
+def pay_and_print_invoice(invoice_id):
+    """Process payment and return print URL"""
+    try:
+        invoice = SalesInvoice.query.get_or_404(invoice_id)
+
+        # Mark as paid if not already
+        if invoice.status != 'paid':
+            invoice.status = 'paid'
+            safe_db_commit()
+
+        return jsonify({
+            'ok': True,
+            'print_url': url_for('print_unpaid_invoice', invoice_id=invoice_id),
+            'message': 'Payment processed successfully'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Import eventlet and socketio only when running the server

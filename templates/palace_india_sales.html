@@ -499,6 +499,7 @@ async function printDraft() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrf()
             },
             body: JSON.stringify({
                 table_number: tableNumber,
@@ -542,6 +543,7 @@ async function processPayment() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrf()
             },
             body: JSON.stringify({
                 table_number: tableNumber,
