@@ -211,6 +211,24 @@ msgstr "خطأ في إنشاء نسخة الإيصال"
 msgid "Print Now"
 msgstr "اطبع الآن"
 
+msgid "Payment processed successfully!"
+msgstr "تم معالجة الدفع بنجاح!"
+
+msgid "Processing Payment..."
+msgstr "جاري معالجة الدفع..."
+
+msgid "Please wait, preparing receipt..."
+msgstr "يرجى الانتظار، جاري تحضير الإيصال..."
+
+msgid "Payment successful!"
+msgstr "تم الدفع بنجاح!"
+
+msgid "Invoice Number"
+msgstr "رقم الفاتورة"
+
+msgid "Invoice cleared and ready for next customer"
+msgstr "تم مسح الفاتورة وهي جاهزة للعميل التالي"
+
 msgid "Print Only"
 msgstr "طباعة فقط"
 

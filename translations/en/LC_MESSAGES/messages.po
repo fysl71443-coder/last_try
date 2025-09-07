@@ -211,6 +211,24 @@ msgstr "Error generating receipt copy"
 msgid "Print Now"
 msgstr "Print Now"
 
+msgid "Payment processed successfully!"
+msgstr "Payment processed successfully!"
+
+msgid "Processing Payment..."
+msgstr "Processing Payment..."
+
+msgid "Please wait, preparing receipt..."
+msgstr "Please wait, preparing receipt..."
+
+msgid "Payment successful!"
+msgstr "Payment successful!"
+
+msgid "Invoice Number"
+msgstr "Invoice Number"
+
+msgid "Invoice cleared and ready for next customer"
+msgstr "Invoice cleared and ready for next customer"
+
 msgid "Print Only"
 msgstr "Print Only"
 

@@ -426,10 +426,10 @@ def api_print_copy():
 
         # Create temporary invoice object for template rendering
         from datetime import datetime
-        import uuid
 
         class TempInvoice:
             def __init__(self):
+                import uuid
                 self.id = str(uuid.uuid4())[:8]
                 self.invoice_number = f"COPY-{self.id}"
                 self.date = datetime.now()
@@ -448,19 +448,30 @@ def api_print_copy():
         # Create temporary invoice
         temp_invoice = TempInvoice()
 
-        # Import print helper
-        from print_helper import render_receipt_template
+        # Prepare template data
+        template_data = {
+            'invoice': temp_invoice,
+            'items': items,
+            'is_copy': True,
+            'restaurant_name': 'Palace India Restaurant' if branch_code == '2' else 'China Town Restaurant',
+            'branch_code': branch_code,
+            'date': temp_invoice.date.strftime('%Y-%m-%d'),
+            'time': temp_invoice.date.strftime('%H:%M'),
+            'invoice_number': temp_invoice.invoice_number,
+            'table_number': table_number,
+            'customer_phone': '',
+            'subtotal': temp_invoice.total_before_tax,
+            'vat': temp_invoice.tax_amount,
+            'total': temp_invoice.total_after_tax_discount,
+            'discount_amount': temp_invoice.discount_amount,
+            'logo_url': '/static/logo.png',  # Add your logo path
+            'vat_number': '123456789',  # Add your VAT number
+            'location': 'الرياض، المملكة العربية السعودية',
+            'phone': '+966 11 123 4567'
+        }
 
-        # Render professional receipt template
-        receipt_html = render_receipt_template(
-            invoice=temp_invoice,
-            items=items,
-            template_type='unified',
-            receipt_type='copy',
-            is_copy=True,
-            copy_message=_('COPY - NOT FOR PAYMENT'),
-            copy_note=_('This is a copy only - No payment processed')
-        )
+        # Render thermal receipt template
+        receipt_html = render_template('thermal_receipt.html', **template_data)
 
         # Create temporary file or return direct HTML
         import tempfile
@@ -514,6 +525,129 @@ def serve_temp_receipt(filename):
     except Exception as e:
         print(f"Error serving temp receipt: {e}")
         return "Error loading receipt", 500
+
+@app.route('/api/pay-and-print', methods=['POST'])
+@csrf_exempt
+def api_pay_and_print():
+    """Process payment and generate receipt"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        # Extract data
+        items = data.get('items', [])
+        table_number = data.get('table_number')
+        customer_name = data.get('customer_name', '')
+        discount_percentage = data.get('discount_percentage', 0)
+        branch_code = data.get('branch_code', '1')
+        payment_method = data.get('payment_method', 'cash')
+
+        if not items:
+            return jsonify({'success': False, 'error': 'No items provided'}), 400
+
+        if not table_number:
+            return jsonify({'success': False, 'error': 'Table number required'}), 400
+
+        # Use safe database operation for payment processing
+        def create_invoice_and_payment():
+            # Create sales invoice
+            invoice = SalesInvoice(
+                branch_code=branch_code,
+                table_number=table_number,
+                customer_name=customer_name,
+                discount_percentage=discount_percentage,
+                payment_method=payment_method,
+                date=get_saudi_now(),
+                invoice_number=f"INV-{get_saudi_now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8]}"
+            )
+
+            # Calculate totals
+            subtotal = sum(item['total_price'] for item in items)
+            discount_amount = subtotal * (discount_percentage / 100)
+            total_before_tax = subtotal - discount_amount
+            tax_amount = total_before_tax * 0.15
+            total_after_tax = total_before_tax + tax_amount
+
+            invoice.total_before_tax = total_before_tax
+            invoice.discount_amount = discount_amount
+            invoice.tax_amount = tax_amount
+            invoice.total_after_tax_discount = total_after_tax
+
+            db.session.add(invoice)
+            db.session.flush()  # Get invoice ID
+
+            # Add invoice items
+            for item in items:
+                invoice_item = SalesInvoiceItem(
+                    invoice_id=invoice.id,
+                    product_name=item['product_name'],
+                    quantity=item['quantity'],
+                    price_before_tax=item['price_before_tax'],
+                    total_price=item['total_price']
+                )
+                db.session.add(invoice_item)
+
+            return invoice
+
+        # Execute with error handling
+        invoice = safe_db_operation(
+            create_invoice_and_payment,
+            "إنشاء فاتورة المبيعات والدفع"
+        )
+
+        if not invoice:
+            return jsonify({'success': False, 'error': 'Failed to create invoice'}), 500
+
+        # Generate receipt with payment info
+        template_data = {
+            'invoice': invoice,
+            'items': items,
+            'is_copy': False,  # This is a paid receipt
+            'restaurant_name': 'Palace India Restaurant' if branch_code == '2' else 'China Town Restaurant',
+            'branch_code': branch_code,
+            'date': invoice.date.strftime('%Y-%m-%d'),
+            'time': invoice.date.strftime('%H:%M'),
+            'invoice_number': invoice.invoice_number,
+            'table_number': table_number,
+            'customer_phone': '',
+            'payment_method': payment_method,
+            'subtotal': invoice.total_before_tax,
+            'vat': invoice.tax_amount,
+            'total': invoice.total_after_tax_discount,
+            'discount_amount': invoice.discount_amount,
+            'logo_url': '/static/logo.png',
+            'vat_number': '123456789',
+            'location': 'الرياض، المملكة العربية السعودية',
+            'phone': '+966 11 123 4567'
+        }
+
+        # Render receipt
+        receipt_html = render_template('thermal_receipt.html', **template_data)
+
+        # Create temporary file
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(receipt_html)
+            temp_file_path = f.name
+
+        # Generate URL
+        temp_filename = os.path.basename(temp_file_path)
+        print_url = f'/temp-receipt/{temp_filename}'
+        session[f'temp_receipt_{temp_filename}'] = temp_file_path
+
+        return jsonify({
+            'success': True,
+            'print_url': print_url,
+            'invoice_id': invoice.id,
+            'invoice_number': invoice.invoice_number
+        })
+
+    except Exception as e:
+        reset_db_session()
+        error_message = handle_db_error(e, "معالجة الدفع والطباعة")
+        print(f"Pay and print error: {e}")
+        return jsonify({'success': False, 'error': error_message}), 500
 
 def save_to_db(instance):
     try:

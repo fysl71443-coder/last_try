@@ -869,19 +869,25 @@ async function payAndPrintFinal() {
     document.body.appendChild(processingDiv);
 
     try {
-        // Process payment
-        const response = await fetch(`/api/pos/${currentBranch}/process_payment`, {
+        // Process payment using new API
+        const response = await fetch('/api/pay-and-print', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCsrf()
             },
             body: JSON.stringify({
+                items: currentInvoice.map(item => ({
+                    product_name: item.name,
+                    quantity: item.quantity,
+                    price_before_tax: item.price,
+                    total_price: item.price * item.quantity
+                })),
                 table_number: tableNumber,
-                items: currentInvoice,
-                customer: selectedCustomer,
-                payment_method: paymentMethod,
-                discount_percent: parseFloat(document.getElementById('discountInput').value) || 0
+                customer_name: selectedCustomer?.name || '',
+                discount_percentage: parseFloat(document.getElementById('discountInput').value) || 0,
+                branch_code: '{{ branch_code }}',
+                payment_method: paymentMethod
             })
         });
 
@@ -891,9 +897,9 @@ async function payAndPrintFinal() {
         const processingEl = document.getElementById('processing-payment');
         if (processingEl) processingEl.remove();
 
-        if (data.ok) {
+        if (data.success) {
             // Show success message
-            alert(`✅ {{ _("Payment successful!") }}\n{{ _("Invoice Number") }}: ${data.invoice_id}`);
+            alert(`✅ {{ _("Payment successful!") }}\n{{ _("Invoice Number") }}: ${data.invoice_number}`);
 
             // Open receipt for printing
             const receiptWindow = window.open(data.print_url, '_blank', 'width=400,height=700,scrollbars=yes');
@@ -917,7 +923,7 @@ async function payAndPrintFinal() {
             }, 1000);
 
         } else {
-            alert('❌ {{ _("Payment error") }}: ' + data.error);
+            alert('❌ {{ _("Payment error") }}: ' + (data.error || 'Unknown error'));
         }
 
     } catch (error) {
