@@ -204,3 +204,24 @@ msgstr "Payment error"
 
 msgid "Server connection error"
 msgstr "Server connection error"
+
+msgid "Preview Invoice"
+msgstr "Preview Invoice"
+
+msgid "Pay & Print Receipt"
+msgstr "Pay & Print Receipt"
+
+msgid "Invoice Preview"
+msgstr "Invoice Preview"
+
+msgid "China Town Restaurant"
+msgstr "China Town Restaurant"
+
+msgid "UNPAID INVOICE"
+msgstr "UNPAID INVOICE"
+
+msgid "This is a preview only"
+msgstr "This is a preview only"
+
+msgid "Invoice cleared and ready for next customer"
+msgstr "Invoice cleared and ready for next customer"

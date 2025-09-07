@@ -271,9 +271,20 @@
           </div>
         </div>
 
+        <!-- Payment Method Selection -->
+        <div class="payment-selection mt-3">
+          <label class="form-label">{{ _('Payment Method') }}:</label>
+          <select class="form-select" id="paymentMethod">
+            <option value="cash">💵 {{ _('Cash') }}</option>
+            <option value="card">💳 {{ _('Card') }}</option>
+            <option value="transfer">🏦 {{ _('Transfer') }}</option>
+            <option value="other">📌 {{ _('Other') }}</option>
+          </select>
+        </div>
+
         <div class="d-grid gap-2 mt-3">
-          <button class="btn btn-print" onclick="printUnpaid()">🖨️ {{ _('Print (Unpaid)') }}</button>
-          <button class="btn btn-payment" onclick="goToPayment()">💳 {{ _('Pay & Print') }}</button>
+          <button class="btn btn-print" onclick="previewInvoice()">👁️ {{ _('Preview Invoice') }}</button>
+          <button class="btn btn-payment" onclick="payAndPrintFinal()">💳 {{ _('Pay & Print Receipt') }}</button>
         </div>
 
         <!-- Footer Message -->
@@ -629,14 +640,35 @@ function goToPayment() {
     });
 }
 
-function printUnpaid() {
+// Preview invoice (without payment)
+function previewInvoice() {
     if (currentInvoice.length === 0) {
-        alert('لا توجد أصناف في الفاتورة');
+        alert('{{ _("No items in invoice") }}');
         return;
     }
 
-    // Just print without payment
-    window.print();
+    const tableNumber = document.getElementById('tableSelect').value;
+    if (!tableNumber) {
+        alert('{{ _("Please select table number") }}');
+        return;
+    }
+
+    // Generate preview HTML
+    const invoiceHtml = generateInvoicePreviewHtml();
+
+    // Open preview window
+    const previewWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes');
+    previewWindow.document.write(invoiceHtml);
+    previewWindow.document.close();
+
+    // Add print button to preview
+    previewWindow.onload = function() {
+        const printBtn = previewWindow.document.createElement('button');
+        printBtn.innerHTML = '🖨️ {{ _("Print") }}';
+        printBtn.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;padding:10px;background:#007bff;color:white;border:none;border-radius:5px;cursor:pointer;';
+        printBtn.onclick = function() { previewWindow.print(); };
+        previewWindow.document.body.appendChild(printBtn);
+    };
 }
 
 // Save cart data to session
@@ -676,6 +708,183 @@ async function saveCartToSession() {
     } catch (error) {
         console.error('Error saving cart:', error);
         throw error;
+    }
+}
+
+// Generate invoice preview HTML
+function generateInvoicePreviewHtml() {
+    const tableNumber = document.getElementById('tableSelect').value;
+    const customerName = selectedCustomer?.name || '';
+    const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+
+    const subtotal = currentInvoice.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const discountAmount = subtotal * (discount / 100);
+    const subtotalAfterDiscount = subtotal - discountAmount;
+    const tax = subtotalAfterDiscount * 0.15;
+    const total = subtotalAfterDiscount + tax;
+
+    let itemsHtml = '';
+    currentInvoice.forEach(item => {
+        itemsHtml += `
+            <tr>
+                <td>${item.name}</td>
+                <td>${item.quantity}</td>
+                <td>${item.price.toFixed(2)}</td>
+                <td>${(item.price * item.quantity).toFixed(2)}</td>
+            </tr>
+        `;
+    });
+
+    return `
+        <!DOCTYPE html>
+        <html dir="rtl">
+        <head>
+            <meta charset="UTF-8">
+            <title>{{ _("Invoice Preview") }}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .header { text-align: center; margin-bottom: 20px; }
+                .invoice-info { margin-bottom: 15px; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+                th { background-color: #f5f5f5; }
+                .totals { margin-top: 15px; }
+                .total-row { font-weight: bold; }
+                @media print { button { display: none !important; } }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>🏰 Palace India Restaurant</h2>
+                <p>{{ _("Invoice Preview") }}</p>
+            </div>
+
+            <div class="invoice-info">
+                <p><strong>{{ _("Table") }}:</strong> ${tableNumber}</p>
+                ${customerName ? `<p><strong>{{ _("Customer") }}:</strong> ${customerName}</p>` : ''}
+                <p><strong>{{ _("Date") }}:</strong> ${new Date().toLocaleDateString('ar-SA')}</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>{{ _("Item") }}</th>
+                        <th>{{ _("Qty") }}</th>
+                        <th>{{ _("Price") }}</th>
+                        <th>{{ _("Total") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHtml}
+                </tbody>
+            </table>
+
+            <div class="totals">
+                <p>{{ _("Subtotal") }}: ${subtotal.toFixed(2)} {{ _("SAR") }}</p>
+                ${discount > 0 ? `<p>{{ _("Discount") }} (${discount}%): -${discountAmount.toFixed(2)} {{ _("SAR") }}</p>` : ''}
+                <p>{{ _("Tax") }} (15%): ${tax.toFixed(2)} {{ _("SAR") }}</p>
+                <p class="total-row">{{ _("Total") }}: ${total.toFixed(2)} {{ _("SAR") }}</p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <p><strong>{{ _("UNPAID INVOICE") }}</strong></p>
+                <p>{{ _("This is a preview only") }}</p>
+            </div>
+        </body>
+        </html>
+    `;
+}
+
+// Pay and Print Final - Main payment processing
+async function payAndPrintFinal() {
+    if (currentInvoice.length === 0) {
+        alert('{{ _("No items in invoice") }}');
+        return;
+    }
+
+    const tableNumber = document.getElementById('tableSelect').value;
+    if (!tableNumber) {
+        alert('{{ _("Please select table number") }}');
+        return;
+    }
+
+    const paymentMethod = document.getElementById('paymentMethod').value;
+
+    // Show processing message
+    const processingDiv = document.createElement('div');
+    processingDiv.id = 'processing-payment';
+    processingDiv.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                   background: rgba(0,0,0,0.8); z-index: 9999; display: flex;
+                   align-items: center; justify-content: center;">
+            <div style="background: white; padding: 30px; border-radius: 15px; text-align: center;">
+                <div class="spinner-border text-success mb-3" role="status"></div>
+                <h4>{{ _("Processing Payment...") }}</h4>
+                <p>{{ _("Please wait, preparing receipt...") }}</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(processingDiv);
+
+    try {
+        // Process payment
+        const response = await fetch(`/api/pos/${currentBranch}/process_payment`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrf()
+            },
+            body: JSON.stringify({
+                table_number: tableNumber,
+                items: currentInvoice,
+                customer: selectedCustomer,
+                payment_method: paymentMethod,
+                discount_percent: parseFloat(document.getElementById('discountInput').value) || 0
+            })
+        });
+
+        const data = await response.json();
+
+        // Remove processing message
+        const processingEl = document.getElementById('processing-payment');
+        if (processingEl) processingEl.remove();
+
+        if (data.ok) {
+            // Show success message
+            alert(`✅ {{ _("Payment successful!") }}\n{{ _("Invoice Number") }}: ${data.invoice_id}`);
+
+            // Open receipt for printing
+            const receiptWindow = window.open(data.print_url, '_blank', 'width=400,height=700,scrollbars=yes');
+
+            // Auto-print receipt
+            receiptWindow.onload = function() {
+                receiptWindow.print();
+            };
+
+            // Clear invoice and reset form
+            currentInvoice = [];
+            selectedCustomer = null;
+            document.getElementById('tableSelect').value = '';
+            document.getElementById('discountInput').value = 0;
+            document.getElementById('selectedCustomer').style.display = 'none';
+            updateInvoiceDisplay();
+
+            // Success feedback
+            setTimeout(() => {
+                alert('{{ _("Invoice cleared and ready for next customer") }}');
+            }, 1000);
+
+        } else {
+            alert('❌ {{ _("Payment error") }}: ' + data.error);
+        }
+
+    } catch (error) {
+        // Remove processing message
+        const processingEl = document.getElementById('processing-payment');
+        if (processingEl) processingEl.remove();
+
+        console.error('Payment error:', error);
+        alert('❌ {{ _("Server connection error") }}: ' + error.message);
     }
 }
 </script>

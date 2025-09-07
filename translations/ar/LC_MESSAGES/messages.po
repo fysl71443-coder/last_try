@@ -204,3 +204,24 @@ msgstr "خطأ في الدفع"
 
 msgid "Server connection error"
 msgstr "خطأ في الاتصال بالخادم"
+
+msgid "Preview Invoice"
+msgstr "معاينة الفاتورة"
+
+msgid "Pay & Print Receipt"
+msgstr "دفع و طباعة الإيصال"
+
+msgid "Invoice Preview"
+msgstr "معاينة الفاتورة"
+
+msgid "China Town Restaurant"
+msgstr "مطعم تشاينا تاون"
+
+msgid "UNPAID INVOICE"
+msgstr "فاتورة غير مدفوعة"
+
+msgid "This is a preview only"
+msgstr "هذه معاينة فقط"
+
+msgid "Invoice cleared and ready for next customer"
+msgstr "تم تفريغ الفاتورة وهي جاهزة للعميل التالي"
