@@ -76,9 +76,9 @@
         {% for it in items %}
         <tr>
           <td>{{ it.product_name }}</td>
-          <td class="right">{{ '%.2f'|format(it.price_before_tax) }}</td>
+          <td class="right">{{ '%.2f'|format(it.price_before_tax) }} ر.س</td>
           <td class="right">{{ '%.0f'|format(it.quantity) }}</td>
-          <td class="right">{{ '%.2f'|format(it.total_price) }}</td>
+          <td class="right">{{ '%.2f'|format(it.total_price) }} ر.س</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -98,17 +98,17 @@
         <tr>
           <td>{{ it.product_name }}</td>
           <td class="right">{{ '%.0f'|format(it.quantity) }}</td>
-          <td class="right">{{ '%.2f'|format(it.total_price) }}</td>
+          <td class="right">{{ '%.2f'|format(it.total_price) }} ر.س</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% endif %}
     <hr>
-    <div class="small right">{{ _('Subtotal') }}: {{ '%.2f'|format(invoice.total_before_tax) }}</div>
-    <div class="small right">{{ _('Tax') }}: {{ '%.2f'|format(invoice.tax_amount) }}</div>
-    <div class="small right">{{ _('Discount') }}: {{ '%.2f'|format(invoice.discount_amount) }}</div>
-    <div class="small right"><strong>{{ _('Grand Total') }}: {{ '%.2f'|format(invoice.total_after_tax_discount) }}</strong></div>
+    <div class="small right">{{ _('Subtotal') }}: {{ '%.2f'|format(invoice.total_before_tax) }} ر.س</div>
+    <div class="small right">{{ _('Tax') }}: {{ '%.2f'|format(invoice.tax_amount) }} ر.س</div>
+    <div class="small right">{{ _('Discount') }}: {{ '%.2f'|format(invoice.discount_amount) }} ر.س</div>
+    <div class="small right"><strong>{{ _('Grand Total') }}: {{ '%.2f'|format(invoice.total_after_tax_discount) }} ر.س</strong></div>
     <hr>
   </div>
     <hr>
@@ -162,7 +162,7 @@
         const el = document.getElementById('qr');
         if(!el) return;
         // Enhanced QR code with more invoice details
-        const qrText = 'Invoice: {{ invoice.invoice_number or invoice.id }}\nTotal: {{ "%.2f"|format(invoice.total_after_tax_discount) }} {{ _("SAR") }}\nDate: {{ invoice.date }}\nBranch: {{ invoice.branch or invoice.branch_code or _("Main") }}';
+        const qrText = 'Invoice: {{ invoice.invoice_number or invoice.id }}\nTotal: {{ "%.2f"|format(invoice.total_after_tax_discount) }} ر.س\nDate: {{ invoice.date }}\nBranch: {{ invoice.branch or invoice.branch_code or _("Main") }}';
         new QRCode(el, { text: qrText, width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
       }catch(e){}
     })();

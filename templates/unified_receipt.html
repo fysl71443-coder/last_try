@@ -271,8 +271,8 @@
                     <td class="number-col">{{ loop.index }}</td>
                     <td>{{ item.product_name }}</td>
                     <td class="qty-col">{{ '%.0f'|format(item.quantity) }}</td>
-                    <td class="price-col">{{ '%.2f'|format(item.price_before_tax or (item.total_price / item.quantity)) }}</td>
-                    <td class="price-col">{{ '%.2f'|format(item.total_price) }}</td>
+                    <td class="price-col">{{ '%.2f'|format(item.price_before_tax or (item.total_price / item.quantity)) }} ر.س</td>
+                    <td class="price-col">{{ '%.2f'|format(item.total_price) }} ر.س</td>
                 </tr>
                 {% else %}
                 <tr>
@@ -286,21 +286,21 @@
         <div class="totals-section">
             <div class="total-row">
                 <span>{{ _('Subtotal') }}:</span>
-                <span>{{ '%.2f'|format(invoice.total_before_tax) }} {{ _('SAR') }}</span>
+                <span>{{ '%.2f'|format(invoice.total_before_tax) }} ر.س</span>
             </div>
             {% if invoice.discount_amount and invoice.discount_amount > 0 %}
             <div class="total-row" style="color: #d63384;">
                 <span>{{ _('Discount') }}:</span>
-                <span>-{{ '%.2f'|format(invoice.discount_amount) }} {{ _('SAR') }}</span>
+                <span>-{{ '%.2f'|format(invoice.discount_amount) }} ر.س</span>
             </div>
             {% endif %}
             <div class="total-row">
                 <span>{{ _('Tax') }} (15%):</span>
-                <span>{{ '%.2f'|format(invoice.tax_amount) }} {{ _('SAR') }}</span>
+                <span>{{ '%.2f'|format(invoice.tax_amount) }} ر.س</span>
             </div>
             <div class="total-row grand-total">
                 <span>{{ _('Grand Total') }}:</span>
-                <span>{{ '%.2f'|format(invoice.total_after_tax_discount) }} {{ _('SAR') }}</span>
+                <span>{{ '%.2f'|format(invoice.total_after_tax_discount) }} ر.س</span>
             </div>
         </div>
         
@@ -341,7 +341,7 @@
                 if (qrElement && typeof QRCode !== 'undefined') {
                     qrElement.innerHTML = '';
                     new QRCode(qrElement, {
-                        text: 'Invoice: {{ invoice.invoice_number or invoice.id }}\nTotal: {{ "%.2f"|format(invoice.total_after_tax_discount) }} SAR\nDate: {{ invoice.date }}',
+                        text: 'Invoice: {{ invoice.invoice_number or invoice.id }}\nTotal: {{ "%.2f"|format(invoice.total_after_tax_discount) }} ر.س\nDate: {{ invoice.date }}',
                         width: {{ receipt_type == 'thermal' and '80' or '100' }},
                         height: {{ receipt_type == 'thermal' and '80' or '100' }},
                         correctLevel: QRCode.CorrectLevel.M

@@ -59,7 +59,7 @@ DEFAULT_SETTINGS = {
     'tax_number': '',
     'phone': '',
     'address': '',
-    'currency': 'SAR',
+    'currency': 'ر.س',
     'show_qr_code': True,
     'auto_print': False,
     'receipt_width': 320,
@@ -74,7 +74,7 @@ QR_CONFIG = {
         'invoice_full': {'width': 100, 'height': 100},
         'unified': {'width': 100, 'height': 100}
     },
-    'content_template': 'Invoice: {invoice_number}\nTotal: {total} {currency}\nDate: {date}\nBranch: {branch}',
+    'content_template': 'Invoice: {invoice_number}\nTotal: {total} ر.س\nDate: {date}\nBranch: {branch}',
     'error_correction': 'M'  # L, M, Q, H
 }
 
@@ -142,13 +142,7 @@ def select_template(context):
 def format_qr_content(invoice, template_type='unified'):
     """Format QR code content based on invoice data"""
     try:
-        content = QR_CONFIG['content_template'].format(
-            invoice_number=invoice.invoice_number or invoice.id,
-            total=f"{invoice.total_after_tax_discount:.2f}",
-            currency=DEFAULT_SETTINGS['currency'],
-            date=invoice.date.strftime('%Y-%m-%d') if invoice.date else '',
-            branch=invoice.branch or invoice.branch_code or 'Main'
-        )
+        content = f"Invoice: {invoice.invoice_number or invoice.id}\nTotal: {invoice.total_after_tax_discount:.2f} ر.س\nDate: {invoice.date.strftime('%Y-%m-%d') if invoice.date else ''}\nBranch: {invoice.branch or invoice.branch_code or 'Main'}"
         return content
     except Exception as e:
         # Fallback to simple content

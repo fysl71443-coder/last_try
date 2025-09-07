@@ -190,6 +190,9 @@ msgstr "لا توجد أصناف"
 msgid "SAR"
 msgstr "ر.س"
 
+msgid "Currency"
+msgstr "العملة"
+
 msgid "Close"
 msgstr "إغلاق"
 
