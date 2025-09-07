@@ -788,6 +788,99 @@ def get_items():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Emergency route to create POS tables and data
+@app.route('/admin/create-pos-tables')
+@login_required
+def create_pos_tables():
+    """Emergency route to create POS tables and populate data"""
+    try:
+        from models import Category, Item
+        from sqlalchemy import text
+
+        # Create tables
+        db.create_all()
+
+        # Check if data exists
+        existing_cats = Category.query.count()
+        if existing_cats > 0:
+            return jsonify({
+                'status': 'already_exists',
+                'categories': existing_cats,
+                'items': Item.query.count()
+            })
+
+        # Create categories
+        categories_data = [
+            "Appetizers", "Beef & Lamb", "Charcoal Grill / Kebabs", "Chicken",
+            "Chinese Sizzling", "Duck", "House Special", "Indian Delicacy (Chicken)",
+            "Indian Delicacy (Fish)", "Indian Delicacy (Vegetables)", "Juices",
+            "Noodles & Chopsuey", "Prawns", "Rice & Biryani", "Salads",
+            "Seafoods", "Shaw Faw", "Soft Drink", "Soups", "spring rolls", "دجاج"
+        ]
+
+        created_categories = {}
+        for cat_name in categories_data:
+            cat = Category(name=cat_name, status='Active')
+            db.session.add(cat)
+            db.session.flush()
+            created_categories[cat_name] = cat.id
+
+        # Create items
+        items_data = [
+            {"name": "Spring Rolls", "price": 15.00, "category": "Appetizers"},
+            {"name": "Chicken Samosa", "price": 12.00, "category": "Appetizers"},
+            {"name": "Vegetable Pakora", "price": 18.00, "category": "Appetizers"},
+            {"name": "Beef Curry", "price": 45.00, "category": "Beef & Lamb"},
+            {"name": "Lamb Biryani", "price": 50.00, "category": "Beef & Lamb"},
+            {"name": "Grilled Lamb Chops", "price": 65.00, "category": "Beef & Lamb"},
+            {"name": "Chicken Tikka", "price": 35.00, "category": "Charcoal Grill / Kebabs"},
+            {"name": "Seekh Kebab", "price": 40.00, "category": "Charcoal Grill / Kebabs"},
+            {"name": "Mixed Grill", "price": 55.00, "category": "Charcoal Grill / Kebabs"},
+            {"name": "Butter Chicken", "price": 38.00, "category": "Chicken"},
+            {"name": "Chicken Curry", "price": 35.00, "category": "Chicken"},
+            {"name": "Chicken Biryani", "price": 42.00, "category": "Chicken"},
+            {"name": "Sizzling Chicken", "price": 45.00, "category": "Chinese Sizzling"},
+            {"name": "Sweet & Sour Chicken", "price": 40.00, "category": "Chinese Sizzling"},
+            {"name": "Kung Pao Chicken", "price": 42.00, "category": "Chinese Sizzling"},
+            {"name": "Chef's Special Platter", "price": 60.00, "category": "House Special"},
+            {"name": "Mixed Seafood Special", "price": 75.00, "category": "House Special"},
+            {"name": "Vegetarian Delight", "price": 35.00, "category": "House Special"},
+            {"name": "Fresh Orange Juice", "price": 12.00, "category": "Juices"},
+            {"name": "Mango Juice", "price": 15.00, "category": "Juices"},
+            {"name": "Apple Juice", "price": 10.00, "category": "Juices"},
+            {"name": "Mixed Fruit Juice", "price": 18.00, "category": "Juices"},
+            {"name": "Plain Rice", "price": 15.00, "category": "Rice & Biryani"},
+            {"name": "Vegetable Biryani", "price": 35.00, "category": "Rice & Biryani"},
+            {"name": "Mutton Biryani", "price": 55.00, "category": "Rice & Biryani"},
+            {"name": "Coca Cola", "price": 8.00, "category": "Soft Drink"},
+            {"name": "Pepsi", "price": 8.00, "category": "Soft Drink"},
+            {"name": "Fresh Lime", "price": 10.00, "category": "Soft Drink"},
+        ]
+
+        for item_data in items_data:
+            category_name = item_data["category"]
+            if category_name in created_categories:
+                item = Item(
+                    name=item_data["name"],
+                    price=item_data["price"],
+                    category_id=created_categories[category_name],
+                    status='Active'
+                )
+                db.session.add(item)
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'categories_created': len(categories_data),
+            'items_created': len(items_data),
+            'message': 'POS tables and data created successfully!'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
 # ========================================
 # Original POS API Routes (MenuCategory/MenuItem)
 # ========================================
