@@ -564,17 +564,28 @@ def api_pay_and_print():
         if not table_number:
             return jsonify({'success': False, 'error': 'Table number required'}), 400
 
+        # Calculate totals
+        subtotal = sum(item['total_price'] for item in items)
+        vat_amount = subtotal * 0.15  # 15% VAT
+        discount_amount = subtotal * (discount_percentage / 100) if discount_percentage > 0 else 0
+        total = subtotal + vat_amount - discount_amount
+
         # Use safe database operation for payment processing
         def create_invoice_and_payment():
             # Create sales invoice
             invoice = SalesInvoice(
-                branch_code=branch_code,
+                branch=branch_code,
                 table_number=table_number,
                 customer_name=customer_name,
-                discount_percentage=discount_percentage,
+                discount_amount=discount_amount,
                 payment_method=payment_method,
-                date=get_saudi_now(),
-                invoice_number=f"INV-{get_saudi_now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8]}"
+                date=get_saudi_now().date(),
+                invoice_number=f"INV-{get_saudi_now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8]}",
+                total_before_tax=subtotal,
+                tax_amount=vat_amount,
+                total_after_tax_discount=total,
+                status='paid',
+                user_id=current_user.id
             )
 
             # Calculate totals
