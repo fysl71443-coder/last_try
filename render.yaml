@@ -1,13 +1,19 @@
 services:
   - type: web
-    name: flask-accounting-app
-    env: docker
-    repo: "fysl71443-coder/-"
-    branch: "erp-app"
+    name: restaurant-system
+    env: python
     plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run_gunicorn.py
     envVars:
+      - key: FLASK_ENV
+        value: production
       - key: SECRET_KEY
-        value: "change-me-please"
-      - key: DATABASE_URL
-        sync: false
-    dockerfilePath: Dockerfile
+        generateValue: true
+      - key: BABEL_DEFAULT_LOCALE
+        value: ar
+
+databases:
+  - name: restaurant-db
+    databaseName: restaurant_system
+    user: restaurant_user

@@ -20,36 +20,40 @@ def fix_database():
             
             # 1. Check and add table_no column to sales_invoices
             try:
-                result = db.engine.execute(text("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'sales_invoices' 
-                    AND column_name = 'table_no'
-                """))
-                
-                if not result.fetchone():
-                    print("➕ Adding table_no column to sales_invoices...")
-                    db.engine.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_no INTEGER"))
-                    print("✅ table_no column added successfully")
-                else:
-                    print("✅ table_no column already exists")
+                with db.engine.connect() as conn:
+                    result = conn.execute(text("""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = 'sales_invoices'
+                        AND column_name = 'table_no'
+                    """))
+
+                    if not result.fetchone():
+                        print("➕ Adding table_no column to sales_invoices...")
+                        conn.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_no INTEGER"))
+                        conn.commit()
+                        print("✅ table_no column added successfully")
+                    else:
+                        print("✅ table_no column already exists")
             except Exception as e:
                 print(f"⚠️ Error with table_no column: {e}")
             
             # 2. Create tables table if missing
             try:
                 print("➕ Creating/verifying tables table...")
-                db.engine.execute(text("""
-                    CREATE TABLE IF NOT EXISTS tables (
-                        id SERIAL PRIMARY KEY,
-                        branch_code VARCHAR(20) NOT NULL,
-                        table_number INTEGER NOT NULL,
-                        status VARCHAR(20) DEFAULT 'available',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(branch_code, table_number)
-                    )
-                """))
+                with db.engine.connect() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS tables (
+                            id SERIAL PRIMARY KEY,
+                            branch_code VARCHAR(20) NOT NULL,
+                            table_number INTEGER NOT NULL,
+                            status VARCHAR(20) DEFAULT 'available',
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE(branch_code, table_number)
+                        )
+                    """))
+                    conn.commit()
                 print("✅ tables table created/verified")
             except Exception as e:
                 print(f"⚠️ Error with tables table: {e}")

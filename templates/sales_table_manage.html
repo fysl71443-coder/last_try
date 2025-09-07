@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Table Management / إدارة الطاولة') }} #{{ table_no }} — {{ branch_label }}{% endblock %}
+{% block title %}{{ _('Table Management / إدارة الطاولة') }} #{{ table_number }} — {{ branch_label }}{% endblock %}
 {% block content %}
 <style>
   .draft-card { 
@@ -21,11 +21,11 @@
 <div class="container-fluid py-3">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-      <h4 class="mb-0">{{ _('Table') }} #{{ table_no }} — {{ branch_label }}</h4>
+      <h4 class="mb-0">{{ _('Table') }} #{{ table_number }} — {{ branch_label }}</h4>
       <small class="text-muted">{{ _('Manage draft orders / إدارة الطلبات المسودة') }}</small>
     </div>
     <div>
-      <a class="btn btn-success me-2" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_no=table_no) }}">
+      <a class="btn btn-success me-2" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=table_number) }}">
         ➕ {{ _('New Order / طلب جديد') }}
       </a>
       <a class="btn btn-outline-secondary" href="{{ url_for('sales_tables', branch_code=branch_code) }}">
@@ -81,7 +81,7 @@
           </div>
           
           <div class="d-flex gap-2">
-            <a href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_no=table_no, draft_id=draft.id) }}"
+            <a href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=table_number, draft_id=draft.id) }}"
                class="btn btn-primary btn-sm flex-fill">
               {{ _('Continue / متابعة') }}
             </a>
@@ -101,7 +101,7 @@
     </div>
     <h5 class="text-muted">{{ _('No draft orders / لا توجد طلبات مسودة') }}</h5>
     <p class="text-muted">{{ _('Create a new order to get started / أنشئ طلب جديد للبدء') }}</p>
-    <a href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_no=table_no) }}" 
+    <a href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=table_number) }}"
        class="btn btn-success">
       ➕ {{ _('New Order / طلب جديد') }}
     </a>
@@ -112,24 +112,32 @@
 <script>
 async function cancelDraft(draftId) {
   const confirmed = await showConfirm('{{ _("Cancel this draft order? This cannot be undone. / إلغاء هذا الطلب المسودة؟ لا يمكن التراجع عن هذا الإجراء.") }}');
-  if (confirmed) {
-    try {
-      const response = await fetch(`/api/draft_orders/${draftId}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
-        }
-      });
-      const data = await response.json();
-      if (data.success) {
-        location.reload();
-      } else {
-        await showAlert(data.error || '{{ _("Failed to cancel order / فشل إلغاء الطلب") }}');
-      }
-    } catch (error) {
-      await showAlert('{{ _("Error cancelling order / خطأ في إلغاء الطلب") }}');
+  if (!confirmed) return;
+
+  // Require supervisor (admin) password
+  const pwd = await showPrompt('{{ _("Enter supervisor password to confirm cancellation / أدخل كلمة مرور المشرف لتأكيد الإلغاء") }}', '');
+  if (pwd === null || pwd.trim() === '') {
+    await showAlert('{{ _("Cancellation aborted. Supervisor password is required / تم إلغاء العملية. كلمة مرور المشرف مطلوبة") }}');
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/draft_orders/${draftId}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      },
+      body: JSON.stringify({ supervisor_password: pwd })
+    });
+    const data = await response.json();
+    if (data.success) {
+      location.reload();
+    } else {
+      await showAlert(data.error || '{{ _("Failed to cancel order / فشل إلغاء الطلب") }}');
     }
+  } catch (error) {
+    await showAlert('{{ _("Error cancelling order / خطأ في إلغاء الطلب") }}');
   }
 }
 </script>

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Sales - Table / المبيعات - الطاولة') }} #{{ table_no }} — {{ branch_label }}{% endblock %}
+{% block title %}{{ _('Sales - Table / المبيعات - الطاولة') }} #{{ table_number }} — {{ branch_label }}{% endblock %}
 {% block content %}
 <style>
   .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -8,18 +8,29 @@
   .meal-card { cursor: pointer; }
   @media (max-width: 992px) { .split { grid-template-columns: 1fr; } }
 </style>
+<style>
+  /* Print only the injected invoice container */
+  @media print {
+    body * { visibility: hidden !important; }
+    #invoice, #invoice * { visibility: visible !important; }
+    #invoice { position: absolute; left: 0; top: 0; width: 100%; }
+  }
+</style>
+
 {% set back_url = url_for('sales_tables', branch_code=branch_code) %}
 
 <div class="container-fluid py-3">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-      <h4 class="mb-0">{{ _('Table') }} #{{ table_no }} — {{ branch_label }}</h4>
+      <h4 class="mb-0">{{ _('Table') }} #{{ table_number }} — {{ branch_label }}</h4>
       <small class="text-muted">{{ _('Select category then meal to add to invoice / اختر القسم ثم الوجبة') }}</small>
     </div>
     <div>
       <a class="btn btn-outline-secondary" href="{{ url_for('sales_tables', branch_code=branch_code) }}">← {{ _('Back to Tables / رجوع للطاولات') }}</a>
     </div>
   </div>
+
+  <div id="invoice" style="display:none;"></div>
 
   <div class="split">
     <!-- Right: Categories and Meals -->
@@ -29,7 +40,7 @@
         <div class="row g-2">
           {% for c in categories %}
           <div class="col-6 col-md-4 col-lg-3">
-            <div class="card cat-card p-2 h-100" onclick="selectCategory('{{ c }}', {{ loop.index0 }})">
+            <div class="card cat-card p-2 h-100">
               <div class="card-body d-flex align-items-center justify-content-center">
                 <div class="fw-bold text-center">{{ c }}</div>
               </div>
@@ -114,8 +125,8 @@
           </div>
 
           <div class="mt-3 d-flex justify-content-between align-items-center">
-            <button class="btn btn-outline-danger" onclick="voidInvoice()">{{ _('Cancel Invoice / إلغاء الفاتورة') }}</button>
-            <button class="btn btn-success" onclick="payAndPrint()">{{ _('Pay & Print / دفع + طباعة') }}</button>
+            <button id="btnVoidInvoice" class="btn btn-outline-danger">{{ _('Cancel Invoice / إلغاء الفاتورة') }}</button>
+            <button id="btnPayPrint" class="btn btn-success">{{ _('Pay & Print / دفع + طباعة') }}</button>
           </div>
         </div>
       </div>
@@ -130,6 +141,18 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+  // Single-window print cleanup helper
+  function cleanupPrint(){
+    try{
+      const container = document.getElementById('invoice');
+      if(container){ container.innerHTML=''; container.style.display='none'; }
+      const st = document.getElementById('printStyle');
+      if(st){ st.remove(); }
+    }catch(e){/* ignore */}
+  }
+  window.cleanupPrint = cleanupPrint;
+  window.addEventListener('afterprint', ()=> setTimeout(cleanupPrint, 50));
+
         <div id="catEmpty" class="alert alert-info d-none">{{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}</div>
         <div class="row g-2" id="catGrid"></div>
       </div>
@@ -143,19 +166,40 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.cat-card').forEach((el, i)=>{
-      el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectCategory(el.innerText.trim(), i);} });
-      el.addEventListener('click', ()=> selectCategory(el.innerText.trim(), i));
+      el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); window.selectCategory(el.innerText.trim(), i);} });
+      el.addEventListener('click', ()=> window.selectCategory(el.innerText.trim(), i));
       el.setAttribute('tabindex','0');
     });
+    // bind pay/print and void buttons
+    document.getElementById('btnPayPrint')?.addEventListener('click', ()=> window.payAndPrint && window.payAndPrint());
+    document.getElementById('btnVoidInvoice')?.addEventListener('click', ()=> window.voidInvoice && window.voidInvoice());
+
+    // Add protection for payment method changes
+    const payMethodSelect = document.getElementById('payMethod');
+    if (payMethodSelect) {
+      payMethodSelect.addEventListener('change', function(e) {
+        try {
+          console.log('Payment method changed to:', e.target.value);
+          // This is safe - just log the change
+        } catch (error) {
+          console.error('Error handling payment method change:', error);
+          // Reset to CASH if there's an error
+          e.target.value = 'CASH';
+        }
+      });
+    }
     // expose codes for external script
     document.body.dataset.branch = '{{ branch_code }}';
-    document.body.dataset.table = '{{ table_no }}';
+    document.body.dataset.table = '{{ table_number }}';
   });
 
   // Category name -> id map injected from server when available
   window.CAT_MAP = {{ cat_map_json | safe }};
+  console.log('🗺️ CAT_MAP loaded:', window.CAT_MAP);
 
   const meals = {{ meals_json | safe }};
+  console.log('🥘 Meals loaded:', meals.length, 'meals');
+  console.log('📂 Categories available:', {{ categories | tojson }});
   let currentCategory = null;
   const items = [];
   let currentDraftId = {{ current_draft.id if current_draft else 'null' }};
@@ -212,8 +256,11 @@
     renderItems();
   }
 
-  async function selectCategory(cat, idx){
+  window.selectCategory = async function(cat, idx){
     currentCategory = cat;
+    console.log('🔍 Category selected:', cat);
+    console.log('🗺️ CAT_MAP:', window.CAT_MAP);
+
     // Open modal and populate with items in this category (from Menu API or fallback)
     const modalEl = document.getElementById('catModal');
     const modalTitle = document.getElementById('catModalTitle');
@@ -225,16 +272,31 @@
 
     // Try menu category mapping first
     const catId = (window.CAT_MAP && window.CAT_MAP[cat]) ? window.CAT_MAP[cat] : null;
+    console.log('🆔 Category ID found:', catId);
+
     let data = [];
     if(catId){
       try{
+        console.log('📡 Fetching items from API:', `/api/menu/${catId}/items`);
         const resp = await fetch(`/api/menu/${catId}/items`, { credentials: 'same-origin' });
-        data = await resp.json();
-      }catch(e){ data = []; }
+        console.log('📡 API Response status:', resp.status);
+        if(!resp.ok) {
+          console.error('❌ API Error:', resp.status, resp.statusText);
+          data = [];
+        } else {
+          data = await resp.json();
+          console.log('📦 API Data received:', data);
+        }
+      }catch(e){
+        console.error('❌ Fetch error:', e);
+        data = [];
+      }
+    } else {
+      console.log('⚠️ No category ID found, will use fallback');
     }
 
-    if(catId && Array.isArray(data)){
-      if(data.length === 0){ empty.classList.remove('d-none'); }
+    if(catId && Array.isArray(data) && data.length > 0){
+      console.log('✅ Using API data:', data.length, 'items');
       data.forEach(m => {
         const col = document.createElement('div');
         col.className = 'col-6 col-md-4 col-lg-3';
@@ -250,40 +312,63 @@
         grid.appendChild(col);
       });
     } else {
+      console.log('⚠️ Using fallback: local meals filter');
       // Fallback: local meals filter
       const filtered = meals.filter(m => m.category === cat);
-      if(filtered.length === 0){ empty.classList.remove('d-none'); }
-      filtered.forEach(m => {
-        const col = document.createElement('div');
-        col.className = 'col-6 col-md-4 col-lg-3';
-        const price = Number(m.price || 0);
-        const safeName = (m.name || '').replace(/`/g,'');
-        col.innerHTML = `
-          <div class="card meal-card h-100" onclick="addItemClose(${m.id})">
-            <div class="card-body d-flex flex-column justify-content-between">
-              <div class="fw-bold">${safeName}</div>
-              <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
-            </div>
-          </div>`;
-        grid.appendChild(col);
-      });
+      console.log('🔍 Filtered meals:', filtered.length, 'for category:', cat);
+
+      if(filtered.length === 0){
+        console.log('❌ No items found for category:', cat);
+        empty.classList.remove('d-none');
+        // Add helpful message to empty state
+        empty.innerHTML = `
+          <div class="alert alert-info">
+            <h6>{{ _('No items in this category yet / لا توجد أصناف في هذا القسم بعد') }}</h6>
+            <p class="mb-0">{{ _('Please add meals to this category in the Menu admin page / يرجى إضافة وجبات لهذا القسم في صفحة إدارة القائمة') }}</p>
+            <small class="text-muted">Category: "${cat}"</small>
+          </div>
+        `;
+      } else {
+        console.log('✅ Found', filtered.length, 'items in fallback');
+        filtered.forEach(m => {
+          const col = document.createElement('div');
+          col.className = 'col-6 col-md-4 col-lg-3';
+          const price = Number(m.price || 0);
+          const safeName = (m.name || '').replace(/`/g,'');
+          col.innerHTML = `
+            <div class="card meal-card h-100" onclick="addItemClose(${m.id})">
+              <div class="card-body d-flex flex-column justify-content-between">
+                <div class="fw-bold">${safeName}</div>
+                <div class="text-muted">{{ _('Price') }}: ${price.toFixed(2)}</div>
+              </div>
+            </div>`;
+          grid.appendChild(col);
+        });
+      }
     }
 
     // Reuse single modal instance to avoid double backdrops and stuck state
+    console.log('🎭 Opening modal...');
     if(window.bootstrap && bootstrap.Modal){
-      if(!window.__catModalInstance){ window.__catModalInstance = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true }); }
+      console.log('✅ Bootstrap Modal available');
+      if(!window.__catModalInstance){
+        console.log('🆕 Creating new modal instance');
+        window.__catModalInstance = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true });
+      }
+      console.log('📱 Showing modal');
       window.__catModalInstance.show();
     } else {
+      console.log('⚠️ Bootstrap not available, using fallback');
       // Fallback: no Bootstrap available => inline grid visible
       modalEl.classList.add('show');
       modalEl.style.display = 'block';
     }
   }
 
-  function addItemClose(mealId){ addItem(mealId); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
-  function addMenuItemClose(mealId, name, unit){ addMenuItem(mealId, name, unit); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
+  window.addItemClose = function(mealId){ console.log('addItemClose()', mealId); window.addItem(mealId); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
+  window.addMenuItemClose = function(mealId, name, unit){ console.log('addMenuItemClose()', mealId, name, unit); window.addMenuItem(mealId, name, unit); const m=document.getElementById('catModal'); const inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide(); setTimeout(()=>{document.body.classList.remove('modal-open'); document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());}, 50); }
 
-  async function addItem(mealId){
+  window.addItem = async function(mealId){ console.log('addItem()', mealId);
     const m = meals.find(x => x.id === mealId);
     if(!m) return;
     const existing = items.find(x => x.meal_id === m.id);
@@ -298,7 +383,7 @@
   }
 
   // Add item using data from Menu API (fallback if meal not in global list)
-  function addMenuItem(mealId, name, unit){
+  window.addMenuItem = function(mealId, name, unit){ console.log('addMenuItem()', mealId, name, unit);
     const m = meals.find(x => x.id === mealId);
     if(m){ addItem(mealId); return; }
     const existing = items.find(x => x.meal_id === mealId);
@@ -307,7 +392,7 @@
     renderItems();
   }
 
-  function renderItems(){
+  window.renderItems = function(){ console.log('renderItems()', items);
     const body = document.getElementById('itemsBody');
     body.innerHTML = '';
     let subtotal = 0;
@@ -337,20 +422,20 @@
     document.getElementById('grand').innerText = grand.toFixed(2);
   }
 
-  async function changeQty(idx, v){
+  window.changeQty = async function(idx, v){ console.log('changeQty()', idx, v);
     items[idx].qty = parseFloat(v||'1');
     renderItems();
     await saveDraftOrder(); // Auto-save after quantity change
   }
 
-  async function removeItem(idx){
+  window.removeItem = async function(idx){ console.log('removeItem()', idx);
     items.splice(idx,1);
     renderItems();
     await saveDraftOrder(); // Auto-save after item removal
   }
 
   // Auto-save draft order
-  async function saveDraftOrder() {
+  window.saveDraftOrder = async function() { console.log('saveDraftOrder()');
     if (!currentDraftId || items.length === 0) return;
 
     try {
@@ -377,7 +462,7 @@
     }
   }
 
-  async function payAndPrint(){
+  window.payAndPrint = async function(){ console.log('payAndPrint() called');
     if(items.length === 0){
       await showAlert('{{ _('Add at least one item / أضف عنصراً واحداً على الأقل') }}');
       return;
@@ -392,13 +477,15 @@
         draft_id: currentDraftId,
         customer_name: document.getElementById('custName').value,
         customer_phone: document.getElementById('custPhone').value,
+        discount_pct: parseFloat(document.getElementById('discountPct').value || '0'),
+        tax_pct: parseFloat(document.getElementById('taxPct').value || '0'),
         payment_method: document.getElementById('payMethod').value
       };
     } else {
       // Regular checkout
       payload = {
         branch_code: '{{ branch_code }}',
-        table_no: {{ table_no }},
+        table_number: {{ table_number }},
         items: items.map(x => ({ meal_id: x.meal_id, qty: x.qty })),
         customer_name: document.getElementById('custName').value,
         customer_phone: document.getElementById('custPhone').value,
@@ -433,10 +520,75 @@
     // Ensure any modal leftovers are removed
     document.body.classList.remove('modal-open');
     document.querySelectorAll('.modal-backdrop').forEach(b=>b.remove());
-    if(data.print_url){ window.open(data.print_url, '_blank'); } else { alert('Invoice created (test echo).'); }
+    if(data.print_url){
+      // Open print window and handle print confirmation
+      const printWindow = window.open(data.print_url, '_blank', 'width=800,height=600,scrollbars=yes');
+      if(printWindow){
+        printWindow.focus();
+
+        // Function to confirm print and register payment
+        const confirmPrintAndPay = async () => {
+          try {
+            const confirmRes = await fetch('/api/invoice/confirm-print', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                invoice_id: data.invoice_id,
+                payment_method: data.payment_method,
+                total_amount: data.total_amount
+              })
+            });
+
+            if (confirmRes.ok) {
+              console.log('Payment registered successfully');
+              // Clear items and reset form
+              items = [];
+              renderItems();
+              document.getElementById('custName').value = '';
+              document.getElementById('custPhone').value = '';
+              document.getElementById('discountPct').value = '0';
+              // Reset payment method to default but don't cause errors
+              try {
+                document.getElementById('payMethod').value = 'CASH';
+              } catch(e) {
+                console.log('Payment method reset skipped');
+              }
+            } else {
+              console.error('Failed to register payment');
+            }
+          } catch (e) {
+            console.error('Error confirming print:', e);
+          }
+        };
+
+        // Monitor print window for close/print completion
+        const checkClosed = setInterval(()=>{
+          if(printWindow.closed){
+            clearInterval(checkClosed);
+            console.log('Print window closed by user - confirming payment');
+            confirmPrintAndPay();
+          }
+        }, 500);
+
+        // Auto-close after reasonable time if still open
+        setTimeout(()=>{
+          if(!printWindow.closed){
+            printWindow.close();
+            clearInterval(checkClosed);
+            console.log('Print window auto-closed - confirming payment');
+            confirmPrintAndPay();
+          }
+        }, 30000); // 30 seconds timeout
+      }
+    } else {
+      alert('Invoice created (test echo).');
+    }
+    console.log('Invoice created successfully', data);
+    return data;
   }
 
-  async function voidInvoice(){
+  window.voidInvoice = async function(){ console.log('voidInvoice() called');
     if(items.length === 0){
       await showAlert('{{ _('Invoice is already empty / لا توجد عناصر في الفاتورة') }}');
       return;
@@ -457,7 +609,7 @@
       });
       const data = await resp.json().catch(()=>({ok:false,error:'Invalid response'}));
       if(!resp.ok || !data.ok){
-        await showAlert(data.error || '{{ _('Wrong password / كلمة المرور غير صحيحة') }}');
+        await showAlert('{{ _('Incorrect password / كلمة السر غير صحيحة') }}');
         return;
       }
       // Clear invoice items and totals
@@ -468,8 +620,14 @@
     }catch(e){ await showAlert('Error'); }
   }
 
+  // ---------------------- Test Utilities ----------------------
+  window.createInvoice = async function(){ console.log('createInvoice() test stub'); return true; }
+  window.cancelInvoice = async function(){ console.log('cancelInvoice() test stub'); items.length = 0; renderItems(); return true; }
+  window.postInvoice = async function(){ console.log('postInvoice() test stub'); return true; }
+
   // Initialize the page
   document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded -> init sales screen');
     renderItems(); // Show any loaded draft items
 
     // Auto-save when customer info changes
@@ -481,6 +639,39 @@
     if (custPhone) custPhone.addEventListener('blur', saveDraftOrder);
     if (payMethod) payMethod.addEventListener('change', saveDraftOrder);
   });
+
+  // ---------------------- End-to-End Test ----------------------
+  window.testSalesScreen = async function(){
+    try{
+      window.__TEST_MODE__ = true; // avoid opening tabs
+      console.log('=== testSalesScreen: START ===');
+      // 1) إنشاء فاتورة جديدة (تهيئة)
+      await window.createInvoice();
+      console.log('Invoice created successfully');
+
+      // 2) إضافة صنف واحد على الأقل
+      const someMeal = meals[0] || { id: 1, name: 'Test', price: 10 };
+      await window.addItem(someMeal.id);
+      console.log('Item added:', someMeal);
+
+      // 3) إلغاء الفاتورة
+      await window.voidInvoice();
+      if(items.length!==0){ throw new Error('Cancel failed: items not cleared'); }
+      console.log('Invoice cancelled and items cleared');
+
+      // 4) إنشاء فاتورة أخرى وإكمالها للدفع والطباعة
+      await window.addItem(someMeal.id);
+      const res = await window.payAndPrint();
+      console.log('Pay & Print response:', res);
+
+      // 5) ترحيل الفاتورة (اختبار stub)
+      await window.postInvoice();
+      console.log('Invoice posted (stub)');
+
+      alert('testSalesScreen finished successfully');
+      console.log('=== testSalesScreen: DONE ===');
+    }catch(e){ console.error('testSalesScreen error:', e); alert('testSalesScreen failed: '+e.message); }
+  }
 </script>
 {% endblock %}
 

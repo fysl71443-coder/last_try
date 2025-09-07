@@ -2,230 +2,331 @@
 # START OF APP.PY (Top)
 # =========================
 
-# 1️⃣ Eventlet monkey patch must be first
-import eventlet
-eventlet.monkey_patch()
+import os
 
-# 2️⃣ Standard libraries
+# Optional async monkey patching with eventlet based on env (hosting-compatible)
+_USE_EVENTLET = os.getenv('USE_EVENTLET', '1').lower() not in ('0','false','no')
+if _USE_EVENTLET:
+    try:
+        import eventlet
+        eventlet.monkey_patch()
+    except Exception:
+        pass
+
+# 1️⃣ Standard libraries
 import os
 import sys
 import logging
 import json
 import traceback
 import time
+import os
+import pytz
 from datetime import datetime, timedelta, timezone
 
-# 3️⃣ Load environment variables
+# ========================
+# ضبط التوقيت على السعودية
+# ========================
+os.environ['TZ'] = 'Asia/Riyadh'
+time.tzset()
+KSA_TZ = pytz.timezone("Asia/Riyadh")
+
+def get_saudi_now():
+    """Get current datetime in Saudi Arabia timezone"""
+    return datetime.now(KSA_TZ)
+
+def get_saudi_today():
+    """Get current date in Saudi Arabia timezone"""
+    return get_saudi_now().date()
+
+
+
+# Configure logging for debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# 2️⃣ Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
 
-# 4️⃣ Flask & extensions
+# 3️⃣ Flask & extensions
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, make_response, current_app
-from extensions import db
-
-from flask_migrate import Migrate
-from flask_login import LoginManager, login_user, login_required, logout_user, current_user
-from flask_bcrypt import Bcrypt
-from flask_babel import Babel, gettext as _
-from flask_socketio import SocketIO
-from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_login import login_user, login_required, logout_user, current_user
+from flask_babel import gettext as _
+from flask_wtf.csrf import CSRFError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+# Import extensions
+from extensions import db, bcrypt, migrate, login_manager, babel, csrf
+
+# Import models to prevent import errors in routes
+from models import Invoice
+
+from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, MealIngredient, ExpenseInvoiceItem, PurchaseInvoiceItem, UserPermission, Table, DraftOrder, DraftOrderItem, Account, LedgerEntry
+
 # =========================
-# Flask App Configuration
+# Flask App Factory
 # =========================
-app = Flask(__name__)
+def create_app():
+    """Create and configure the Flask application"""
+    app = Flask(__name__)
 
-# Secret key
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key')
+    # Load configuration
+    from config import Config
+    app.config.from_object(Config)
 
-# Instance folder for SQLite (fallback)
-basedir = os.path.abspath(os.path.dirname(__file__))
-instance_dir = os.path.join(basedir, 'instance')
-os.makedirs(instance_dir, exist_ok=True)
+    # Add template filter for Saudi time
+    @app.template_filter('saudi_time')
+    def saudi_time_filter(dt):
+        """Convert datetime to Saudi Arabia timezone for display"""
+        if not dt:
+            return ''
+        if dt.tzinfo is None:
+            # Assume it's already in Saudi time if no timezone info
+            return dt.strftime('%H:%M')
+        else:
+            # Convert to Saudi time
+            saudi_dt = dt.astimezone(KSA_TZ)
+            return saudi_dt.strftime('%H:%M')
 
-# Default DB: SQLite
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(instance_dir, 'accounting_app.db')}"
+    # Add template context processor for current Saudi time
+    @app.context_processor
+    def inject_saudi_time():
+        return {
+            'current_saudi_time': get_saudi_now(),
+            'current_saudi_date': get_saudi_today()
+        }
+    # Initialize extensions
+    db.init_app(app)
+    bcrypt.init_app(app)
+    migrate.init_app(app, db)
+    login_manager.init_app(app)
+    babel.init_app(app)
+    csrf.init_app(app)
 
-# Override with production DB if available
-_db_url = os.getenv('DATABASE_URL')
-if _db_url:
-    if _db_url.startswith('postgres://'):
-        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
+    # Configure login manager
+    login_manager.login_view = 'login'
 
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # Proxy fix (Render)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-# Babel / i18n
-app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
-babel = Babel(app)
-@app.errorhandler(500)
-def handle_internal_error(e):
+    # Error handlers
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        try:
+            if request.path.startswith('/api/'):
+                return jsonify({'ok': False, 'error': f'CSRF error: {getattr(e, "description", str(e))}'}), 400
+        except Exception:
+            pass
+        return render_template('login.html', form=LoginForm()), 400
+
+    @app.errorhandler(500)
+    def handle_internal_error(e):
+        try:
+            if request.path.startswith('/api/'):
+                return jsonify({'ok': False, 'error': 'Internal server error'}), 500
+        except Exception:
+            pass
+        return e
+
+    # Production-safe runtime schema patcher (avoid heavy migrations on legacy DB)
     try:
-        if request.path.startswith('/api/'):
-            return jsonify({'ok': False, 'error': 'Internal server error'}), 500
-    except Exception:
-        pass
-    return e
+        if os.getenv('RENDER') == 'true' or os.getenv('RENDER'):
+            with app.app_context():
+                from sqlalchemy import inspect as _sa_inspect, text as _sa_text
+                _insp = _sa_inspect(db.engine)
+                with db.engine.begin() as _conn:
+                    # 1) Ensure menu_categories table exists (idempotent)
+                    if 'menu_categories' not in _insp.get_table_names():
+                        _conn.execute(_sa_text(
+                            """
+                            CREATE TABLE IF NOT EXISTS menu_categories (
+                                id SERIAL PRIMARY KEY,
+                                name VARCHAR(200) UNIQUE NOT NULL,
+                                active BOOLEAN DEFAULT TRUE,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """
+                        ))
+                    # 2) Ensure Settings receipt columns and logo_url exist (idempotent)
+                    if 'settings' in _insp.get_table_names():
+                        existing_cols = {c['name'] for c in _insp.get_columns('settings')}
+                        def addcol(col_sql):
+                            _conn.execute(_sa_text(col_sql))
+                        if 'receipt_paper_width' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_paper_width VARCHAR(4)")
+                        if 'receipt_margin_top_mm' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_top_mm INTEGER")
+                        if 'receipt_margin_bottom_mm' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_bottom_mm INTEGER")
+                        if 'receipt_margin_left_mm' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_left_mm INTEGER")
+                        if 'receipt_margin_right_mm' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_right_mm INTEGER")
+                        if 'receipt_font_size' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_font_size INTEGER")
+                        if 'receipt_show_logo' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_logo BOOLEAN DEFAULT TRUE")
+                        if 'receipt_show_tax_number' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_tax_number BOOLEAN DEFAULT TRUE")
+                        if 'receipt_footer_text' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_footer_text VARCHAR(300)")
+                        if 'logo_url' not in existing_cols:
+                            addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS logo_url VARCHAR(300)")
+                    # 3) Ensure customers table exists (idempotent)
+                    if 'customers' not in _insp.get_table_names():
+                        _conn.execute(_sa_text(
+                            """
+                            CREATE TABLE IF NOT EXISTS customers (
+                                id SERIAL PRIMARY KEY,
+                                name VARCHAR(200) NOT NULL,
+                                phone VARCHAR(50),
+                                discount_percent NUMERIC(5,2) DEFAULT 0,
+                                active BOOLEAN DEFAULT TRUE,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """
+                        ))
+                    # 4) Ensure sales_invoices.customer_phone exists (idempotent)
+                    if 'sales_invoices' in _insp.get_table_names():
+                        existing_cols_si = {c['name'] for c in _insp.get_columns('sales_invoices')}
+                        if 'customer_phone' not in existing_cols_si:
+                            _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30)"))
+                        if 'customer_id' not in existing_cols_si:
+                            _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_id INTEGER"))
+
+                    # 5) Ensure menu_items table exists
+                    if 'menu_items' not in _insp.get_table_names():
+                        _conn.execute(_sa_text(
+                            """
+                            CREATE TABLE IF NOT EXISTS menu_items (
+                                id SERIAL PRIMARY KEY,
+                                category_id INTEGER NOT NULL REFERENCES menu_categories(id) ON DELETE CASCADE,
+                                meal_id INTEGER NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+                                price_override NUMERIC(12,2),
+                                display_order INTEGER,
+                                CONSTRAINT uq_category_meal UNIQUE (category_id, meal_id)
+                            )
+                            """
+                        ))
+
+                        # 6) Ensure suppliers table exists (idempotent)
+                        if 'suppliers' not in _insp.get_table_names():
+                            _conn.execute(_sa_text(
+                                """
+                                CREATE TABLE IF NOT EXISTS suppliers (
+                                    id SERIAL PRIMARY KEY,
+                                    name VARCHAR(200) UNIQUE NOT NULL,
+                                    phone VARCHAR(50),
+                                    email VARCHAR(100),
+                                    address VARCHAR(300),
+                                    tax_number VARCHAR(50),
+                                    contact_person VARCHAR(100),
+                                    notes TEXT,
+                                    active BOOLEAN DEFAULT TRUE,
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                )
+                                """
+                            ))
+
+                        # 7) Ensure purchase_invoices.supplier_id exists and add FK (best effort)
+                        if 'purchase_invoices' in _insp.get_table_names():
+                            existing_cols_pi = {c['name'] for c in _insp.get_columns('purchase_invoices')}
+                            if 'supplier_id' not in existing_cols_pi:
+                                _conn.execute(_sa_text("ALTER TABLE purchase_invoices ADD COLUMN IF NOT EXISTS supplier_id INTEGER"))
+                            try:
+                                _conn.execute(_sa_text("ALTER TABLE purchase_invoices ADD CONSTRAINT fk_purchase_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL"))
+                            except Exception:
+                                pass
+
+                        # 8) Ensure employee_salary_defaults table exists (idempotent)
+                        if 'employee_salary_defaults' not in _insp.get_table_names():
+                            _conn.execute(_sa_text(
+                                """
+                                CREATE TABLE IF NOT EXISTS employee_salary_defaults (
+                                    id SERIAL PRIMARY KEY,
+                                    employee_id INTEGER UNIQUE NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                                    base_salary NUMERIC(12,2) DEFAULT 0 NOT NULL,
+                                    allowances NUMERIC(12,2) DEFAULT 0 NOT NULL,
+                                    deductions NUMERIC(12,2) DEFAULT 0 NOT NULL,
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                )
+                                """
+                            ))
 
 
-# CSRF protection
-csrf = CSRFProtect(app)
+    except Exception as _patch_err:
+        logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
 
-# Proxy fix (Render)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-
-# API-friendly error handlers
-from flask import jsonify, request
-
-@app.errorhandler(CSRFError)
-def handle_csrf_error(e):
+    # Local rotating error logging
     try:
-        if request.path.startswith('/api/'):
-            return jsonify({'ok': False, 'error': f'CSRF error: {getattr(e, "description", str(e))}'}), 400
-    except Exception:
-        pass
-    return render_template('login.html', form=LoginForm()), 400
+        from logging_setup import setup_logging
+        setup_logging(app)
+    except Exception as _log_err:
+        logging.error('Failed to initialize local rotating error logging: %s', _log_err)
 
-@app.errorhandler(500)
-def handle_internal_error(e):
-    try:
-        if request.path.startswith('/api/'):
-            return jsonify({'ok': False, 'error': 'Internal server error'}), 500
-    except Exception:
-        pass
-    return e
+    # Import models after db created
+    from models import User, Invoice, SalesInvoice, SalesInvoiceItem, Product, RawMaterial, Meal, MealIngredient, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Employee, Salary, Payment, Account, LedgerEntry
 
-# Initialize other extensions
-db.init_app(app)
-migrate = Migrate(app, db)
-login_manager = LoginManager(app)
-bcrypt = Bcrypt(app)
-socketio = SocketIO(app)
+    @login_manager.user_loader
+    def load_user(user_id):
+        try:
+            return db.session.get(User, int(user_id))
+        except Exception:
+            return None
 
-# Production-safe runtime schema patcher (avoid heavy migrations on legacy DB)
+    # Add test route for timezone
+    @app.route('/test-time')
+    def test_time():
+        now_ksa = get_saudi_now().strftime("%Y-%m-%d %H:%M:%S %Z")
+        return f"الوقت الحالي في السعودية: {now_ksa}"
+
+    return app
+
+# =========================
+# Create app instance for use by flask commands
+# =========================
+app = create_app()
+
+# Rate limiting for login attempts
+login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
+
+# Global socketio instance
 try:
-    if os.getenv('RENDER') == 'true' or os.getenv('RENDER'):
-        with app.app_context():
-            from sqlalchemy import inspect as _sa_inspect, text as _sa_text
-            _insp = _sa_inspect(db.engine)
-            with db.engine.begin() as _conn:
-                # 1) Ensure menu_categories table exists (idempotent)
-                if 'menu_categories' not in _insp.get_table_names():
-                    _conn.execute(_sa_text(
-                        """
-                        CREATE TABLE IF NOT EXISTS menu_categories (
-                            id SERIAL PRIMARY KEY,
-                            name VARCHAR(200) UNIQUE NOT NULL,
-                            active BOOLEAN DEFAULT TRUE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                        """
-                    ))
-                # 2) Ensure Settings receipt columns and logo_url exist (idempotent)
-                if 'settings' in _insp.get_table_names():
-                    existing_cols = {c['name'] for c in _insp.get_columns('settings')}
-                    def addcol(col_sql):
-                        _conn.execute(_sa_text(col_sql))
-                    if 'receipt_paper_width' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_paper_width VARCHAR(4)")
-                    if 'receipt_margin_top_mm' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_top_mm INTEGER")
-                    if 'receipt_margin_bottom_mm' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_bottom_mm INTEGER")
-                    if 'receipt_margin_left_mm' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_left_mm INTEGER")
-                    if 'receipt_margin_right_mm' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_margin_right_mm INTEGER")
-                    if 'receipt_font_size' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_font_size INTEGER")
-                    if 'receipt_show_logo' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_logo BOOLEAN DEFAULT TRUE")
-                    if 'receipt_show_tax_number' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_tax_number BOOLEAN DEFAULT TRUE")
-                    if 'receipt_footer_text' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_footer_text VARCHAR(300)")
-                    if 'logo_url' not in existing_cols:
-                        addcol("ALTER TABLE settings ADD COLUMN IF NOT EXISTS logo_url VARCHAR(300)")
-                # 3) Ensure customers table exists (idempotent)
-                if 'customers' not in _insp.get_table_names():
-                    _conn.execute(_sa_text(
-                        """
-                        CREATE TABLE IF NOT EXISTS customers (
-                            id SERIAL PRIMARY KEY,
-                            name VARCHAR(200) NOT NULL,
-                            phone VARCHAR(50),
-                            discount_percent NUMERIC(5,2) DEFAULT 0,
-                            active BOOLEAN DEFAULT TRUE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                        """
-                    ))
-                # 4) Ensure sales_invoices.customer_phone exists (idempotent)
-                if 'sales_invoices' in _insp.get_table_names():
-                    existing_cols_si = {c['name'] for c in _insp.get_columns('sales_invoices')}
-                    if 'customer_phone' not in existing_cols_si:
-                        _conn.execute(_sa_text("ALTER TABLE sales_invoices ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30)"))
+    from flask_socketio import SocketIO
+    socketio = SocketIO(app, cors_allowed_origins="*")
+except ImportError:
+    socketio = None
 
-                # 5) Ensure menu_items table exists
-                if 'menu_items' not in _insp.get_table_names():
-                    _conn.execute(_sa_text(
-                        """
-                        CREATE TABLE IF NOT EXISTS menu_items (
-                            id SERIAL PRIMARY KEY,
-                            category_id INTEGER NOT NULL REFERENCES menu_categories(id) ON DELETE CASCADE,
-                            meal_id INTEGER NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
-                            price_override NUMERIC(12,2),
-                            display_order INTEGER,
-                            CONSTRAINT uq_category_meal UNIQUE (category_id, meal_id)
-                        )
-                        """
-                    ))
+def csrf_exempt(f):
+    """Decorator that exempts a route from CSRF protection if CSRF is available"""
+    from extensions import csrf
+    if csrf:
+        return csrf.exempt(f)
+    return f
 
-except Exception as _patch_err:
-    logging.error('Runtime schema patch failed: %s', _patch_err, exc_info=True)
-
-# =========================
-# END OF INITIALIZATION
-# =========================
-
-# Routes and rest of app.py remain unchanged
-
-# Ensure SQLAlchemy track modifications disabled
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Babel / i18n
-app.config['BABEL_DEFAULT_LOCALE'] = os.getenv('BABEL_DEFAULT_LOCALE', 'en')
-
-from flask import session
-
-login_manager.login_view = 'login'
-
-# Basic error logging to file (errors only)
-logging.basicConfig(filename='app.log', level=logging.ERROR, format='%(asctime)s %(levelname)s %(message)s')
-
+def safe_db_commit(operation_name="database operation"):
+    """Safe database commit with proper error handling for eventlet"""
+    try:
+        db.session.commit()
+        return True
+    except Exception as e:
+        db.session.rollback()
+        print(f"Database commit error in {operation_name}: {e}")
+        return False
 
 def save_to_db(instance):
     try:
         db.session.add(instance)
-        db.session.commit()
+        safe_db_commit()
         return True
     except Exception as e:
         db.session.rollback()
         logging.error('Database Error: %s', e, exc_info=True)
         return False
-
-
-
-# Rate limiting for login attempts
-login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
-
-# Import models after db created
-from models import User, Invoice, SalesInvoice, SalesInvoiceItem, Product, RawMaterial, Meal, MealIngredient, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Employee, Salary, Payment, Account, LedgerEntry
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
 
 def get_locale():
     # language selection from query param, user pref, or accept headers
@@ -238,6 +339,20 @@ def get_locale():
     except Exception:
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
+
+# Expose get_locale to Jinja templates
+@app.context_processor
+def inject_get_locale():
+    try:
+        return dict(get_locale=get_locale)
+    except Exception:
+        return {}
+
+
+# Configure babel locale selector after get_locale is defined
+babel.init_app(app, locale_selector=get_locale)
+
+# Babel will be configured after app creation
 @app.context_processor
 def inject_settings():
     try:
@@ -254,7 +369,7 @@ def toggle_theme():
     session['theme'] = 'dark' if current != 'dark' else 'light'
     return redirect(request.referrer or url_for('dashboard'))
 
-babel.init_app(app, locale_selector=get_locale)
+
 
 # Make get_locale available in templates
 @app.context_processor
@@ -288,12 +403,14 @@ def get_settings_safe():
 
 
 from forms import LoginForm, SalesInvoiceForm, RawMaterialForm, MealForm, PurchaseInvoiceForm, ExpenseInvoiceForm, EmployeeForm, SalaryForm
+
 # Register blueprints
 try:
     from routes.vat import bp as vat_bp
     app.register_blueprint(vat_bp)
 except Exception as _e:
     pass
+
 # Register financials blueprint
 try:
     from routes.financials import bp as financials_bp
@@ -301,48 +418,74 @@ try:
 except Exception:
     pass
 
-
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
-    client_ip = request.remote_addr
-
-    # Check if blocked
-    if client_ip in login_attempts:
-        attempts_info = login_attempts[client_ip]
-        if attempts_info["count"] >= 5 and datetime.now(timezone.utc) - attempts_info["last_attempt"] < timedelta(minutes=10):
-            flash(_('Too many attempts. Try again later. / عدد المحاولات كبير، حاول لاحقاً.'), 'danger')
-            return render_template('login.html', form=form)
 
     if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        if user and bcrypt.check_password_hash(user.password_hash, form.password.data):
-            if not user.active:
-                flash(_('حسابك غير مفعل / Your account is not active.'), 'danger')
+        try:
+            from models import User
+            from extensions import bcrypt
+
+            username = form.username.data
+            password = form.password.data
+
+            logger.info(f"Login attempt for username: {username}")
+            print(f"Login attempt for username: {username}")  # للتتبع
+
+            # البحث عن المستخدم
+            try:
+                user = User.query.filter_by(username=username).first()
+                print(f"User found: {user is not None}")
+            except Exception as db_error:
+                print(f"Database query error: {db_error}")
+                flash('خطأ في قاعدة البيانات / Database error', 'danger')
                 return render_template('login.html', form=form)
 
-            login_user(user, remember=form.remember.data)
-            user.last_login()
-            db.session.commit()
-            login_attempts.pop(client_ip, None)  # reset attempts
-            flash(_('تم تسجيل الدخول بنجاح / Logged in successfully.'), 'success')
-            return redirect(url_for('dashboard'))
+            if user:
+                try:
+                    # التحقق من كلمة المرور
+                    password_valid = bcrypt.check_password_hash(user.password_hash, password)
+                    print(f"Password valid: {password_valid}")
 
-        # Wrong credentials — increment counter
-        if client_ip not in login_attempts:
-            login_attempts[client_ip] = {"count": 1, "last_attempt": datetime.now(timezone.utc)}
-        else:
-            login_attempts[client_ip]["count"] += 1
-            login_attempts[client_ip]["last_attempt"] = datetime.now(timezone.utc)
+                    if password_valid:
+                        # تسجيل الدخول
+                        login_user(user, remember=form.remember.data)
 
-        flash(_('اسم المستخدم أو كلمة المرور غير صحيحة / Invalid credentials.'), 'danger')
+                        # تحديث آخر تسجيل دخول
+                        try:
+                            user.last_login()
+                            if safe_db_commit("login update"):
+                                print("Login successful, redirecting to dashboard")
+                                return redirect(url_for('dashboard'))
+                            else:
+                                print("Failed to update last login")
+                        except Exception as update_error:
+                            print(f"Error updating last login: {update_error}")
+
+                        # حتى لو فشل التحديث، نسمح بالدخول
+                        return redirect(url_for('dashboard'))
+                    else:
+                        flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
+                except Exception as bcrypt_error:
+                    print(f"Bcrypt error: {bcrypt_error}")
+                    flash('خطأ في التحقق من كلمة المرور / Password verification error', 'danger')
+            else:
+                flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
+
+        except Exception as e:
+            # طباعة الخطأ في سجل الخادم لتعرف السبب
+            print(f"Login Error: {e}")
+            import traceback
+            traceback.print_exc()
+            flash('خطأ في النظام / System error', 'danger')
 
     return render_template('login.html', form=form)
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    # If user is a branch sales user, template will hide other modules.
     return render_template('dashboard.html')
 
 @app.route('/logout')
@@ -396,7 +539,7 @@ def sales_branch(branch_code):
 
     # Default date
     if request.method == 'GET':
-        form.date.data = datetime.now(timezone.utc).date()
+        form.date.data = get_saudi_today()
 
     # Handle submit
     if form.validate_on_submit():
@@ -405,11 +548,11 @@ def sales_branch(branch_code):
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
             try:
                 last_num = int(last_invoice.invoice_number.split('-')[-1])
-                invoice_number = f'SAL-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
+                invoice_number = f'SAL-{get_saudi_now().year}-{last_num + 1:03d}'
             except Exception:
-                invoice_number = f'SAL-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
+                invoice_number = f'SAL-{get_saudi_now().strftime("%Y%m%d%H%M%S")}'
         else:
-            invoice_number = f'SAL-{datetime.now(timezone.utc).year}-001'
+            invoice_number = f'SAL-{get_saudi_now().year}-001'
 
         # Totals
         total_before_tax = 0.0
@@ -465,14 +608,15 @@ def sales_branch(branch_code):
         invoice.tax_amount = total_tax
         invoice.discount_amount = total_discount
         invoice.total_after_tax_discount = total_after_tax_discount
-        db.session.commit()
+        safe_db_commit()
 
         # Emit and redirect on success
-        socketio.emit('sales_update', {
-            'invoice_number': invoice_number,
-            'branch': branch_code,
-            'total': float(total_after_tax_discount)
-        })
+        if socketio:
+            socketio.emit('sales_update', {
+                'invoice_number': invoice_number,
+                'branch': branch_code,
+                'total': float(total_after_tax_discount)
+            })
         flash(_('Invoice created successfully / تم إنشاء الفاتورة بنجاح'), 'success')
         return redirect(url_for('sales_branch', branch_code=branch_code))
 
@@ -506,10 +650,490 @@ def sales_branch(branch_code):
 @login_required
 def sales():
     branches = [
-        {'code': 'china_town', 'label': 'China Town', 'url': url_for('sales_tables', branch_code='china_town')},
-        {'code': 'place_india', 'label': 'Place India', 'url': url_for('sales_tables', branch_code='place_india')},
+        {'code': 'china_town', 'label': 'China Town', 'url': url_for('china_town_sales')},
+        {'code': 'place_india', 'label': 'Place India', 'url': url_for('palace_india_sales')},
     ]
     return render_template('sales_branches.html', branches=branches)
+
+# China Town Sales POS
+@app.route('/sales/china_town')
+@login_required
+def china_town_sales():
+    """China Town POS System"""
+    return render_template('china_town_sales.html')
+
+# Palace India Sales POS
+@app.route('/sales/palace_india')
+@login_required
+def palace_india_sales():
+    """Palace India POS System"""
+    return render_template('palace_india_sales.html')
+
+# API: Get categories for POS
+@app.route('/api/pos/<branch>/categories')
+@login_required
+def get_pos_categories(branch):
+    """Get menu categories for POS system"""
+    try:
+        from models import MenuCategory
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Get active categories
+        categories = MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).all()
+
+        result = []
+        for cat in categories:
+            result.append({
+                'id': cat.id,
+                'name': cat.name
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Get menu items for a specific category
+@app.route('/api/pos/<branch>/categories/<int:category_id>/items')
+@login_required
+def get_pos_category_items(branch, category_id):
+    """Get menu items for a specific category"""
+    try:
+        from models import MenuItem, Meal
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Get menu items for this category
+        items = MenuItem.query.filter_by(category_id=category_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+
+        result = []
+        for item in items:
+            # Use price override if available, otherwise use meal selling price
+            price = float(item.price_override) if item.price_override is not None else float(item.meal.selling_price or 0)
+
+            result.append({
+                'id': item.id,
+                'meal_id': item.meal_id,
+                'name': item.meal.display_name,
+                'price': round(price, 2)
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Search customers by phone or name
+@app.route('/api/pos/<branch>/customers/search')
+@login_required
+def search_pos_customers(branch):
+    """Search customers by phone or name for POS"""
+    try:
+        from models import Customer
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        query = (request.args.get('q') or '').strip()
+        if not query:
+            return jsonify([])
+
+        # Search by name or phone
+        customers = Customer.query.filter(
+            (Customer.name.ilike(f"%{query}%")) | (Customer.phone.ilike(f"%{query}%"))
+        ).filter_by(active=True).order_by(Customer.name.asc()).limit(10).all()
+
+        result = []
+        for customer in customers:
+            result.append({
+                'id': customer.id,
+                'name': customer.name,
+                'phone': customer.phone or '',
+                'discount_percent': float(customer.discount_percent or 0)
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Print draft invoice (unpaid)
+@app.route('/api/pos/<branch>/print_draft', methods=['POST'])
+@login_required
+def print_draft_invoice(branch):
+    """Print draft invoice with UNPAID notice"""
+    try:
+        data = request.get_json()
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Validate required data
+        if not data.get('items') or not data.get('table_number'):
+            return jsonify({'error': 'Missing required data'}), 400
+
+        # Generate draft invoice HTML
+        invoice_html = generate_draft_invoice_html(branch, data)
+
+        return jsonify({
+            'success': True,
+            'invoice_html': invoice_html,
+            'message': 'Draft invoice ready for printing'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Process payment and print final invoice
+@app.route('/api/pos/<branch>/process_payment', methods=['POST'])
+@login_required
+def process_payment(branch):
+    """Process payment and create final invoice"""
+    try:
+        data = request.get_json()
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Validate required data
+        required_fields = ['items', 'table_number', 'payment_method']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'Missing {field}'}), 400
+
+        # Create sales invoice in database
+        invoice_id = create_sales_invoice(branch, data)
+
+        # Generate final invoice HTML
+        invoice_html = generate_final_invoice_html(branch, data, invoice_id)
+
+        return jsonify({
+            'success': True,
+            'invoice_id': invoice_id,
+            'invoice_html': invoice_html,
+            'message': 'Payment processed successfully'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Verify void password
+@app.route('/api/pos/<branch>/verify_void_password', methods=['POST'])
+@login_required
+def verify_void_password(branch):
+    """Verify password for voiding items"""
+    try:
+        data = request.get_json()
+        password = data.get('password', '')
+
+        # Validate branch
+        if branch not in ['china_town', 'palace_india']:
+            return jsonify({'error': 'Invalid branch'}), 400
+
+        # Get branch-specific password from settings
+        settings = get_settings_safe()
+        if branch == 'china_town':
+            correct_password = settings.china_town_void_password if settings else '1991'
+        else:  # palace_india
+            correct_password = settings.place_india_void_password if settings else '1991'
+
+        is_valid = password == correct_password
+
+        return jsonify({
+            'valid': is_valid,
+            'message': 'Password verified' if is_valid else 'Invalid password'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Helper functions for POS system
+def generate_draft_invoice_html(branch, data):
+    """Generate HTML for draft invoice with UNPAID notice"""
+    from datetime import datetime
+
+    settings = get_settings_safe()
+    branch_label = 'China Town' if branch == 'china_town' else 'Palace India'
+
+    # Calculate totals
+    subtotal = sum(float(item.get('price', 0)) * int(item.get('quantity', 1)) for item in data['items'])
+    discount_rate = float(data.get('customer_discount', 0))
+    discount_amount = subtotal * (discount_rate / 100)
+    subtotal_after_discount = subtotal - discount_amount
+
+    # Get branch-specific tax rate
+    if branch == 'china_town':
+        tax_rate = float(settings.china_town_vat_rate) if settings else 15.0
+    else:
+        tax_rate = float(settings.place_india_vat_rate) if settings else 15.0
+
+    tax_amount = subtotal_after_discount * (tax_rate / 100)
+    total = subtotal_after_discount + tax_amount
+
+    # Generate HTML
+    html = f"""
+    <div class="invoice-container" style="max-width: 300px; font-family: Arial, sans-serif; font-size: 12px;">
+        <div class="header" style="text-align: center; margin-bottom: 20px;">
+            <h2 style="margin: 0;">{branch_label}</h2>
+            <p style="margin: 5px 0;">Table #{data['table_number']}</p>
+            <p style="margin: 5px 0;">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        </div>
+
+        <div class="customer-info" style="margin-bottom: 15px;">
+            <p style="margin: 2px 0;"><strong>Customer:</strong> {data.get('customer_name', 'Walk-in Customer')}</p>
+            <p style="margin: 2px 0;"><strong>Phone:</strong> {data.get('customer_phone', 'N/A')}</p>
+            <p style="margin: 2px 0;"><strong>Discount:</strong> {discount_rate}%</p>
+        </div>
+
+        <div class="items" style="margin-bottom: 15px;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 1px solid #ccc;">
+                        <th style="text-align: left; padding: 5px;">Item</th>
+                        <th style="text-align: center; padding: 5px;">Qty</th>
+                        <th style="text-align: right; padding: 5px;">Price</th>
+                        <th style="text-align: right; padding: 5px;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+
+    for item in data['items']:
+        item_total = float(item.get('price', 0)) * int(item.get('quantity', 1))
+        html += f"""
+                    <tr>
+                        <td style="padding: 3px;">{item.get('name', '')}</td>
+                        <td style="text-align: center; padding: 3px;">{item.get('quantity', 1)}</td>
+                        <td style="text-align: right; padding: 3px;">{item.get('price', 0):.2f}</td>
+                        <td style="text-align: right; padding: 3px;">{item_total:.2f}</td>
+                    </tr>
+        """
+
+    html += f"""
+                </tbody>
+            </table>
+        </div>
+
+        <div class="totals" style="border-top: 1px solid #ccc; padding-top: 10px;">
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Subtotal:</span> <span>{subtotal:.2f} SAR</span>
+            </p>
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Discount ({discount_rate}%):</span> <span>-{discount_amount:.2f} SAR</span>
+            </p>
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Tax ({tax_rate}%):</span> <span>{tax_amount:.2f} SAR</span>
+            </p>
+            <p style="margin: 5px 0; display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                <span>Total:</span> <span>{total:.2f} SAR</span>
+            </p>
+        </div>
+
+        <div class="unpaid-notice" style="text-align: center; margin-top: 20px; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
+            <strong style="color: #856404;">⚠️ UNPAID / غير مدفوعة</strong>
+        </div>
+
+        <div class="footer" style="text-align: center; margin-top: 15px; font-size: 10px; color: #666;">
+            <p>Thank you for your visit!</p>
+        </div>
+    </div>
+    """
+
+    return html
+
+def generate_final_invoice_html(branch, data, invoice_id):
+    """Generate HTML for final paid invoice"""
+    from datetime import datetime
+
+    settings = get_settings_safe()
+    branch_label = 'China Town' if branch == 'china_town' else 'Palace India'
+
+    # Calculate totals (same as draft)
+    subtotal = sum(float(item.get('price', 0)) * int(item.get('quantity', 1)) for item in data['items'])
+    discount_rate = float(data.get('customer_discount', 0))
+    discount_amount = subtotal * (discount_rate / 100)
+    subtotal_after_discount = subtotal - discount_amount
+
+    # Get branch-specific tax rate
+    if branch == 'china_town':
+        tax_rate = float(settings.china_town_vat_rate) if settings else 15.0
+    else:
+        tax_rate = float(settings.place_india_vat_rate) if settings else 15.0
+
+    tax_amount = subtotal_after_discount * (tax_rate / 100)
+    total = subtotal_after_discount + tax_amount
+
+    # Generate HTML (similar to draft but without UNPAID notice)
+    html = f"""
+    <div class="invoice-container" style="max-width: 300px; font-family: Arial, sans-serif; font-size: 12px;">
+        <div class="header" style="text-align: center; margin-bottom: 20px;">
+            <h2 style="margin: 0;">{branch_label}</h2>
+            <p style="margin: 5px 0;">Invoice #{invoice_id}</p>
+            <p style="margin: 5px 0;">Table #{data['table_number']}</p>
+            <p style="margin: 5px 0;">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        </div>
+
+        <div class="customer-info" style="margin-bottom: 15px;">
+            <p style="margin: 2px 0;"><strong>Customer:</strong> {data.get('customer_name', 'Walk-in Customer')}</p>
+            <p style="margin: 2px 0;"><strong>Phone:</strong> {data.get('customer_phone', 'N/A')}</p>
+            <p style="margin: 2px 0;"><strong>Discount:</strong> {discount_rate}%</p>
+            <p style="margin: 2px 0;"><strong>Payment:</strong> {data.get('payment_method', 'Cash').title()}</p>
+        </div>
+
+        <div class="items" style="margin-bottom: 15px;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 1px solid #ccc;">
+                        <th style="text-align: left; padding: 5px;">Item</th>
+                        <th style="text-align: center; padding: 5px;">Qty</th>
+                        <th style="text-align: right; padding: 5px;">Price</th>
+                        <th style="text-align: right; padding: 5px;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+
+    for item in data['items']:
+        item_total = float(item.get('price', 0)) * int(item.get('quantity', 1))
+        html += f"""
+                    <tr>
+                        <td style="padding: 3px;">{item.get('name', '')}</td>
+                        <td style="text-align: center; padding: 3px;">{item.get('quantity', 1)}</td>
+                        <td style="text-align: right; padding: 3px;">{item.get('price', 0):.2f}</td>
+                        <td style="text-align: right; padding: 3px;">{item_total:.2f}</td>
+                    </tr>
+        """
+
+    html += f"""
+                </tbody>
+            </table>
+        </div>
+
+        <div class="totals" style="border-top: 1px solid #ccc; padding-top: 10px;">
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Subtotal:</span> <span>{subtotal:.2f} SAR</span>
+            </p>
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Discount ({discount_rate}%):</span> <span>-{discount_amount:.2f} SAR</span>
+            </p>
+            <p style="margin: 2px 0; display: flex; justify-content: space-between;">
+                <span>Tax ({tax_rate}%):</span> <span>{tax_amount:.2f} SAR</span>
+            </p>
+            <p style="margin: 5px 0; display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                <span>Total:</span> <span>{total:.2f} SAR</span>
+            </p>
+        </div>
+
+        <div class="paid-notice" style="text-align: center; margin-top: 20px; padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px;">
+            <strong style="color: #155724;">✅ PAID</strong>
+        </div>
+
+        <div class="footer" style="text-align: center; margin-top: 15px; font-size: 10px; color: #666;">
+            <p>Thank you for your visit!</p>
+        </div>
+    </div>
+    """
+
+    return html
+
+def create_sales_invoice(branch, data):
+    """Create sales invoice in database"""
+    from models import SalesInvoice, SalesInvoiceItem, MenuItem
+    from datetime import datetime, timezone
+
+    try:
+        # Generate invoice number
+        last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
+        if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
+            try:
+                last_num = int(last_invoice.invoice_number.split('-')[-1])
+                invoice_number = f'SAL-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
+            except Exception:
+                invoice_number = f'SAL-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
+        else:
+            invoice_number = f'SAL-{datetime.now(timezone.utc).year}-001'
+
+        # Calculate totals
+        subtotal = sum(float(item.get('price', 0)) * int(item.get('quantity', 1)) for item in data['items'])
+        discount_rate = float(data.get('customer_discount', 0))
+        discount_amount = subtotal * (discount_rate / 100)
+        subtotal_after_discount = subtotal - discount_amount
+
+        # Get branch-specific tax rate
+        settings = get_settings_safe()
+        if branch == 'china_town':
+            tax_rate = float(settings.china_town_vat_rate) if settings else 15.0
+        else:
+            tax_rate = float(settings.place_india_vat_rate) if settings else 15.0
+
+        tax_amount = subtotal_after_discount * (tax_rate / 100)
+        total = subtotal_after_discount + tax_amount
+
+        # Determine customer name - use customer name if available, otherwise table number
+        customer_name = data.get('customer_name', f"Table {data['table_number']}")
+        if not customer_name or customer_name.strip() == '':
+            customer_name = f"Table {data['table_number']}"
+
+        # Create invoice
+        invoice = SalesInvoice(
+            invoice_number=invoice_number,
+            date=datetime.now(timezone.utc).date(),
+            branch=branch,
+            customer_name=customer_name,
+            customer_phone=data.get('customer_phone', ''),
+            payment_method=data.get('payment_method', 'cash'),
+            total_before_tax=subtotal,
+            tax_amount=tax_amount,
+            discount_amount=discount_amount,
+            total_after_tax_discount=total,
+            status='paid',
+            user_id=current_user.id
+        )
+
+        db.session.add(invoice)
+        db.session.flush()  # Get invoice ID
+
+        # Add invoice items
+        for item_data in data['items']:
+            # Find the menu item
+            menu_item = MenuItem.query.get(item_data.get('id'))
+            if menu_item:
+                item_price = float(item_data.get('price', 0))
+                item_quantity = int(item_data.get('quantity', 1))
+                item_total = item_price * item_quantity
+
+                item = SalesInvoiceItem(
+                    invoice_id=invoice.id,
+                    product_name=item_data.get('name', ''),
+                    quantity=item_quantity,
+                    price_before_tax=item_price,
+                    tax=0,  # Tax is calculated on total
+                    discount=0,
+                    total_price=item_total
+                )
+                db.session.add(item)
+
+        db.session.commit()
+        return invoice_number
+
+    except Exception as e:
+        db.session.rollback()
+        raise e
+
+# Legacy sales redirect page
+@app.route('/sales/legacy')
+@login_required
+def sales_legacy():
+    """Show upgrade notice and redirect to new system"""
+    return render_template('sales_redirect.html')
 
 # Old unified sales screen kept under /sales/all for backward links
 @app.route('/sales/all', methods=['GET', 'POST'])
@@ -544,11 +1168,11 @@ def sales_all():
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
             try:
                 last_num = int(last_invoice.invoice_number.split('-')[-1])
-                invoice_number = f'SAL-{datetime.now(timezone.utc).year}-{last_num + 1:03d}'
+                invoice_number = f'SAL-{get_saudi_now().year}-{last_num + 1:03d}'
             except Exception:
-                invoice_number = f'SAL-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
+                invoice_number = f'SAL-{get_saudi_now().strftime("%Y%m%d%H%M%S")}'
         else:
-            invoice_number = f'SAL-{datetime.now(timezone.utc).year}-001'
+            invoice_number = f'SAL-{get_saudi_now().year}-001'
 
 # Seed default menu categories once (safe, best-effort)
 MENU_SEEDED = False
@@ -569,7 +1193,7 @@ def _seed_menu_categories_once():
         if to_add:
             for name in to_add:
                 db.session.add(MenuCategory(name=name))
-            db.session.commit()
+            safe_db_commit()
     except Exception:
         # Table may not exist yet; ignore
         pass
@@ -582,6 +1206,13 @@ PAYMENT_METHODS = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC']
 
 def is_valid_branch(code: str) -> bool:
     return code in BRANCH_CODES
+
+def safe_table_number(table_number) -> int:
+    """Safely convert table_number to int, default to 0 if None/invalid"""
+    try:
+        return int(table_number or 0)
+    except (ValueError, TypeError):
+        return 0
 
 @app.context_processor
 def inject_globals():
@@ -616,7 +1247,9 @@ def sales_tables(branch_code):
     # Count active draft orders per table
     draft_orders = DraftOrder.query.filter_by(branch_code=branch_code, status='draft').all()
     for draft in draft_orders:
-        draft_counts[draft.table_no] = draft_counts.get(draft.table_no, 0) + 1
+        # Safe handling of table_number - convert to int, default to 0 if None/invalid
+        table_num = safe_table_number(draft.table_number)
+        draft_counts[table_num] = draft_counts.get(table_num, 0) + 1
 
     # Generate table list with status and draft count
     tables_data = []
@@ -639,10 +1272,10 @@ def sales_tables(branch_code):
                          branch_label=BRANCH_CODES[branch_code],
                          tables=tables_data)
 # Table management screen: shows draft orders for a table
-@app.route('/sales/<branch_code>/table/<int:table_no>/manage', methods=['GET'])
+@app.route('/sales/<branch_code>/table/<int:table_number>/manage', methods=['GET'])
 @login_required
-def sales_table_manage(branch_code, table_no):
-    if not is_valid_branch(branch_code) or table_no < 1 or table_no > 50:
+def sales_table_manage(branch_code, table_number):
+    if not is_valid_branch(branch_code) or table_number < 1 or table_number > 50:
         flash(_('Unknown branch/table / فرع أو طاولة غير معروف'), 'danger')
         return redirect(url_for('sales'))
 
@@ -651,7 +1284,7 @@ def sales_table_manage(branch_code, table_no):
     # Get all draft orders for this table
     draft_orders = DraftOrder.query.filter_by(
         branch_code=branch_code,
-        table_no=table_no,
+        table_number=str(table_number),
         status='draft'
     ).order_by(DraftOrder.created_at.desc()).all()
 
@@ -662,14 +1295,14 @@ def sales_table_manage(branch_code, table_no):
     return render_template('sales_table_manage.html',
                          branch_code=branch_code,
                          branch_label=BRANCH_CODES[branch_code],
-                         table_no=table_no,
+                         table_number=table_number,
                          draft_orders=draft_orders)
 
 # Table invoice screen (split UI) - supports draft orders
-@app.route('/sales/<branch_code>/table/<int:table_no>', methods=['GET'])
+@app.route('/sales/<branch_code>/table/<int:table_number>', methods=['GET'])
 @login_required
-def sales_table_invoice(branch_code, table_no):
-    if not is_valid_branch(branch_code) or table_no < 1 or table_no > 50:
+def sales_table_invoice(branch_code, table_number):
+    if not is_valid_branch(branch_code) or table_number < 1 or table_number > 50:
         flash(_('Unknown branch/table / فرع أو طاولة غير معروف'), 'danger')
         return redirect(url_for('sales'))
 
@@ -685,7 +1318,7 @@ def sales_table_invoice(branch_code, table_no):
         current_draft = DraftOrder.query.filter_by(
             id=draft_id,
             branch_code=branch_code,
-            table_no=table_no,
+            table_number=str(table_number),
             status='draft'
         ).first()
         if current_draft:
@@ -694,12 +1327,13 @@ def sales_table_invoice(branch_code, table_no):
         # Create new draft order
         current_draft = DraftOrder(
             branch_code=branch_code,
-            table_no=table_no,
+            table_number=str(table_number),
             user_id=current_user.id,
             status='draft'
         )
         db.session.add(current_draft)
-        db.session.commit()
+        safe_db_commit()
+
     # Load meals and categories (prefer MenuCategory if defined)
     try:
         meals = Meal.query.filter_by(active=True).all()
@@ -742,7 +1376,7 @@ def sales_table_invoice(branch_code, table_no):
         return render_template('sales_table_invoice.html',
                                branch_code=branch_code,
                                branch_label=BRANCH_CODES[branch_code],
-                               table_no=table_no,
+                               table_number=table_number,
                                current_draft=current_draft,
                                draft_items=json.dumps(draft_items_json),
                                categories=categories,
@@ -754,24 +1388,103 @@ def sales_table_invoice(branch_code, table_no):
         current_app.logger.error("=== Table View Error Traceback ===\n" + traceback.format_exc())
         return f"Error loading table: {e}", 500
 
+# POS alias route to table invoice (back-compat for tests)
+@app.route('/pos/<branch_code>/table/<int:table_number>')
+@login_required
+def pos_table_alias(branch_code, table_number):
+    try:
+        return redirect(url_for('sales_table_invoice', branch_code=branch_code, table_number=table_number))
+    except Exception:
+        abort(404)
+
 # API: items by category
 @app.route('/api/menu/<int:cat_id>/items')
 @login_required
 def api_menu_items(cat_id):
     from models import MenuItem, Meal
-    items = MenuItem.query.filter_by(category_id=cat_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
-    res = []
-    for it in items:
-        price = float(it.price_override) if it.price_override is not None else float(it.meal.selling_price or 0)
-        res.append({'id': it.id, 'meal_id': it.meal_id, 'name': it.meal.display_name, 'price': price})
-    return jsonify(res)
+    try:
+        items = MenuItem.query.filter_by(category_id=cat_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+        res = []
+        for it in items:
+            price = float(it.price_override) if it.price_override is not None else float(it.meal.selling_price or 0)
+            res.append({'id': it.id, 'meal_id': it.meal_id, 'name': it.meal.display_name, 'price': price})
+        current_app.logger.info(f"API: Found {len(res)} items for category {cat_id}")
+        return jsonify(res)
+    except Exception as e:
+        current_app.logger.error(f"API Error for category {cat_id}: {e}")
+        return jsonify([])
+
+# Debug route to check menu state
+@app.route('/api/debug/menu-state')
+@login_required
+def debug_menu_state():
+    from models import MenuCategory, MenuItem, Meal
+    try:
+        categories = MenuCategory.query.all()
+        meals = Meal.query.filter_by(active=True).all()
+        items = MenuItem.query.all()
+
+        result = {
+            'categories': [{'id': c.id, 'name': c.name, 'active': c.active} for c in categories],
+            'meals_count': len(meals),
+            'menu_items': [{'id': i.id, 'category_id': i.category_id, 'meal_id': i.meal_id, 'meal_name': i.meal.display_name if i.meal else 'N/A'} for i in items],
+            'cat_map': {c.name: c.id for c in categories if c.active}
+        }
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# Debug route to create sample menu items
+@app.route('/api/debug/create-sample-menu')
+@login_required
+def create_sample_menu():
+    from models import MenuCategory, MenuItem, Meal
+    try:
+        # Get first few categories and meals
+        categories = MenuCategory.query.filter_by(active=True).limit(5).all()
+        meals = Meal.query.filter_by(active=True).limit(10).all()
+
+        if not categories:
+            return jsonify({'error': 'No categories found. Please create categories first.'})
+
+        if not meals:
+            return jsonify({'error': 'No meals found. Please create meals first.'})
+
+        created_count = 0
+        for i, meal in enumerate(meals):
+            category = categories[i % len(categories)]  # Distribute meals across categories
+
+            # Check if item already exists
+            existing = MenuItem.query.filter_by(category_id=category.id, meal_id=meal.id).first()
+            if not existing:
+                menu_item = MenuItem(
+                    category_id=category.id,
+                    meal_id=meal.id,
+                    price_override=None,  # Use meal's default price
+                    display_order=i + 1
+                )
+                db.session.add(menu_item)
+                created_count += 1
+
+        safe_db_commit()
+
+        return jsonify({
+            'ok': True,
+            'message': f'Created {created_count} sample menu items',
+            'categories_used': len(categories),
+            'meals_used': len(meals)
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)})
 
     vat_rate = float(settings.vat_rate) if settings and settings.vat_rate is not None else 15.0
     from datetime import date as _date
     return render_template('sales_table_invoice.html',
                            branch_code=branch_code,
                            branch_label=BRANCH_CODES[branch_code],
-                           table_no=table_no,
+                           table_number=table_number,
                            categories=categories,
                            meals_json=json.dumps(meals_data),
                            cat_map_json=json.dumps(cat_map),
@@ -842,7 +1555,7 @@ def customers():
             try:
                 c = Customer(name=name, phone=phone, discount_percent=discount_percent, active=True)
                 db.session.add(c)
-                db.session.commit()
+                safe_db_commit()
                 flash(_('Customer added successfully / تم إضافة العميل بنجاح'), 'success')
             except Exception:
                 db.session.rollback()
@@ -882,7 +1595,7 @@ def customers_edit(cid):
         else:
             try:
                 c.name = name; c.phone = phone; c.discount_percent = discount_percent
-                db.session.commit()
+                safe_db_commit()
                 flash(_('Customer updated / تم تحديث العميل'), 'success')
                 return redirect(url_for('customers'))
             except Exception:
@@ -897,7 +1610,7 @@ def customers_delete(cid):
     c = Customer.query.get_or_404(cid)
     try:
         db.session.delete(c)
-        db.session.commit()
+        safe_db_commit()
         flash(_('Customer deleted / تم حذف العميل'), 'success')
     except Exception:
         db.session.rollback()
@@ -907,10 +1620,103 @@ def customers_delete(cid):
 @app.route('/customers/<int:cid>/toggle', methods=['POST'])
 @login_required
 def customers_toggle(cid):
+    # Toggle active/inactive for customer
+    c.active = not bool(c.active)
+    safe_db_commit()
+    flash(_('Status changed / تم تغيير الحالة'), 'info')
+    return redirect(url_for('customers'))
+
+
+# ---------------------- Suppliers ----------------------
+@app.route('/suppliers', methods=['GET'])
+@login_required
+def suppliers():
+    from models import Supplier
+    q = (request.args.get('q') or '').strip()
+    query = Supplier.query
+    if q:
+        like = f"%{q}%"
+        query = query.filter((Supplier.name.ilike(like)) | (Supplier.phone.ilike(like)) | (Supplier.email.ilike(like)))
+    items = query.order_by(Supplier.name.asc()).all()
+    return render_template('suppliers.html', suppliers=items)
+
+@app.route('/suppliers', methods=['POST'])
+@login_required
+def suppliers_create():
+    if not can_perm('users','edit') and getattr(current_user,'role','')!='admin':
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
+        return redirect(url_for('suppliers'))
+    from models import Supplier
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        flash(_('Name is required / الاسم مطلوب'), 'danger')
+        return redirect(url_for('suppliers'))
+    s = Supplier(
+        name=name,
+        contact_person=(request.form.get('contact_person') or '').strip(),
+        phone=(request.form.get('phone') or '').strip(),
+        email=(request.form.get('email') or '').strip(),
+        address=(request.form.get('address') or '').strip(),
+        tax_number=(request.form.get('tax_number') or '').strip(),
+        notes=(request.form.get('notes') or '').strip(),
+        active=bool(request.form.get('active')),
+    )
+    db.session.add(s)
+    safe_db_commit()
+    flash(_('Supplier added / تم إضافة المورد'), 'success')
+    return redirect(url_for('suppliers'))
+
+@app.route('/suppliers/<int:sid>/edit', methods=['GET','POST'])
+@login_required
+def suppliers_edit(sid):
+    from models import Supplier
+    s = Supplier.query.get_or_404(sid)
+    if request.method == 'POST':
+        if not can_perm('users','edit') and getattr(current_user,'role','')!='admin':
+            flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
+            return redirect(url_for('suppliers'))
+        s.name = (request.form.get('name') or '').strip()
+        s.contact_person = (request.form.get('contact_person') or '').strip()
+        s.phone = (request.form.get('phone') or '').strip()
+        s.email = (request.form.get('email') or '').strip()
+        s.address = (request.form.get('address') or '').strip()
+        s.tax_number = (request.form.get('tax_number') or '').strip()
+        s.notes = (request.form.get('notes') or '').strip()
+        s.active = bool(request.form.get('active'))
+        safe_db_commit()
+        flash(_('Supplier updated / تم تحديث المورد'), 'success')
+        return redirect(url_for('suppliers'))
+    return render_template('suppliers_edit.html', s=s)
+
+@app.route('/suppliers/<int:sid>/toggle', methods=['POST'])
+@login_required
+def suppliers_toggle(sid):
+    from models import Supplier
+    s = Supplier.query.get_or_404(sid)
+    s.active = not bool(s.active)
+    safe_db_commit()
+    flash(_('Status changed / تم تغيير الحالة'), 'info')
+    return redirect(url_for('suppliers'))
+
+@app.route('/suppliers/<int:sid>/delete', methods=['POST'])
+@login_required
+def suppliers_delete(sid):
+    from models import Supplier, PurchaseInvoice
+    s = Supplier.query.get_or_404(sid)
+    # Prevent delete if supplier in use in purchases
+    in_use = PurchaseInvoice.query.filter(PurchaseInvoice.supplier_name == s.name).count()
+    if in_use:
+        flash(_('Supplier is used in purchase invoices. Deactivate instead. / المورد مستخدم في فواتير الشراء. قم بتعطيله بدلاً من الحذف.'), 'warning')
+        return redirect(url_for('suppliers'))
+    db.session.delete(s)
+    safe_db_commit()
+    flash(_('Supplier deleted / تم حذف المورد'), 'success')
+    return redirect(url_for('suppliers'))
+
     from models import Customer
     c = Customer.query.get_or_404(cid)
     c.active = not bool(c.active)
-    db.session.commit()
+    safe_db_commit()
     flash(_('Customer status updated / تم تحديث حالة العميل'), 'success')
     return redirect(url_for('customers'))
 
@@ -940,7 +1746,7 @@ def customers_import_csv():
                 continue
             db.session.add(Customer(name=name, phone=phone, discount_percent=dp, active=True))
             added += 1
-        db.session.commit()
+        safe_db_commit()
         flash(_('%(n)s customers imported / تم استيراد %(n)s عميل', n=added), 'success')
     except Exception:
         db.session.rollback()
@@ -993,7 +1799,7 @@ def menu():
             else:
                 cat = MenuCategory(name=name, active=True)
                 db.session.add(cat)
-                db.session.commit()
+                safe_db_commit()
                 flash(_('Category added / تم إضافة القسم'), 'success')
         return redirect(url_for('menu'))
     # List + optional items management
@@ -1042,7 +1848,7 @@ def menu_item_add():
             ex.display_order = display_order
         else:
             db.session.add(MenuItem(category_id=section_id, meal_id=meal_id, price_override=price_override, display_order=display_order))
-        db.session.commit()
+        safe_db_commit()
         flash(_('Item saved'), 'success')
     except Exception as e:
         db.session.rollback()
@@ -1059,7 +1865,7 @@ def menu_item_update(item_id):
         display_order = request.form.get('display_order')
         it.price_override = (None if price_override == '' else float(price_override))
         it.display_order = int(display_order) if (display_order or '').strip() else None
-        db.session.commit()
+        safe_db_commit()
         flash(_('Item updated'), 'success')
     except Exception:
         db.session.rollback()
@@ -1077,18 +1883,11 @@ def api_sales_void_check():
     try:
         data = request.get_json(silent=True) or {}
         pwd = (data.get('password') or '').strip()
-        # Determine expected password from settings, fall back to '0000'
-        settings = get_settings_safe()
-        expected = None
-        if settings and getattr(settings, 'void_password', None):
-            expected = str(settings.void_password)
-        elif settings and getattr(settings, 'tax_number', None):
-            expected = str(settings.tax_number)
-        else:
-            expected = '0000'
-        if pwd == str(expected):
+        # Fixed password for cancellation: 1991
+        expected = '1991'
+        if pwd == expected:
             return jsonify({'ok': True})
-        return jsonify({'ok': False, 'error': 'Wrong password'}), 400
+        return jsonify({'ok': False, 'error': _('Incorrect password / كلمة السر غير صحيحة')}), 400
     except Exception as e:
         current_app.logger.error("=== Void Check Error Traceback ===\n" + traceback.format_exc())
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -1096,7 +1895,7 @@ def api_sales_void_check():
     it = MenuItem.query.get_or_404(item_id)
     try:
         db.session.delete(it)
-        db.session.commit()
+        safe_db_commit()
         flash(_('Item deleted'), 'success')
     except Exception:
         db.session.rollback()
@@ -1110,13 +1909,13 @@ def menu_toggle(cat_id):
     from models import MenuCategory
     cat = MenuCategory.query.get_or_404(cat_id)
     cat.active = not bool(cat.active)
-    db.session.commit()
+    safe_db_commit()
     flash(_('Category status updated / تم تحديث حالة القسم'), 'success')
     return redirect(url_for('menu'))
 
 # Checkout API: create invoice + items + payment, then return receipt URL
 
-@csrf.exempt
+@csrf_exempt
 @app.route('/api/sales/checkout', methods=['POST'])
 @login_required
 def api_sales_checkout():
@@ -1126,13 +1925,15 @@ def api_sales_checkout():
         from datetime import datetime as _dt
         data = request.get_json(silent=True) or {}
         branch_code = data.get('branch_code')
-        table_no = int(data.get('table_no') or 0)
+        table_number = int(data.get('table_number') or 0)
         items = data.get('items') or []  # [{meal_id, qty}]
         customer_name = data.get('customer_name') or None
         customer_phone = data.get('customer_phone') or None
         discount_pct = float(data.get('discount_pct') or 0)
         tax_pct = float(data.get('tax_pct') or 15)
         payment_method = data.get('payment_method') or 'CASH'
+
+
 
         if not is_valid_branch(branch_code) or not items:
             return jsonify({'ok': False, 'error': 'Invalid branch or empty items'}), 400
@@ -1155,12 +1956,7 @@ def api_sales_checkout():
             new_num = 1
 
         # Get current datetime in Saudi Arabia timezone (UTC+3)
-        try:
-            from datetime import timezone as _tz
-            saudi_tz = _tz(timedelta(hours=3))
-            _now = _dt.now(saudi_tz)
-        except Exception:
-            _now = _dt.now()
+        _now = get_saudi_now()
 
         invoice_number = f"SAL-{_now.year}-{new_num:03d}"
 
@@ -1190,32 +1986,37 @@ def api_sales_checkout():
         discount_val = (subtotal + tax_total) * (discount_pct / 100.0)
         grand_total = (subtotal + tax_total) - discount_val
 
+
+
         # Persist invoice
         inv = SalesInvoice(
             invoice_number=invoice_number,
             date=_now.date(),
             payment_method=payment_method,
             branch=branch_code,
-            table_no=table_no,
+            table_number=str(table_number),
             customer_name=customer_name,
             customer_phone=customer_phone,
             total_before_tax=subtotal,
             tax_amount=tax_total,
             discount_amount=discount_val,
             total_after_tax_discount=grand_total,
-            status='paid',
-            user_id=current_user.id
+            status='unpaid',  # Will be posted as paid upon printing the receipt
+            user_id=current_user.id,
+            created_at=_now  # Explicitly set Saudi time
         )
 
         try:
             db.session.add(inv)
             db.session.flush()
 
+
+
             # Update table status to occupied when order is created
             from models import Table
-            table = Table.query.filter_by(branch_code=branch_code, table_number=table_no).first()
+            table = Table.query.filter_by(branch_code=branch_code, table_number=table_number).first()
             if not table:
-                table = Table(branch_code=branch_code, table_number=table_no, status='occupied', current_order_id=inv.id)
+                table = Table(branch_code=branch_code, table_number=table_number, status='occupied', current_order_id=inv.id)
                 db.session.add(table)
             else:
                 table.status = 'occupied'
@@ -1238,23 +2039,23 @@ def api_sales_checkout():
                 total_price=float(it.get('total') or 0)
             ))
 
-        # Record payment
-        db.session.add(Payment(
-            invoice_id=inv.id,
-            invoice_type='sales',
-            amount_paid=grand_total,
-            payment_method=payment_method
-        ))
+        # Do not record payment here; posting occurs on print
 
         try:
-            db.session.commit()
+            safe_db_commit()
         except Exception as e:
             db.session.rollback()
             logging.exception('checkout commit failed')
             return jsonify({'ok': False, 'error': str(e)}), 500
 
         receipt_url = url_for('sales_receipt', invoice_id=inv.id)
-        return jsonify({'ok': True, 'invoice_id': inv.id, 'print_url': receipt_url})
+        return jsonify({
+            'ok': True,
+            'invoice_id': inv.id,
+            'print_url': receipt_url,
+            'total_amount': float(grand_total),
+            'payment_method': payment_method
+        })
 
     except Exception as e:
         logging.exception('checkout top-level failed')
@@ -1268,16 +2069,58 @@ def sales_receipt(invoice_id):
     invoice = SalesInvoice.query.get_or_404(invoice_id)
     items = SalesInvoiceItem.query.filter_by(invoice_id=invoice_id).all()
     settings = get_settings_safe()
-    return render_template('sales_receipt.html', invoice=invoice, items=items, settings=settings)
+
+    # Build ZATCA TLV QR on server to avoid client-side JS cost and CDN delay
+    qr_data_url = None
+    try:
+        import base64, io
+        import qrcode
+        # Compose TLV payload: seller(1), vat(2), timestamp(3), total(4), vat amount(5)
+        def _tlv(tag, b):
+            return bytes([tag & 0xFF, len(b) & 0xFF]) + b
+        seller = (settings.company_name or '').strip().encode('utf-8') if settings else b''
+        vat = (settings.tax_number or '').strip().encode('utf-8') if settings else b''
+        ts = (invoice.created_at.astimezone().isoformat() if invoice.created_at else str(invoice.date)).encode('utf-8')
+        total = (f"{float(invoice.total_after_tax_discount or 0):.2f}").encode('utf-8')
+        vat_amt = (f"{float(invoice.tax_amount or 0):.2f}").encode('utf-8')
+        payload = base64.b64encode(_tlv(1, seller) + _tlv(2, vat) + _tlv(3, ts) + _tlv(4, total) + _tlv(5, vat_amt)).decode('ascii')
+        img = qrcode.make(payload)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        qr_data_url = 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode('ascii')
+    except Exception:
+        qr_data_url = None  # Fallback to client-side QR if available
+
+    return render_template('sales_receipt.html', invoice=invoice, items=items, settings=settings, qr_data_url=qr_data_url)
 
 
 @app.route('/purchases', methods=['GET', 'POST'])
 @login_required
 def purchases():
     import json
+    from decimal import Decimal
+    from decimal import Decimal
 
     # Get raw materials for dropdown
     raw_materials = RawMaterial.query.filter_by(active=True).all()
+    # Suppliers list for auto-complete
+    try:
+        from models import Supplier
+        suppliers_list = Supplier.query.filter_by(active=True).order_by(Supplier.name.asc()).all()
+        suppliers_json = json.dumps([
+            {
+                'id': s.id,
+                'name': s.name,
+                'phone': s.phone,
+                'email': s.email,
+                'address': s.address,
+                'tax_number': s.tax_number,
+                'contact_person': s.contact_person
+            } for s in suppliers_list
+        ])
+    except Exception:
+        suppliers_list = []
+        suppliers_json = '[]'
     material_choices = [(0, _('Select Raw Material / اختر المادة الخام'))] + [(m.id, m.display_name) for m in raw_materials]
 
     form = PurchaseInvoiceForm()
@@ -1296,6 +2139,18 @@ def purchases():
     } for m in raw_materials])
 
     if form.validate_on_submit():
+        valid_count = 0
+        for item_form in form.items.entries:
+            try:
+                if item_form.raw_material_id.data and int(item_form.raw_material_id.data) != 0 and \
+                   (item_form.quantity.data is not None) and (item_form.price_before_tax.data is not None):
+                    valid_count += 1
+            except Exception:
+                continue
+        if valid_count == 0:
+            flash(_('Please add at least one valid item / الرجاء إضافة عنصر واحد على الأقل'), 'danger')
+            return render_template('purchases.html', form=form, invoices=PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).limit(50).all(), materials_json=materials_json, suppliers_list=suppliers_list, suppliers_json=suppliers_json)
+
         # Generate invoice number
         last_invoice = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).first()
         if last_invoice and last_invoice.invoice_number and '-' in last_invoice.invoice_number:
@@ -1318,6 +2173,7 @@ def purchases():
             invoice_number=invoice_number,
             date=form.date.data,
             supplier_name=form.supplier_name.data,
+            supplier_id=int(request.form.get('supplier_id') or 0) or None,
             payment_method=form.payment_method.data,
             total_before_tax=0,  # Will be calculated
             tax_amount=0,  # Will be calculated
@@ -1331,7 +2187,7 @@ def purchases():
 
         # Add invoice items and update stock
         for item_form in form.items.entries:
-            if item_form.raw_material_id.data and item_form.raw_material_id.data != 0:  # Valid material selected
+            if item_form.raw_material_id.data and int(item_form.raw_material_id.data) != 0:  # Valid material selected
                 raw_material = RawMaterial.query.get(item_form.raw_material_id.data)
                 if raw_material:
                     qty = float(item_form.quantity.data)
@@ -1349,8 +2205,9 @@ def purchases():
                     total_tax += tax
                     total_discount += discount
 
-                    # Update raw material stock quantity
-                    raw_material.stock_quantity += qty
+                    # Update raw material stock quantity (ensure Decimal arithmetic)
+                    qty_dec = Decimal(str(qty))
+                    raw_material.stock_quantity = (raw_material.stock_quantity or 0) + qty_dec
 
                     # Update cost per unit (weighted average)
                     if raw_material.stock_quantity > 0:
@@ -1385,7 +2242,7 @@ def purchases():
         invoice.discount_amount = total_discount
         invoice.total_after_tax_discount = total_after_tax_discount
 
-        db.session.commit()
+        safe_db_commit()
 
         # Post to ledger (Inventory, VAT Input, Cash/AP)
         try:
@@ -1401,25 +2258,25 @@ def purchases():
             cash_acc = get_or_create('1000', 'Cash', 'ASSET')
             ap_acc = get_or_create('2000', 'Accounts Payable', 'LIABILITY')
 
-            settle_cash_like = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC','cash','mada','visa','mastercard','bank','aks','gcc']
-            settle_acc = cash_acc if (invoice.payment_method in settle_cash_like) else ap_acc
+            # Always record purchases as payable at creation; payment will be registered later
             db.session.add(LedgerEntry(date=invoice.date, account_id=inv_acc.id, debit=invoice.total_before_tax, credit=0, description=f'Purchase {invoice.invoice_number}'))
             db.session.add(LedgerEntry(date=invoice.date, account_id=vat_in_acc.id, debit=invoice.tax_amount, credit=0, description=f'VAT Input {invoice.invoice_number}'))
-            db.session.add(LedgerEntry(date=invoice.date, account_id=settle_acc.id, credit=invoice.total_after_tax_discount, debit=0, description=f'Settlement {invoice.invoice_number}'))
-            db.session.commit()
+            db.session.add(LedgerEntry(date=invoice.date, account_id=ap_acc.id, credit=invoice.total_after_tax_discount, debit=0, description=f'AP for {invoice.invoice_number}'))
+            safe_db_commit()
         except Exception as e:
             db.session.rollback()
             logging.error('Ledger posting (purchase) failed: %s', e, exc_info=True)
 
 
-        db.session.commit()
+        safe_db_commit()
 
         # Emit real-time update
-        socketio.emit('purchase_update', {
-            'invoice_number': invoice_number,
-            'supplier': form.supplier_name.data,
-            'total': float(total_after_tax_discount)
-        })
+        if socketio:
+            socketio.emit('purchase_update', {
+                'invoice_number': invoice_number,
+                'supplier': form.supplier_name.data,
+                'total': float(total_after_tax_discount)
+            })
 
         flash(_('Purchase invoice created and stock updated successfully / تم إنشاء فاتورة الشراء وتحديث المخزون بنجاح'), 'success')
         return redirect(url_for('purchases'))
@@ -1432,7 +2289,7 @@ def purchases():
     page = int(request.args.get('page') or 1)
     per_page = min(100, int(request.args.get('per_page') or 25))
     pag = PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).paginate(page=page, per_page=per_page, error_out=False)
-    return render_template('purchases.html', form=form, invoices=pag.items, pagination=pag, materials_json=materials_json)
+    return render_template('purchases.html', form=form, invoices=pag.items, pagination=pag, materials_json=materials_json, suppliers_list=suppliers_list, suppliers_json=suppliers_json)
 
 @app.route('/expenses', methods=['GET', 'POST'])
 @login_required
@@ -1461,7 +2318,7 @@ def expenses():
             invoice_number=invoice_number,
             date=form.date.data,
             payment_method=form.payment_method.data,
-            status='paid',  # Expenses are usually paid immediately
+            status='unpaid',  # Will remain unpaid until user registers a payment
             total_before_tax=0,  # Will be calculated
             tax_amount=0,  # Will be calculated
             discount_amount=0,  # Will be calculated
@@ -1485,6 +2342,44 @@ def expenses():
                 discount = (item_before_tax + tax) * (discount_pct/100.0)
                 total_item = item_before_tax + tax - discount
 
+                # Create expense item
+                expense_item = ExpenseInvoiceItem(
+                    invoice_id=invoice.id,
+                    description=item_form.form.description.data,
+                    quantity=qty,
+                    price_before_tax=price,
+                    tax=tax,
+                    discount=discount,
+                    total_price=total_item
+                )
+                db.session.add(expense_item)
+
+                # Update totals
+                total_before_tax += item_before_tax
+                total_tax += tax
+                total_discount += discount
+
+        # Update invoice totals
+        invoice.total_before_tax = total_before_tax
+        invoice.tax_amount = total_tax
+        invoice.discount_amount = total_discount
+        invoice.total_after_tax_discount = total_before_tax + total_tax - total_discount
+
+        # Do not create payment automatically; will remain unpaid until user registers a payment
+
+        if safe_db_commit("expense invoice creation"):
+            flash(_('Expense invoice created successfully / تم إنشاء فاتورة المصروفات بنجاح'), 'success')
+            return redirect(url_for('expenses'))
+        else:
+            flash(_('Error creating expense invoice / خطأ في إنشاء فاتورة المصروفات'), 'danger')
+
+    # GET request - show form and existing invoices
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    pag = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    return render_template('expenses.html', form=form, invoices=pag.items, pagination=pag)
+
+
 @app.route('/import_meals', methods=['POST'])
 @login_required
 def import_meals():
@@ -1505,37 +2400,66 @@ def import_meals():
         # Read file using pandas
         try:
             import pandas as pd
+            print(f"DEBUG: pandas version: {pd.__version__}")  # Debug info
             if file.filename.lower().endswith('.csv'):
                 df = pd.read_csv(file)
             else:
-                df = pd.read_excel(file)
-        except ImportError:
-            flash(_('pandas library not installed / مكتبة pandas غير مثبتة'), 'danger')
+                # For Excel files, we need openpyxl
+                df = pd.read_excel(file, engine='openpyxl')
+        except ImportError as e:
+            print(f"DEBUG: ImportError details: {e}")  # Debug info
+            if 'pandas' in str(e):
+                flash(_('pandas library not installed / مكتبة pandas غير مثبتة'), 'danger')
+            elif 'openpyxl' in str(e):
+                flash(_('openpyxl library required for Excel files / مكتبة openpyxl مطلوبة لملفات Excel'), 'danger')
+            else:
+                flash(_('Required library not installed: %(error)s / مكتبة مطلوبة غير مثبتة: %(error)s', error=str(e)), 'danger')
             return redirect(url_for('meals'))
         except Exception as e:
+            print(f"DEBUG: General error: {e}")  # Debug info
             flash(_('Error reading file / خطأ في قراءة الملف: %(error)s', error=str(e)), 'danger')
             return redirect(url_for('meals'))
 
-        # Expected columns: Name, Name (Arabic), Category, Cost, Selling Price
-        expected_cols = ['Name', 'Name (Arabic)', 'Category', 'Cost', 'Selling Price']
-        if not all(col in df.columns for col in expected_cols):
-            flash(_('Invalid file format. Expected columns: %(cols)s / تنسيق ملف غير صالح. الأعمدة المطلوبة: %(cols)s',
-                   cols=', '.join(expected_cols)), 'danger')
+        # Normalize column names (case-insensitive matching)
+        df.columns = df.columns.str.strip()  # Remove extra spaces
+        col_mapping = {}
+
+        # Map actual columns to expected columns (case-insensitive)
+        for col in df.columns:
+            col_lower = col.lower()
+            if col_lower == 'name':
+                col_mapping['Name'] = col
+            elif col_lower in ['name (arabic)', 'name(arabic)', 'arabic name', 'arabic_name']:
+                col_mapping['Name (Arabic)'] = col
+            elif col_lower == 'category':
+                col_mapping['Category'] = col
+            elif col_lower == 'cost':
+                col_mapping['Cost'] = col
+            elif col_lower in ['selling price', 'selling_price', 'price']:
+                col_mapping['Selling Price'] = col
+
+        # Check if we have the required columns
+        required_cols = ['Name', 'Cost', 'Selling Price']  # Arabic name and category are optional
+        missing_cols = [col for col in required_cols if col not in col_mapping]
+
+        if missing_cols:
+            flash(_('Missing required columns: %(cols)s / أعمدة مطلوبة مفقودة: %(cols)s. Available columns: %(available)s',
+                   cols=', '.join(missing_cols), available=', '.join(df.columns)), 'danger')
             return redirect(url_for('meals'))
 
         # Import meals
         imported_count = 0
         from models import Meal
 
-        for _, row in df.iterrows():
+        for idx, row in df.iterrows():
             try:
-                name = str(row['Name']).strip()
-                name_ar = str(row['Name (Arabic)']).strip() if pd.notna(row['Name (Arabic)']) else ''
-                category = str(row['Category']).strip() if pd.notna(row['Category']) else 'General'
-                cost = float(row['Cost']) if pd.notna(row['Cost']) else 0.0
-                selling_price = float(row['Selling Price']) if pd.notna(row['Selling Price']) else 0.0
+                name = str(row[col_mapping['Name']]).strip()
+                name_ar = str(row[col_mapping.get('Name (Arabic)', '')]).strip() if col_mapping.get('Name (Arabic)') and pd.notna(row[col_mapping.get('Name (Arabic)', '')]) else ''
+                category = str(row[col_mapping.get('Category', '')]).strip() if col_mapping.get('Category') and pd.notna(row[col_mapping.get('Category', '')]) else 'General'
+                cost = float(row[col_mapping['Cost']]) if pd.notna(row[col_mapping['Cost']]) else 0.0
+                selling_price = float(row[col_mapping['Selling Price']]) if pd.notna(row[col_mapping['Selling Price']]) else 0.0
 
-                if not name:
+                if not name or name.lower() in ['nan', 'none', '']:
                     continue
 
                 # Check if meal already exists
@@ -1547,19 +2471,23 @@ def import_meals():
                     name=name,
                     name_ar=name_ar,
                     category=category,
-                    cost=cost,
+                    total_cost=cost,  # Fixed: use total_cost instead of cost
                     selling_price=selling_price,
-                    profit_margin_percent=((selling_price - cost) / cost * 100) if cost > 0 else 0
+                    profit_margin_percent=((selling_price - cost) / cost * 100) if cost > 0 else 0,
+                    user_id=current_user.id  # Required field
                 )
                 db.session.add(meal)
                 imported_count += 1
 
             except Exception as e:
-                logging.warning(f'Error importing meal row: {e}')
+                logging.warning(f'Error importing meal row {idx}: {e}')
                 continue
 
-        db.session.commit()
-        flash(_('Successfully imported %(count)s meals / تم استيراد %(count)s وجبة بنجاح', count=imported_count), 'success')
+        commit_success = safe_db_commit("meal import")
+        if commit_success:
+            flash(_('Successfully imported %(count)s meals / تم استيراد %(count)s وجبة بنجاح', count=imported_count), 'success')
+        else:
+            flash(_('Failed to save meals to database / فشل حفظ الوجبات في قاعدة البيانات'), 'danger')
 
     except Exception as e:
         db.session.rollback()
@@ -1576,12 +2504,24 @@ def cancel_draft_order(draft_id):
 
         draft = DraftOrder.query.get_or_404(draft_id)
 
+        # Require supervisor password for cancellation (same as invoice void password)
+        try:
+            payload = request.get_json(silent=True) or {}
+            pwd = (payload.get('supervisor_password') or '').strip()
+            # Fixed password for cancellation: 1991 (same as invoice void)
+            expected = '1991'
+            if pwd != expected:
+                return jsonify({'success': False, 'error': _('Incorrect password / كلمة السر غير صحيحة')}), 400
+        except Exception:
+            return jsonify({'success': False, 'error': _('Password check failed / فشل التحقق من كلمة السر')}), 400
+
         # Check permissions (user can cancel their own drafts or admin can cancel any)
         if draft.user_id != current_user.id and getattr(current_user, 'role', '') != 'admin':
             return jsonify({'success': False, 'error': 'Permission denied'}), 403
 
         branch_code = draft.branch_code
-        table_no = draft.table_no
+        # Safe handling of table_number
+        table_number = safe_table_number(draft.table_number)
 
         # Delete the draft order (cascade will delete items)
         db.session.delete(draft)
@@ -1589,17 +2529,17 @@ def cancel_draft_order(draft_id):
         # Update table status if no more drafts
         remaining_drafts = DraftOrder.query.filter_by(
             branch_code=branch_code,
-            table_no=table_no,
+            table_number=str(table_number),
             status='draft'
         ).count()
 
         if remaining_drafts <= 1:  # <= 1 because we haven't committed the delete yet
-            table = Table.query.filter_by(branch_code=branch_code, table_number=table_no).first()
+            table = Table.query.filter_by(branch_code=branch_code, table_number=table_number).first()
             if table:
                 table.status = 'available'
                 table.updated_at = datetime.utcnow()
 
-        db.session.commit()
+        safe_db_commit()
         return jsonify({'success': True})
 
     except Exception as e:
@@ -1648,15 +2588,16 @@ def add_item_to_draft(draft_id):
 
         # Update table status to reserved if this is the first item
         if len(draft.items) == 0:  # First item being added
-            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_no).first()
+            table_num_int = safe_table_number(draft.table_number)
+            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=table_num_int).first()
             if not table:
-                table = Table(branch_code=draft.branch_code, table_number=draft.table_no, status='reserved')
+                table = Table(branch_code=draft.branch_code, table_number=table_num_int, status='reserved')
                 db.session.add(table)
             else:
                 table.status = 'reserved'
                 table.updated_at = datetime.utcnow()
 
-        db.session.commit()
+        safe_db_commit()
         return jsonify({'success': True, 'item_id': draft_item.id})
 
     except Exception as e:
@@ -1724,15 +2665,16 @@ def update_draft_order(draft_id):
 
         # Update table status to reserved if items exist
         if items_data:
-            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_no).first()
+            table_num_int = safe_table_number(draft.table_number)
+            table = Table.query.filter_by(branch_code=draft.branch_code, table_number=table_num_int).first()
             if not table:
-                table = Table(branch_code=draft.branch_code, table_number=draft.table_no, status='reserved')
+                table = Table(branch_code=draft.branch_code, table_number=table_num_int, status='reserved')
                 db.session.add(table)
             else:
                 table.status = 'reserved'
                 table.updated_at = datetime.utcnow()
 
-        db.session.commit()
+        safe_db_commit()
         return jsonify({'success': True})
 
     except Exception as e:
@@ -1756,30 +2698,46 @@ def api_draft_checkout():
         from models import DraftOrder, SalesInvoice, SalesInvoiceItem, Payment, Table
 
         data = request.get_json() or {}
+        current_app.logger.debug('api_draft_checkout payload: %s', data)
+
+        # Debug logging
+        print(f"DEBUG: api_draft_checkout called with data: {data}")
+
         draft_id = data.get('draft_id')
 
         if not draft_id:
+            print(f"DEBUG: No draft_id provided in data: {data}")
             return jsonify({'ok': False, 'error': 'Draft ID required'}), 400
 
         draft = DraftOrder.query.get_or_404(draft_id)
 
+        # Debug logging
+        print(f"DEBUG: Draft order {draft_id} status: '{draft.status}', items count: {len(draft.items)}")
+
         if draft.status != 'draft':
-            return jsonify({'ok': False, 'error': 'Invalid draft order'}), 400
+            print(f"DEBUG: Invalid draft status - expected 'draft', got '{draft.status}'")
+            return jsonify({'ok': False, 'error': f'Invalid draft order status: {draft.status}'}), 400
 
         # Get form data
         customer_name = data.get('customer_name', '').strip()
         customer_phone = data.get('customer_phone', '').strip()
         payment_method = data.get('payment_method', 'CASH')
+        discount_pct = float(data.get('discount_pct') or 0)
+
+
 
         # Calculate totals
         subtotal = sum(float(item.price_before_tax * item.quantity) for item in draft.items)
         tax_total = sum(float(item.tax) for item in draft.items)
-        grand_total = sum(float(item.total_price) for item in draft.items)
+
+        # Calculate discount and grand total
+        discount_val = (subtotal + tax_total) * (discount_pct / 100.0)
+        grand_total = (subtotal + tax_total) - discount_val
+
+
 
         # Generate invoice number
-        from datetime import datetime as _dt, timezone, timedelta
-        saudi_tz = timezone(timedelta(hours=3))
-        _now = _dt.now(saudi_tz)
+        _now = get_saudi_now()
 
         last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
         invoice_number = (last_invoice.id + 1) if last_invoice else 1
@@ -1790,25 +2748,27 @@ def api_draft_checkout():
             date=_now.date(),
             payment_method=payment_method,
             branch=draft.branch_code,
-            table_no=draft.table_no,
+            table_number=draft.table_number,
             customer_name=customer_name or None,
             customer_phone=customer_phone or None,
             total_before_tax=subtotal,
             tax_amount=tax_total,
-            discount_amount=0,
+            discount_amount=discount_val,  # Fixed: use calculated discount
             total_after_tax_discount=grand_total,
-            status='paid',
+            status='unpaid',
             user_id=current_user.id,
-            created_at=_now
+            created_at=_now  # Explicitly set Saudi time
         )
         db.session.add(invoice)
         db.session.flush()
+
+
 
         # Copy items from draft to invoice
         for draft_item in draft.items:
             invoice_item = SalesInvoiceItem(
                 invoice_id=invoice.id,
-                meal_id=draft_item.meal_id,
+
                 product_name=draft_item.product_name,
                 quantity=draft_item.quantity,
                 price_before_tax=draft_item.price_before_tax,
@@ -1818,15 +2778,6 @@ def api_draft_checkout():
             )
             db.session.add(invoice_item)
 
-        # Create payment record
-        payment = Payment(
-            invoice_id=invoice.id,
-            invoice_type='sales',
-            amount_paid=grand_total,
-            payment_method=payment_method,
-            payment_date=_now
-        )
-        db.session.add(payment)
 
         # Mark draft as completed
         draft.status = 'completed'
@@ -1834,11 +2785,12 @@ def api_draft_checkout():
         # Update table status
         remaining_drafts = DraftOrder.query.filter_by(
             branch_code=draft.branch_code,
-            table_no=draft.table_no,
+            table_number=str(draft.table_number),
             status='draft'
         ).count()
 
-        table = Table.query.filter_by(branch_code=draft.branch_code, table_number=draft.table_no).first()
+        table_num_int = safe_table_number(draft.table_number)
+        table = Table.query.filter_by(branch_code=draft.branch_code, table_number=table_num_int).first()
         if table:
             if remaining_drafts <= 1:  # This draft will be completed
                 table.status = 'available'
@@ -1846,7 +2798,7 @@ def api_draft_checkout():
                 table.status = 'reserved'  # Still has other drafts
             table.updated_at = _now
 
-        db.session.commit()
+        safe_db_commit()
 
         # Return success with print URL
         print_url = url_for('sales_receipt', invoice_id=invoice.id)
@@ -1854,12 +2806,62 @@ def api_draft_checkout():
             'ok': True,
             'status': 'success',
             'invoice_id': invoice.id,
-            'print_url': print_url
+            'print_url': print_url,
+            'total_amount': float(grand_total),
+            'payment_method': payment_method
         })
 
     except Exception as e:
         db.session.rollback()
         logging.exception('API draft checkout failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# API: Confirm print completion and register payment
+@app.route('/api/invoice/confirm-print', methods=['POST'])
+@login_required
+def confirm_print_and_pay():
+    """Confirm that invoice was printed and register payment"""
+    try:
+        data = request.get_json() or {}
+        invoice_id = data.get('invoice_id')
+        payment_method = data.get('payment_method', 'CASH')
+        total_amount = float(data.get('total_amount', 0))
+
+        if not invoice_id or not total_amount:
+            return jsonify({'ok': False, 'error': 'Missing invoice_id or total_amount'}), 400
+
+        # Get the invoice
+        from models import SalesInvoice, Payment
+        invoice = SalesInvoice.query.get(invoice_id)
+        if not invoice:
+            return jsonify({'ok': False, 'error': 'Invoice not found'}), 404
+
+        # Check if already paid
+        if invoice.status == 'paid':
+            return jsonify({'ok': True, 'message': 'Already paid'})
+
+        # Create payment record
+        payment = Payment(
+            invoice_type='sales',
+            invoice_id=invoice_id,
+            amount_paid=total_amount,
+            payment_method=payment_method,
+            payment_date=get_saudi_now(),
+            user_id=current_user.id
+        )
+        db.session.add(payment)
+
+        # Update invoice status to paid
+        invoice.status = 'paid'
+
+        db.session.commit()
+
+        return jsonify({'ok': True, 'message': 'Payment registered successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        logging.exception('confirm_print_and_pay failed')
         return jsonify({'ok': False, 'error': str(e)}), 500
 @app.route('/admin/fix_database', methods=['GET'])
 @login_required
@@ -1873,24 +2875,24 @@ def fix_database_route():
 
         results = []
 
-        # 1. Add table_no column to sales_invoices if missing
+        # 1. Add table_number column to sales_invoices if missing
         try:
             with db.engine.connect() as conn:
                 result = conn.execute(text("""
                     SELECT column_name
                     FROM information_schema.columns
                     WHERE table_name = 'sales_invoices'
-                    AND column_name = 'table_no'
+                    AND column_name = 'table_number'
                 """))
 
                 if not result.fetchone():
-                    conn.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_no INTEGER"))
+                    conn.execute(text("ALTER TABLE sales_invoices ADD COLUMN table_number INTEGER"))
                     conn.commit()
-                    results.append("✅ Added table_no column to sales_invoices")
+                    results.append("✅ Added table_number column to sales_invoices")
                 else:
-                    results.append("✅ table_no column already exists")
+                    results.append("✅ table_number column already exists")
         except Exception as e:
-            results.append(f"⚠️ Error with table_no: {e}")
+            results.append(f"⚠️ Error with table_number: {e}")
 
         # 2. Create tables table if missing
         try:
@@ -1912,13 +2914,15 @@ def fix_database_route():
             results.append(f"⚠️ Error with tables table: {e}")
 
         # 3. Create draft_orders table if missing
+
+
         try:
             with db.engine.connect() as conn:
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS draft_orders (
                         id SERIAL PRIMARY KEY,
                         branch_code VARCHAR(20) NOT NULL,
-                        table_no INTEGER NOT NULL,
+                        table_number INTEGER NOT NULL,
                         customer_name VARCHAR(100),
                         customer_phone VARCHAR(30),
                         payment_method VARCHAR(20) DEFAULT 'CASH',
@@ -1985,6 +2989,61 @@ def fix_database_route():
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+
+@app.route('/admin/seed_branch_users', methods=['GET'])
+@login_required
+def admin_seed_branch_users():
+    """Create or update branch-scoped sales users and permissions.
+    Admin-only. Idempotent and safe to re-run.
+    Users:
+      - place_india / place02563 -> sales perms for branch_scope='place_india'
+      - china_town / china02554 -> sales perms for branch_scope='china_town'
+    """
+    try:
+        if getattr(current_user, 'role', '') != 'admin':
+            return jsonify({'ok': False, 'error': 'Admin access required'}), 403
+
+        from models import User, UserPermission
+        created, updated = [], []
+
+        def ensure_user(username: str, password: str):
+            u = User.query.filter_by(username=username).first()
+            if u:
+                if password:
+                    u.set_password(password, bcrypt)
+                    updated.append(username)
+            else:
+                u = User(username=username, role='user', active=True)
+                u.set_password(password, bcrypt)
+                db.session.add(u)
+                created.append(username)
+            db.session.flush()
+            return u
+
+        place_user = ensure_user('place_india', 'place02563')
+        china_user = ensure_user('china_town', 'china02554')
+
+        def grant_sales(u, scope: str):
+            # remove existing sales permissions for any scope to avoid duplicates
+            UserPermission.query.filter_by(user_id=u.id, screen_key='sales').delete(synchronize_session=False)
+            p = UserPermission(user_id=u.id, screen_key='sales', branch_scope=scope,
+                               can_view=True, can_add=True, can_edit=False, can_delete=False, can_print=True)
+            db.session.add(p)
+
+        grant_sales(place_user, 'place_india')
+        grant_sales(china_user, 'china_town')
+
+        db.session.commit()
+        return jsonify({'ok': True, 'created': created, 'updated': updated,
+                        'credentials': {
+                            'place_india': {'username': 'place_india', 'password': 'place02563'},
+                            'china_town': {'username': 'china_town', 'password': 'china02554'}
+                        }})
+    except Exception as e:
+        db.session.rollback()
+        logging.exception('admin_seed_branch_users failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 @app.route('/invoices')
 @login_required
 def invoices():
@@ -1997,23 +3056,41 @@ def invoices():
         elif raw_type in ['sales','sale']: tfilter = 'sales'
         else: tfilter = 'all'
 
-        # Simple approach - get invoices directly without complex queries
+        # Build invoices and compute paid amounts from Payments, recompute status
         rows = []
+        def paid_map_for(kind, ids):
+            if not ids:
+                return {}
+            mm = db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)) \
+                .filter(Payment.invoice_type == kind, Payment.invoice_id.in_(ids)) \
+                .group_by(Payment.invoice_id).all()
+            return {pid: float(total or 0) for (pid, total) in mm}
+        def status_from(total, paid):
+            try:
+                if paid >= total: return 'paid'
+                if paid > 0: return 'partial'
+                return 'unpaid'
+            except Exception:
+                return 'unpaid'
 
         # Sales invoices
         if tfilter in ['all', 'sales']:
             try:
-                sales_invoices = SalesInvoice.query.order_by(SalesInvoice.date.desc()).all()
-                for inv in sales_invoices:
+                sales_list = SalesInvoice.query.order_by(SalesInvoice.date.desc()).all()
+                sales_paid = paid_map_for('sales', [s.id for s in sales_list])
+                for inv in sales_list:
+                    total = float(inv.total_after_tax_discount or 0)
+                    paid = sales_paid.get(inv.id, 0.0)
+                    remaining = max(total - paid, 0.0)
                     rows.append({
                         'id': inv.id,
                         'invoice_number': inv.invoice_number,
                         'invoice_type': 'sales',
                         'customer_supplier': inv.customer_name or 'Customer',
-                        'total_amount': float(inv.total_after_tax_discount or 0),
-                        'paid_amount': 0,  # Will be calculated from payments
-                        'remaining_amount': float(inv.total_after_tax_discount or 0),
-                        'status': inv.status or 'unpaid',
+                        'total_amount': total,
+                        'paid_amount': paid,
+                        'remaining_amount': remaining,
+                        'status': status_from(total, paid),
                         'due_date': inv.date
                     })
             except Exception as e:
@@ -2022,17 +3099,21 @@ def invoices():
         # Purchase invoices
         if tfilter in ['all', 'purchase']:
             try:
-                purchase_invoices = PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).all()
-                for inv in purchase_invoices:
+                purchase_list = PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).all()
+                purchase_paid = paid_map_for('purchase', [p.id for p in purchase_list])
+                for inv in purchase_list:
+                    total = float(getattr(inv, 'total_after_tax_discount', 0) or 0)
+                    paid = purchase_paid.get(inv.id, 0.0)
+                    remaining = max(total - paid, 0.0)
                     rows.append({
                         'id': inv.id,
                         'invoice_number': getattr(inv, 'invoice_number', inv.id),
                         'invoice_type': 'purchase',
                         'customer_supplier': getattr(inv, 'supplier_name', 'Supplier'),
-                        'total_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                        'paid_amount': 0,
-                        'remaining_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                        'status': getattr(inv, 'status', 'unpaid'),
+                        'total_amount': total,
+                        'paid_amount': paid,
+                        'remaining_amount': remaining,
+                        'status': status_from(total, paid),
                         'due_date': inv.date
                     })
             except Exception as e:
@@ -2041,17 +3122,21 @@ def invoices():
         # Expense invoices
         if tfilter in ['all', 'expense']:
             try:
-                expense_invoices = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).all()
-                for inv in expense_invoices:
+                expense_list = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).all()
+                expense_paid = paid_map_for('expense', [x.id for x in expense_list])
+                for inv in expense_list:
+                    total = float(getattr(inv, 'total_after_tax_discount', 0) or 0)
+                    paid = expense_paid.get(inv.id, 0.0)
+                    remaining = max(total - paid, 0.0)
                     rows.append({
                         'id': inv.id,
                         'invoice_number': getattr(inv, 'invoice_number', inv.id),
                         'invoice_type': 'expense',
                         'customer_supplier': 'Expense',
-                        'total_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                        'paid_amount': 0,
-                        'remaining_amount': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                        'status': getattr(inv, 'status', 'unpaid'),
+                        'total_amount': total,
+                        'paid_amount': paid,
+                        'remaining_amount': remaining,
+                        'status': status_from(total, paid),
                         'due_date': inv.date
                     })
             except Exception as e:
@@ -2208,7 +3293,7 @@ def invoices_delete():
         else:
             flash(_('Invalid request / طلب غير صالح'), 'danger')
             return redirect(url_for('invoices', type='all'))
-        db.session.commit()
+        safe_db_commit()
         flash(_('Deleted %(n)s invoices / تم حذف %(n)s فاتورة', n=deleted), 'success')
     except Exception:
         db.session.rollback()
@@ -2282,11 +3367,40 @@ def employees():
                 status=form.status.data
             )
             db.session.add(emp)
-            db.session.commit()
+            safe_db_commit()
+            # Create default salary row
+            try:
+                from models import EmployeeSalaryDefault
+                d = EmployeeSalaryDefault(
+                    employee_id=emp.id,
+                    base_salary=form.base_salary.data or 0,
+                    allowances=form.allowances.data or 0,
+                    deductions=form.deductions.data or 0,
+                )
+                db.session.add(d)
+                safe_db_commit()
+            except Exception:
+                db.session.rollback()
             flash(_('تم إضافة الموظف بنجاح / Employee added successfully'), 'success')
             return redirect(url_for('employees'))
         except Exception as e:
             db.session.rollback()
+
+    # Pre-fill from defaults when employee selected
+    if request.method == 'POST' and not form.errors:
+        from models import EmployeeSalaryDefault
+        try:
+            d = EmployeeSalaryDefault.query.filter_by(employee_id=form.employee_id.data).first()
+            if d:
+                if not form.basic_salary.data: form.basic_salary.data = float(d.base_salary or 0)
+                if not form.allowances.data: form.allowances.data = float(d.allowances or 0)
+                if not form.deductions.data: form.deductions.data = float(d.deductions or 0)
+                # Recompute total
+                total = (float(form.basic_salary.data or 0) + float(form.allowances.data or 0) - float(form.deductions.data or 0) + float(form.previous_salary_due.data or 0))
+                form.total_salary.data = total
+        except Exception:
+            pass
+
             flash(_('تعذرت إضافة الموظف. تحقق من أن رقم الموظف والهوية غير مكررين. / Could not add employee. Ensure code and national id are unique.'), 'danger')
     employees_list = Employee.query.order_by(Employee.full_name.asc()).all()
     return render_template('employees.html', form=form, employees=employees_list)
@@ -2319,10 +3433,10 @@ def salaries():
                 deductions=deductions,
                 previous_salary_due=prev_due,
                 total_salary=total,
-                status=form.status.data
+                status='unpaid'
             )
             db.session.add(salary)
-            db.session.commit()
+            safe_db_commit()
             flash(_('تم حفظ الراتب بنجاح / Salary saved successfully'), 'success')
             return redirect(url_for('salaries'))
         except Exception:
@@ -2338,8 +3452,16 @@ def payments():
     status_filter = request.args.get('status')
     type_filter = request.args.get('type')
 
+    # Initialize all_invoices as empty list to prevent UnboundLocalError
+    all_invoices = []
+
     # Simple approach - get invoices directly from models
     try:
+        # Import required models
+        from sqlalchemy import func
+
+        from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice
+
         # Sales invoices
         sales_invoices = []
         try:
@@ -2350,7 +3472,7 @@ def payments():
                     'type': 'sales',
                     'party': inv.customer_name or 'Customer',
                     'total': float(inv.total_after_tax_discount or 0),
-                    'paid': 0,  # Will be calculated from payments
+                    'paid': float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type=='sales', Payment.invoice_id==inv.id).scalar() or 0),
                     'date': inv.date,
                     'status': inv.status or 'unpaid'
                 })
@@ -2367,7 +3489,7 @@ def payments():
                     'type': 'purchase',
                     'party': getattr(inv, 'supplier_name', 'Supplier'),
                     'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                    'paid': 0,
+                    'paid': float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type=='purchase', Payment.invoice_id==inv.id).scalar() or 0),
                     'date': inv.date,
                     'status': getattr(inv, 'status', 'unpaid')
                 })
@@ -2384,12 +3506,26 @@ def payments():
                     'type': 'expense',
                     'party': 'Expense',
                     'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                    'paid': 0,
+                    'paid': float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type=='expense', Payment.invoice_id==inv.id).scalar() or 0),
                     'date': inv.date,
                     'status': getattr(inv, 'status', 'unpaid')
                 })
         except Exception as e:
             logging.warning(f'Error loading expense invoices: {e}')
+
+        # Combine all invoices into one list with recomputed status from paid
+        def compute_status(total, paid):
+            try:
+                if paid >= total: return 'paid'
+                if paid > 0: return 'partial'
+                return 'unpaid'
+            except Exception:
+                return 'unpaid'
+        # recompute status per invoice
+        for arr in (sales_invoices, purchase_invoices, expense_invoices):
+            for it in arr:
+                it['status'] = compute_status(float(it['total']), float(it['paid']))
+        all_invoices = sales_invoices + purchase_invoices + expense_invoices
 
         # Apply filters if needed
         if status_filter:
@@ -2401,9 +3537,14 @@ def payments():
         return render_template('payments.html', invoices=all_invoices, status_filter=status_filter, type_filter=type_filter)
 
     except Exception as e:
+        # Rollback any failed database transactions and show whatever we have
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         logging.exception('Error in payments route')
         flash(_('Error loading payments / خطأ في تحميل المدفوعات'), 'danger')
-        return redirect(url_for('dashboard'))
+        return render_template('payments.html', invoices=all_invoices, status_filter=status_filter, type_filter=type_filter)
 
 @app.route('/reports', methods=['GET'])
 @login_required
@@ -2414,7 +3555,7 @@ def reports():
         start_arg = request.args.get('start_date')
         end_arg = request.args.get('end_date')
 
-        today = datetime.now(timezone.utc).date()
+        today = get_saudi_today()
 
         if period == 'today':
             start_dt = end_dt = today
@@ -2438,8 +3579,9 @@ def reports():
             start_dt = today.replace(day=1)
             end_dt = today
 
-        # Optional branch filter
+        # Optional branch filter - with error handling
         branch_filter = request.args.get('branch')
+ feature/new-pos-system
         if branch_filter and branch_filter != 'all':
             sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
                 .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter).scalar() or 0
@@ -2453,72 +3595,246 @@ def reports():
                 .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
             total_sales = float(sales_place) + float(sales_china)
 
-    # Purchases and Expenses
-    total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-        .filter(PurchaseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
-    total_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
-        .filter(ExpenseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        # Purchases and Expenses
+        total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
+            .filter(PurchaseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        total_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
+            .filter(ExpenseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
 
-    # Salaries within period: compute by month-year mapping to 1st day of month
-    salaries_rows = Salary.query.all()
-    total_salaries = 0.0
-    for s in salaries_rows:
+        # Salaries within period: compute by month-year mapping to 1st day of month
+        salaries_rows = Salary.query.all()
+        total_salaries = 0.0
+        for s in salaries_rows:
+            try:
+                s_date = datetime(s.year, s.month, 1).date()
+                if start_dt <= s_date <= end_dt:
+                    total_salaries += float(s.total_salary or 0)
+            except Exception:
+                continue
+
+        profit = float(total_sales) - (float(total_purchases) + float(total_expenses) + float(total_salaries))
+
+        # Line chart: daily sales
+        daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+            .group_by(SalesInvoice.date) \
+            .order_by(SalesInvoice.date.asc()).all()
+        line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
+        line_values = [float(r.t or 0) for r in daily_rows]
+
+        # Payment method distribution across invoices
+        def pm_counts(model, date_col, method_col):
+            rows = db.session.query(getattr(model, method_col), func.count('*')) \
+                .filter(getattr(model, date_col).between(start_dt, end_dt)) \
+                .group_by(getattr(model, method_col)).all()
+            return { (k or 'unknown'): int(v) for k, v in rows }
+
+        pm_map = {}
+        for d in (pm_counts(SalesInvoice, 'date', 'payment_method'),
+                  pm_counts(PurchaseInvoice, 'date', 'payment_method'),
+                  pm_counts(ExpenseInvoice, 'date', 'payment_method')):
+            for k, v in d.items():
+                pm_map[k] = pm_map.get(k, 0) + v
+=======
+        sales_place = 0
+        sales_china = 0
+        total_sales = 0
+
         try:
-            s_date = datetime(s.year, s.month, 1).date()
-            if start_dt <= s_date <= end_dt:
-                total_salaries += float(s.total_salary or 0)
-        except Exception:
-            continue
+            if branch_filter and branch_filter != 'all':
+                sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+                    .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter).scalar() or 0
+                sales_china = 0
+                total_sales = float(sales_place)
+            else:
+                # Sales totals by branch
+                sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+                    .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'place_india').scalar() or 0
+                sales_china = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
+                    .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == 'china_town').scalar() or 0
+                total_sales = float(sales_place) + float(sales_china)
+        except Exception as e:
+            logging.warning(f'Error calculating sales totals: {e}')
+            db.session.rollback()
+            sales_place = sales_china = total_sales = 0
 
-    profit = float(total_sales) - (float(total_purchases) + float(total_expenses) + float(total_salaries))
+        # Purchases and Expenses - with error handling
+        total_purchases = 0
+        total_expenses = 0
+        total_salaries = 0
 
-    # Line chart: daily sales
-    daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-        .group_by(SalesInvoice.date) \
-        .order_by(SalesInvoice.date.asc()).all()
-    line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
-    line_values = [float(r.t or 0) for r in daily_rows]
+        try:
+            total_purchases = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
+                .filter(PurchaseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        except Exception as e:
+            logging.warning(f'Error calculating purchases: {e}')
+            db.session.rollback()
+            total_purchases = 0
 
-    # Payment method distribution across invoices
-    def pm_counts(model, date_col, method_col):
-        rows = db.session.query(getattr(model, method_col), func.count('*')) \
-            .filter(getattr(model, date_col).between(start_dt, end_dt)) \
-            .group_by(getattr(model, method_col)).all()
-        return { (k or 'unknown'): int(v) for k, v in rows }
+        try:
+            total_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
+                .filter(ExpenseInvoice.date.between(start_dt, end_dt)).scalar() or 0)
+        except Exception as e:
+            logging.warning(f'Error calculating expenses: {e}')
+            db.session.rollback()
+            total_expenses = 0
 
-    pm_map = {}
-    for d in (pm_counts(SalesInvoice, 'date', 'payment_method'),
-              pm_counts(PurchaseInvoice, 'date', 'payment_method'),
-              pm_counts(ExpenseInvoice, 'date', 'payment_method')):
-        for k, v in d.items():
-            pm_map[k] = pm_map.get(k, 0) + v
-    pm_labels = list(pm_map.keys())
-    pm_values = [pm_map[k] for k in pm_labels]
+        # Salaries within period: compute by month-year mapping to 1st day of month
+        try:
+            salaries_rows = Salary.query.all()
+            for s in salaries_rows:
+                try:
+                    s_date = datetime(s.year, s.month, 1).date()
+                    if start_dt <= s_date <= end_dt:
+                        total_salaries += float(s.total_salary or 0)
+                except Exception:
+                    continue
+        except Exception as e:
+            logging.warning(f'Error calculating salaries: {e}')
+            db.session.rollback()
+            total_salaries = 0
 
-    # Comparison bars: totals
-    comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
-    comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
+        profit = float(total_sales) - (float(total_purchases) + float(total_expenses) + float(total_salaries))
 
-    # Cash flows from Payments table
-    start_dt_dt = datetime.combine(start_dt, datetime.min.time())
-    end_dt_dt = datetime.combine(end_dt, datetime.max.time())
-    inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-        Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
-    ).scalar() or 0)
-    outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-        Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
-    ).scalar() or 0)
-    net_cash = inflow - outflow
+        # Line chart: daily sales - with error handling
+        line_labels = []
+        line_values = []
 
-    # Top products by quantity
-    top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
-        .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
-        .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-        .group_by(SalesInvoiceItem.product_name) \
-        .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
-        .limit(10).all()
+        try:
+            daily_rows = db.session.query(SalesInvoice.date.label('d'), func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('t')) \
+                .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+                .group_by(SalesInvoice.date) \
+                .order_by(SalesInvoice.date.asc()).all()
+            line_labels = [r.d.strftime('%Y-%m-%d') for r in daily_rows]
+            line_values = [float(r.t) if r.t is not None else 0.0 for r in daily_rows]
+        except Exception as e:
+            logging.warning(f'Error generating daily sales chart: {e}')
+            db.session.rollback()
+            line_labels = []
+            line_values = []
+
+        # Payment method distribution across invoices - with error handling
+        def pm_counts(model, date_col, method_col):
+            try:
+                rows = db.session.query(getattr(model, method_col), func.count('*')) \
+                    .filter(getattr(model, date_col).between(start_dt, end_dt)) \
+                    .group_by(getattr(model, method_col)).all()
+                return {r[0]: int(r[1]) for r in rows}
+            except Exception as e:
+                logging.warning(f'Error getting payment method counts for {model.__name__}: {e}')
+                db.session.rollback()
+                return {}
+
+
+        pm_map = {}
+        try:
+            for d in (pm_counts(SalesInvoice, 'date', 'payment_method'),
+                      pm_counts(PurchaseInvoice, 'date', 'payment_method'),
+                      pm_counts(ExpenseInvoice, 'date', 'payment_method')):
+                for k, v in d.items():
+
+
+                    pm_map[k] = pm_map.get(k, 0) + v
+        except Exception as e:
+            logging.warning(f'Error processing payment method data: {e}')
+            pm_map = {}
+
+        pm_labels = list(pm_map.keys())
+        pm_values = [pm_map[k] for k in pm_labels]
+
+        # Comparison bars: totals
+        comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
+        comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
+
+        # Cash flows from Payments table - with error handling
+        inflow = 0
+        outflow = 0
+        net_cash = 0
+
+        try:
+            start_dt_dt = datetime.combine(start_dt, datetime.min.time())
+            end_dt_dt = datetime.combine(end_dt, datetime.max.time())
+            inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
+            ).scalar() or 0)
+            outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
+            ).scalar() or 0)
+            net_cash = inflow - outflow
+        except Exception as e:
+            logging.warning(f'Error calculating cash flows: {e}')
+            db.session.rollback()
+            inflow = outflow = net_cash = 0
+            for k, v in d.items():
+                pm_map[k or 'unknown'] = pm_map.get(k or 'unknown', 0) + v
+        except Exception as e:
+            logging.warning(f'Error processing payment method data: {e}')
+            pm_map = {}
+
+ main
+        pm_labels = list(pm_map.keys())
+        pm_values = [pm_map[k] for k in pm_labels]
+
+        # Comparison bars: totals
+        comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
+        comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
+
+ feature/new-pos-system
+        # Cash flows from Payments table
+        start_dt_dt = datetime.combine(start_dt, datetime.min.time())
+        end_dt_dt = datetime.combine(end_dt, datetime.max.time())
+        inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+            Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
+        ).scalar() or 0)
+        outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+            Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
+        ).scalar() or 0)
+        net_cash = inflow - outflow
+
+        # Top products by quantity
+        top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
+            .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
+            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+            .group_by(SalesInvoiceItem.product_name) \
+            .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
+            .limit(10).all()
         top_labels = [r[0] for r in top_rows]
+
+        # Cash flows from Payments table - with error handling
+        inflow = 0
+        outflow = 0
+        net_cash = 0
+
+
+        # Top products by quantity - with error handling
+        top_labels = []
+        top_values = []
+
+        try:
+            top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
+                .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
+                .filter(SalesInvoice.date.between(start_dt, end_dt)) \
+                .group_by(SalesInvoiceItem.product_name) \
+                .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
+                .limit(10).all()
+            top_labels = [r[0] for r in top_rows]
+            top_values = [float(r[1]) for r in top_rows]
+        except Exception as e:
+            logging.warning(f'Error getting top products: {e}')
+            db.session.rollback()
+            top_labels = []
+            top_values = []
+
+        # Low stock items - with error handling
+        low_stock = []
+        try:
+            low_stock_rows = RawMaterial.query.filter(RawMaterial.current_stock <= RawMaterial.minimum_stock).all()
+            low_stock = [{'name': r.name, 'current': r.current_stock, 'minimum': r.minimum_stock} for r in low_stock_rows]
+        except Exception as e:
+            logging.warning(f'Error getting low stock items: {e}')
+            db.session.rollback()
+            low_stock = []
+ main
 
         # Settings for labels/currency
         s = get_settings_safe()
@@ -2526,9 +3842,32 @@ def reports():
         china_lbl = s.china_town_label if s and s.china_town_label else 'China Town'
         currency = s.currency if s and s.currency else 'SAR'
 
-        # Simple fallback data for now
+        # Return template with actual calculated data
         return render_template('reports.html',
-            period=period, start_date=today, end_date=today,
+            period=period, start_date=start_dt, end_date=end_dt,
+            sales_place=sales_place, sales_china=sales_china, total_sales=total_sales,
+            total_purchases=total_purchases, total_expenses=total_expenses, total_salaries=total_salaries, profit=profit,
+            line_labels=line_labels, line_values=line_values,
+            pm_labels=pm_labels, pm_values=pm_values,
+            comp_labels=comp_labels, comp_values=comp_values,
+            inflow=inflow, outflow=outflow, net_cash=net_cash,
+            top_labels=top_labels, top_values=top_values,
+            low_stock=low_stock,
+            place_lbl=place_lbl, china_lbl=china_lbl, currency=currency
+        )
+    except Exception as e:
+        # Rollback any failed database transactions
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+        logging.exception('Error in reports route')
+        flash(_('Error loading reports / خطأ في تحميل التقارير'), 'danger')
+
+        # Return safe fallback data instead of redirect
+        return render_template('reports.html',
+            period='this_month', start_date=datetime.now().date(), end_date=datetime.now().date(),
             sales_place=0, sales_china=0, total_sales=0,
             total_purchases=0, total_expenses=0, total_salaries=0, profit=0,
             line_labels=[], line_values=[],
@@ -2539,10 +3878,6 @@ def reports():
             low_stock=[],
             place_lbl='Place India', china_lbl='China Town', currency='SAR'
         )
-    except Exception as e:
-        logging.exception('Error in reports route')
-        flash(_('Error loading reports / خطأ في تحميل التقارير'), 'danger')
-        return redirect(url_for('dashboard'))
 
 
 
@@ -2563,6 +3898,13 @@ def register_payment_ajax():
 
     # Register payment
     pay = Payment(invoice_id=invoice_id, invoice_type=invoice_type, amount_paid=amount, payment_method=method)
+    # Ensure payment_date is set now to avoid None in ledger posting
+    try:
+        from datetime import datetime as _dt
+        if not getattr(pay, 'payment_date', None):
+            pay.payment_date = _dt.utcnow()
+    except Exception:
+        pass
     db.session.add(pay)
 
     # Update invoice paid and status according to invoice type
@@ -2609,25 +3951,31 @@ def register_payment_ajax():
         ar_acc = get_or_create('1100', 'Accounts Receivable', 'ASSET')
         ap_acc = get_or_create('2000', 'Accounts Payable', 'LIABILITY')
 
+        # Robust date for ledger (fallback to today if missing)
+        try:
+            _pdate = pay.payment_date.date() if getattr(pay, 'payment_date', None) else datetime.utcnow().date()
+        except Exception:
+            _pdate = datetime.utcnow().date()
         if invoice_type == 'sales':
             # receipt: debit cash, credit AR
-            db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=cash_acc.id, debit=amount, credit=0, description=f'Receipt sales #{invoice_id}'))
-            db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=ar_acc.id, debit=0, credit=amount, description=f'Settle AR sales #{invoice_id}'))
+            db.session.add(LedgerEntry(date=_pdate, account_id=cash_acc.id, debit=amount, credit=0, description=f'Receipt sales #{invoice_id}'))
+            db.session.add(LedgerEntry(date=_pdate, account_id=ar_acc.id, debit=0, credit=amount, description=f'Settle AR sales #{invoice_id}'))
         elif invoice_type in ['purchase','expense','salary']:
             # payment: credit cash, debit AP (or expense/salary direct, but we keep AP)
-            db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=ap_acc.id, debit=amount, credit=0, description=f'Settle AP {invoice_type} #{invoice_id}'))
-            db.session.add(LedgerEntry(date=pay.payment_date.date(), account_id=cash_acc.id, debit=0, credit=amount, description=f'Payment {invoice_type} #{invoice_id}'))
-        db.session.commit()
+            db.session.add(LedgerEntry(date=_pdate, account_id=ap_acc.id, debit=amount, credit=0, description=f'Settle AP {invoice_type} #{invoice_id}'))
+            db.session.add(LedgerEntry(date=_pdate, account_id=cash_acc.id, debit=0, credit=amount, description=f'Payment {invoice_type} #{invoice_id}'))
+        safe_db_commit()
     except Exception as e:
         db.session.rollback()
         logging.error('Ledger posting (payment) failed: %s', e, exc_info=True)
 
 
-    db.session.commit()
+    safe_db_commit()
 
     # Emit socket event (if desired)
     try:
-        socketio.emit('payment_update', {'invoice_id': invoice_id, 'invoice_type': invoice_type, 'amount': amount})
+        if socketio:
+            socketio.emit('payment_update', {'invoice_id': invoice_id, 'invoice_type': invoice_type, 'amount': amount})
     except Exception:
         pass
 
@@ -2639,6 +3987,30 @@ def register_payment_ajax():
 
 
 # Employees: Edit
+
+# Employees: Edit defaults
+@app.route('/employees/<int:emp_id>/defaults', methods=['GET','POST'])
+@login_required
+def edit_employee_defaults(emp_id):
+    from models import Employee, EmployeeSalaryDefault
+    emp = Employee.query.get_or_404(emp_id)
+    d = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
+    if request.method == 'POST':
+        try:
+            if not d:
+                d = EmployeeSalaryDefault(employee_id=emp.id)
+                db.session.add(d)
+            d.base_salary = float(request.form.get('base_salary') or 0)
+            d.allowances = float(request.form.get('allowances') or 0)
+            d.deductions = float(request.form.get('deductions') or 0)
+            safe_db_commit()
+            flash(_('Defaults updated / تم تحديث الافتراضات'), 'success')
+            return redirect(url_for('employees'))
+        except Exception:
+            db.session.rollback()
+            flash(_('Failed to update defaults / فشل تحديث الافتراضات'), 'danger')
+    return render_template('employee_defaults_edit.html', emp=emp, d=d)
+
 
 # Deprecated inline VAT route is replaced by blueprint
 
@@ -2658,7 +4030,7 @@ def edit_employee(emp_id):
             emp.email = form.email.data.strip() if form.email.data else None
             emp.hire_date = form.hire_date.data
             emp.status = form.status.data
-            db.session.commit()
+            safe_db_commit()
             flash(_('تم تعديل بيانات الموظف / Employee updated'), 'success')
             return redirect(url_for('employees'))
         except Exception:
@@ -2672,12 +4044,15 @@ def edit_employee(emp_id):
 def delete_employee(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     try:
-        if emp.salaries and len(emp.salaries) > 0:
-            flash(_('لا يمكن حذف الموظف لوجود رواتب مرتبطة / Cannot delete employee with linked salaries'), 'danger')
-            return redirect(url_for('employees'))
+        # Delete related salaries first, then employee
+        try:
+            from models import Salary
+            Salary.query.filter_by(employee_id=emp.id).delete(synchronize_session=False)
+        except Exception:
+            pass
         db.session.delete(emp)
-        db.session.commit()
-        flash(_('تم حذف الموظف / Employee deleted'), 'info')
+        safe_db_commit()
+        flash(_('تم حذف الموظف وجميع رواتبه / Employee and related salaries deleted'), 'info')
     except Exception:
         db.session.rollback()
         flash(_('تعذر حذف الموظف / Could not delete employee'), 'danger')
@@ -2704,7 +4079,7 @@ def edit_salary(salary_id):
             sal.previous_salary_due = float(form.previous_salary_due.data or 0)
             sal.total_salary = sal.basic_salary + sal.allowances - sal.deductions + sal.previous_salary_due
             sal.status = form.status.data
-            db.session.commit()
+            safe_db_commit()
             flash(_('تم تعديل الراتب / Salary updated'), 'success')
             return redirect(url_for('salaries'))
         except Exception:
@@ -2726,13 +4101,13 @@ def salaries_statements():
         pass
     # Year/month
     try:
-        year = int(request.args.get('year') or datetime.now(timezone.utc).year)
+        year = int(request.args.get('year') or get_saudi_now().year)
     except Exception:
-        year = datetime.now(timezone.utc).year
+        year = get_saudi_now().year
     try:
-        month = int(request.args.get('month') or datetime.now(timezone.utc).month)
+        month = int(request.args.get('month') or get_saudi_now().month)
     except Exception:
-        month = datetime.now(timezone.utc).month
+        month = get_saudi_now().month
 
     from sqlalchemy import func
     qs = Salary.query.filter_by(year=year, month=month).join(Employee).order_by(Employee.full_name.asc())
@@ -2949,7 +4324,7 @@ def delete_salary(salary_id):
     sal = Salary.query.get_or_404(salary_id)
     try:
         db.session.delete(sal)
-        db.session.commit()
+        safe_db_commit()
         flash(_('تم حذف الراتب / Salary deleted'), 'info')
     except Exception:
         db.session.rollback()
@@ -2972,27 +4347,33 @@ def salaries_monthly():
         pass
     # Select year/month
     try:
-        year = int(request.values.get('year') or datetime.now(timezone.utc).year)
+        year = int(request.values.get('year') or get_saudi_now().year)
     except Exception:
-        year = datetime.now(timezone.utc).year
+        year = get_saudi_now().year
     try:
-        month = int(request.values.get('month') or datetime.now(timezone.utc).month)
+        month = int(request.values.get('month') or get_saudi_now().month)
     except Exception:
-        month = datetime.now(timezone.utc).month
+        month = get_saudi_now().month
 
     # Ensure salary rows exist for all active employees
     emps = Employee.query.filter_by(status='active').order_by(Employee.full_name.asc()).all()
     existing = {(s.employee_id, s.year, s.month): s for s in Salary.query.filter_by(year=year, month=month).all()}
     created = 0
+    from models import EmployeeSalaryDefault
     for e in emps:
         if (e.id, year, month) not in existing:
+            d = EmployeeSalaryDefault.query.filter_by(employee_id=e.id).first()
+            basic = float(getattr(d, 'base_salary', 0) or 0)
+            allow = float(getattr(d, 'allowances', 0) or 0)
+            ded = float(getattr(d, 'deductions', 0) or 0)
+            total = basic + allow - ded
             s = Salary(employee_id=e.id, year=year, month=month,
-                       basic_salary=0, allowances=0, deductions=0, previous_salary_due=0,
-                       total_salary=0, status='due')
+                       basic_salary=basic, allowances=allow, deductions=ded, previous_salary_due=0,
+                       total_salary=total, status='due')
             db.session.add(s)
             created += 1
     if created:
-        db.session.commit()
+        safe_db_commit()
 
     # Fetch salaries for period with payments summary
     salaries_q = Salary.query.filter_by(year=year, month=month).join(Employee).order_by(Employee.full_name.asc())
@@ -3036,6 +4417,16 @@ def salaries_monthly_save():
             return redirect(url_for('salaries_monthly', year=request.form.get('year'), month=request.form.get('month')))
     except Exception:
         pass
+
+@app.route('/api/employee/<int:emp_id>/salary_defaults')
+@login_required
+def api_employee_salary_defaults(emp_id):
+    from models import EmployeeSalaryDefault
+    d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
+    if not d:
+        return jsonify({'base_salary': 0, 'allowances': 0, 'deductions': 0})
+    return jsonify({'base_salary': float(d.base_salary or 0), 'allowances': float(d.allowances or 0), 'deductions': float(d.deductions or 0)})
+
     # Expect fields like basic_salary_<id>, allowances_<id>, deductions_<id>, previous_salary_due_<id>
     updated = 0
     for key, val in request.form.items():
@@ -3061,7 +4452,7 @@ def salaries_monthly_save():
         except Exception:
             continue
     if updated:
-        db.session.commit()
+        safe_db_commit()
         flash(_('تم حفظ التعديلات / Changes saved'), 'success')
     else:
         flash(_('No changes / لا توجد تعديلات'), 'info')
@@ -3084,7 +4475,7 @@ def settings_print_save():
     s.receipt_show_logo = bool(request.form.get('receipt_show_logo'))
     s.receipt_show_tax_number = bool(request.form.get('receipt_show_tax_number'))
     s.receipt_footer_text = (request.form.get('receipt_footer_text') or '').strip()
-    db.session.commit()
+    safe_db_commit()
     flash(_('Print settings saved / تم حفظ إعدادات الطباعة'), 'success')
     return redirect(url_for('settings'))
 
@@ -3124,6 +4515,27 @@ def settings():
         s.place_india_label = request.form.get('place_india_label') or 'Place India'
         s.china_town_label = request.form.get('china_town_label') or 'China Town'
         s.default_theme = (request.form.get('default_theme') or 'light').lower()
+
+        # Branch-specific settings
+        s.china_town_void_password = request.form.get('china_town_void_password') or '1991'
+        try:
+            s.china_town_vat_rate = float(request.form.get('china_town_vat_rate') or 15)
+        except Exception:
+            s.china_town_vat_rate = 15.0
+        try:
+            s.china_town_discount_rate = float(request.form.get('china_town_discount_rate') or 0)
+        except Exception:
+            s.china_town_discount_rate = 0.0
+
+        s.place_india_void_password = request.form.get('place_india_void_password') or '1991'
+        try:
+            s.place_india_vat_rate = float(request.form.get('place_india_vat_rate') or 15)
+        except Exception:
+            s.place_india_vat_rate = 15.0
+        try:
+            s.place_india_discount_rate = float(request.form.get('place_india_discount_rate') or 0)
+        except Exception:
+            s.place_india_discount_rate = 0.0
         # Receipt settings
         s.receipt_paper_width = (request.form.get('receipt_paper_width') or s.receipt_paper_width or '80')
         try:
@@ -3174,7 +4586,7 @@ def settings():
         s.receipt_show_logo = bool(request.form.get('receipt_show_logo'))
         s.receipt_show_tax_number = bool(request.form.get('receipt_show_tax_number'))
         s.receipt_footer_text = (request.form.get('receipt_footer_text') or s.receipt_footer_text or '')
-        db.session.commit()
+        safe_db_commit()
         flash(_('Settings saved successfully / تم حفظ الإعدادات'), 'success')
         return redirect(url_for('settings'))
     return render_template('settings.html', s=s or Settings())
@@ -3206,7 +4618,7 @@ def change_password():
     # Update securely
     u.set_password(new, bcrypt)
     try:
-        db.session.commit()
+        safe_db_commit()
         # Sync session object
         try:
             current_user.password_hash = u.password_hash
@@ -3303,7 +4715,7 @@ def api_users_create():
     u = User(username=username, email=email, role=role, active=True)
     u.set_password(password, bcrypt)
     db.session.add(u)
-    db.session.commit()
+    safe_db_commit()
     return jsonify({'status':'ok','id':u.id})
 
 @app.route('/api/users/<int:uid>', methods=['PATCH'])
@@ -3318,7 +4730,7 @@ def api_users_update(uid):
         u.active = bool(payload['active'])
     if 'password' in payload and payload['password']:
         u.set_password(payload['password'], bcrypt)
-    db.session.commit()
+    safe_db_commit()
     return jsonify({'status':'ok'})
 
 @app.route('/api/users', methods=['DELETE'])
@@ -3331,7 +4743,7 @@ def api_users_delete():
     if not ids:
         return jsonify({'error':'no ids'}), 400
     User.query.filter(User.id.in_(ids)).delete(synchronize_session=False)
-    db.session.commit()
+    safe_db_commit()
     return jsonify({'status':'ok','deleted':len(ids)})
 
 # ----- Permissions enforcement helpers -----
@@ -3385,24 +4797,40 @@ def api_user_permissions_get(uid):
     if not can_perm('users','view'):
         return jsonify({'error':'forbidden'}), 403
     User.query.get_or_404(uid)
-    scope = request.args.get('branch_scope')
+    scope = (request.args.get('branch_scope') or '').strip().lower()
+    # map short scope values to canonical
+    scope_map = {'place':'place_india', 'china':'china_town'}
+    canon_scope = scope_map.get(scope, scope)
     q = UserPermission.query.filter_by(user_id=uid)
-    if scope:
-        q = q.filter_by(branch_scope=scope)
+    from sqlalchemy import or_
+    if canon_scope and canon_scope != 'all':
+        # Include branch-specific, global ('all'), and legacy short scopes to be backward compatible
+        q = q.filter(or_(
+            UserPermission.branch_scope == canon_scope,
+            UserPermission.branch_scope == 'all',
+            UserPermission.branch_scope == 'place',
+            UserPermission.branch_scope == 'china'
+        ))
     perms = q.all()
-    out = [
-        {
-            'screen_key': p.screen_key,
-            'branch_scope': p.branch_scope,
-            'view': p.can_view,
-            'add': p.can_add,
-            'edit': p.can_edit,
-            'delete': p.can_delete,
-            'print': p.can_print,
-        } for p in perms
-    ]
+    # Aggregate by screen_key: effective permission is OR across scopes
+    agg = {}
+    for p in perms:
+        k = p.screen_key
+        if k not in agg:
+            agg[k] = {'screen_key': k, 'view': False, 'add': False, 'edit': False, 'delete': False, 'print': False}
+        agg[k]['view'] = agg[k]['view'] or bool(p.can_view)
+        agg[k]['add'] = agg[k]['add'] or bool(p.can_add)
+        agg[k]['edit'] = agg[k]['edit'] or bool(p.can_edit)
+        agg[k]['delete'] = agg[k]['delete'] or bool(p.can_delete)
+        agg[k]['print'] = agg[k]['print'] or bool(p.can_print)
+    if not canon_scope or canon_scope == 'all':
+        # For 'all' scope: aggregate across all scopes so UI shows effective overall perms
+        out = list(agg.values())
+    else:
+        out = list(agg.values())
     return jsonify({'items': out})
 
+@csrf_exempt
 @app.route('/api/users/<int:uid>/permissions', methods=['POST'])
 @login_required
 def api_user_permissions_save(uid):
@@ -3411,12 +4839,15 @@ def api_user_permissions_save(uid):
     User.query.get_or_404(uid)
     payload = request.get_json(force=True) or {}
     items = payload.get('items') or []
-    branch_scope = (payload.get('branch_scope') or 'all').lower()
+    scope_in = (payload.get('branch_scope') or 'all').strip().lower()
+    scope_map = {'place':'place_india', 'china':'china_town'}
+    branch_scope = scope_map.get(scope_in, scope_in)
     # Remove existing for this branch scope, then insert new
     UserPermission.query.filter_by(user_id=uid, branch_scope=branch_scope).delete(synchronize_session=False)
     for it in items:
         key = (it.get('screen_key') or '').strip()
-        if not key: continue
+        if not key:
+            continue
         p = UserPermission(
             user_id=uid, screen_key=key, branch_scope=branch_scope,
             can_view=bool(it.get('view')), can_add=bool(it.get('add')),
@@ -3424,8 +4855,63 @@ def api_user_permissions_save(uid):
             can_print=bool(it.get('print'))
         )
         db.session.add(p)
-    db.session.commit()
+    safe_db_commit()
     return jsonify({'status':'ok','count':len(items)})
+
+# Admin-only debug endpoint to inspect effective permissions for a user
+@app.route('/api/debug/effective_permissions', methods=['GET'])
+@login_required
+def debug_effective_permissions():
+    # Extra safe: admin only
+    if getattr(current_user, 'role', '') != 'admin':
+        return jsonify({'error': 'forbidden'}), 403
+    try:
+        # Identify target user
+        uname = (request.args.get('username') or '').strip()
+        uid_arg = (request.args.get('uid') or '').strip()
+        target = None
+        if uname:
+            target = User.query.filter_by(username=uname).first()
+        elif uid_arg:
+            try:
+                target = User.query.get(int(uid_arg))
+            except Exception:
+                target = None
+        if not target:
+            return jsonify({'error': 'user not found'}), 404
+        # Branch scope handling: same canonicalization and aggregation logic as API
+        scope = (request.args.get('branch_scope') or '').strip().lower()
+        scope_map = {'place':'place_india', 'china':'china_town'}
+        canon_scope = scope_map.get(scope, scope)
+        from models import UserPermission
+        from sqlalchemy import or_
+        q = UserPermission.query.filter_by(user_id=target.id)
+        if canon_scope and canon_scope != 'all':
+            q = q.filter(or_(
+                UserPermission.branch_scope == canon_scope,
+                UserPermission.branch_scope == 'all',
+                UserPermission.branch_scope == 'place',
+                UserPermission.branch_scope == 'china'
+            ))
+        perms = q.all()
+        agg = {}
+        for p in perms:
+            k = p.screen_key
+            if k not in agg:
+                agg[k] = {'screen_key': k, 'view': False, 'add': False, 'edit': False, 'delete': False, 'print': False}
+            agg[k]['view'] = agg[k]['view'] or bool(p.can_view)
+            agg[k]['add'] = agg[k]['add'] or bool(p.can_add)
+            agg[k]['edit'] = agg[k]['edit'] or bool(p.can_edit)
+            agg[k]['delete'] = agg[k]['delete'] or bool(p.can_delete)
+            agg[k]['print'] = agg[k]['print'] or bool(p.can_print)
+        out = list(agg.values())
+        return jsonify({'username': target.username, 'branch_scope': canon_scope or 'all', 'items': out})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': 'internal', 'detail': str(e)}), 500
 
 
 # Retention: 12 months with PDF export
@@ -3433,7 +4919,7 @@ def api_user_permissions_save(uid):
 @login_required
 def invoices_retention_view():
     # Show invoices older than 12 months (approx 365 days)
-    cutoff = datetime.now(timezone.utc).date() - timedelta(days=365)
+    cutoff = get_saudi_today() - timedelta(days=365)
     sales_old = SalesInvoice.query.filter(SalesInvoice.date < cutoff).order_by(SalesInvoice.date.desc()).limit(200).all()
     purchases_old = PurchaseInvoice.query.filter(PurchaseInvoice.date < cutoff).order_by(PurchaseInvoice.date.desc()).limit(200).all()
     expenses_old = ExpenseInvoice.query.filter(ExpenseInvoice.date < cutoff).order_by(ExpenseInvoice.date.desc()).limit(200).all()
@@ -3447,7 +4933,7 @@ def invoices_retention_export_view():
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
     import io
-    cutoff = datetime.now(timezone.utc).date() - timedelta(days=365)
+    cutoff = get_saudi_today() - timedelta(days=365)
     kind = (request.args.get('type') or 'all').lower()
     # Collect
     sales = SalesInvoice.query.filter(SalesInvoice.date < cutoff).order_by(SalesInvoice.date.asc()).all() if kind in ['all','sales'] else []
@@ -3698,14 +5184,15 @@ def single_payment(invoice_id):
     if payment_amount > 0:
         invoice.paid_amount += payment_amount
         invoice.update_status()
-        db.session.commit()
+        safe_db_commit()
 
         # Emit real-time update
-        socketio.emit('invoice_update', {
-            'invoice_id': invoice_id,
-            'new_status': invoice.status,
-            'paid_amount': invoice.paid_amount
-        })
+        if socketio:
+            socketio.emit('invoice_update', {
+                'invoice_id': invoice_id,
+                'new_status': invoice.status,
+                'paid_amount': invoice.paid_amount
+            })
 
         flash(_('Payment recorded successfully / تم تسجيل الدفعة بنجاح'), 'success')
 
@@ -3727,13 +5214,14 @@ def bulk_payment():
                 invoice.paid_amount += payment_per_invoice
                 invoice.update_status()
 
-        db.session.commit()
+        safe_db_commit()
 
         # Emit real-time update
-        socketio.emit('invoice_update', {
-            'bulk_update': True,
-            'updated_invoices': invoice_ids
-        })
+        if socketio:
+            socketio.emit('invoice_update', {
+                'bulk_update': True,
+                'updated_invoices': invoice_ids
+            })
 
         flash(_('Bulk payment recorded successfully / تم تسجيل الدفعة الجماعية بنجاح'), 'success')
 
@@ -3755,7 +5243,7 @@ def raw_materials():
             active=True
         )
         db.session.add(raw_material)
-        db.session.commit()
+        safe_db_commit()
 
         flash(_('Raw material added successfully / تم إضافة المادة الخام بنجاح'), 'success')
         return redirect(url_for('raw_materials'))
@@ -3841,14 +5329,15 @@ def meals():
             meal.total_cost = total_cost
             meal.calculate_selling_price()
 
-            db.session.commit()
+            safe_db_commit()
 
             # Emit real-time update
-            socketio.emit('meal_update', {
-                'meal_name': meal.display_name,
-                'total_cost': float(meal.total_cost),
-                'selling_price': float(meal.selling_price)
-            })
+            if socketio:
+                socketio.emit('meal_update', {
+                    'meal_name': meal.display_name,
+                    'total_cost': float(meal.total_cost),
+                    'selling_price': float(meal.selling_price)
+                })
 
             flash(_('Meal created successfully / تم إنشاء الوجبة بنجاح'), 'success')
             return redirect(url_for('meals'))
@@ -3865,24 +5354,42 @@ def meals():
 @app.route('/delete_raw_material/<int:material_id>', methods=['POST'])
 @login_required
 def delete_raw_material(material_id):
+    # Ensure required models are available even if globals change
+    from models import RawMaterial, MealIngredient, PurchaseInvoiceItem
+
     material = RawMaterial.query.get_or_404(material_id)
 
     # Check if material is used in any meals
-    meals_using_material = MealIngredient.query.filter_by(raw_material_id=material_id).all()
+    try:
+        meals_using_material = MealIngredient.query.filter_by(raw_material_id=material_id).all()
+    except Exception:
+        meals_using_material = []
     if meals_using_material:
-        meal_names = [ingredient.meal.display_name for ingredient in meals_using_material]
-        flash(_('Cannot delete material. It is used in meals: {}').format(', '.join(meal_names)), 'error')
+        # Be robust if some relations are missing
+        meal_names = []
+        for ingredient in meals_using_material:
+            try:
+                if getattr(ingredient, 'meal', None) and getattr(ingredient.meal, 'display_name', None):
+                    meal_names.append(ingredient.meal.display_name)
+                else:
+                    meal_names.append(str(getattr(ingredient, 'meal_id', 'Unknown')))
+            except Exception:
+                meal_names.append('Unknown')
+        flash(_('Cannot delete material. It is used in meals: {}').format(', '.join(meal_names)), 'warning')
         return redirect(url_for('raw_materials'))
 
     # Check if material is used in any purchase invoices
-    purchase_items = PurchaseInvoiceItem.query.filter_by(raw_material_id=material_id).all()
+    try:
+        purchase_items = PurchaseInvoiceItem.query.filter_by(raw_material_id=material_id).all()
+    except Exception:
+        purchase_items = []
     if purchase_items:
         flash(_('Cannot delete material. It has purchase history. Material will be deactivated instead.'), 'warning')
         material.active = False
     else:
         db.session.delete(material)
 
-    db.session.commit()
+    safe_db_commit()
     flash(_('Raw material deleted successfully / تم حذف المادة الخام بنجاح'), 'success')
     return redirect(url_for('raw_materials'))
 
@@ -3901,7 +5408,7 @@ def delete_meal(meal_id):
         MealIngredient.query.filter_by(meal_id=meal_id).delete()
         db.session.delete(meal)
 
-    db.session.commit()
+    safe_db_commit()
     flash(_('Meal deleted successfully / تم حذف الوجبة بنجاح'), 'success')
     return redirect(url_for('meals'))
 
@@ -3928,7 +5435,13 @@ def delete_purchase_invoice(invoice_id):
 
     # Delete invoice
     db.session.delete(invoice)
-    db.session.commit()
+    safe_db_commit()
+
+    # Signal UI of purchases page to refresh after deletion when coming from invoices
+    referer = request.headers.get('Referer', '')
+    if 'invoices' in referer:
+        # If user deleted from All Invoices page, go back there but with flash that purchases should update
+        return redirect(url_for('invoices', type='purchase'))
 
     flash(_('Purchase invoice deleted and stock updated / تم حذف فاتورة الشراء وتحديث المخزون'), 'success')
     return redirect(url_for('purchases'))
@@ -3936,6 +5449,12 @@ def delete_purchase_invoice(invoice_id):
 @app.route('/delete_sales_invoice/<int:invoice_id>', methods=['POST'])
 @login_required
 def delete_sales_invoice(invoice_id):
+    # Check for password in form data
+    password = request.form.get('password', '').strip()
+    if password != '1991':
+        flash(_('Incorrect password / كلمة السر غير صحيحة'), 'danger')
+        return redirect(url_for('sales'))
+
     invoice = SalesInvoice.query.get_or_404(invoice_id)
 
     # Delete related payments first
@@ -3949,7 +5468,7 @@ def delete_sales_invoice(invoice_id):
 
     # Delete invoice
     db.session.delete(invoice)
-    db.session.commit()
+    safe_db_commit()
 
     flash(_('Sales invoice deleted successfully / تم حذف فاتورة المبيعات بنجاح'), 'success')
 
@@ -3976,7 +5495,7 @@ def delete_expense_invoice(invoice_id):
 
     # Delete invoice
     db.session.delete(invoice)
-    db.session.commit()
+    safe_db_commit()
 
     flash(_('Expense invoice deleted successfully / تم حذف فاتورة المصروفات بنجاح'), 'success')
 
@@ -3987,5 +5506,58 @@ def delete_expense_invoice(invoice_id):
     else:
         return redirect(url_for('expenses'))
 
+# Health check endpoint
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok', 'message': 'App is running'})
+
+# Test endpoint for debugging dependencies
+@app.route('/test-dependencies')
+def test_dependencies():
+    """Test endpoint to check if pandas and other dependencies are available"""
+    results = {}
+
+    # Test pandas
+    try:
+        import pandas as pd
+        results['pandas'] = {'status': 'OK', 'version': pd.__version__}
+    except ImportError as e:
+        results['pandas'] = {'status': 'MISSING', 'error': str(e)}
+    except Exception as e:
+        results['pandas'] = {'status': 'ERROR', 'error': str(e)}
+
+    # Test openpyxl
+    try:
+        import openpyxl
+        results['openpyxl'] = {'status': 'OK', 'version': openpyxl.__version__}
+    except ImportError as e:
+        results['openpyxl'] = {'status': 'MISSING', 'error': str(e)}
+    except Exception as e:
+        results['openpyxl'] = {'status': 'ERROR', 'error': str(e)}
+
+    # Test Flask-Babel
+    try:
+        from flask_babel import gettext as _
+        test_msg = _('Test message')
+        results['flask_babel'] = {'status': 'OK', 'test': test_msg}
+    except ImportError as e:
+        results['flask_babel'] = {'status': 'MISSING', 'error': str(e)}
+    except Exception as e:
+        results['flask_babel'] = {'status': 'ERROR', 'error': str(e)}
+
+    return jsonify(results)
+
+# App is already initialized above
+
 if __name__ == '__main__':
+    # Import eventlet and socketio only when running the server
+    import eventlet
+    eventlet.monkey_patch()
+
+    from flask_socketio import SocketIO
+
+    # Initialize SocketIO with the app and assign to global variable
+    socketio = SocketIO(app, cors_allowed_origins="*")
+
+    # Run the application with SocketIO
     socketio.run(app, host='0.0.0.0', port=8000, debug=True)

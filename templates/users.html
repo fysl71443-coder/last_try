@@ -97,8 +97,8 @@
           <div class="d-flex gap-2">
             <select id="branchSelect" class="form-select form-select-sm">
               <option value="all">جميع الفروع</option>
-              <option value="place">فرع Place India</option>
-              <option value="china">فرع China Town</option>
+              <option value="place_india">فرع Place India</option>
+              <option value="china_town">فرع China Town</option>
             </select>
           </div>
         </div>
@@ -345,13 +345,20 @@
     // fetch existing permissions for branch scope
     try{
       const scope = document.getElementById('branchSelect').value;
-      const res = await fetch(`/api/users/${uid}/permissions?branch_scope=${scope}`);
+      const res = await fetch(`/api/users/${uid}/permissions?branch_scope=${encodeURIComponent(scope)}`);
       const data = await res.json();
       // reset all first
       list.querySelectorAll('.permCheck, .screenCheck').forEach(cb=>cb.checked=false);
       data.items.forEach(p=>{
         // tick screen if any permission
         const hasAny = p.view||p.add||p.edit||p.delete||p.print;
+        const scrCb = document.getElementById(`sc_${p.screen_key}`);
+        if(scrCb) scrCb.checked = hasAny;
+        ['view','add','edit','delete','print'].forEach(k=>{
+          const el = document.getElementById(`${p.screen_key}_${k}`);
+          if(el) el.checked = !!p[k];
+        });
+
 
 
   // branch change reloads perms if modal is open
@@ -362,7 +369,7 @@
     const uid = ids[0];
     try{
       const scope = document.getElementById('branchSelect').value;
-      const res = await fetch(`/api/users/${uid}/permissions?branch_scope=${scope}`);
+      const res = await fetch(`/api/users/${uid}/permissions?branch_scope=${encodeURIComponent(scope)}`);
       const data = await res.json();
       list.querySelectorAll('.permCheck, .screenCheck').forEach(cb=>cb.checked=false);
       data.items.forEach(p=>{
@@ -398,8 +405,7 @@
       items.push(obj);
     });
     try{
-      const res = await fetch(`/api/users/${uid}/permissions`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items, branch_scope: scope }) });
-      if(!res.ok){ throw new Error(await res.text()); }
+      await api('POST', `/api/users/${uid}/permissions`, { items, branch_scope: scope });
       // re-fetch to reflect saved values
       const res2 = await fetch(`/api/users/${uid}/permissions?branch_scope=${scope}`);
       const data = await res2.json();

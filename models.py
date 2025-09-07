@@ -1,4 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime
+import pytz
+
+# Saudi Arabia timezone
+KSA_TZ = pytz.timezone("Asia/Riyadh")
+
+def get_saudi_now():
+    """Get current datetime in Saudi Arabia timezone"""
+    return datetime.now(KSA_TZ)
 from flask_login import UserMixin
 from extensions import db
 
@@ -55,10 +63,11 @@ class SalesInvoice(db.Model):
     __tablename__ = 'sales_invoices'
     id = db.Column(db.Integer, primary_key=True)
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
-    date = db.Column(db.Date, default=datetime.utcnow)
+    date = db.Column(db.Date, default=lambda: get_saudi_now().date())
     payment_method = db.Column(db.String(20), nullable=False)
     branch = db.Column(db.String(50), nullable=False)  # 'place_india' or 'china_town'
-    table_no = db.Column(db.Integer, nullable=True)  # Table number
+    table_number = db.Column(db.Integer, nullable=True)  # Table number
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=True)  # Customer reference
     customer_name = db.Column(db.String(100), nullable=True)
     customer_phone = db.Column(db.String(30), nullable=True)
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
@@ -66,7 +75,7 @@ class SalesInvoice(db.Model):
     discount_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     total_after_tax_discount = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(db.String(20), default='unpaid')  # paid, partial, unpaid
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     items = db.relationship('SalesInvoiceItem', backref='invoice', lazy=True)
@@ -199,6 +208,7 @@ class PurchaseInvoice(db.Model):
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
     date = db.Column(db.Date, default=datetime.utcnow)
     supplier_name = db.Column(db.String(200), nullable=True)
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
     payment_method = db.Column(db.String(20), nullable=False)  # مدى, فيزا, بنك, كاش, ...
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
     tax_amount = db.Column(db.Numeric(12, 2), nullable=False)
@@ -208,6 +218,7 @@ class PurchaseInvoice(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
+    supplier = db.relationship('Supplier', lazy=True)
     items = db.relationship('PurchaseInvoiceItem', backref='invoice', lazy=True)
 
     def __repr__(self):
@@ -303,6 +314,16 @@ class Salary(db.Model):
     status = db.Column(db.String(20), default='due')  # paid/due/partial
 
 
+
+class EmployeeSalaryDefault(db.Model):
+    __tablename__ = 'employee_salary_defaults'
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False, unique=True)
+    base_salary = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    allowances = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    deductions = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 # Payments
 class Payment(db.Model):
     __tablename__ = 'payments'
@@ -334,12 +355,12 @@ class Table(db.Model):
 class DraftOrder(db.Model):
     __tablename__ = 'draft_orders'
     id = db.Column(db.Integer, primary_key=True)
-    branch_code = db.Column(db.String(20), nullable=False)
-    table_no = db.Column(db.Integer, nullable=False)
+    branch_code = db.Column(db.String(50), nullable=False)
+    table_number = db.Column(db.String(50), nullable=False, default='0')  # NOT NULL with default for PostgreSQL
     customer_name = db.Column(db.String(100), nullable=True)
-    customer_phone = db.Column(db.String(30), nullable=True)
-    payment_method = db.Column(db.String(20), default='CASH')
-    status = db.Column(db.String(20), default='draft')  # draft, completed, cancelled
+    customer_phone = db.Column(db.String(20), nullable=True)
+    payment_method = db.Column(db.String(50), nullable=False, default='CASH')  # NOT NULL with default
+    status = db.Column(db.String(20), nullable=False, default='draft')  # NOT NULL with default
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -347,7 +368,7 @@ class DraftOrder(db.Model):
     items = db.relationship('DraftOrderItem', backref='draft_order', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
-        return f'<DraftOrder {self.branch_code}-T{self.table_no} ({self.status})>'
+        return f'<DraftOrder {self.branch_code}-T{self.table_number} ({self.status})>'
 
 class DraftOrderItem(db.Model):
     __tablename__ = 'draft_order_items'
@@ -379,6 +400,18 @@ class Settings(db.Model):
     china_town_label = db.Column(db.String(100), default='China Town')
     currency = db.Column(db.String(10), default='SAR')
     default_theme = db.Column(db.String(10), default='light')  # 'light' or 'dark'
+
+    # Branch-specific settings
+    # China Town settings
+    china_town_void_password = db.Column(db.String(50), default='1991')
+    china_town_vat_rate = db.Column(db.Numeric(5, 2), default=15.00)
+    china_town_discount_rate = db.Column(db.Numeric(5, 2), default=0.00)
+
+    # Palace India settings
+    place_india_void_password = db.Column(db.String(50), default='1991')
+    place_india_vat_rate = db.Column(db.Numeric(5, 2), default=15.00)
+    place_india_discount_rate = db.Column(db.Numeric(5, 2), default=0.00)
+
     # Receipt print settings (sales invoices only)
     receipt_paper_width = db.Column(db.String(4), default='80')  # '80' or '58'
     receipt_margin_top_mm = db.Column(db.Integer, default=5)
@@ -392,8 +425,22 @@ class Settings(db.Model):
 
     logo_url = db.Column(db.String(300), default='/static/chinese-logo.svg')  # receipt logo
 
+
+class Supplier(db.Model):
+    __tablename__ = 'suppliers'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, nullable=False)
+    phone = db.Column(db.String(50), nullable=True)
+    email = db.Column(db.String(100), nullable=True)
+    address = db.Column(db.String(300), nullable=True)
+    tax_number = db.Column(db.String(50), nullable=True)
+    contact_person = db.Column(db.String(100), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
     def __repr__(self):
-        return f'<Settings {self.company_name or "Settings"}>'
+        return f'<Supplier {self.name}>'
 
 
 class Customer(db.Model):

@@ -84,9 +84,10 @@ class MealForm(FlaskForm):
 class PurchaseInvoiceItemForm(FlaskForm):
     class Meta:
         csrf = False
-    raw_material_id = SelectField(_l('Raw Material / المادة الخام'), coerce=int, validators=[DataRequired()])
-    quantity = DecimalField(_l('Quantity / الكمية'), validators=[DataRequired(), NumberRange(min=0.0001)], places=4)
-    price_before_tax = DecimalField(_l('Unit Price / سعر الوحدة'), validators=[DataRequired(), NumberRange(min=0)], places=4)
+    # نجعل الحقول اختيارية للسماح بصفوف فارغة في FieldList، وسنقوم بالتحقق في السيرفر لاحقاً
+    raw_material_id = SelectField(_l('Raw Material / المادة الخام'), coerce=int, validators=[Optional()])
+    quantity = DecimalField(_l('Quantity / الكمية'), validators=[Optional(), NumberRange(min=0.0001)], places=4)
+    price_before_tax = DecimalField(_l('Unit Price / سعر الوحدة'), validators=[Optional(), NumberRange(min=0)], places=4)
     discount = DecimalField(_l('Discount %% / نسبة الخصم %%'), validators=[Optional(), NumberRange(min=0, max=100)], places=2)
 
 # Purchase Invoice Form
@@ -110,6 +111,21 @@ class ExpenseInvoiceItemForm(FlaskForm):
     discount = DecimalField(_l('Discount %% / نسبة الخصم %%'), validators=[Optional(), NumberRange(min=0, max=100)], places=2)
 
 # Expense Invoice Form
+
+# Supplier Form
+class SupplierForm(FlaskForm):
+    class Meta:
+        csrf = False
+    name = StringField(_l('Supplier Name / اسم المورد'), validators=[DataRequired()])
+    phone = StringField(_l('Phone / الهاتف'))
+    email = StringField(_l('Email / البريد الإلكتروني'))
+    address = StringField(_l('Address / العنوان'))
+    tax_number = StringField(_l('Tax Number / الرقم الضريبي'))
+    contact_person = StringField(_l('Contact Person / شخص التواصل'))
+    notes = StringField(_l('Notes / ملاحظات'))
+    active = BooleanField(_l('Active / نشط'), default=True)
+    submit = SubmitField(_l('Save / حفظ'))
+
 class ExpenseInvoiceForm(FlaskForm):
     class Meta:
         csrf = False
@@ -129,6 +145,10 @@ class EmployeeForm(FlaskForm):
     email = StringField(_l('Email / البريد الإلكتروني'))
     hire_date = DateField(_l('Hire Date / تاريخ التعيين'), format='%Y-%m-%d')
     status = SelectField(_l('Status / الحالة'), choices=[('active', _l('Active / نشط')), ('inactive', _l('Inactive / غير نشط'))], default='active')
+    # Defaults section
+    base_salary = DecimalField(_l('Default Basic Salary / الراتب الأساسي الافتراضي'), validators=[Optional(), NumberRange(min=0)], places=2, default=0)
+    allowances = DecimalField(_l('Default Allowances / البدلات الافتراضية'), validators=[Optional(), NumberRange(min=0)], places=2, default=0)
+    deductions = DecimalField(_l('Default Deductions / الاستقطاعات الافتراضية'), validators=[Optional(), NumberRange(min=0)], places=2, default=0)
     submit = SubmitField(_l('Save Employee / حفظ الموظف'))
 
 class SalaryForm(FlaskForm):

@@ -13,9 +13,12 @@ Flask-SocketIO==5.3.6
 reportlab==4.0.4
 pandas>=1.5.0
 openpyxl>=3.0.0
+# Production server with async support
 gunicorn==21.2.0
 gevent==23.9.1
 eventlet==0.36.1
+# Arabic text shaping for PDF
 arabic-reshaper>=3.0.0
 python-bidi>=0.4.2
-qrcode>=7.4.2
+# Optional: QR code image generation for ZATCA TLV on receipts
+qrcode[pil]>=7.4.2

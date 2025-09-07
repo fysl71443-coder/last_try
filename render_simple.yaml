@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: restaurant-simple
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements_simple.txt
+    startCommand: gunicorn -k eventlet -w 1 --timeout 120 --log-level info -b 0.0.0.0:$PORT clean_app:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+
+databases:
+  - name: restaurant-simple-db
+    databaseName: restaurant_simple
+    user: restaurant_user

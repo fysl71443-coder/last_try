@@ -29,6 +29,12 @@
           <div class="col-md-3">{{ form.email.label(class_='form-label') }}{{ form.email(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.hire_date.label(class_='form-label') }}{{ form.hire_date(class_='form-control') }}</div>
         </div>
+        <hr/>
+        <div class="row g-3">
+          <div class="col-md-3">{{ form.base_salary.label(class_='form-label') }}{{ form.base_salary(class_='form-control') }}</div>
+          <div class="col-md-3">{{ form.allowances.label(class_='form-label') }}{{ form.allowances(class_='form-control') }}</div>
+          <div class="col-md-3">{{ form.deductions.label(class_='form-label') }}{{ form.deductions(class_='form-control') }}</div>
+        </div>
         <div class="text-end mt-3">
           {{ form.submit(class_='btn btn-success') }}
         </div>
@@ -71,14 +77,15 @@
               <td>{{ _('Active / نشط') if e.status=='active' else _('Inactive / غير نشط') }}</td>
               <td>
                 <a href="{{ url_for('edit_employee', emp_id=e.id) }}" class="btn btn-sm btn-outline-primary">{{ _('Edit / تعديل') }}</a>
-                <form method="POST" action="{{ url_for('delete_employee', emp_id=e.id) }}" style="display:inline" onsubmit="return handleDeleteEmployee(event, '{{ e.full_name }}')"
-                  {{ form.csrf_token }}
+                <a href="{{ url_for('edit_employee_defaults', emp_id=e.id) }}" class="btn btn-sm btn-outline-success">{{ _('Defaults / الافتراضات') }}</a>
+                <form method="POST" action="{{ url_for('delete_employee', emp_id=e.id) }}" style="display:inline" onsubmit="return handleDeleteEmployee(event, '{{ e.full_name }}')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                   <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
                 </form>
               </td>
             </tr>
 <script>
-async function handleDeleteEmployee(event, name) {
+window.handleDeleteEmployee = async function(event, name){
   event.preventDefault();
   const confirmed = await showConfirm("{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}\n" + name);
   if (confirmed) {

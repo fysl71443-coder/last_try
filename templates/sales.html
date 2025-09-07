@@ -156,6 +156,7 @@ body {
                         <th>{{ _('Branch / الفرع') }}</th>
                         <th>{{ _('Customer / العميل') }}</th>
                         <th>{{ _('Payment Method / طريقة الدفع') }}</th>
+                        <th>{{ _('Discount / الخصم') }}</th>
                         <th>{{ _('Total / الإجمالي') }}</th>
                         <th>{{ _('Status / الحالة') }}</th>
                         <th>{{ _('Actions / الإجراءات') }}</th>
@@ -189,6 +190,13 @@ body {
                                 📝 {{ _('Check / شيك') }}
                             {% else %}
                                 {{ invoice.payment_method }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if invoice.discount_amount and invoice.discount_amount > 0 %}
+                                <span style="color: #d63384;">-${{ "%.2f"|format(invoice.discount_amount) }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                         <td>${{ "%.2f"|format(invoice.total_after_tax_discount) }}</td>
@@ -327,10 +335,26 @@ body {
     async function deleteSalesInvoice(invoiceId, invoiceNumber) {
         const confirmed = await showConfirm('{{ _("Are you sure you want to delete sales invoice") }} "' + invoiceNumber + '"?\n\n{{ _("This action cannot be undone.") }}');
         if (confirmed) {
+            // Ask for password
+            const password = await showPrompt('{{ _("Enter deletion password / أدخل كلمة سر الحذف") }}:');
+            if (password === null) return; // User cancelled
+
+            if (!password || password.trim() === '') {
+                await showAlert('{{ _("Password required / كلمة السر مطلوبة") }}');
+                return;
+            }
+
             // Create a form and submit it
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = '/delete_sales_invoice/' + invoiceId;
+
+            // Add password field
+            const passwordInput = document.createElement('input');
+            passwordInput.type = 'hidden';
+            passwordInput.name = 'password';
+            passwordInput.value = password.trim();
+            form.appendChild(passwordInput);
 
             // Add CSRF token if available
             const csrfToken = document.querySelector('input[name="csrf_token"]');
