@@ -2,41 +2,16 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>فاتورة</title>
+  <title>فاتورة / Invoice</title>
   <style>
-    body {
-      font-family: "Tahoma", sans-serif;
-      font-size: 12px;
-      width: 80mm;
-      margin: 0 auto;
-      direction: rtl;
-    }
-    .center {
-      text-align: center;
-    }
-    .bold {
-      font-weight: bold;
-    }
-    .line {
-      border-top: 1px dashed #000;
-      margin: 5px 0;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    table th, table td {
-      text-align: center;
-      padding: 2px 0;
-    }
-    .footer {
-      margin-top: 10px;
-      text-align: center;
-      font-size: 11px;
-    }
-    .currency {
-      font-family: sans-serif;
-    }
+    body { font-family: "Tahoma", sans-serif; font-size: 12px; width: 80mm; margin: 0 auto; direction: rtl; }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .line { border-top: 1px dashed #000; margin: 5px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    table th, table td { text-align: center; padding: 2px 0; }
+    .footer { margin-top: 10px; text-align: center; font-size: 11px; }
+    .currency { font-family: sans-serif; }
     .unpaid-notice {
       background: #fff3cd;
       border: 1px dashed #856404;
@@ -52,35 +27,23 @@
     }
   </style>
 </head>
-<body>
+<body {% if not is_copy %}onload="window.print()"{% endif %}>
 
-  <!-- شعار وبيانات -->
   <div class="center">
-    {% if logo_url %}
-    <img src="{{ logo_url }}" alt="Logo" width="60"><br>
-    {% endif %}
-    <span class="bold">{{ restaurant_name or (branch_code == '2' and 'Palace India Restaurant' or 'China Town Restaurant') }}</span><br>
-    {% if vat_number %}
-    الرقم الضريبي: {{ vat_number }}<br>
-    {% endif %}
-    {% if location %}
-    {{ location }}<br>
-    {% endif %}
-    {% if phone %}
-    هاتف: {{ phone }}<br>
-    {% endif %}
+    <img src="{{ logo_url or url_for('static', filename='logo.png') }}" alt="Logo" width="60"><br>
+    <span class="bold">{{ restaurant_name or (branch_code == '2' and '🏰 Palace India' or '🏮 China Town') }}</span><br>
+    الرقم الضريبي / VAT No.: {{ vat_number or '300123456700003' }}<br>
+    {{ location or 'Al Khobar, Saudi Arabia' }}<br>
+    هاتف / Phone: {{ phone or '+966 50 123 4567' }}<br>
   </div>
 
   <div class="line"></div>
 
-  <!-- تفاصيل الفاتورة -->
-  <p>التاريخ: {{ date or invoice.date.strftime('%Y-%m-%d') if invoice.date else '' }} | الوقت: {{ time or invoice.date.strftime('%H:%M') if invoice.date else '' }}</p>
-  <p>رقم الفاتورة: {{ invoice_number or invoice.invoice_number or invoice.id }}</p>
-  {% if customer_phone %}
-  <p>هاتف العميل: {{ customer_phone }}</p>
-  {% endif %}
-  <p>رقم الطاولة: {{ table_number or invoice.table_number }}</p>
-  
+  <p>التاريخ / Date: {{ date or invoice.date.strftime('%Y-%m-%d') if invoice.date else '' }} | الوقت / Time: {{ time or invoice.date.strftime('%H:%M') if invoice.date else '' }}</p>
+  <p>رقم الفاتورة / Invoice No.: {{ invoice_number or invoice.invoice_number or invoice.id }}</p>
+  <p>هاتف العميل / Customer Phone: {{ customer_phone or '' }}</p>
+  <p>رقم الطاولة / Table No.: {{ table_number or invoice.table_number }}</p>
+
   {% if is_copy %}
   <!-- إشعار نسخة غير مدفوعة -->
   <div class="unpaid-notice">
@@ -88,18 +51,17 @@
     نسخة فقط - Copy Only
   </div>
   {% else %}
-  <p>طريقة الدفع: {{ payment_method or 'نقدي' }}</p>
+  <p>طريقة الدفع / Payment Method: {{ payment_method or 'نقدي / Cash' }}</p>
   {% endif %}
 
   <div class="line"></div>
 
-  <!-- جدول الأصناف -->
   <table>
     <thead>
       <tr>
-        <th>الصنف</th>
-        <th>الكمية</th>
-        <th>السعر</th>
+        <th>الصنف / Item</th>
+        <th>الكمية / Qty</th>
+        <th>السعر / Price</th>
       </tr>
     </thead>
     <tbody>
@@ -107,7 +69,7 @@
       <tr>
         <td>{{ item.product_name or item.name }}</td>
         <td>{{ '%.0f'|format(item.quantity) }}</td>
-        <td>{{ '%.2f'|format(item.price_before_tax or (item.total_price / item.quantity)) }} <span class="currency">ر.س</span></td>
+        <td>{{ '%.2f'|format(item.price_before_tax or (item.total_price / item.quantity)) }} <span class="currency">﷼</span></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -115,45 +77,40 @@
 
   <div class="line"></div>
 
-  <!-- الإجماليات -->
-  <p>الإجمالي الفرعي: {{ '%.2f'|format(subtotal or invoice.total_before_tax) }} <span class="currency">ر.س</span></p>
+  <p>الإجمالي الفرعي / Subtotal: {{ '%.2f'|format(subtotal or invoice.total_before_tax) }} <span class="currency">﷼</span></p>
   {% if discount_amount and discount_amount > 0 %}
-  <p>الخصم: -{{ '%.2f'|format(discount_amount or invoice.discount_amount) }} <span class="currency">ر.س</span></p>
+  <p>الخصم / Discount: -{{ '%.2f'|format(discount_amount or invoice.discount_amount) }} <span class="currency">﷼</span></p>
   {% endif %}
-  <p>ضريبة القيمة المضافة (15%): {{ '%.2f'|format(vat or invoice.tax_amount) }} <span class="currency">ر.س</span></p>
-  <p class="bold">الإجمالي شامل الضريبة: {{ '%.2f'|format(total or invoice.total_after_tax_discount) }} <span class="currency">ر.س</span></p>
-  
+  <p>ضريبة القيمة المضافة 15% / VAT (15%): {{ '%.2f'|format(vat or invoice.tax_amount) }} <span class="currency">﷼</span></p>
+  <p class="bold">الإجمالي شامل الضريبة / Total (incl. VAT): {{ '%.2f'|format(total or invoice.total_after_tax_discount) }} <span class="currency">﷼</span></p>
+
   {% if not is_copy %}
-  <p class="bold">طريقة الدفع: {{ payment_method or 'نقدي' }}</p>
+  <p class="bold">طريقة الدفع / Payment: {{ payment_method or 'نقدي / Cash' }}</p>
   {% endif %}
 
   <div class="line"></div>
 
-  <!-- QR -->
-  {% if qr_code_url or qr_data_url %}
   <div class="center">
-    <img src="{{ qr_code_url or qr_data_url }}" width="120" height="120">
-  </div>
-  {% endif %}
-
-  <!-- رسالة -->
-  <div class="footer">
-    {% if is_copy %}
-    <strong>نسخة - غير مدفوع</strong><br>
-    <strong>Copy - Unpaid</strong><br>
-    {% else %}
-    Thank you for visit<br>
-    شكراً لزيارتكم<br>
+    {% if qr_code_url or qr_data_url %}
+    <img src="{{ qr_code_url or qr_data_url }}" width="120" height="120"><br>
     {% endif %}
-    💳 جميع الأسعار بالريال السعودي <span class="currency">ر.س</span>
+
+    {% if is_copy %}
+    <span class="footer"><strong>نسخة - غير مدفوع / Copy - Unpaid</strong></span><br>
+    {% else %}
+    <span class="footer">Thank you for your visit / شكرًا لزيارتكم</span><br>
+    {% endif %}
+    <span class="footer">All prices in Saudi riyal <span class="currency">﷼</span></span>
   </div>
 
-  <!-- Print Button -->
+  <!-- Print Button for Copy Mode -->
+  {% if is_copy %}
   <div class="center no-print" style="margin-top: 20px;">
     <button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
       🖨️ طباعة - Print
     </button>
   </div>
+  {% endif %}
 
 </body>
 </html>

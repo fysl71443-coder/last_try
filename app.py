@@ -447,12 +447,27 @@ def api_print_copy():
         # Create temporary invoice
         temp_invoice = TempInvoice()
 
+        # Generate QR Code
+        try:
+            import qrcode
+            import base64
+            from io import BytesIO
+
+            qr_content = f"Invoice {temp_invoice.invoice_number} - Table {table_number} - {temp_invoice.total_after_tax_discount:.2f} SAR"
+            qr = qrcode.make(qr_content)
+            buffer = BytesIO()
+            qr.save(buffer, format="PNG")
+            qr_code_url = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+        except Exception as e:
+            print(f"QR Code generation failed: {e}")
+            qr_code_url = None
+
         # Prepare template data
         template_data = {
             'invoice': temp_invoice,
             'items': items,
             'is_copy': True,
-            'restaurant_name': 'Palace India Restaurant' if branch_code == '2' else 'China Town Restaurant',
+            'restaurant_name': '🏰 Palace India' if branch_code == '2' else '🏮 China Town',
             'branch_code': branch_code,
             'date': temp_invoice.date.strftime('%Y-%m-%d'),
             'time': temp_invoice.date.strftime('%H:%M'),
@@ -463,10 +478,11 @@ def api_print_copy():
             'vat': temp_invoice.tax_amount,
             'total': temp_invoice.total_after_tax_discount,
             'discount_amount': temp_invoice.discount_amount,
-            'logo_url': '/static/logo.png',  # Add your logo path
-            'vat_number': '123456789',  # Add your VAT number
-            'location': 'الرياض، المملكة العربية السعودية',
-            'phone': '+966 11 123 4567'
+            'logo_url': url_for('static', filename='logo.png'),
+            'vat_number': '300123456700003',
+            'location': 'Al Khobar, Saudi Arabia',
+            'phone': '+966 50 123 4567',
+            'qr_code_url': qr_code_url
         }
 
         # Render thermal receipt template
@@ -598,12 +614,27 @@ def api_pay_and_print():
         if not invoice:
             return jsonify({'success': False, 'error': 'Failed to create invoice'}), 500
 
+        # Generate QR Code for paid receipt
+        try:
+            import qrcode
+            import base64
+            from io import BytesIO
+
+            qr_content = f"Invoice {invoice.invoice_number} - Table {table_number} - {invoice.total_after_tax_discount:.2f} SAR - PAID"
+            qr = qrcode.make(qr_content)
+            buffer = BytesIO()
+            qr.save(buffer, format="PNG")
+            qr_code_url = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+        except Exception as e:
+            print(f"QR Code generation failed: {e}")
+            qr_code_url = None
+
         # Generate receipt with payment info
         template_data = {
             'invoice': invoice,
             'items': items,
             'is_copy': False,  # This is a paid receipt
-            'restaurant_name': 'Palace India Restaurant' if branch_code == '2' else 'China Town Restaurant',
+            'restaurant_name': '🏰 Palace India' if branch_code == '2' else '🏮 China Town',
             'branch_code': branch_code,
             'date': invoice.date.strftime('%Y-%m-%d'),
             'time': invoice.date.strftime('%H:%M'),
@@ -615,10 +646,11 @@ def api_pay_and_print():
             'vat': invoice.tax_amount,
             'total': invoice.total_after_tax_discount,
             'discount_amount': invoice.discount_amount,
-            'logo_url': '/static/logo.png',
-            'vat_number': '123456789',
-            'location': 'الرياض، المملكة العربية السعودية',
-            'phone': '+966 11 123 4567'
+            'logo_url': url_for('static', filename='logo.png'),
+            'vat_number': '300123456700003',
+            'location': 'Al Khobar, Saudi Arabia',
+            'phone': '+966 50 123 4567',
+            'qr_code_url': qr_code_url
         }
 
         # Render receipt
