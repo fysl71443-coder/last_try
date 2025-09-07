@@ -20,7 +20,7 @@ import logging
 import json
 import traceback
 import time
-import os
+import uuid
 import pytz
 from datetime import datetime, timedelta, timezone
 
@@ -429,7 +429,6 @@ def api_print_copy():
 
         class TempInvoice:
             def __init__(self):
-                import uuid
                 self.id = str(uuid.uuid4())[:8]
                 self.invoice_number = f"COPY-{self.id}"
                 self.date = datetime.now()
