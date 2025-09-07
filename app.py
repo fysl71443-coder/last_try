@@ -881,6 +881,171 @@ def create_pos_tables():
         db.session.rollback()
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
+# Payment page route
+@app.route('/payment')
+@login_required
+def payment_page():
+    """Payment page for POS system"""
+    try:
+        # Get cart data from session
+        cart = session.get('cart', [])
+        customer_name = session.get('customer_name', '')
+        customer_phone = session.get('customer_phone', '')
+        table_number = session.get('table_number', '')
+        discount_percent = session.get('discount_percent', 0)
+        branch_code = session.get('branch_code', '1')
+
+        if not cart:
+            flash('لا توجد أصناف في الفاتورة', 'warning')
+            return redirect(url_for('sales_china_town'))
+
+        # Calculate totals
+        subtotal = sum(float(item.get('price', 0)) * int(item.get('qty', 0)) for item in cart)
+        discount_amount = subtotal * (float(discount_percent) / 100)
+        subtotal_after_discount = subtotal - discount_amount
+        tax_amount = subtotal_after_discount * 0.15  # 15% VAT
+        total = subtotal_after_discount + tax_amount
+
+        return render_template('payment.html',
+                             cart=cart,
+                             customer_name=customer_name,
+                             customer_phone=customer_phone,
+                             table_number=table_number,
+                             subtotal=subtotal,
+                             discount_percent=discount_percent,
+                             discount_amount=discount_amount,
+                             tax_amount=tax_amount,
+                             total=total,
+                             branch_code=branch_code)
+
+    except Exception as e:
+        flash(f'خطأ في تحميل صفحة الدفع: {str(e)}', 'danger')
+        return redirect(url_for('sales_china_town'))
+
+# Confirm payment route
+@app.route('/confirm_payment', methods=['POST'])
+@login_required
+def confirm_payment():
+    """Confirm payment and save invoice"""
+    try:
+        data = request.get_json() or request.form
+        payment_method = data.get('method', 'cash')
+
+        # Get cart data from session
+        cart = session.get('cart', [])
+        customer_name = session.get('customer_name', '')
+        customer_phone = session.get('customer_phone', '')
+        table_number = session.get('table_number', '')
+        discount_percent = session.get('discount_percent', 0)
+        branch_code = session.get('branch_code', '1')
+
+        if not cart:
+            return jsonify({'status': 'error', 'message': 'لا توجد أصناف في الفاتورة'}), 400
+
+        # Calculate totals
+        subtotal = sum(float(item.get('price', 0)) * int(item.get('qty', 0)) for item in cart)
+        discount_amount = subtotal * (float(discount_percent) / 100)
+        subtotal_after_discount = subtotal - discount_amount
+        tax_amount = subtotal_after_discount * 0.15
+        total = subtotal_after_discount + tax_amount
+
+        # Generate invoice number
+        from datetime import datetime
+        now = datetime.now()
+        last_invoice = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
+        invoice_num = 1
+        if last_invoice and last_invoice.invoice_number:
+            try:
+                last_num = int(last_invoice.invoice_number.split('-')[-1])
+                invoice_num = last_num + 1
+            except:
+                pass
+
+        invoice_number = f"SAL-{now.year}-{invoice_num:04d}"
+
+        # Create invoice
+        invoice = SalesInvoice(
+            invoice_number=invoice_number,
+            date=now.date(),
+            payment_method=payment_method.upper(),
+            branch=branch_code,
+            customer_name=customer_name or None,
+            customer_phone=customer_phone or None,
+            table_number=table_number or None,
+            total_before_tax=subtotal,
+            discount_amount=discount_amount,
+            tax_amount=tax_amount,
+            total_after_tax_discount=total,
+            status='paid',
+            user_id=current_user.id
+        )
+
+        db.session.add(invoice)
+        db.session.flush()  # Get invoice ID
+
+        # Add invoice items
+        for item in cart:
+            invoice_item = SalesInvoiceItem(
+                invoice_id=invoice.id,
+                product_name=item.get('name', ''),
+                quantity=int(item.get('qty', 0)),
+                price_before_tax=float(item.get('price', 0)),
+                tax=float(item.get('price', 0)) * int(item.get('qty', 0)) * 0.15,
+                discount=0,
+                total_price=float(item.get('price', 0)) * int(item.get('qty', 0)) * 1.15
+            )
+            db.session.add(invoice_item)
+
+        # Add payment record
+        payment_record = Payment(
+            invoice_id=invoice.id,
+            invoice_type='sales',
+            amount_paid=total,
+            payment_method=payment_method.upper()
+        )
+        db.session.add(payment_record)
+
+        db.session.commit()
+
+        # Clear cart from session
+        session.pop('cart', None)
+        session.pop('customer_name', None)
+        session.pop('customer_phone', None)
+        session.pop('table_number', None)
+        session.pop('discount_percent', None)
+
+        return jsonify({
+            'status': 'success',
+            'invoice_id': invoice.id,
+            'invoice_number': invoice_number,
+            'message': 'تم حفظ الفاتورة بنجاح'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Save cart to session route
+@app.route('/api/save_cart_session', methods=['POST'])
+@login_required
+def save_cart_session():
+    """Save cart data to session for payment page"""
+    try:
+        data = request.get_json()
+
+        # Save cart data to session
+        session['cart'] = data.get('cart', [])
+        session['customer_name'] = data.get('customer_name', '')
+        session['customer_phone'] = data.get('customer_phone', '')
+        session['table_number'] = data.get('table_number', '')
+        session['discount_percent'] = data.get('discount_percent', 0)
+        session['branch_code'] = data.get('branch_code', '1')
+
+        return jsonify({'status': 'success', 'message': 'Cart saved to session'})
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 # ========================================
 # Original POS API Routes (MenuCategory/MenuItem)
 # ========================================

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>صفحة الدفع - نظام المطعم</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .payment-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin: 20px auto;
+            max-width: 1200px;
+        }
+        
+        .payment-header {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .invoice-details {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .payment-methods {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .payment-btn {
+            background: linear-gradient(45deg, #74b9ff, #0984e3);
+            border: none;
+            border-radius: 15px;
+            color: white;
+            padding: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .payment-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(116, 185, 255, 0.3);
+        }
+        
+        .payment-btn.cash {
+            background: linear-gradient(45deg, #00b894, #00a085);
+        }
+        
+        .payment-btn.card {
+            background: linear-gradient(45deg, #6c5ce7, #5f3dc4);
+        }
+        
+        .payment-btn.transfer {
+            background: linear-gradient(45deg, #fd79a8, #e84393);
+        }
+        
+        .payment-btn.other {
+            background: linear-gradient(45deg, #fdcb6e, #e17055);
+        }
+        
+        .invoice-table {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .invoice-table th {
+            background: linear-gradient(45deg, #2d3436, #636e72);
+            color: white;
+            border: none;
+            padding: 15px;
+        }
+        
+        .invoice-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .total-row {
+            background: #f1f2f6;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .btn-print {
+            background: linear-gradient(45deg, #a29bfe, #6c5ce7);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-back {
+            background: linear-gradient(45deg, #636e72, #2d3436);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-print:hover, .btn-back:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .customer-info {
+            background: linear-gradient(45deg, #74b9ff, #0984e3);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .invoice-details, .invoice-details * {
+                visibility: visible;
+            }
+            .invoice-details {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .payment-methods, .action-buttons {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="payment-container">
+            <!-- Header -->
+            <div class="payment-header">
+                <h2><i class="fas fa-credit-card"></i> صفحة الدفع</h2>
+                <p class="mb-0">اختر طريقة الدفع المناسبة</p>
+            </div>
+            
+            <div class="row p-4">
+                <!-- Invoice Details (Right Side) -->
+                <div class="col-md-7">
+                    <div class="invoice-details">
+                        <h4 class="mb-3"><i class="fas fa-receipt"></i> تفاصيل الفاتورة</h4>
+                        
+                        <!-- Customer Info -->
+                        {% if customer_name or customer_phone or table_number %}
+                        <div class="customer-info">
+                            <div class="row">
+                                {% if customer_name %}
+                                <div class="col-md-4">
+                                    <strong><i class="fas fa-user"></i> العميل:</strong><br>
+                                    {{ customer_name }}
+                                </div>
+                                {% endif %}
+                                {% if customer_phone %}
+                                <div class="col-md-4">
+                                    <strong><i class="fas fa-phone"></i> الهاتف:</strong><br>
+                                    {{ customer_phone }}
+                                </div>
+                                {% endif %}
+                                {% if table_number %}
+                                <div class="col-md-4">
+                                    <strong><i class="fas fa-chair"></i> الطاولة:</strong><br>
+                                    {{ table_number }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Items Table -->
+                        <div class="table-responsive">
+                            <table class="table invoice-table">
+                                <thead>
+                                    <tr>
+                                        <th>الصنف</th>
+                                        <th>الكمية</th>
+                                        <th>السعر</th>
+                                        <th>الإجمالي</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in cart %}
+                                    <tr>
+                                        <td>{{ item.name }}</td>
+                                        <td>{{ item.qty }}</td>
+                                        <td>{{ "%.2f"|format(item.price|float) }} ريال</td>
+                                        <td>{{ "%.2f"|format((item.price|float) * (item.qty|int)) }} ريال</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="3"><strong>المجموع الفرعي:</strong></td>
+                                        <td><strong>{{ "%.2f"|format(subtotal) }} ريال</strong></td>
+                                    </tr>
+                                    {% if discount_amount > 0 %}
+                                    <tr>
+                                        <td colspan="3"><strong>الخصم ({{ discount_percent }}%):</strong></td>
+                                        <td><strong class="text-danger">-{{ "%.2f"|format(discount_amount) }} ريال</strong></td>
+                                    </tr>
+                                    {% endif %}
+                                    <tr>
+                                        <td colspan="3"><strong>الضريبة (15%):</strong></td>
+                                        <td><strong>{{ "%.2f"|format(tax_amount) }} ريال</strong></td>
+                                    </tr>
+                                    <tr class="total-row">
+                                        <td colspan="3"><strong>الإجمالي النهائي:</strong></td>
+                                        <td><strong>{{ "%.2f"|format(total) }} ريال</strong></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Payment Methods (Left Side) -->
+                <div class="col-md-5">
+                    <h4 class="mb-3"><i class="fas fa-money-bill-wave"></i> طرق الدفع</h4>
+                    
+                    <div class="payment-methods">
+                        <button class="payment-btn cash" onclick="submitPayment('cash')">
+                            <i class="fas fa-money-bill-wave fa-2x"></i>
+                            <span>💵 نقد</span>
+                        </button>
+                        
+                        <button class="payment-btn card" onclick="submitPayment('card')">
+                            <i class="fas fa-credit-card fa-2x"></i>
+                            <span>💳 بطاقة</span>
+                        </button>
+                        
+                        <button class="payment-btn transfer" onclick="submitPayment('transfer')">
+                            <i class="fas fa-university fa-2x"></i>
+                            <span>🏦 تحويل</span>
+                        </button>
+                        
+                        <button class="payment-btn other" onclick="submitPayment('other')">
+                            <i class="fas fa-ellipsis-h fa-2x"></i>
+                            <span>📌 أخرى</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="action-buttons">
+                        <button class="btn btn-print" onclick="printInvoice()">
+                            <i class="fas fa-print"></i> طباعة قبل الدفع
+                        </button>
+                        
+                        <button class="btn btn-back" onclick="goBack()">
+                            <i class="fas fa-arrow-right"></i> العودة
+                        </button>
+                    </div>
+                    
+                    <!-- Loading -->
+                    <div class="loading" id="loading">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">جاري المعالجة...</span>
+                        </div>
+                        <p class="mt-2">جاري معالجة الدفع...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Submit payment
+        function submitPayment(method) {
+            const loading = document.getElementById('loading');
+            const paymentButtons = document.querySelectorAll('.payment-btn');
+            
+            // Show loading
+            loading.style.display = 'block';
+            paymentButtons.forEach(btn => btn.disabled = true);
+            
+            fetch('/confirm_payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrf()
+                },
+                body: JSON.stringify({ method: method })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Show success message
+                    alert('✅ تم حفظ الفاتورة بنجاح!\nرقم الفاتورة: ' + data.invoice_number);
+                    
+                    // Print invoice
+                    window.print();
+                    
+                    // Redirect back to sales page
+                    setTimeout(() => {
+                        window.location.href = '/sales/china_town';
+                    }, 1000);
+                } else {
+                    alert('❌ خطأ في معالجة الدفع: ' + data.message);
+                    loading.style.display = 'none';
+                    paymentButtons.forEach(btn => btn.disabled = false);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('❌ خطأ في الاتصال بالخادم');
+                loading.style.display = 'none';
+                paymentButtons.forEach(btn => btn.disabled = false);
+            });
+        }
+        
+        // Print invoice only (without payment)
+        function printInvoice() {
+            window.print();
+        }
+        
+        // Go back to sales page
+        function goBack() {
+            if (confirm('هل تريد العودة بدون دفع؟ ستبقى الفاتورة محفوظة.')) {
+                window.location.href = '/sales/china_town';
+            }
+        }
+        
+        // Get CSRF token
+        function getCsrf() {
+            return document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                goBack();
+            } else if (e.key === 'F1') {
+                e.preventDefault();
+                submitPayment('cash');
+            } else if (e.key === 'F2') {
+                e.preventDefault();
+                submitPayment('card');
+            } else if (e.key === 'F3') {
+                e.preventDefault();
+                submitPayment('transfer');
+            } else if (e.key === 'F4') {
+                e.preventDefault();
+                submitPayment('other');
+            } else if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                printInvoice();
+            }
+        });
+    </script>
+</body>
+</html>

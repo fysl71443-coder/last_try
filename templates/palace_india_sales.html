@@ -244,8 +244,8 @@
         </div>
         
         <div class="d-grid gap-2 mt-3">
-          <button class="btn btn-print" id="printDraftBtn">🖨️ طباعة (غير مدفوعة)</button>
-          <button class="btn btn-payment" id="processPaymentBtn">💳 دفع و طباعة</button>
+          <button class="btn btn-print" onclick="printUnpaid()">🖨️ طباعة (غير مدفوعة)</button>
+          <button class="btn btn-payment" onclick="goToPayment()">💳 دفع و طباعة</button>
         </div>
       </div>
     </div>
@@ -571,6 +571,72 @@ async function processPayment() {
     } catch (error) {
         console.error('Error processing payment:', error);
         alert('خطأ في معالجة الدفع');
+    }
+}
+
+// New payment functions for payment page
+function goToPayment() {
+    if (currentInvoice.length === 0) {
+        alert('لا توجد أصناف في الفاتورة');
+        return;
+    }
+
+    // Save current cart to session and redirect to payment page
+    saveCartToSession().then(() => {
+        window.location.href = '/payment';
+    }).catch(error => {
+        console.error('Error saving cart:', error);
+        alert('خطأ في حفظ بيانات الفاتورة');
+    });
+}
+
+function printUnpaid() {
+    if (currentInvoice.length === 0) {
+        alert('لا توجد أصناف في الفاتورة');
+        return;
+    }
+
+    // Just print without payment
+    window.print();
+}
+
+// Save cart data to session
+async function saveCartToSession() {
+    const customerName = document.getElementById('customerSearch').value;
+    const tableNumber = document.getElementById('tableSelect').value;
+    const discountPercent = parseFloat(document.getElementById('discountInput').value) || 0;
+
+    const cartData = {
+        cart: currentInvoice.map(item => ({
+            name: item.name,
+            price: item.price,
+            qty: item.quantity
+        })),
+        customer_name: customerName,
+        customer_phone: '', // Could be extracted from customer search
+        table_number: tableNumber,
+        discount_percent: discountPercent,
+        branch_code: currentBranch === 'palace_india' ? '2' : '1'
+    };
+
+    try {
+        const response = await fetch('/api/save_cart_session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrf()
+            },
+            body: JSON.stringify(cartData)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save cart');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error saving cart:', error);
+        throw error;
     }
 }
 </script>
