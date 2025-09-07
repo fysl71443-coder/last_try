@@ -217,6 +217,83 @@ def create_app():
                             """
                         ))
 
+                    # 6) Ensure simplified categories table exists for POS
+                    if 'categories' not in _insp.get_table_names():
+                        _conn.execute(_sa_text(
+                            """
+                            CREATE TABLE IF NOT EXISTS categories (
+                                id SERIAL PRIMARY KEY,
+                                name VARCHAR(255) NOT NULL,
+                                status VARCHAR(50) DEFAULT 'Active',
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """
+                        ))
+
+                    # 7) Ensure simplified items table exists for POS
+                    if 'items' not in _insp.get_table_names():
+                        _conn.execute(_sa_text(
+                            """
+                            CREATE TABLE IF NOT EXISTS items (
+                                id SERIAL PRIMARY KEY,
+                                name VARCHAR(255) NOT NULL,
+                                price NUMERIC(10,2) NOT NULL,
+                                category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+                                status VARCHAR(50) DEFAULT 'Active',
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                            """
+                        ))
+
+                    # 8) Populate simplified categories and items with sample data
+                    _conn.execute(_sa_text("SELECT COUNT(*) FROM categories"))
+                    cat_count = _conn.fetchone()[0]
+
+                    if cat_count == 0:
+                        # Insert sample categories
+                        categories_data = [
+                            "Appetizers", "Beef & Lamb", "Charcoal Grill / Kebabs", "Chicken",
+                            "Chinese Sizzling", "Duck", "House Special", "Indian Delicacy (Chicken)",
+                            "Indian Delicacy (Fish)", "Indian Delicacy (Vegetables)", "Juices",
+                            "Noodles & Chopsuey", "Prawns", "Rice & Biryani", "Salads",
+                            "Seafoods", "Shaw Faw", "Soft Drink", "Soups", "spring rolls", "دجاج"
+                        ]
+
+                        for cat_name in categories_data:
+                            _conn.execute(_sa_text(
+                                "INSERT INTO categories (name, status, created_at) VALUES (:name, 'Active', CURRENT_TIMESTAMP)"
+                            ), {"name": cat_name})
+
+                        # Insert sample items
+                        items_data = [
+                            # Appetizers (category_id = 1)
+                            ("Spring Rolls", 15.00, 1), ("Chicken Samosa", 12.00, 1), ("Vegetable Pakora", 18.00, 1),
+                            # Beef & Lamb (category_id = 2)
+                            ("Beef Curry", 45.00, 2), ("Lamb Biryani", 50.00, 2), ("Grilled Lamb Chops", 65.00, 2),
+                            # Charcoal Grill / Kebabs (category_id = 3)
+                            ("Chicken Tikka", 35.00, 3), ("Seekh Kebab", 40.00, 3), ("Mixed Grill", 55.00, 3),
+                            # Chicken (category_id = 4)
+                            ("Butter Chicken", 38.00, 4), ("Chicken Curry", 35.00, 4), ("Chicken Biryani", 42.00, 4),
+                            # Chinese Sizzling (category_id = 5)
+                            ("Sizzling Chicken", 45.00, 5), ("Sweet & Sour Chicken", 40.00, 5), ("Kung Pao Chicken", 42.00, 5),
+                            # House Special (category_id = 7)
+                            ("Chef's Special Platter", 60.00, 7), ("Mixed Seafood Special", 75.00, 7), ("Vegetarian Delight", 35.00, 7),
+                            # Juices (category_id = 11)
+                            ("Fresh Orange Juice", 12.00, 11), ("Mango Juice", 15.00, 11), ("Apple Juice", 10.00, 11), ("Mixed Fruit Juice", 18.00, 11),
+                            # Rice & Biryani (category_id = 14)
+                            ("Plain Rice", 15.00, 14), ("Vegetable Biryani", 35.00, 14), ("Mutton Biryani", 55.00, 14),
+                            # Soft Drink (category_id = 18)
+                            ("Coca Cola", 8.00, 18), ("Pepsi", 8.00, 18), ("Fresh Lime", 10.00, 18),
+                        ]
+
+                        for item_name, price, cat_id in items_data:
+                            _conn.execute(_sa_text(
+                                "INSERT INTO items (name, price, category_id, status, created_at) VALUES (:name, :price, :cat_id, 'Active', CURRENT_TIMESTAMP)"
+                            ), {"name": item_name, "price": price, "cat_id": cat_id})
+
+                        _conn.commit()
+                        print("✅ Populated simplified categories and items for POS system")
+
                         # 6) Ensure suppliers table exists (idempotent)
                         if 'suppliers' not in _insp.get_table_names():
                             _conn.execute(_sa_text(
