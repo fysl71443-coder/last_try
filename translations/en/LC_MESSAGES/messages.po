@@ -174,3 +174,33 @@ msgstr "Visit us again!"
 
 msgid "Have a great day!"
 msgstr "Have a great day!"
+
+msgid "Print Only"
+msgstr "Print Only"
+
+msgid "Are you sure you want to go back without payment?"
+msgstr "Are you sure you want to go back without payment?"
+
+msgid "Pay & Print"
+msgstr "Pay & Print"
+
+msgid "Preview Only"
+msgstr "Preview Only"
+
+msgid "Processing Payment..."
+msgstr "Processing Payment..."
+
+msgid "Please wait, preparing receipt..."
+msgstr "Please wait, preparing receipt..."
+
+msgid "Payment successful!"
+msgstr "Payment successful!"
+
+msgid "Receipt Number"
+msgstr "Receipt Number"
+
+msgid "Payment error"
+msgstr "Payment error"
+
+msgid "Server connection error"
+msgstr "Server connection error"

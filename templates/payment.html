@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ _('Payment Page') }} - {{ _('Restaurant System') }}</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -58,19 +59,28 @@
         }
         
         .payment-btn {
-            background: linear-gradient(45deg, #74b9ff, #0984e3);
+            background: linear-gradient(45deg, #28a745, #20c997);
             border: none;
             border-radius: 15px;
             color: white;
             padding: 20px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
             transition: all 0.3s ease;
             cursor: pointer;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 5px;
+            height: 140px;
+            position: relative;
+        }
+
+        .payment-btn small {
+            font-size: 12px;
+            opacity: 0.9;
+            font-weight: normal;
         }
         
         .payment-btn:hover {
@@ -299,31 +309,35 @@
                     <h4 class="mb-3"><i class="fas fa-money-bill-wave"></i> {{ _('Payment Methods') }}</h4>
 
                     <div class="payment-methods">
-                        <button class="payment-btn cash" onclick="submitPayment('cash')">
+                        <button class="payment-btn cash" onclick="payAndPrint('cash')">
                             <i class="fas fa-money-bill-wave fa-2x"></i>
                             <span>💵 {{ _('Cash') }}</span>
+                            <small>{{ _('Pay & Print') }}</small>
                         </button>
 
-                        <button class="payment-btn card" onclick="submitPayment('card')">
+                        <button class="payment-btn card" onclick="payAndPrint('card')">
                             <i class="fas fa-credit-card fa-2x"></i>
                             <span>💳 {{ _('Card') }}</span>
+                            <small>{{ _('Pay & Print') }}</small>
                         </button>
 
-                        <button class="payment-btn transfer" onclick="submitPayment('transfer')">
+                        <button class="payment-btn transfer" onclick="payAndPrint('transfer')">
                             <i class="fas fa-university fa-2x"></i>
                             <span>🏦 {{ _('Transfer') }}</span>
+                            <small>{{ _('Pay & Print') }}</small>
                         </button>
 
-                        <button class="payment-btn other" onclick="submitPayment('other')">
+                        <button class="payment-btn other" onclick="payAndPrint('other')">
                             <i class="fas fa-ellipsis-h fa-2x"></i>
                             <span>📌 {{ _('Other') }}</span>
+                            <small>{{ _('Pay & Print') }}</small>
                         </button>
                     </div>
 
                     <!-- Action Buttons -->
                     <div class="action-buttons">
-                        <button class="btn btn-print" onclick="printInvoice()">
-                            <i class="fas fa-print"></i> {{ _('Print Before Payment') }}
+                        <button class="btn btn-print" onclick="previewOnly()">
+                            <i class="fas fa-eye"></i> {{ _('Preview Only') }}
                         </button>
 
                         <button class="btn btn-back" onclick="goBack()">
@@ -345,15 +359,35 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Submit payment
-        function submitPayment(method) {
+        // Get CSRF token
+        function getCsrf() {
+            const token = document.querySelector('meta[name="csrf-token"]');
+            return token ? token.getAttribute('content') : '';
+        }
+
+        // Pay and Print - Main function for payment buttons
+        function payAndPrint(method) {
             const loading = document.getElementById('loading');
             const paymentButtons = document.querySelectorAll('.payment-btn');
-            
+
             // Show loading
             loading.style.display = 'block';
             paymentButtons.forEach(btn => btn.disabled = true);
-            
+
+            // Show processing message
+            const processingMsg = document.createElement('div');
+            processingMsg.id = 'processing-msg';
+            processingMsg.innerHTML = `
+                <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                           background: #28a745; color: white; padding: 20px; border-radius: 10px;
+                           box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 9999; text-align: center;">
+                    <i class="fas fa-spinner fa-spin fa-2x mb-3"></i><br>
+                    <strong>{{ _('Processing Payment...') }}</strong><br>
+                    <small>{{ _('Please wait, preparing receipt...') }}</small>
+                </div>
+            `;
+            document.body.appendChild(processingMsg);
+
             fetch('/confirm_payment', {
                 method: 'POST',
                 headers: {
@@ -364,40 +398,59 @@
             })
             .then(response => response.json())
             .then(data => {
+                // Remove processing message
+                const msg = document.getElementById('processing-msg');
+                if (msg) msg.remove();
+
                 if (data.status === 'success') {
-                    // Show success message
-                    alert('✅ تم حفظ الفاتورة بنجاح!\nرقم الفاتورة: ' + data.invoice_number);
-                    
-                    // Print invoice
-                    window.print();
-                    
-                    // Redirect back to sales page
+                    // Show success message briefly
+                    alert('✅ {{ _("Payment successful!") }}\n{{ _("Receipt Number") }}: ' + data.invoice_number);
+
+                    // Open receipt for immediate printing
+                    const receiptUrl = `/sales/receipt/${data.invoice_id}`;
+                    const receiptWindow = window.open(receiptUrl, '_blank', 'width=400,height=700,scrollbars=yes');
+
+                    // Auto-print the receipt
+                    receiptWindow.onload = function() {
+                        receiptWindow.print();
+                    };
+
+                    // Redirect back to sales page after short delay
                     setTimeout(() => {
-                        window.location.href = '/sales/china_town';
-                    }, 1000);
+                        const branchCode = '{{ branch_code }}' || '1';
+                        const returnUrl = branchCode === '2' ? '/sales/palace_india' : '/sales/china_town';
+                        window.location.href = returnUrl;
+                    }, 2000);
                 } else {
-                    alert('❌ خطأ في معالجة الدفع: ' + data.message);
+                    alert('❌ {{ _("Payment error") }}: ' + data.message);
                     loading.style.display = 'none';
                     paymentButtons.forEach(btn => btn.disabled = false);
                 }
             })
             .catch(error => {
+                // Remove processing message
+                const msg = document.getElementById('processing-msg');
+                if (msg) msg.remove();
+
                 console.error('Error:', error);
-                alert('❌ خطأ في الاتصال بالخادم');
+                alert('❌ {{ _("Server connection error") }}: ' + error.message);
                 loading.style.display = 'none';
                 paymentButtons.forEach(btn => btn.disabled = false);
             });
         }
-        
-        // Print invoice only (without payment)
-        function printInvoice() {
+
+        // Preview only (without payment) - for preview
+        function previewOnly() {
             window.print();
         }
         
         // Go back to sales page
         function goBack() {
-            if (confirm('هل تريد العودة بدون دفع؟ ستبقى الفاتورة محفوظة.')) {
-                window.location.href = '/sales/china_town';
+            if (confirm('{{ _("Are you sure you want to go back without payment?") }}')) {
+                // Determine which branch to return to
+                const branchCode = '{{ branch_code }}' || '1';
+                const returnUrl = branchCode === '2' ? '/sales/palace_india' : '/sales/china_town';
+                window.location.href = returnUrl;
             }
         }
         
@@ -412,19 +465,19 @@
                 goBack();
             } else if (e.key === 'F1') {
                 e.preventDefault();
-                submitPayment('cash');
+                payAndPrint('cash');
             } else if (e.key === 'F2') {
                 e.preventDefault();
-                submitPayment('card');
+                payAndPrint('card');
             } else if (e.key === 'F3') {
                 e.preventDefault();
-                submitPayment('transfer');
+                payAndPrint('transfer');
             } else if (e.key === 'F4') {
                 e.preventDefault();
-                submitPayment('other');
+                payAndPrint('other');
             } else if (e.ctrlKey && e.key === 'p') {
                 e.preventDefault();
-                printInvoice();
+                previewOnly();
             }
         });
     </script>

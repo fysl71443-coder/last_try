@@ -174,3 +174,33 @@ msgstr "زورونا مرة أخرى!"
 
 msgid "Have a great day!"
 msgstr "نتمنى لكم يوماً سعيداً!"
+
+msgid "Print Only"
+msgstr "طباعة فقط"
+
+msgid "Are you sure you want to go back without payment?"
+msgstr "هل تريد العودة بدون دفع؟"
+
+msgid "Pay & Print"
+msgstr "دفع و طباعة"
+
+msgid "Preview Only"
+msgstr "معاينة فقط"
+
+msgid "Processing Payment..."
+msgstr "جاري معالجة الدفع..."
+
+msgid "Please wait, preparing receipt..."
+msgstr "يرجى الانتظار، جاري تحضير الإيصال..."
+
+msgid "Payment successful!"
+msgstr "تم الدفع بنجاح!"
+
+msgid "Receipt Number"
+msgstr "رقم الإيصال"
+
+msgid "Payment error"
+msgstr "خطأ في الدفع"
+
+msgid "Server connection error"
+msgstr "خطأ في الاتصال بالخادم"
