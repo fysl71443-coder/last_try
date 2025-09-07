@@ -81,16 +81,19 @@
       margin: -20px -20px 20px -20px;
     }
     .btn-print {
-      background: linear-gradient(45deg, #74b9ff, #0984e3);
+      background: linear-gradient(45deg, #6f42c1, #8e44ad);
       border: none;
       color: white;
       border-radius: 8px;
       transition: all 0.3s ease;
+      font-weight: bold;
+      height: 50px;
     }
     .btn-print:hover {
       transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(116, 185, 255, 0.4);
+      box-shadow: 0 5px 15px rgba(111, 66, 193, 0.4);
       color: white;
+      background: linear-gradient(45deg, #8e44ad, #6f42c1);
     }
     .btn-payment {
       background: linear-gradient(45deg, #00b894, #00a085);
@@ -283,7 +286,7 @@
         </div>
 
         <div class="d-grid gap-2 mt-3">
-          <button class="btn btn-print" onclick="previewInvoice()">👁️ {{ _('Preview Invoice') }}</button>
+          <button class="btn btn-print" onclick="printCopy()">🖨️ {{ _('PRINT COPY') }}</button>
           <button class="btn btn-payment" onclick="payAndPrintFinal()">💳 {{ _('Pay & Print Receipt') }}</button>
         </div>
 
@@ -640,8 +643,8 @@ function goToPayment() {
     });
 }
 
-// Preview invoice (without payment)
-function previewInvoice() {
+// Print copy (without payment) - Direct print
+function printCopy() {
     if (currentInvoice.length === 0) {
         alert('{{ _("No items in invoice") }}');
         return;
@@ -653,21 +656,27 @@ function previewInvoice() {
         return;
     }
 
-    // Generate preview HTML
-    const invoiceHtml = generateInvoicePreviewHtml();
+    // Generate invoice HTML for printing
+    const invoiceHtml = generatePrintCopyHtml();
 
-    // Open preview window
-    const previewWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes');
-    previewWindow.document.write(invoiceHtml);
-    previewWindow.document.close();
+    // Open print window and auto-print
+    const printWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes');
+    printWindow.document.write(invoiceHtml);
+    printWindow.document.close();
 
-    // Add print button to preview
-    previewWindow.onload = function() {
-        const printBtn = previewWindow.document.createElement('button');
-        printBtn.innerHTML = '🖨️ {{ _("Print") }}';
-        printBtn.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;padding:10px;background:#007bff;color:white;border:none;border-radius:5px;cursor:pointer;';
-        printBtn.onclick = function() { previewWindow.print(); };
-        previewWindow.document.body.appendChild(printBtn);
+    // Auto-print when loaded
+    printWindow.onload = function() {
+        printWindow.print();
+        // Close window after printing
+        printWindow.onafterprint = function() {
+            printWindow.close();
+        };
+        // Fallback close after 3 seconds
+        setTimeout(function() {
+            if (!printWindow.closed) {
+                printWindow.close();
+            }
+        }, 3000);
     };
 }
 
@@ -711,8 +720,8 @@ async function saveCartToSession() {
     }
 }
 
-// Generate invoice preview HTML
-function generateInvoicePreviewHtml() {
+// Generate print copy HTML (for direct printing)
+function generatePrintCopyHtml() {
     const tableNumber = document.getElementById('tableSelect').value;
     const customerName = selectedCustomer?.name || '';
     const discount = parseFloat(document.getElementById('discountInput').value) || 0;
@@ -780,15 +789,16 @@ function generateInvoicePreviewHtml() {
             </table>
 
             <div class="totals">
-                <p>{{ _("Subtotal") }}: ${subtotal.toFixed(2)} {{ _("SAR") }}</p>
-                ${discount > 0 ? `<p>{{ _("Discount") }} (${discount}%): -${discountAmount.toFixed(2)} {{ _("SAR") }}</p>` : ''}
-                <p>{{ _("Tax") }} (15%): ${tax.toFixed(2)} {{ _("SAR") }}</p>
-                <p class="total-row">{{ _("Total") }}: ${total.toFixed(2)} {{ _("SAR") }}</p>
+                <p>{{ _("Subtotal") }}: ${subtotal.toFixed(2)} ر.س</p>
+                ${discount > 0 ? `<p>{{ _("Discount") }} (${discount}%): -${discountAmount.toFixed(2)} ر.س</p>` : ''}
+                <p>{{ _("Tax") }} (15%): ${tax.toFixed(2)} ر.س</p>
+                <p class="total-row">{{ _("Total") }}: ${total.toFixed(2)} ر.س</p>
             </div>
 
             <div style="text-align: center; margin-top: 30px;">
-                <p><strong>{{ _("UNPAID INVOICE") }}</strong></p>
-                <p>{{ _("This is a preview only") }}</p>
+                <p><strong>{{ _("COPY - NOT FOR PAYMENT") }}</strong></p>
+                <p>{{ _("This is a copy only - No payment processed") }}</p>
+                <p><strong>{{ _("THANK YOU FOR VISIT") }}</strong></p>
             </div>
         </body>
         </html>

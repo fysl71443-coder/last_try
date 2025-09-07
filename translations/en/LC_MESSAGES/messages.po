@@ -196,6 +196,15 @@ msgstr "Currency"
 msgid "Close"
 msgstr "Close"
 
+msgid "PRINT COPY"
+msgstr "PRINT COPY"
+
+msgid "COPY - NOT FOR PAYMENT"
+msgstr "COPY - NOT FOR PAYMENT"
+
+msgid "This is a copy only - No payment processed"
+msgstr "This is a copy only - No payment processed"
+
 msgid "Print Only"
 msgstr "Print Only"
 

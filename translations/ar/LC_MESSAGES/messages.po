@@ -196,6 +196,15 @@ msgstr "العملة"
 msgid "Close"
 msgstr "إغلاق"
 
+msgid "PRINT COPY"
+msgstr "طباعة نسخة"
+
+msgid "COPY - NOT FOR PAYMENT"
+msgstr "نسخة - ليست للدفع"
+
+msgid "This is a copy only - No payment processed"
+msgstr "هذه نسخة فقط - لم يتم معالجة أي دفع"
+
 msgid "Print Only"
 msgstr "طباعة فقط"
 
