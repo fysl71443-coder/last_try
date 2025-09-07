@@ -3581,7 +3581,6 @@ def reports():
 
         # Optional branch filter - with error handling
         branch_filter = request.args.get('branch')
- feature/new-pos-system
         if branch_filter and branch_filter != 'all':
             sales_place = db.session.query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0)) \
                 .filter(SalesInvoice.date.between(start_dt, end_dt), SalesInvoice.branch == branch_filter).scalar() or 0
