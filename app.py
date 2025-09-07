@@ -590,17 +590,11 @@ def api_pay_and_print():
                 user_id=current_user.id
             )
 
-            # Calculate totals
-            subtotal = sum(item['total_price'] for item in items)
-            discount_amount = subtotal * (discount_percentage / 100)
-            total_before_tax = subtotal - discount_amount
-            tax_amount = total_before_tax * 0.15
-            total_after_tax = total_before_tax + tax_amount
-
-            invoice.total_before_tax = total_before_tax
+            # Update invoice with calculated totals (already calculated above)
+            invoice.total_before_tax = subtotal
             invoice.discount_amount = discount_amount
-            invoice.tax_amount = tax_amount
-            invoice.total_after_tax_discount = total_after_tax
+            invoice.tax_amount = vat_amount
+            invoice.total_after_tax_discount = total
 
             db.session.add(invoice)
             db.session.flush()  # Get invoice ID
