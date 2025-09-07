@@ -175,6 +175,24 @@ msgstr "Visit us again!"
 msgid "Have a great day!"
 msgstr "Have a great day!"
 
+msgid "Scan for invoice details"
+msgstr "Scan for invoice details"
+
+msgid "Restaurant"
+msgstr "Restaurant"
+
+msgid "Main"
+msgstr "Main"
+
+msgid "No items"
+msgstr "No items"
+
+msgid "SAR"
+msgstr "SAR"
+
+msgid "Close"
+msgstr "Close"
+
 msgid "Print Only"
 msgstr "Print Only"
 

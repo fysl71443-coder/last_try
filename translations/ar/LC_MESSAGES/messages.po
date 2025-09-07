@@ -175,6 +175,24 @@ msgstr "زورونا مرة أخرى!"
 msgid "Have a great day!"
 msgstr "نتمنى لكم يوماً سعيداً!"
 
+msgid "Scan for invoice details"
+msgstr "امسح للحصول على تفاصيل الفاتورة"
+
+msgid "Restaurant"
+msgstr "مطعم"
+
+msgid "Main"
+msgstr "الرئيسي"
+
+msgid "No items"
+msgstr "لا توجد أصناف"
+
+msgid "SAR"
+msgstr "ر.س"
+
+msgid "Close"
+msgstr "إغلاق"
+
 msgid "Print Only"
 msgstr "طباعة فقط"
 

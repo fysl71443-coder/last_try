@@ -39,22 +39,22 @@
       {% if settings and (settings.receipt_show_logo|default(true)) %}
         <img id="logo" src="{{ settings.logo_url or url_for('static', filename='logo.svg') }}" alt="logo" class="logo">
       {% endif %}
-      <div class="company-name">{{ settings.company_name if settings else 'Restaurant' }}</div>
+      <div class="company-name">{{ settings.company_name if settings else _('Restaurant') }}</div>
       {% if settings and settings.receipt_show_tax_number %}
       <div class="small">{{ _('Tax No.') }}: {{ settings.tax_number or '-' }}</div>
       {% endif %}
       {% if settings and settings.address %}<div class="small">{{ settings.address }}</div>{% endif %}
-      {% if settings and settings.phone %}<div class="small">{{ settings.phone }}</div>{% endif %}
+      {% if settings and settings.phone %}<div class="small">{{ _('Phone') }}: {{ settings.phone }}</div>{% endif %}
     </div>
     <hr>
     <div class="small center">
-      <div>{{ _('Invoice') }}: {{ invoice.invoice_number }}</div>
+      <div>{{ _('Invoice') }}: {{ invoice.invoice_number or invoice.id }}</div>
       <div>{{ _('Date/Time') }}: {{ (invoice.created_at.astimezone().strftime('%Y-%m-%d %H:%M') if invoice.created_at else invoice.date|string) }}</div>
-      <div>{{ _('Branch') }}: {{ invoice.branch }}</div>
-      {% if invoice.table_no %}<div>{{ _('Table') }}: {{ invoice.table_no }}</div>{% endif %}
-      <div>{{ _('Payment') }}: {{ invoice.payment_method }}</div>
+      <div>{{ _('Branch') }}: {{ invoice.branch or invoice.branch_code or _('Main') }}</div>
+      {% if invoice.table_no or invoice.table_number %}<div>{{ _('Table') }}: {{ invoice.table_no or invoice.table_number }}</div>{% endif %}
+      <div>{{ _('Payment') }}: {{ invoice.payment_method or _('Cash') }}</div>
 
-      <div>{{ _('Customer') }}: {{ invoice.customer_name or '-' }}</div>
+      <div>{{ _('Customer') }}: {{ invoice.customer_name or _('Cash customer') }}</div>
       {% if invoice.customer_phone %}<div>{{ _('Phone') }}: {{ invoice.customer_phone }}</div>{% endif %}
     </div>
     <hr>
@@ -161,8 +161,9 @@
       try{
         const el = document.getElementById('qr');
         if(!el) return;
-        // minimal client QR if server-side generation not available
-        new QRCode(el, { text: '{{ invoice.invoice_number }}', width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
+        // Enhanced QR code with more invoice details
+        const qrText = 'Invoice: {{ invoice.invoice_number or invoice.id }}\nTotal: {{ "%.2f"|format(invoice.total_after_tax_discount) }} {{ _("SAR") }}\nDate: {{ invoice.date }}\nBranch: {{ invoice.branch or invoice.branch_code or _("Main") }}';
+        new QRCode(el, { text: qrText, width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
       }catch(e){}
     })();
   </script>

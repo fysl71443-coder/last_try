@@ -222,8 +222,17 @@
 <body>
     <div class="invoice-container">
         <div class="invoice-header">
-            <h1>{{ invoice.branch_code|title if invoice.branch_code else 'مطعم' }}</h1>
-            <p>فاتورة مبيعات رقم: {{ invoice.id }}</p>
+            {% if settings and settings.logo_url %}
+            <img src="{{ settings.logo_url }}" alt="Logo" style="height: 60px; margin-bottom: 10px;">
+            {% endif %}
+            <h1>{{ settings.company_name if settings else (invoice.branch_code|title if invoice.branch_code else 'مطعم') }}</h1>
+            <p>فاتورة مبيعات رقم: {{ invoice.invoice_number or invoice.id }}</p>
+            {% if settings and settings.tax_number %}
+            <p style="font-size: 12px; opacity: 0.8;">الرقم الضريبي: {{ settings.tax_number }}</p>
+            {% endif %}
+            {% if settings and settings.phone %}
+            <p style="font-size: 12px; opacity: 0.8;">الهاتف: {{ settings.phone }}</p>
+            {% endif %}
         </div>
         
         <div class="invoice-info">
@@ -270,10 +279,10 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in invoice.items %}
+                    {% for item in items %}
                     <tr>
-                        <td>{{ "%.2f"|format(item.quantity * item.unit_price) }} ر.س</td>
-                        <td>{{ "%.2f"|format(item.unit_price) }} ر.س</td>
+                        <td>{{ "%.2f"|format(item.total_price or (item.quantity * (item.unit_price or item.price_before_tax))) }} ر.س</td>
+                        <td>{{ "%.2f"|format(item.unit_price or item.price_before_tax) }} ر.س</td>
                         <td>{{ item.quantity }}</td>
                         <td>{{ item.product_name }}</td>
                         <td>{{ loop.index }}</td>
@@ -291,7 +300,7 @@
             <table class="totals-table">
                 <tr>
                     <td class="total-label">المجموع الفرعي:</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.subtotal or 0) }} ر.س</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.total_before_tax or invoice.subtotal or 0) }} ر.س</td>
                 </tr>
                 {% if invoice.discount_amount and invoice.discount_amount > 0 %}
                 <tr>
@@ -305,16 +314,33 @@
                 </tr>
                 <tr class="grand-total">
                     <td class="total-label">الإجمالي:</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.total_amount or 0) }} ر.س</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.total_after_tax_discount or invoice.total_amount or 0) }} ر.س</td>
                 </tr>
             </table>
         </div>
         
         <div class="invoice-footer">
+            <!-- QR Code Section -->
+            <div style="text-align: center; margin-bottom: 20px;">
+                {% if qr_data_url %}
+                    <img src="{{ qr_data_url }}" alt="QR Code" style="width: 100px; height: 100px;">
+                {% else %}
+                    <div id="qr-code" style="width: 100px; height: 100px; margin: 0 auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #666;">
+                        QR Code
+                    </div>
+                {% endif %}
+                <p style="font-size: 10px; margin-top: 5px;">{{ _('Scan for invoice details') }}</p>
+            </div>
+
             <p><strong>{{ _('THANK YOU FOR VISIT') }}</strong></p>
             <p>{{ _('Thank you for visiting us!') }} - {{ _('We hope to see you again soon') }}</p>
             <p>{{ _('Have a great day!') }}</p>
-            <p>{{ invoice.branch_code|title if invoice.branch_code else 'مطعم' }} | الرياض، المملكة العربية السعودية</p>
+            <p>{{ settings.company_name if settings else (invoice.branch_code|title if invoice.branch_code else 'مطعم') }}</p>
+            {% if settings and settings.address %}
+            <p style="font-size: 12px;">{{ settings.address }}</p>
+            {% else %}
+            <p style="font-size: 12px;">الرياض، المملكة العربية السعودية</p>
+            {% endif %}
         </div>
         
         <div class="print-actions no-print">

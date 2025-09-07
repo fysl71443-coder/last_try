@@ -22,17 +22,35 @@
 <body>
   <div class="wrap">
     <div class="center">
+      {% if settings and settings.logo_url %}
+      <img src="{{ settings.logo_url }}" alt="logo" style="height:40px; margin-bottom:6px"/>
+      {% elif logo_url %}
       <img src="{{ logo_url }}" alt="logo" style="height:40px; margin-bottom:6px"/>
-      <div><strong>{{ company_name }}</strong></div>
-      {% if tax_number %}<div class="small muted">{{ _('VAT No.') }}: {{ tax_number }}</div>{% endif %}
-      {% if phone %}<div class="small muted">{{ _('Phone') }}: {{ phone }}</div>{% endif %}
+      {% endif %}
+      <div><strong>{{ settings.company_name if settings else company_name }}</strong></div>
+      {% if settings and settings.tax_number %}
+      <div class="small muted">{{ _('VAT No.') }}: {{ settings.tax_number }}</div>
+      {% elif tax_number %}
+      <div class="small muted">{{ _('VAT No.') }}: {{ tax_number }}</div>
+      {% endif %}
+      {% if settings and settings.phone %}
+      <div class="small muted">{{ _('Phone') }}: {{ settings.phone }}</div>
+      {% elif phone %}
+      <div class="small muted">{{ _('Phone') }}: {{ phone }}</div>
+      {% endif %}
+      {% if settings and settings.address %}
+      <div class="small muted">{{ settings.address }}</div>
+      {% endif %}
     </div>
 
     <hr/>
 
     <div class="small">
       <div>{{ _('Invoice') }}: {{ inv.invoice_number or inv.id }}</div>
-      <div>{{ _('Date/Time') }}: {{ inv.date }} {{ inv.created_at|saudi_time }}</div>
+      <div>{{ _('Date/Time') }}: {{ inv.date }} {{ inv.created_at|saudi_time if inv.created_at else '' }}</div>
+      <div>{{ _('Branch') }}: {{ inv.branch or inv.branch_code or 'Main' }}</div>
+      {% if inv.table_number %}<div>{{ _('Table') }}: {{ inv.table_number }}</div>{% endif %}
+      <div>{{ _('Payment') }}: {{ inv.payment_method or 'Cash' }}</div>
       <div>{{ _('Customer') }}: {{ inv.customer_name or _('Cash customer') }}</div>
       {% if inv.customer_phone %}<div>{{ _('Phone') }}: {{ inv.customer_phone }}</div>{% endif %}
     </div>
@@ -66,6 +84,17 @@
       </tfoot>
     </table>
 
+    <!-- QR Code Section -->
+    <div class="center" style="margin-top:8px">
+      {% if qr_data_url %}
+        <img src="{{ qr_data_url }}" alt="QR Code" style="width: 80px; height: 80px;">
+      {% else %}
+        <div id="qr-code" style="width: 80px; height: 80px; margin: 0 auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #666;">
+          QR
+        </div>
+      {% endif %}
+    </div>
+
     <div class="center small muted" style="margin-top:8px">
       <div><strong>{{ _('THANK YOU FOR VISIT') }}</strong></div>
       <div>{{ _('Visit us again!') }}</div>
@@ -76,6 +105,29 @@
       <button onclick="window.print()">{{ _('Print / طباعة') }}</button>
     </div>
   </div>
+
+  <!-- QR Code Generation Script -->
+  {% if not qr_data_url %}
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        const qrElement = document.getElementById('qr-code');
+        if (qrElement && typeof QRCode !== 'undefined') {
+          qrElement.innerHTML = '';
+          new QRCode(qrElement, {
+            text: '{{ inv.invoice_number or inv.id }}',
+            width: 80,
+            height: 80,
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        }
+      } catch(e) {
+        console.log('QR Code generation failed:', e);
+      }
+    });
+  </script>
+  {% endif %}
 </body>
 </html>
 

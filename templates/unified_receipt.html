@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="{{ get_locale() }}" dir="{{ 'rtl' if get_locale() == 'ar' else 'ltr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ _('Receipt') }} - {{ invoice.invoice_number or invoice.id }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background: white;
+            color: #333;
+            font-size: {{ receipt_type == 'thermal' and '12px' or '14px' }};
+            line-height: 1.4;
+        }
+        
+        .receipt-container {
+            max-width: {{ receipt_type == 'thermal' and '320px' or '600px' }};
+            margin: 0 auto;
+            background: white;
+            {% if receipt_type != 'thermal' %}
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            {% endif %}
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 15px;
+            {% if receipt_type != 'thermal' %}
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            margin: -20px -20px 20px -20px;
+            border-radius: 8px 8px 0 0;
+            {% endif %}
+        }
+        
+        .logo {
+            height: {{ receipt_type == 'thermal' and '40px' or '60px' }};
+            margin-bottom: 10px;
+        }
+        
+        .company-name {
+            font-weight: bold;
+            font-size: {{ receipt_type == 'thermal' and '16px' or '24px' }};
+            margin: 5px 0;
+        }
+        
+        .company-info {
+            font-size: {{ receipt_type == 'thermal' and '10px' or '12px' }};
+            opacity: 0.8;
+            margin: 2px 0;
+        }
+        
+        .invoice-info {
+            margin: 15px 0;
+            padding: 10px 0;
+            border-top: {{ receipt_type == 'thermal' and '1px dashed #ddd' or '1px solid #eee' }};
+            border-bottom: {{ receipt_type == 'thermal' and '1px dashed #ddd' or '1px solid #eee' }};
+            font-size: {{ receipt_type == 'thermal' and '11px' or '13px' }};
+        }
+        
+        .invoice-info div {
+            margin: 3px 0;
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        .items-table th {
+            background: {{ receipt_type == 'thermal' and 'transparent' or '#f8f9fa' }};
+            padding: {{ receipt_type == 'thermal' and '5px 2px' or '10px 8px' }};
+            text-align: {{ 'right' if get_locale() == 'ar' else 'left' }};
+            font-weight: bold;
+            border-bottom: {{ receipt_type == 'thermal' and '1px dashed #ddd' or '2px solid #dee2e6' }};
+            font-size: {{ receipt_type == 'thermal' and '10px' or '12px' }};
+        }
+        
+        .items-table td {
+            padding: {{ receipt_type == 'thermal' and '4px 2px' or '8px' }};
+            border-bottom: {{ receipt_type == 'thermal' and '1px dashed #eee' or '1px solid #f0f0f0' }};
+            text-align: {{ 'right' if get_locale() == 'ar' else 'left' }};
+            font-size: {{ receipt_type == 'thermal' and '10px' or '12px' }};
+        }
+        
+        .items-table .number-col {
+            text-align: center;
+            width: 30px;
+        }
+        
+        .items-table .qty-col {
+            text-align: center;
+            width: 40px;
+        }
+        
+        .items-table .price-col {
+            text-align: {{ 'left' if get_locale() == 'ar' else 'right' }};
+            width: 60px;
+        }
+        
+        .totals-section {
+            margin: 15px 0;
+            padding: 10px 0;
+            border-top: {{ receipt_type == 'thermal' and '1px dashed #ddd' or '2px solid #dee2e6' }};
+        }
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: {{ receipt_type == 'thermal' and '11px' or '13px' }};
+        }
+        
+        .total-row.grand-total {
+            font-weight: bold;
+            font-size: {{ receipt_type == 'thermal' and '13px' or '16px' }};
+            border-top: {{ receipt_type == 'thermal' and '1px dashed #333' or '2px solid #333' }};
+            padding-top: 5px;
+            margin-top: 10px;
+        }
+        
+        .qr-section {
+            text-align: center;
+            margin: 15px 0;
+        }
+        
+        .qr-code {
+            width: {{ receipt_type == 'thermal' and '80px' or '100px' }};
+            height: {{ receipt_type == 'thermal' and '80px' or '100px' }};
+            margin: 0 auto 5px auto;
+        }
+        
+        .footer-message {
+            text-align: center;
+            margin: 15px 0;
+            font-size: {{ receipt_type == 'thermal' and '11px' or '13px' }};
+            {% if receipt_type != 'thermal' %}
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            {% endif %}
+        }
+        
+        .footer-message strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: {{ receipt_type == 'thermal' and '12px' or '14px' }};
+        }
+        
+        .print-button {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        
+        .btn:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            
+            .receipt-container {
+                border: none;
+                border-radius: 0;
+                box-shadow: none;
+                max-width: none;
+            }
+        }
+        
+        /* RTL/LTR specific styles */
+        [dir="rtl"] .items-table th,
+        [dir="rtl"] .items-table td {
+            text-align: right;
+        }
+        
+        [dir="rtl"] .items-table .price-col {
+            text-align: left;
+        }
+        
+        [dir="ltr"] .items-table th,
+        [dir="ltr"] .items-table td {
+            text-align: left;
+        }
+        
+        [dir="ltr"] .items-table .price-col {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <!-- Header Section -->
+        <div class="header">
+            {% if settings and settings.logo_url %}
+            <img src="{{ settings.logo_url }}" alt="Logo" class="logo">
+            {% endif %}
+            <div class="company-name">
+                {{ settings.company_name if settings else (invoice.branch_code|title if invoice.branch_code else _('Restaurant')) }}
+            </div>
+            {% if settings and settings.tax_number %}
+            <div class="company-info">{{ _('VAT No.') }}: {{ settings.tax_number }}</div>
+            {% endif %}
+            {% if settings and settings.phone %}
+            <div class="company-info">{{ _('Phone') }}: {{ settings.phone }}</div>
+            {% endif %}
+            {% if settings and settings.address %}
+            <div class="company-info">{{ settings.address }}</div>
+            {% endif %}
+        </div>
+        
+        <!-- Invoice Information -->
+        <div class="invoice-info">
+            <div><strong>{{ _('Invoice') }}:</strong> {{ invoice.invoice_number or invoice.id }}</div>
+            <div><strong>{{ _('Date/Time') }}:</strong> {{ invoice.date }} {{ invoice.created_at.strftime('%H:%M') if invoice.created_at else '' }}</div>
+            <div><strong>{{ _('Branch') }}:</strong> {{ invoice.branch or invoice.branch_code or _('Main') }}</div>
+            {% if invoice.table_number %}
+            <div><strong>{{ _('Table') }}:</strong> {{ invoice.table_number }}</div>
+            {% endif %}
+            <div><strong>{{ _('Payment') }}:</strong> {{ invoice.payment_method or _('Cash') }}</div>
+            <div><strong>{{ _('Customer') }}:</strong> {{ invoice.customer_name or _('Cash customer') }}</div>
+            {% if invoice.customer_phone %}
+            <div><strong>{{ _('Phone') }}:</strong> {{ invoice.customer_phone }}</div>
+            {% endif %}
+        </div>
+        
+        <!-- Items Table -->
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th class="number-col">#</th>
+                    <th>{{ _('Item') }}</th>
+                    <th class="qty-col">{{ _('Qty') }}</th>
+                    <th class="price-col">{{ _('Price') }}</th>
+                    <th class="price-col">{{ _('Total') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="number-col">{{ loop.index }}</td>
+                    <td>{{ item.product_name }}</td>
+                    <td class="qty-col">{{ '%.0f'|format(item.quantity) }}</td>
+                    <td class="price-col">{{ '%.2f'|format(item.price_before_tax or (item.total_price / item.quantity)) }}</td>
+                    <td class="price-col">{{ '%.2f'|format(item.total_price) }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; color: #666;">{{ _('No items') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <!-- Totals Section -->
+        <div class="totals-section">
+            <div class="total-row">
+                <span>{{ _('Subtotal') }}:</span>
+                <span>{{ '%.2f'|format(invoice.total_before_tax) }} {{ _('SAR') }}</span>
+            </div>
+            {% if invoice.discount_amount and invoice.discount_amount > 0 %}
+            <div class="total-row" style="color: #d63384;">
+                <span>{{ _('Discount') }}:</span>
+                <span>-{{ '%.2f'|format(invoice.discount_amount) }} {{ _('SAR') }}</span>
+            </div>
+            {% endif %}
+            <div class="total-row">
+                <span>{{ _('Tax') }} (15%):</span>
+                <span>{{ '%.2f'|format(invoice.tax_amount) }} {{ _('SAR') }}</span>
+            </div>
+            <div class="total-row grand-total">
+                <span>{{ _('Grand Total') }}:</span>
+                <span>{{ '%.2f'|format(invoice.total_after_tax_discount) }} {{ _('SAR') }}</span>
+            </div>
+        </div>
+        
+        <!-- QR Code Section -->
+        <div class="qr-section">
+            {% if qr_data_url %}
+                <img src="{{ qr_data_url }}" alt="QR Code" class="qr-code">
+            {% else %}
+                <div id="qr-code" class="qr-code" style="background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #666;">
+                    QR Code
+                </div>
+            {% endif %}
+            <div style="font-size: 10px; color: #666;">{{ _('Scan for invoice details') }}</div>
+        </div>
+        
+        <!-- Footer Message -->
+        <div class="footer-message">
+            <strong>{{ _('THANK YOU FOR VISIT') }}</strong>
+            <div>{{ _('Thank you for visiting us!') }}</div>
+            <div>{{ _('We hope to see you again soon') }}</div>
+            <div>{{ _('Have a great day!') }}</div>
+        </div>
+        
+        <!-- Print Buttons -->
+        <div class="print-button no-print">
+            <button onclick="window.print()" class="btn">🖨️ {{ _('Print') }}</button>
+            <button onclick="window.close()" class="btn btn-secondary">{{ _('Close') }}</button>
+        </div>
+    </div>
+    
+    <!-- QR Code Generation Script -->
+    {% if not qr_data_url %}
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                const qrElement = document.getElementById('qr-code');
+                if (qrElement && typeof QRCode !== 'undefined') {
+                    qrElement.innerHTML = '';
+                    new QRCode(qrElement, {
+                        text: 'Invoice: {{ invoice.invoice_number or invoice.id }}\nTotal: {{ "%.2f"|format(invoice.total_after_tax_discount) }} SAR\nDate: {{ invoice.date }}',
+                        width: {{ receipt_type == 'thermal' and '80' or '100' }},
+                        height: {{ receipt_type == 'thermal' and '80' or '100' }},
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                }
+            } catch(e) {
+                console.log('QR Code generation failed:', e);
+            }
+        });
+        
+        // Auto-print functionality (optional)
+        {% if auto_print %}
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                window.print();
+            }, 500);
+        });
+        {% endif %}
+    </script>
+    {% endif %}
+</body>
+</html>
