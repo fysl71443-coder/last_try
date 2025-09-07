@@ -22,15 +22,12 @@ class Config:
         SQLALCHEMY_ENGINE_OPTIONS = {
             "poolclass": NullPool,
             "pool_pre_ping": True,
-            "echo": False,
-            "connect_args": {
-                "options": "-c timezone=Asia/Riyadh"
-            }
+            "echo": False
         }
     else:
         SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
         SQLALCHEMY_ENGINE_OPTIONS = {
             "poolclass": NullPool,  # تجنب مشاكل connection pooling مع eventlet
             "connect_args": {"check_same_thread": False},
-            "echo": True  # تفعيل SQL logging للتطوير
+            "echo": False  # تعطيل SQL logging للتطوير
         }
