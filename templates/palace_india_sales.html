@@ -643,8 +643,8 @@ function goToPayment() {
     });
 }
 
-// Print copy (without payment) - Direct print
-function printCopy() {
+// Print copy (without payment) - Use professional template
+async function printCopy() {
     if (currentInvoice.length === 0) {
         alert('{{ _("No items in invoice") }}');
         return;
@@ -656,28 +656,54 @@ function printCopy() {
         return;
     }
 
-    // Generate invoice HTML for printing
-    const invoiceHtml = generatePrintCopyHtml();
-
-    // Open print window and auto-print
-    const printWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes');
-    printWindow.document.write(invoiceHtml);
-    printWindow.document.close();
-
-    // Auto-print when loaded
-    printWindow.onload = function() {
-        printWindow.print();
-        // Close window after printing
-        printWindow.onafterprint = function() {
-            printWindow.close();
+    try {
+        // Prepare invoice data for server-side template rendering
+        const invoiceData = {
+            items: currentInvoice.map(item => ({
+                product_name: item.name,
+                quantity: item.quantity,
+                price_before_tax: item.price,
+                total_price: item.price * item.quantity
+            })),
+            table_number: tableNumber,
+            customer_name: selectedCustomer?.name || '',
+            discount_percentage: parseFloat(document.getElementById('discountInput').value) || 0,
+            branch_code: '{{ branch_code }}',
+            is_copy: true // Mark as copy, not payment
         };
-        // Fallback close after 3 seconds
-        setTimeout(function() {
-            if (!printWindow.closed) {
-                printWindow.close();
+
+        // Send request to server to generate professional receipt
+        const response = await fetch('/api/print-copy', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrf()
+            },
+            body: JSON.stringify(invoiceData)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate receipt');
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.print_url) {
+            // Open the professional receipt in new window
+            const printWindow = window.open(result.print_url, '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
+
+            // Focus the window
+            if (printWindow) {
+                printWindow.focus();
             }
-        }, 3000);
-    };
+        } else {
+            throw new Error(result.error || 'Failed to generate receipt');
+        }
+
+    } catch (error) {
+        console.error('Print copy error:', error);
+        alert('{{ _("Error generating receipt copy") }}: ' + error.message);
+    }
 }
 
 // Save cart data to session
@@ -720,7 +746,13 @@ async function saveCartToSession() {
     }
 }
 
-// Generate print copy HTML (for direct printing)
+// Helper function to get CSRF token
+function getCsrf() {
+    return document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+           document.querySelector('input[name=csrf_token]')?.value || '';
+}
+
+// Generate print copy HTML (for direct printing) - DEPRECATED
 function generatePrintCopyHtml() {
     const tableNumber = document.getElementById('tableSelect').value;
     const customerName = selectedCustomer?.name || '';

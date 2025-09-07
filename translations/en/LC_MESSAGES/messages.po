@@ -205,6 +205,12 @@ msgstr "COPY - NOT FOR PAYMENT"
 msgid "This is a copy only - No payment processed"
 msgstr "This is a copy only - No payment processed"
 
+msgid "Error generating receipt copy"
+msgstr "Error generating receipt copy"
+
+msgid "Print Now"
+msgstr "Print Now"
+
 msgid "Print Only"
 msgstr "Print Only"
 

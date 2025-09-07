@@ -402,6 +402,119 @@ def csrf_exempt(f):
 
 # Database helper functions are now imported from db_helpers.py
 
+@app.route('/api/print-copy', methods=['POST'])
+@csrf_exempt
+def api_print_copy():
+    """Generate professional receipt copy without payment processing"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        # Extract data
+        items = data.get('items', [])
+        table_number = data.get('table_number')
+        customer_name = data.get('customer_name', '')
+        discount_percentage = data.get('discount_percentage', 0)
+        branch_code = data.get('branch_code', '1')
+
+        if not items:
+            return jsonify({'success': False, 'error': 'No items provided'}), 400
+
+        if not table_number:
+            return jsonify({'success': False, 'error': 'Table number required'}), 400
+
+        # Create temporary invoice object for template rendering
+        from datetime import datetime
+        import uuid
+
+        class TempInvoice:
+            def __init__(self):
+                self.id = str(uuid.uuid4())[:8]
+                self.invoice_number = f"COPY-{self.id}"
+                self.date = datetime.now()
+                self.branch_code = branch_code
+                self.table_number = table_number
+                self.customer_name = customer_name
+                self.discount_percentage = discount_percentage
+
+                # Calculate totals
+                self.subtotal = sum(item['total_price'] for item in items)
+                self.discount_amount = self.subtotal * (discount_percentage / 100)
+                self.total_before_tax = self.subtotal - self.discount_amount
+                self.tax_amount = self.total_before_tax * 0.15
+                self.total_after_tax_discount = self.total_before_tax + self.tax_amount
+
+        # Create temporary invoice
+        temp_invoice = TempInvoice()
+
+        # Import print helper
+        from print_helper import render_receipt_template
+
+        # Render professional receipt template
+        receipt_html = render_receipt_template(
+            invoice=temp_invoice,
+            items=items,
+            template_type='unified',
+            receipt_type='copy',
+            is_copy=True,
+            copy_message=_('COPY - NOT FOR PAYMENT'),
+            copy_note=_('This is a copy only - No payment processed')
+        )
+
+        # Create temporary file or return direct HTML
+        import tempfile
+        import os
+
+        # Create temporary HTML file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(receipt_html)
+            temp_file_path = f.name
+
+        # Generate URL for the temporary file
+        temp_filename = os.path.basename(temp_file_path)
+        print_url = f'/temp-receipt/{temp_filename}'
+
+        # Store temp file info in session for cleanup
+        session[f'temp_receipt_{temp_filename}'] = temp_file_path
+
+        return jsonify({
+            'success': True,
+            'print_url': print_url,
+            'invoice_id': temp_invoice.id
+        })
+
+    except Exception as e:
+        print(f"Print copy error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/temp-receipt/<filename>')
+def serve_temp_receipt(filename):
+    """Serve temporary receipt files"""
+    try:
+        # Get file path from session
+        temp_file_path = session.get(f'temp_receipt_{filename}')
+
+        if not temp_file_path or not os.path.exists(temp_file_path):
+            return "Receipt not found", 404
+
+        # Read and return the HTML content
+        with open(temp_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Clean up the temporary file after serving
+        try:
+            os.unlink(temp_file_path)
+            session.pop(f'temp_receipt_{filename}', None)
+        except Exception:
+            pass  # Ignore cleanup errors
+
+        return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+    except Exception as e:
+        print(f"Error serving temp receipt: {e}")
+        return "Error loading receipt", 500
+
 def save_to_db(instance):
     try:
         db.session.add(instance)

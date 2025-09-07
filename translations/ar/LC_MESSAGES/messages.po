@@ -205,6 +205,12 @@ msgstr "نسخة - ليست للدفع"
 msgid "This is a copy only - No payment processed"
 msgstr "هذه نسخة فقط - لم يتم معالجة أي دفع"
 
+msgid "Error generating receipt copy"
+msgstr "خطأ في إنشاء نسخة الإيصال"
+
+msgid "Print Now"
+msgstr "اطبع الآن"
+
 msgid "Print Only"
 msgstr "طباعة فقط"
 

@@ -643,8 +643,8 @@ function goToPayment() {
     });
 }
 
-// Print copy (without payment) - Direct print
-function printCopy() {
+// Print copy (without payment) - Use professional template
+async function printCopy() {
     if (currentInvoice.length === 0) {
         alert('{{ _("No items in invoice") }}');
         return;
@@ -656,28 +656,54 @@ function printCopy() {
         return;
     }
 
-    // Generate invoice HTML for printing
-    const invoiceHtml = generatePrintCopyHtml();
-
-    // Open print window and auto-print
-    const printWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes');
-    printWindow.document.write(invoiceHtml);
-    printWindow.document.close();
-
-    // Auto-print when loaded
-    printWindow.onload = function() {
-        printWindow.print();
-        // Close window after printing
-        printWindow.onafterprint = function() {
-            printWindow.close();
+    try {
+        // Prepare invoice data for server-side template rendering
+        const invoiceData = {
+            items: currentInvoice.map(item => ({
+                product_name: item.name,
+                quantity: item.quantity,
+                price_before_tax: item.price,
+                total_price: item.price * item.quantity
+            })),
+            table_number: tableNumber,
+            customer_name: selectedCustomer?.name || '',
+            discount_percentage: parseFloat(document.getElementById('discountInput').value) || 0,
+            branch_code: '{{ branch_code }}',
+            is_copy: true // Mark as copy, not payment
         };
-        // Fallback close after 3 seconds
-        setTimeout(function() {
-            if (!printWindow.closed) {
-                printWindow.close();
+
+        // Send request to server to generate professional receipt
+        const response = await fetch('/api/print-copy', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrf()
+            },
+            body: JSON.stringify(invoiceData)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate receipt');
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.print_url) {
+            // Open the professional receipt in new window
+            const printWindow = window.open(result.print_url, '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
+
+            // Focus the window
+            if (printWindow) {
+                printWindow.focus();
             }
-        }, 3000);
-    };
+        } else {
+            throw new Error(result.error || 'Failed to generate receipt');
+        }
+
+    } catch (error) {
+        console.error('Print copy error:', error);
+        alert('{{ _("Error generating receipt copy") }}: ' + error.message);
+    }
 }
 
 // Save cart data to session
@@ -720,89 +746,10 @@ async function saveCartToSession() {
     }
 }
 
-// Generate print copy HTML (for direct printing)
-function generatePrintCopyHtml() {
-    const tableNumber = document.getElementById('tableSelect').value;
-    const customerName = selectedCustomer?.name || '';
-    const discount = parseFloat(document.getElementById('discountInput').value) || 0;
-
-    const subtotal = currentInvoice.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const discountAmount = subtotal * (discount / 100);
-    const subtotalAfterDiscount = subtotal - discountAmount;
-    const tax = subtotalAfterDiscount * 0.15;
-    const total = subtotalAfterDiscount + tax;
-
-    let itemsHtml = '';
-    currentInvoice.forEach(item => {
-        itemsHtml += `
-            <tr>
-                <td>${item.name}</td>
-                <td>${item.quantity}</td>
-                <td>${item.price.toFixed(2)}</td>
-                <td>${(item.price * item.quantity).toFixed(2)}</td>
-            </tr>
-        `;
-    });
-
-    return `
-        <!DOCTYPE html>
-        <html dir="rtl">
-        <head>
-            <meta charset="UTF-8">
-            <title>{{ _("Invoice Preview") }}</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .header { text-align: center; margin-bottom: 20px; }
-                .invoice-info { margin-bottom: 15px; }
-                table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
-                th { background-color: #f5f5f5; }
-                .totals { margin-top: 15px; }
-                .total-row { font-weight: bold; }
-                @media print { button { display: none !important; } }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h2>{{ _("China Town Restaurant") }}</h2>
-                <p>{{ _("Invoice Preview") }}</p>
-            </div>
-
-            <div class="invoice-info">
-                <p><strong>{{ _("Table") }}:</strong> ${tableNumber}</p>
-                ${customerName ? `<p><strong>{{ _("Customer") }}:</strong> ${customerName}</p>` : ''}
-                <p><strong>{{ _("Date") }}:</strong> ${new Date().toLocaleDateString('ar-SA')}</p>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>{{ _("Item") }}</th>
-                        <th>{{ _("Qty") }}</th>
-                        <th>{{ _("Price") }}</th>
-                        <th>{{ _("Total") }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itemsHtml}
-                </tbody>
-            </table>
-
-            <div class="totals">
-                <p>{{ _("Subtotal") }}: ${subtotal.toFixed(2)} ر.س</p>
-                ${discount > 0 ? `<p>{{ _("Discount") }} (${discount}%): -${discountAmount.toFixed(2)} ر.س</p>` : ''}
-                <p>{{ _("Tax") }} (15%): ${tax.toFixed(2)} ر.س</p>
-                <p class="total-row">{{ _("Total") }}: ${total.toFixed(2)} ر.س</p>
-            </div>
-
-            <div style="text-align: center; margin-top: 30px;">
-                <p><strong>{{ _("COPY - NOT FOR PAYMENT") }}</strong></p>
-                <p>{{ _("This is a copy only - No payment processed") }}</p>
-                <p><strong>{{ _("THANK YOU FOR VISIT") }}</strong></p>
-            </div>
-        </body>
-        </html>
-    `;
+// Helper function to get CSRF token
+function getCsrf() {
+    return document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+           document.querySelector('input[name=csrf_token]')?.value || '';
 }
 
 // Pay and Print Final - Main payment processing
