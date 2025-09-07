@@ -821,10 +821,10 @@ function generatePrintCopyHtml() {
             </table>
 
             <div class="totals">
-                <p>{{ _("Subtotal") }}: ${subtotal.toFixed(2)} ر.س</p>
-                ${discount > 0 ? `<p>{{ _("Discount") }} (${discount}%): -${discountAmount.toFixed(2)} ر.س</p>` : ''}
-                <p>{{ _("Tax") }} (15%): ${tax.toFixed(2)} ر.س</p>
-                <p class="total-row">{{ _("Total") }}: ${total.toFixed(2)} ر.س</p>
+                <p>{{ _("Subtotal") }}: ${subtotal.toFixed(2)} <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></p>
+                ${discount > 0 ? `<p>{{ _("Discount") }} (${discount}%): -${discountAmount.toFixed(2)} <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></p>` : ''}
+                <p>{{ _("Tax") }} (15%): ${tax.toFixed(2)} <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></p>
+                <p class="total-row">{{ _("Total") }}: ${total.toFixed(2)} <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></p>
             </div>
 
             <div style="text-align: center; margin-top: 30px;">

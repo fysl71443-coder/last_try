@@ -12,6 +12,7 @@
     table th, table td { text-align: center; padding: 2px 0; }
     .footer { margin-top: 10px; text-align: center; font-size: 11px; }
     .currency { font-family: sans-serif; }
+    .sar-icon { width: 14px; height: 14px; vertical-align: middle; margin-left: 2px; }
     .unpaid-notice {
       background: #fff3cd;
       border: 1px dashed #856404;
@@ -69,7 +70,7 @@
       <tr>
         <td>{{ item.product_name or item.name }}</td>
         <td>{{ '%.0f'|format(item.quantity) }}</td>
-        <td>{{ '%.2f'|format(item.price_before_tax or (item.total_price / item.quantity)) }} <span class="currency">﷼</span></td>
+        <td>{{ '%.2f'|format(item.price_before_tax or (item.total_price / item.quantity)) }} <img src="{{ url_for('static', filename='sar-simple.svg') }}" class="sar-icon" alt="ر.س"></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -77,12 +78,12 @@
 
   <div class="line"></div>
 
-  <p>الإجمالي الفرعي / Subtotal: {{ '%.2f'|format(subtotal or invoice.total_before_tax) }} <span class="currency">﷼</span></p>
+  <p>الإجمالي الفرعي / Subtotal: {{ '%.2f'|format(subtotal or invoice.total_before_tax) }} <img src="{{ url_for('static', filename='sar-simple.svg') }}" class="sar-icon" alt="ر.س"></p>
   {% if discount_amount and discount_amount > 0 %}
-  <p>الخصم / Discount: -{{ '%.2f'|format(discount_amount or invoice.discount_amount) }} <span class="currency">﷼</span></p>
+  <p>الخصم / Discount: -{{ '%.2f'|format(discount_amount or invoice.discount_amount) }} <img src="{{ url_for('static', filename='sar-simple.svg') }}" class="sar-icon" alt="ر.س"></p>
   {% endif %}
-  <p>ضريبة القيمة المضافة 15% / VAT (15%): {{ '%.2f'|format(vat or invoice.tax_amount) }} <span class="currency">﷼</span></p>
-  <p class="bold">الإجمالي شامل الضريبة / Total (incl. VAT): {{ '%.2f'|format(total or invoice.total_after_tax_discount) }} <span class="currency">﷼</span></p>
+  <p>ضريبة القيمة المضافة 15% / VAT (15%): {{ '%.2f'|format(vat or invoice.tax_amount) }} <img src="{{ url_for('static', filename='sar-simple.svg') }}" class="sar-icon" alt="ر.س"></p>
+  <p class="bold">الإجمالي شامل الضريبة / Total (incl. VAT): {{ '%.2f'|format(total or invoice.total_after_tax_discount) }} <img src="{{ url_for('static', filename='sar-simple.svg') }}" class="sar-icon" alt="ر.س"></p>
 
   {% if not is_copy %}
   <p class="bold">طريقة الدفع / Payment: {{ payment_method or 'نقدي / Cash' }}</p>
@@ -100,7 +101,7 @@
     {% else %}
     <span class="footer">Thank you for your visit / شكرًا لزيارتكم</span><br>
     {% endif %}
-    <span class="footer">All prices in Saudi riyal <span class="currency">﷼</span></span>
+    <span class="footer">All prices in Saudi riyal <img src="{{ url_for('static', filename='sar-simple.svg') }}" class="sar-icon" alt="ر.س"></span>
   </div>
 
   <!-- Print Button for Copy Mode -->

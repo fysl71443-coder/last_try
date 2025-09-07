@@ -565,12 +565,10 @@ def api_pay_and_print():
             return jsonify({'success': False, 'error': 'Table number required'}), 400
 
         # Calculate totals
-        print(f"DEBUG: discount_percentage = {discount_percentage}")
         subtotal = sum(item['total_price'] for item in items)
         vat_amount = subtotal * 0.15  # 15% VAT
         discount_amount = subtotal * (discount_percentage / 100) if discount_percentage > 0 else 0
         total = subtotal + vat_amount - discount_amount
-        print(f"DEBUG: subtotal={subtotal}, vat_amount={vat_amount}, discount_amount={discount_amount}, total={total}")
 
         # Use safe database operation for payment processing
         def create_invoice_and_payment():

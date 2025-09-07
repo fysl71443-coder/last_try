@@ -257,20 +257,20 @@
         <div class="total-section">
           <div class="d-flex justify-content-between">
             <span>{{ _('Subtotal') }}:</span>
-            <span id="subtotal">0.00 SAR</span>
+            <span id="subtotal">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
           </div>
           <div class="d-flex justify-content-between">
             <span>{{ _('Discount') }}:</span>
-            <span id="discountAmount">0.00 SAR</span>
+            <span id="discountAmount">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
           </div>
           <div class="d-flex justify-content-between">
             <span>{{ _('Tax') }} (15%):</span>
-            <span id="taxAmount">0.00 SAR</span>
+            <span id="taxAmount">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
           </div>
           <hr>
           <div class="d-flex justify-content-between fw-bold">
             <span>{{ _('Total') }}:</span>
-            <span id="totalAmount">0.00 SAR</span>
+            <span id="totalAmount">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
           </div>
         </div>
         
@@ -358,7 +358,7 @@ async function loadProducts(categoryId) {
                     <div class="card product-card p-2" data-item='${JSON.stringify(item)}'>
                         <div class="card-body text-center">
                             <h6 class="card-title">${item.name}</h6>
-                            <p class="text-muted">${item.price} SAR</p>
+                            <p class="text-muted">${item.price} <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="12" style="vertical-align: middle;"></p>
                         </div>
                     </div>
                 </div>`
@@ -445,7 +445,7 @@ function updateInvoiceDisplay() {
             `<div class="invoice-item d-flex justify-content-between align-items-center">
                 <div>
                     <strong>${item.name}</strong><br>
-                    <small>${item.price} SAR × ${item.quantity}</small>
+                    <small>${item.price} <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="12" style="vertical-align: middle;"> × ${item.quantity}</small>
                 </div>
                 <div class="quantity-controls">
                     <button class="quantity-btn" onclick="changeQuantity(${index}, -1)">-</button>
@@ -484,10 +484,10 @@ function calculateTotals() {
     const taxAmount = afterDiscount * 0.15;
     const total = afterDiscount + taxAmount;
 
-    document.getElementById('subtotal').textContent = subtotal.toFixed(2) + ' SAR';
-    document.getElementById('discountAmount').textContent = discountAmount.toFixed(2) + ' SAR';
-    document.getElementById('taxAmount').textContent = taxAmount.toFixed(2) + ' SAR';
-    document.getElementById('totalAmount').textContent = total.toFixed(2) + ' SAR';
+    document.getElementById('subtotal').innerHTML = subtotal.toFixed(2) + ' <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;">';
+    document.getElementById('discountAmount').innerHTML = discountAmount.toFixed(2) + ' <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;">';
+    document.getElementById('taxAmount').innerHTML = taxAmount.toFixed(2) + ' <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;">';
+    document.getElementById('totalAmount').innerHTML = total.toFixed(2) + ' <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;">';
 }
 
 // Search customers
