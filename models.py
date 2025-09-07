@@ -485,6 +485,55 @@ class MenuItem(db.Model):
         return f'<MenuItem cat={self.category_id} meal={self.meal_id}>'
 
 
+# ========================================
+# Simplified POS Models (Alternative approach)
+# ========================================
+
+class Category(db.Model):
+    """Simplified category model for POS system"""
+    __tablename__ = 'categories'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(50), default='Active')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Category {self.name}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'status': self.status
+        }
+
+
+class Item(db.Model):
+    """Simplified item model for POS system"""
+    __tablename__ = 'items'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    price = db.Column(db.Numeric(10, 2), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
+    status = db.Column(db.String(50), default='Active')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationship
+    category = db.relationship('Category', backref='items')
+
+    def __repr__(self):
+        return f'<Item {self.name}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'price': float(self.price),
+            'category_id': self.category_id,
+            'status': self.status
+        }
+
+
 
 class UserPermission(db.Model):
     __tablename__ = 'user_permissions'

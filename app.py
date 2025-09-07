@@ -681,6 +681,40 @@ def palace_india_sales():
     """Palace India POS System"""
     return render_template('palace_india_sales.html')
 
+# ========================================
+# Simplified POS API Routes
+# ========================================
+
+@app.route('/api/categories')
+@login_required
+def get_categories():
+    """Get all active categories for POS system (simplified approach)"""
+    try:
+        from models import Category
+        categories = Category.query.filter_by(status='Active').all()
+        return jsonify([cat.to_dict() for cat in categories])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/items')
+@login_required
+def get_items():
+    """Get items by category_id for POS system (simplified approach)"""
+    try:
+        from models import Item
+        category_id = request.args.get('category_id')
+        if not category_id:
+            return jsonify({'error': 'category_id parameter required'}), 400
+
+        items = Item.query.filter_by(category_id=category_id, status='Active').all()
+        return jsonify([item.to_dict() for item in items])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ========================================
+# Original POS API Routes (MenuCategory/MenuItem)
+# ========================================
+
 # API: Get categories for POS
 @app.route('/api/pos/<branch>/categories')
 @login_required
