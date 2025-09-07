@@ -158,3 +158,19 @@ msgstr "مرحباً"
 
 msgid "Table Selection"
 msgstr "اختيار الطاولة"
+
+# Receipt footer messages
+msgid "THANK YOU FOR VISIT"
+msgstr "شكراً لزيارتكم"
+
+msgid "Thank you for visiting us!"
+msgstr "شكراً لزيارتكم!"
+
+msgid "We hope to see you again soon"
+msgstr "نتطلع لرؤيتكم مرة أخرى قريباً"
+
+msgid "Visit us again!"
+msgstr "زورونا مرة أخرى!"
+
+msgid "Have a great day!"
+msgstr "نتمنى لكم يوماً سعيداً!"

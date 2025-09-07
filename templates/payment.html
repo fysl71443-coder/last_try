@@ -178,8 +178,12 @@
                 top: 0;
                 width: 100%;
             }
-            .payment-methods, .action-buttons {
+            .payment-methods, .action-buttons, .language-toggle {
                 display: none !important;
+            }
+            .print-footer {
+                display: block !important;
+                visibility: visible !important;
             }
         }
     </style>
@@ -275,6 +279,17 @@
                                     </tr>
                                 </tfoot>
                             </table>
+                        </div>
+
+                        <!-- Thank you message for print -->
+                        <div class="print-footer text-center mt-4" style="display: none;">
+                            <hr>
+                            <div class="mb-2">
+                                <strong>{{ _('THANK YOU FOR VISIT') }}</strong>
+                            </div>
+                            <div>{{ _('Thank you for visiting us!') }}</div>
+                            <div>{{ _('We hope to see you again soon') }}</div>
+                            <div class="mt-2">{{ _('Have a great day!') }}</div>
                         </div>
                     </div>
                 </div>

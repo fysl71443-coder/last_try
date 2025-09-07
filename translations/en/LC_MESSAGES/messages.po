@@ -158,3 +158,19 @@ msgstr "Welcome"
 
 msgid "Table Selection"
 msgstr "Table Selection"
+
+# Receipt footer messages
+msgid "THANK YOU FOR VISIT"
+msgstr "THANK YOU FOR VISIT"
+
+msgid "Thank you for visiting us!"
+msgstr "Thank you for visiting us!"
+
+msgid "We hope to see you again soon"
+msgstr "We hope to see you again soon"
+
+msgid "Visit us again!"
+msgstr "Visit us again!"
+
+msgid "Have a great day!"
+msgstr "Have a great day!"

@@ -311,7 +311,9 @@
         </div>
         
         <div class="invoice-footer">
-            <p>شكراً لزيارتكم - نتطلع لخدمتكم مرة أخرى</p>
+            <p><strong>{{ _('THANK YOU FOR VISIT') }}</strong></p>
+            <p>{{ _('Thank you for visiting us!') }} - {{ _('We hope to see you again soon') }}</p>
+            <p>{{ _('Have a great day!') }}</p>
             <p>{{ invoice.branch_code|title if invoice.branch_code else 'مطعم' }} | الرياض، المملكة العربية السعودية</p>
         </div>
         
