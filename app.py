@@ -28,7 +28,11 @@ from datetime import datetime, timedelta, timezone
 # ضبط التوقيت على السعودية
 # ========================
 os.environ['TZ'] = 'Asia/Riyadh'
-time.tzset()
+# time.tzset() is not available on Windows
+try:
+    time.tzset()
+except AttributeError:
+    pass  # Windows doesn't support tzset
 KSA_TZ = pytz.timezone("Asia/Riyadh")
 
 def get_saudi_now():
@@ -53,7 +57,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 3️⃣ Flask & extensions
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, make_response, current_app
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, make_response, current_app, session
 from flask_login import login_user, login_required, logout_user, current_user
 from flask_babel import gettext as _
 from flask_wtf.csrf import CSRFError
@@ -642,8 +646,6 @@ def sales_branch(branch_code):
     # List invoices for this branch only
     invoices = SalesInvoice.query.filter_by(branch=branch_code).order_by(SalesInvoice.date.desc()).all()
     return render_template('sales.html', form=form, invoices=invoices, products_json=products_json, fixed_branch=branch_code, branch_label=branch_label)
-
-    return redirect(url_for('login'))
 
 # Sales entry: Branch cards -> Tables -> Table invoice
 @app.route('/sales', methods=['GET'])
@@ -1621,6 +1623,8 @@ def customers_delete(cid):
 @login_required
 def customers_toggle(cid):
     # Toggle active/inactive for customer
+    from models import Customer
+    c = Customer.query.get_or_404(cid)
     c.active = not bool(c.active)
     safe_db_commit()
     flash(_('Status changed / تم تغيير الحالة'), 'info')
@@ -1712,13 +1716,6 @@ def suppliers_delete(sid):
     safe_db_commit()
     flash(_('Supplier deleted / تم حذف المورد'), 'success')
     return redirect(url_for('suppliers'))
-
-    from models import Customer
-    c = Customer.query.get_or_404(cid)
-    c.active = not bool(c.active)
-    safe_db_commit()
-    flash(_('Customer status updated / تم تحديث حالة العميل'), 'success')
-    return redirect(url_for('customers'))
 
 @app.route('/customers/import/csv', methods=['POST'])
 @login_required
@@ -1891,16 +1888,6 @@ def api_sales_void_check():
     except Exception as e:
         current_app.logger.error("=== Void Check Error Traceback ===\n" + traceback.format_exc())
         return jsonify({'ok': False, 'error': str(e)}), 500
-
-    it = MenuItem.query.get_or_404(item_id)
-    try:
-        db.session.delete(it)
-        safe_db_commit()
-        flash(_('Item deleted'), 'success')
-    except Exception:
-        db.session.rollback()
-        flash(_('Delete failed'), 'danger')
-    return redirect(url_for('menu'))
 
 
 @app.route('/menu/<int:cat_id>/toggle', methods=['POST'])
@@ -3634,7 +3621,8 @@ def reports():
                   pm_counts(ExpenseInvoice, 'date', 'payment_method')):
             for k, v in d.items():
                 pm_map[k] = pm_map.get(k, 0) + v
-=======
+
+        # Sales totals by branch - with error handling
         sales_place = 0
         sales_china = 0
         total_sales = 0
@@ -3770,15 +3758,12 @@ def reports():
             logging.warning(f'Error processing payment method data: {e}')
             pm_map = {}
 
- main
         pm_labels = list(pm_map.keys())
         pm_values = [pm_map[k] for k in pm_labels]
 
         # Comparison bars: totals
         comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
         comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
-
- feature/new-pos-system
         # Cash flows from Payments table
         start_dt_dt = datetime.combine(start_dt, datetime.min.time())
         end_dt_dt = datetime.combine(end_dt, datetime.max.time())
@@ -3833,7 +3818,6 @@ def reports():
             logging.warning(f'Error getting low stock items: {e}')
             db.session.rollback()
             low_stock = []
- main
 
         # Settings for labels/currency
         s = get_settings_safe()
