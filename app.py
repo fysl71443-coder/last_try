@@ -1502,6 +1502,49 @@ def get_items():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/products')
+@login_required
+def get_products():
+    """Get all products/meals for POS system"""
+    try:
+        from models import Meal
+        meals = Meal.query.filter_by(active=True).all()
+        products = []
+        for meal in meals:
+            products.append({
+                'id': meal.id,
+                'name': meal.name,
+                'name_ar': meal.name_ar,
+                'description': meal.description,
+                'description_ar': meal.description_ar,
+                'price': float(meal.selling_price or 0),
+                'cost': float(meal.cost_price or 0),
+                'active': meal.active
+            })
+        return jsonify(products)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/products/<int:product_id>')
+@login_required
+def get_product(product_id):
+    """Get specific product by ID"""
+    try:
+        from models import Meal
+        meal = Meal.query.get_or_404(product_id)
+        return jsonify({
+            'id': meal.id,
+            'name': meal.name,
+            'name_ar': meal.name_ar,
+            'description': meal.description,
+            'description_ar': meal.description_ar,
+            'price': float(meal.selling_price or 0),
+            'cost': float(meal.cost_price or 0),
+            'active': meal.active
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Emergency route to create POS tables and data
 @app.route('/admin/create-pos-tables')
 @login_required
@@ -6776,19 +6819,58 @@ def pay_and_print_invoice(invoice_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 @app.route('/admin/create-sample-data')
-@login_required
 def create_sample_data_route():
-    """Route to create sample data for testing"""
+    """Route to create sample data for testing - No login required for testing"""
     try:
         create_sample_data()
-        flash('تم إنشاء البيانات التجريبية بنجاح / Sample data created successfully', 'success')
+        return jsonify({
+            'success': True,
+            'message': 'Sample data created successfully / تم إنشاء البيانات التجريبية بنجاح',
+            'data': {
+                'settings': Settings.query.count(),
+                'employees': Employee.query.count(),
+                'raw_materials': RawMaterial.query.count(),
+                'meals': Meal.query.count()
+            }
+        })
     except Exception as e:
-        flash(f'خطأ في إنشاء البيانات التجريبية / Error creating sample data: {str(e)}', 'danger')
-    return redirect(url_for('dashboard'))
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 def create_sample_data():
-    """Create sample data for testing"""
+    """Create comprehensive sample data for testing"""
     try:
+        # Create default settings if none exist
+        from models import Settings
+        if not Settings.query.first():
+            settings = Settings(
+                company_name='مطعم الصين وقصر الهند',
+                tax_number='123456789',
+                address='الرياض، المملكة العربية السعودية',
+                phone='0112345678',
+                email='info@restaurant.com',
+                vat_rate=15.0,
+                currency='SAR',
+                china_town_label='China Town',
+                place_india_label='Palace India',
+                china_town_void_password='1991',
+                place_india_void_password='1991',
+                china_town_vat_rate=15.0,
+                place_india_vat_rate=15.0,
+                china_town_discount_rate=0.0,
+                place_india_discount_rate=0.0,
+                receipt_paper_width='80',
+                receipt_font_size=12,
+                receipt_logo_height=40,
+                receipt_extra_bottom_mm=15,
+                receipt_show_tax_number=True,
+                receipt_footer_text='شكراً لزيارتكم - Thank you for visiting'
+            )
+            db.session.add(settings)
+            print("✅ Default settings created")
+
         # Create sample employees if none exist
         if Employee.query.count() == 0:
             from models import EmployeeSalaryDefault
@@ -6826,6 +6908,17 @@ def create_sample_data():
                     'email': 'mohammed@restaurant.com',
                     'hire_date': datetime.now().date(),
                     'status': 'active'
+                },
+                {
+                    'employee_code': 'EMP004',
+                    'full_name': 'سارة خالد',
+                    'national_id': '5566778899',
+                    'department': 'المحاسبة',
+                    'position': 'محاسبة',
+                    'phone': '0505566778',
+                    'email': 'sara@restaurant.com',
+                    'hire_date': datetime.now().date(),
+                    'status': 'active'
                 }
             ]
 
@@ -6843,36 +6936,46 @@ def create_sample_data():
                 )
                 db.session.add(salary_default)
 
-            db.session.commit()
             print("✅ Sample employees created")
 
-        # Create default settings if none exist
-        from models import Settings
-        if not Settings.query.first():
-            settings = Settings(
-                company_name='مطعم الصين وقصر الهند',
-                tax_number='123456789',
-                address='الرياض، المملكة العربية السعودية',
-                phone='0112345678',
-                email='info@restaurant.com',
-                vat_rate=15.0,
-                currency='SAR',
-                china_town_label='China Town',
-                place_india_label='Palace India',
-                china_town_void_password='1991',
-                place_india_void_password='1991',
-                china_town_vat_rate=15.0,
-                place_india_vat_rate=15.0,
-                china_town_discount_rate=0.0,
-                place_india_discount_rate=0.0
-            )
-            db.session.add(settings)
-            db.session.commit()
-            print("✅ Default settings created")
+        # Add some raw materials for inventory
+        if RawMaterial.query.count() < 5:
+            raw_materials = [
+                {
+                    'name': 'Rice',
+                    'name_ar': 'أرز',
+                    'unit': 'kg',
+                    'cost_per_unit': 5.0,
+                    'current_stock': 100.0,
+                    'minimum_stock': 20.0,
+                    'active': True
+                },
+                {
+                    'name': 'Chicken',
+                    'name_ar': 'دجاج',
+                    'unit': 'kg',
+                    'cost_per_unit': 15.0,
+                    'current_stock': 50.0,
+                    'minimum_stock': 10.0,
+                    'active': True
+                }
+            ]
+
+            for material_data in raw_materials:
+                if not RawMaterial.query.filter_by(name=material_data['name']).first():
+                    material = RawMaterial(**material_data)
+                    db.session.add(material)
+
+            print("✅ Raw materials added")
+
+        # Commit all changes
+        db.session.commit()
+        print("✅ All sample data created successfully")
 
     except Exception as e:
         print(f"❌ Error creating sample data: {e}")
         db.session.rollback()
+        raise e
 
 if __name__ == '__main__':
     # Import eventlet and socketio only when running the server

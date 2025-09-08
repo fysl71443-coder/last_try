@@ -1,0 +1,336 @@
+{
+  "run_id": "e2e_test_20250908_171945",
+  "base_url": "https://restaurant-system-fnbm.onrender.com",
+  "duration_seconds": 31.92,
+  "timestamp": "2025-09-08T17:20:16.990719",
+  "summary": {
+    "total_tests": 46,
+    "passed": 45,
+    "failed": 1,
+    "success_rate": "97.8%"
+  },
+  "results": [
+    {
+      "test_name": "Page Access - Login Page",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:19:48.952124",
+      "details": null
+    },
+    {
+      "test_name": "Login Form Elements",
+      "status": "PASS",
+      "message": "Username and password fields found",
+      "timestamp": "2025-09-08T17:19:48.967748",
+      "details": null
+    },
+    {
+      "test_name": "Login Functionality",
+      "status": "PASS",
+      "message": "Successfully logged in - URL: https://restaurant-system-fnbm.onrender.com/login",
+      "timestamp": "2025-09-08T17:19:52.237057",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Dashboard",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:19:58.060970",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - Dashboard",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:19:58.256776",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - Dashboard",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:19:58.256776",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Settings",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:19:59.780732",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - Settings",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:19:59.780732",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - Settings",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:19:59.780732",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Employees",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:01.006475",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - Employees",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:20:01.006475",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - Employees",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:20:01.006475",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Inventory",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:02.077862",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - Inventory",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:20:02.077862",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - Inventory",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:20:02.077862",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Reports",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:03.147827",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - Reports",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:20:03.147827",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - Reports",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:20:03.147827",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Sales China Town",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:05.093408",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - Sales China Town",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:20:05.093408",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - Sales China Town",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:20:05.093408",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Sales Palace India",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:06.360728",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - Sales Palace India",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:20:06.360728",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - Sales Palace India",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:20:06.360728",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Tables China Town",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:07.439036",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - Tables China Town",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:20:07.439036",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - Tables China Town",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:20:07.439036",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Tables Palace India",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:08.681169",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - Tables Palace India",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:20:08.682170",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - Tables Palace India",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:20:08.682170",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - Dashboard",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:09.740095",
+      "details": null
+    },
+    {
+      "test_name": "Navigation Discovery",
+      "status": "PASS",
+      "message": "Found 2 unique navigation links",
+      "timestamp": "2025-09-08T17:20:09.741094",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - EN",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:10.439067",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - EN",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:20:10.439067",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - EN",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:20:10.439067",
+      "details": null
+    },
+    {
+      "test_name": "Page Access - AR",
+      "status": "PASS",
+      "message": "Page loaded successfully - Login / تسجيل الدخول",
+      "timestamp": "2025-09-08T17:20:11.506053",
+      "details": null
+    },
+    {
+      "test_name": "Form Analysis - AR",
+      "status": "PASS",
+      "message": "Form 1: 5 fields, 0 required",
+      "timestamp": "2025-09-08T17:20:11.506053",
+      "details": null
+    },
+    {
+      "test_name": "Page Elements - AR",
+      "status": "PASS",
+      "message": "Found 1 forms, 0 tables, 3 interactive elements",
+      "timestamp": "2025-09-08T17:20:11.506053",
+      "details": null
+    },
+    {
+      "test_name": "API Endpoint - /api/tables/1",
+      "status": "PASS",
+      "message": "HTTP 200 OK",
+      "timestamp": "2025-09-08T17:20:12.654078",
+      "details": null
+    },
+    {
+      "test_name": "API Endpoint - /api/tables/2",
+      "status": "PASS",
+      "message": "HTTP 200 OK",
+      "timestamp": "2025-09-08T17:20:13.253003",
+      "details": null
+    },
+    {
+      "test_name": "API Endpoint - /api/categories",
+      "status": "PASS",
+      "message": "HTTP 200 OK",
+      "timestamp": "2025-09-08T17:20:14.260906",
+      "details": null
+    },
+    {
+      "test_name": "API Endpoint - /api/products",
+      "status": "FAIL",
+      "message": "HTTP 404 Not Found",
+      "timestamp": "2025-09-08T17:20:14.385949",
+      "details": null
+    },
+    {
+      "test_name": "API Endpoint - /settings",
+      "status": "PASS",
+      "message": "HTTP 200 OK",
+      "timestamp": "2025-09-08T17:20:15.060425",
+      "details": null
+    },
+    {
+      "test_name": "API Endpoint - /employees",
+      "status": "PASS",
+      "message": "HTTP 200 OK",
+      "timestamp": "2025-09-08T17:20:15.685594",
+      "details": null
+    },
+    {
+      "test_name": "API Endpoint - /inventory",
+      "status": "PASS",
+      "message": "HTTP 200 OK",
+      "timestamp": "2025-09-08T17:20:16.406768",
+      "details": null
+    },
+    {
+      "test_name": "API Endpoint - /reports",
+      "status": "PASS",
+      "message": "HTTP 200 OK",
+      "timestamp": "2025-09-08T17:20:16.990719",
+      "details": null
+    }
+  ]
+}

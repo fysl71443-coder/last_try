@@ -1,0 +1,144 @@
+{
+  "run_id": "functional_e2e_20250908_172322",
+  "test_type": "functional_e2e",
+  "base_url": "https://restaurant-system-fnbm.onrender.com",
+  "duration_seconds": 8.89,
+  "timestamp": "2025-09-08T17:23:31.578027",
+  "summary": {
+    "total_tests": 13,
+    "passed": 3,
+    "failed": 1,
+    "warnings": 9,
+    "success_rate": "23.1%"
+  },
+  "categories": {
+    "Login": {
+      "pass": 1,
+      "fail": 0,
+      "warn": 0
+    },
+    "Employee": {
+      "pass": 2,
+      "fail": 0,
+      "warn": 2
+    },
+    "Settings": {
+      "pass": 0,
+      "fail": 1,
+      "warn": 0
+    },
+    "POS": {
+      "pass": 0,
+      "fail": 0,
+      "warn": 4
+    },
+    "Reports": {
+      "pass": 0,
+      "fail": 0,
+      "warn": 1
+    },
+    "China": {
+      "pass": 0,
+      "fail": 0,
+      "warn": 1
+    },
+    "Palace": {
+      "pass": 0,
+      "fail": 0,
+      "warn": 1
+    }
+  },
+  "results": [
+    {
+      "test_name": "Login Process",
+      "status": "PASS",
+      "message": "Successfully logged in",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:25.158535"
+    },
+    {
+      "test_name": "Employee Page Access",
+      "status": "PASS",
+      "message": "Employees page accessible",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:25.735027"
+    },
+    {
+      "test_name": "Employee Form",
+      "status": "PASS",
+      "message": "Employee form found",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:25.735027"
+    },
+    {
+      "test_name": "Employee Form Fields",
+      "status": "WARN",
+      "message": "Some fields missing. Found: []",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:25.735027"
+    },
+    {
+      "test_name": "Employee Data",
+      "status": "WARN",
+      "message": "No employee table found",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:25.735027"
+    },
+    {
+      "test_name": "Settings Form",
+      "status": "FAIL",
+      "message": "No settings form found",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:26.669434"
+    },
+    {
+      "test_name": "POS China Town Elements",
+      "status": "WARN",
+      "message": "Limited POS elements found: []",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:27.275217"
+    },
+    {
+      "test_name": "POS China Town JavaScript",
+      "status": "WARN",
+      "message": "No POS JavaScript detected",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:27.275217"
+    },
+    {
+      "test_name": "POS Palace India Elements",
+      "status": "WARN",
+      "message": "Limited POS elements found: []",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:28.686266"
+    },
+    {
+      "test_name": "POS Palace India JavaScript",
+      "status": "WARN",
+      "message": "No POS JavaScript detected",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:28.686266"
+    },
+    {
+      "test_name": "Reports Content",
+      "status": "WARN",
+      "message": "No report content detected",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:29.238548"
+    },
+    {
+      "test_name": "China Town Tables Elements",
+      "status": "WARN",
+      "message": "No table elements found",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:30.897155"
+    },
+    {
+      "test_name": "Palace India Tables Elements",
+      "status": "WARN",
+      "message": "No table elements found",
+      "details": null,
+      "timestamp": "2025-09-08T17:23:31.562435"
+    }
+  ]
+}

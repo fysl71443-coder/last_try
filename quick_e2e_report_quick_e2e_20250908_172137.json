@@ -1,0 +1,149 @@
+{
+  "run_id": "quick_e2e_20250908_172137",
+  "base_url": "https://restaurant-system-fnbm.onrender.com",
+  "duration_seconds": 15.86,
+  "timestamp": "2025-09-08T17:21:53.177801",
+  "summary": {
+    "total_tests": 19,
+    "passed": 7,
+    "failed": 4,
+    "warnings": 8,
+    "success_rate": "36.8%",
+    "avg_response_time_ms": 671.0
+  },
+  "results": [
+    {
+      "test_name": "Home/Login Page",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 1330,
+      "timestamp": "2025-09-08T17:21:38.636640"
+    },
+    {
+      "test_name": "Dashboard",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 611,
+      "timestamp": "2025-09-08T17:21:39.463577"
+    },
+    {
+      "test_name": "Settings Page",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 578,
+      "timestamp": "2025-09-08T17:21:40.256420"
+    },
+    {
+      "test_name": "Employees Page",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 563,
+      "timestamp": "2025-09-08T17:21:41.023619"
+    },
+    {
+      "test_name": "Inventory Page",
+      "status": "WARN",
+      "message": "Page loaded but missing expected content",
+      "response_time_ms": 1539,
+      "timestamp": "2025-09-08T17:21:42.778612"
+    },
+    {
+      "test_name": "Reports Page",
+      "status": "WARN",
+      "message": "Page loaded but missing expected content",
+      "response_time_ms": 643,
+      "timestamp": "2025-09-08T17:21:43.628690"
+    },
+    {
+      "test_name": "China Town POS",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 1403,
+      "timestamp": "2025-09-08T17:21:45.244411"
+    },
+    {
+      "test_name": "Palace India POS",
+      "status": "WARN",
+      "message": "Page loaded but missing expected content",
+      "response_time_ms": 568,
+      "timestamp": "2025-09-08T17:21:46.025232"
+    },
+    {
+      "test_name": "China Town Tables",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 585,
+      "timestamp": "2025-09-08T17:21:46.825201"
+    },
+    {
+      "test_name": "Palace India Tables",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 767,
+      "timestamp": "2025-09-08T17:21:47.797942"
+    },
+    {
+      "test_name": "API - /api/tables/1",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 560,
+      "timestamp": "2025-09-08T17:21:48.567817"
+    },
+    {
+      "test_name": "API - /api/tables/2",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 577,
+      "timestamp": "2025-09-08T17:21:49.254721"
+    },
+    {
+      "test_name": "API - /api/categories",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 1419,
+      "timestamp": "2025-09-08T17:21:50.789130"
+    },
+    {
+      "test_name": "API - /api/products/1",
+      "status": "FAIL",
+      "message": "Not Found",
+      "response_time_ms": 122,
+      "timestamp": "2025-09-08T17:21:51.020568"
+    },
+    {
+      "test_name": "API - /api/load-draft-order/1/1",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 565,
+      "timestamp": "2025-09-08T17:21:51.696842"
+    },
+    {
+      "test_name": "API - /api/table-settings",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 543,
+      "timestamp": "2025-09-08T17:21:52.356048"
+    },
+    {
+      "test_name": "Static - /static/css/style.css",
+      "status": "FAIL",
+      "message": "HTTP 404",
+      "response_time_ms": 122,
+      "timestamp": "2025-09-08T17:21:52.587600"
+    },
+    {
+      "test_name": "Static - /static/js/main.js",
+      "status": "FAIL",
+      "message": "HTTP 404",
+      "response_time_ms": 114,
+      "timestamp": "2025-09-08T17:21:52.813667"
+    },
+    {
+      "test_name": "Static - /static/images/logo.png",
+      "status": "FAIL",
+      "message": "HTTP 404",
+      "response_time_ms": 131,
+      "timestamp": "2025-09-08T17:21:53.059647"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+# This is a placeholder for the logo image
+# In a real deployment, this would be a PNG image file
+# For now, we'll create a simple text-based logo placeholder
+
+Restaurant Management System Logo Placeholder
+
+This file should contain the restaurant logo in PNG format.
+Dimensions: 200x100 pixels recommended
+Background: Transparent
+Format: PNG
+
+To add a real logo:
+1. Replace this file with your actual logo.png
+2. Ensure it's optimized for web use
+3. Keep file size under 100KB for best performance
