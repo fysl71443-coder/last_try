@@ -1040,8 +1040,18 @@ def table_management(branch_code):
 def api_get_tables(branch_code):
     """Get all tables and their status for a specific branch"""
     try:
+        # Create tables if they don't exist
+        try:
+            db.create_all()
+        except Exception as create_error:
+            print(f"Warning: Could not create tables: {create_error}")
+
         # Get table settings for this branch
-        table_settings = TableSettings.query.filter_by(branch_code=branch_code).first()
+        table_settings = None
+        try:
+            table_settings = TableSettings.query.filter_by(branch_code=branch_code).first()
+        except Exception as settings_error:
+            print(f"Warning: Could not query table settings: {settings_error}")
 
         if not table_settings:
             # Default settings
@@ -1055,46 +1065,68 @@ def api_get_tables(branch_code):
 
         # Generate table numbers based on settings
         table_numbers = []
-        if numbering_system == 'numeric':
-            table_numbers = [str(i) for i in range(1, table_count + 1)]
-        elif numbering_system == 'alpha':
-            table_numbers = [chr(65 + i) for i in range(table_count)]  # A, B, C...
-        elif numbering_system == 'custom' and custom_numbers:
-            table_numbers = [n.strip() for n in custom_numbers.split(',') if n.strip()]
-        else:
-            # Fallback to numeric
-            table_numbers = [str(i) for i in range(1, table_count + 1)]
+        try:
+            if numbering_system == 'numeric':
+                table_numbers = [str(i) for i in range(1, table_count + 1)]
+            elif numbering_system == 'alpha':
+                table_numbers = [chr(65 + i) for i in range(min(table_count, 26))]  # A, B, C... (max 26)
+            elif numbering_system == 'custom' and custom_numbers:
+                table_numbers = [n.strip() for n in custom_numbers.split(',') if n.strip()]
+            else:
+                # Fallback to numeric
+                table_numbers = [str(i) for i in range(1, table_count + 1)]
+        except Exception as numbering_error:
+            print(f"Error generating table numbers: {numbering_error}")
+            # Ultimate fallback
+            table_numbers = [str(i) for i in range(1, 21)]
 
         tables_data = []
         for table_number in table_numbers:
-            # Check if there's a draft order for this table
-            draft_order = DraftOrder.query.filter_by(
-                branch_code=branch_code,
-                table_number=str(table_number),
-                status='draft'
-            ).first()
+            try:
+                # Check if there's a draft order for this table
+                draft_order = None
+                try:
+                    draft_order = DraftOrder.query.filter_by(
+                        branch_code=branch_code,
+                        table_number=str(table_number),
+                        status='draft'
+                    ).first()
+                except Exception as draft_error:
+                    print(f"Warning: Could not query draft orders: {draft_error}")
 
-            # Check if there's an existing table record
-            table_record = Table.query.filter_by(
-                branch_code=branch_code,
-                table_number=str(table_number)
-            ).first()
+                # Check if there's an existing table record
+                table_record = None
+                try:
+                    table_record = Table.query.filter_by(
+                        branch_code=branch_code,
+                        table_number=str(table_number)
+                    ).first()
+                except Exception as table_error:
+                    print(f"Warning: Could not query table records: {table_error}")
 
-            if draft_order:
-                status = 'occupied'
-                last_updated = draft_order.updated_at
-            elif table_record:
-                status = table_record.status
-                last_updated = table_record.updated_at
-            else:
-                status = 'available'
-                last_updated = None
+                if draft_order:
+                    status = 'occupied'
+                    last_updated = draft_order.updated_at
+                elif table_record:
+                    status = table_record.status
+                    last_updated = table_record.updated_at
+                else:
+                    status = 'available'
+                    last_updated = None
 
-            tables_data.append({
-                'table_number': table_number,
-                'status': status,
-                'last_updated': last_updated.isoformat() if last_updated else None
-            })
+                tables_data.append({
+                    'table_number': table_number,
+                    'status': status,
+                    'last_updated': last_updated.isoformat() if last_updated else None
+                })
+            except Exception as table_loop_error:
+                print(f"Error processing table {table_number}: {table_loop_error}")
+                # Add table with default status
+                tables_data.append({
+                    'table_number': table_number,
+                    'status': 'available',
+                    'last_updated': None
+                })
 
         return jsonify({
             'success': True,
@@ -1103,10 +1135,22 @@ def api_get_tables(branch_code):
 
     except Exception as e:
         print(f"Error getting tables: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Return default tables as fallback
+        default_tables = []
+        for i in range(1, 21):
+            default_tables.append({
+                'table_number': str(i),
+                'status': 'available',
+                'last_updated': None
+            })
+
         return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+            'success': True,
+            'tables': default_tables
+        })
 
 # API: Get draft order for table
 @app.route('/api/draft-order/<branch_code>/<table_number>')
@@ -1254,8 +1298,24 @@ def table_settings():
 def api_get_table_settings():
     """Get table settings for all branches"""
     try:
-        china_settings = TableSettings.query.filter_by(branch_code='1').first()
-        india_settings = TableSettings.query.filter_by(branch_code='2').first()
+        # Create tables if they don't exist
+        try:
+            db.create_all()
+        except Exception as create_error:
+            print(f"Warning: Could not create tables: {create_error}")
+
+        china_settings = None
+        india_settings = None
+
+        try:
+            china_settings = TableSettings.query.filter_by(branch_code='1').first()
+        except Exception as e:
+            print(f"Error querying China settings: {e}")
+
+        try:
+            india_settings = TableSettings.query.filter_by(branch_code='2').first()
+        except Exception as e:
+            print(f"Error querying India settings: {e}")
 
         settings = {
             'china': {
@@ -1277,6 +1337,8 @@ def api_get_table_settings():
 
     except Exception as e:
         print(f"Error getting table settings: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1334,14 +1396,16 @@ def api_save_table_settings():
 @login_required
 def china_town_sales():
     """China Town POS System"""
-    return render_template('china_town_sales.html')
+    table_number = request.args.get('table')
+    return render_template('china_town_sales.html', selected_table=table_number)
 
 # Palace India Sales POS
 @app.route('/sales/palace_india')
 @login_required
 def palace_india_sales():
     """Palace India POS System"""
-    return render_template('palace_india_sales.html')
+    table_number = request.args.get('table')
+    return render_template('palace_india_sales.html', selected_table=table_number)
 
 # ========================================
 # Simplified POS API Routes

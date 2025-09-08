@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>إعدادات الطاولات</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -326,30 +327,45 @@
                     const data = await response.json();
                     if (data.success) {
                         // Load China Town settings
-                        if (data.settings.china) {
+                        if (data.settings && data.settings.china) {
                             document.getElementById('chinaTableCount').value = data.settings.china.count || 20;
-                            document.querySelector(`input[name="chinaNumbering"][value="${data.settings.china.numbering || 'numeric'}"]`).checked = true;
+                            const chinaNumberingElement = document.querySelector(`input[name="chinaNumbering"][value="${data.settings.china.numbering || 'numeric'}"]`);
+                            if (chinaNumberingElement) {
+                                chinaNumberingElement.checked = true;
+                            }
                             if (data.settings.china.custom_numbers) {
                                 document.getElementById('chinaCustomNumbers').value = data.settings.china.custom_numbers;
                             }
                         }
-                        
+
                         // Load Palace India settings
-                        if (data.settings.india) {
+                        if (data.settings && data.settings.india) {
                             document.getElementById('indiaTableCount').value = data.settings.india.count || 20;
-                            document.querySelector(`input[name="indiaNumbering"][value="${data.settings.india.numbering || 'numeric'}"]`).checked = true;
+                            const indiaNumberingElement = document.querySelector(`input[name="indiaNumbering"][value="${data.settings.india.numbering || 'numeric'}"]`);
+                            if (indiaNumberingElement) {
+                                indiaNumberingElement.checked = true;
+                            }
                             if (data.settings.india.custom_numbers) {
                                 document.getElementById('indiaCustomNumbers').value = data.settings.india.custom_numbers;
                             }
                         }
-                        
+
                         updatePreview('china');
                         updatePreview('india');
                         toggleCustomNumbering();
+                    } else {
+                        showMessage('خطأ في تحميل الإعدادات: ' + (data.error || 'خطأ غير معروف'), 'danger');
                     }
+                } else {
+                    showMessage('خطأ في الاتصال بالخادم', 'danger');
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
+                showMessage('خطأ في تحميل الإعدادات', 'danger');
+                // Set default values
+                updatePreview('china');
+                updatePreview('india');
+                toggleCustomNumbering();
             }
         }
         

@@ -320,17 +320,19 @@ let currentBranch = 'palace_india';
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
-    // Check for table parameter in URL
+    // Check for table parameter in URL or from server
     const urlParams = new URLSearchParams(window.location.search);
-    const tableParam = urlParams.get('table');
-    if (tableParam) {
-        document.getElementById('tableSelect').value = tableParam;
-        // Load any existing draft order for this table
-        loadDraftOrder(tableParam);
-    }
+    const tableParam = urlParams.get('table') || '{{ selected_table or "" }}';
 
     loadCategories();
-    loadTables();
+    loadTables().then(() => {
+        // Set table after tables are loaded
+        if (tableParam) {
+            document.getElementById('tableSelect').value = tableParam;
+            // Load any existing draft order for this table
+            loadDraftOrder(tableParam);
+        }
+    });
     setupEventListeners();
 });
 
@@ -453,6 +455,7 @@ async function loadTables() {
                     option.textContent = `طاولة ${table.table_number}`;
                     tableSelect.appendChild(option);
                 });
+                return Promise.resolve();
             }
         }
     } catch (error) {
@@ -465,6 +468,7 @@ async function loadTables() {
             option.textContent = `طاولة ${i}`;
             tableSelect.appendChild(option);
         }
+        return Promise.resolve();
     }
 }
 
