@@ -813,13 +813,21 @@ except Exception:
 def login():
     form = LoginForm()
 
-    if form.validate_on_submit():
+    if request.method == 'POST':
+        # التحقق اليدوي من الحقول المطلوبة
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not username or not password:
+            flash('يرجى ملء جميع الحقول المطلوبة / Please fill all required fields', 'danger')
+            return render_template('login.html', form=form)
+
+        # تحديث بيانات النموذج
+        form.username.data = username
+        form.password.data = password
         try:
             from models import User
             from extensions import bcrypt
-
-            username = form.username.data
-            password = form.password.data
 
             logger.info(f"Login attempt for username: {username}")
             print(f"Login attempt for username: {username}")  # للتتبع
