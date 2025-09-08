@@ -116,30 +116,30 @@ body {
     <div class="row justify-content-center">
       <!-- China Town Branch -->
       <div class="col-lg-5 col-md-6">
-        <div class="branch-card china-town-card" onclick="location.href='{{ url_for('china_town_sales') }}'">
+        <div class="branch-card china-town-card" onclick="location.href='{{ url_for('table_management', branch_code='1') }}'">
           <span class="branch-icon">🏮</span>
           <h3 class="branch-title">China Town</h3>
           <p class="branch-description">
-            Chinese cuisine point of sale system with table-based ordering,
+            Chinese cuisine point of sale system with table management,
             draft invoice printing, and secure item management.
           </p>
-          <a href="{{ url_for('china_town_sales') }}" class="branch-btn">
-            Enter China Town POS
+          <a href="{{ url_for('table_management', branch_code='1') }}" class="branch-btn">
+            إدارة طاولات China Town
           </a>
         </div>
       </div>
 
       <!-- Palace India Branch -->
       <div class="col-lg-5 col-md-6">
-        <div class="branch-card palace-india-card" onclick="location.href='{{ url_for('palace_india_sales') }}'">
+        <div class="branch-card palace-india-card" onclick="location.href='{{ url_for('table_management', branch_code='2') }}'">
           <span class="branch-icon">🏛️</span>
           <h3 class="branch-title">Palace India</h3>
           <p class="branch-description">
-            Indian cuisine point of sale system with table-based ordering,
+            Indian cuisine point of sale system with table management,
             draft invoice printing, and secure item management.
           </p>
-          <a href="{{ url_for('palace_india_sales') }}" class="branch-btn">
-            Enter Palace India POS
+          <a href="{{ url_for('table_management', branch_code='2') }}" class="branch-btn">
+            إدارة طاولات Palace India
           </a>
         </div>
       </div>

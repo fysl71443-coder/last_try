@@ -1020,6 +1020,203 @@ def sales():
     ]
     return render_template('sales_branches.html', branches=branches)
 
+# Table Management
+@app.route('/tables/<branch_code>')
+@login_required
+def table_management(branch_code):
+    """Show table management for a specific branch"""
+    if branch_code not in ['1', '2']:
+        return redirect(url_for('sales'))
+
+    branch_label = 'China Town' if branch_code == '1' else 'Palace India'
+
+    return render_template('table_management.html',
+                         branch_code=branch_code,
+                         branch_label=branch_label)
+
+# API: Get tables status for a branch
+@app.route('/api/tables/<branch_code>')
+@login_required
+def api_get_tables(branch_code):
+    """Get all tables and their status for a specific branch"""
+    try:
+        # Create default tables if they don't exist
+        tables_data = []
+        for table_num in range(1, 21):  # Tables 1-20
+            # Check if there's a draft order for this table
+            draft_order = DraftOrder.query.filter_by(
+                branch_code=branch_code,
+                table_number=str(table_num),
+                status='draft'
+            ).first()
+
+            # Check if there's an existing table record
+            table_record = Table.query.filter_by(
+                branch_code=branch_code,
+                table_number=table_num
+            ).first()
+
+            if draft_order:
+                status = 'occupied'
+                last_updated = draft_order.updated_at
+            elif table_record:
+                status = table_record.status
+                last_updated = table_record.updated_at
+            else:
+                status = 'available'
+                last_updated = None
+
+            tables_data.append({
+                'table_number': table_num,
+                'status': status,
+                'last_updated': last_updated.isoformat() if last_updated else None
+            })
+
+        return jsonify({
+            'success': True,
+            'tables': tables_data
+        })
+
+    except Exception as e:
+        print(f"Error getting tables: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# API: Get draft order for table
+@app.route('/api/draft-order/<branch_code>/<table_number>')
+@login_required
+def api_get_draft_order(branch_code, table_number):
+    """Get draft order for a specific table"""
+    try:
+        draft_order = DraftOrder.query.filter_by(
+            branch_code=branch_code,
+            table_number=table_number,
+            status='draft'
+        ).first()
+
+        if draft_order:
+            items = []
+            for item in draft_order.items:
+                items.append({
+                    'id': item.item_id,
+                    'name': item.item_name,
+                    'price': float(item.price),
+                    'quantity': item.quantity,
+                    'total_price': float(item.total_price)
+                })
+
+            return jsonify({
+                'success': True,
+                'items': items
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'items': []
+            })
+
+    except Exception as e:
+        print(f"Error getting draft order: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# API: Save draft order
+@app.route('/api/save-draft-order', methods=['POST'])
+@login_required
+def api_save_draft_order():
+    """Save draft order for a table"""
+    try:
+        data = request.get_json()
+        branch_code = data.get('branch_code')
+        table_number = data.get('table_number')
+        items = data.get('items', [])
+
+        if not branch_code or not table_number:
+            return jsonify({
+                'success': False,
+                'error': 'Branch code and table number are required'
+            }), 400
+
+        # Delete existing draft order for this table
+        existing_draft = DraftOrder.query.filter_by(
+            branch_code=branch_code,
+            table_number=table_number,
+            status='draft'
+        ).first()
+
+        if existing_draft:
+            # Delete existing items
+            for item in existing_draft.items:
+                db.session.delete(item)
+            db.session.delete(existing_draft)
+
+        if items:  # Only create new draft if there are items
+            # Create new draft order
+            draft_order = DraftOrder(
+                branch_code=branch_code,
+                table_number=table_number,
+                user_id=current_user.id,
+                status='draft'
+            )
+            db.session.add(draft_order)
+            db.session.flush()  # Get the ID
+
+            # Add items
+            for item in items:
+                draft_item = DraftOrderItem(
+                    draft_order_id=draft_order.id,
+                    item_id=item['id'],
+                    item_name=item['name'],
+                    price=item['price'],
+                    quantity=item['quantity'],
+                    total_price=item['price'] * item['quantity']
+                )
+                db.session.add(draft_item)
+
+            # Update table status
+            table = Table.query.filter_by(
+                branch_code=branch_code,
+                table_number=int(table_number)
+            ).first()
+
+            if not table:
+                table = Table(
+                    branch_code=branch_code,
+                    table_number=int(table_number),
+                    status='occupied'
+                )
+                db.session.add(table)
+            else:
+                table.status = 'occupied'
+                table.updated_at = datetime.utcnow()
+        else:
+            # No items, mark table as available
+            table = Table.query.filter_by(
+                branch_code=branch_code,
+                table_number=int(table_number)
+            ).first()
+            if table:
+                table.status = 'available'
+                table.updated_at = datetime.utcnow()
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error saving draft order: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 # China Town Sales POS
 @app.route('/sales/china_town')
 @login_required

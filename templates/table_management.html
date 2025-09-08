@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة الطاولات - {{ branch_label }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            margin: 20px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .tables-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            margin: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .table-card {
+            border: none;
+            border-radius: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .table-card.available {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        
+        .table-card.occupied {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white;
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+        }
+        
+        .table-card.reserved {
+            background: linear-gradient(135deg, #ff9800, #f57c00);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+        }
+        
+        .table-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+        
+        .table-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .table-status {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .table-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+        
+        .back-btn {
+            background: linear-gradient(135deg, #6c757d, #5a6268);
+            border: none;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+            color: white;
+        }
+        
+        .branch-title {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .stats-card {
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .stats-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stats-label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .available-stat { color: #4CAF50; }
+        .occupied-stat { color: #f44336; }
+        .reserved-stat { color: #ff9800; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="header">
+            <div class="row align-items-center">
+                <div class="col-md-2">
+                    <a href="{{ url_for('sales_branches') }}" class="btn back-btn">
+                        <i class="fas fa-arrow-right me-2"></i>
+                        العودة للفروع
+                    </a>
+                </div>
+                <div class="col-md-8">
+                    <h1 class="branch-title mb-0">
+                        {% if branch_code == '1' %}
+                            🏮 China Town
+                        {% else %}
+                            🏰 Palace India
+                        {% endif %}
+                        - إدارة الطاولات
+                    </h1>
+                </div>
+                <div class="col-md-2 text-start">
+                    <button class="btn btn-primary" onclick="refreshTables()">
+                        <i class="fas fa-sync-alt me-2"></i>
+                        تحديث
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="row mx-3">
+            <div class="col-md-4">
+                <div class="stats-card">
+                    <div class="stats-number available-stat" id="availableCount">0</div>
+                    <div class="stats-label">طاولات فارغة</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stats-card">
+                    <div class="stats-number occupied-stat" id="occupiedCount">0</div>
+                    <div class="stats-label">طاولات مشغولة</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stats-card">
+                    <div class="stats-number reserved-stat" id="reservedCount">0</div>
+                    <div class="stats-label">طاولات محجوزة</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables Grid -->
+        <div class="tables-container">
+            <div class="row" id="tablesGrid">
+                <!-- Tables will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const branchCode = '{{ branch_code }}';
+        
+        // Load tables on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTables();
+        });
+        
+        async function loadTables() {
+            try {
+                const response = await fetch(`/api/tables/${branchCode}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayTables(data.tables);
+                    updateStats(data.tables);
+                } else {
+                    console.error('Error loading tables:', data.error);
+                }
+            } catch (error) {
+                console.error('Error loading tables:', error);
+            }
+        }
+        
+        function displayTables(tables) {
+            const tablesGrid = document.getElementById('tablesGrid');
+            tablesGrid.innerHTML = '';
+            
+            tables.forEach(table => {
+                const tableCard = createTableCard(table);
+                tablesGrid.appendChild(tableCard);
+            });
+        }
+        
+        function createTableCard(table) {
+            const col = document.createElement('div');
+            col.className = 'col-lg-2 col-md-3 col-sm-4 col-6 mb-4';
+            
+            const statusClass = getStatusClass(table.status);
+            const statusText = getStatusText(table.status);
+            
+            col.innerHTML = `
+                <div class="card table-card ${statusClass}" onclick="selectTable(${table.table_number})">
+                    <div class="table-info">
+                        ${table.last_updated ? new Date(table.last_updated).toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'}) : ''}
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="table-number">${table.table_number}</div>
+                        <div class="table-status">${statusText}</div>
+                    </div>
+                </div>
+            `;
+            
+            return col;
+        }
+        
+        function getStatusClass(status) {
+            switch(status) {
+                case 'available': return 'available';
+                case 'occupied': return 'occupied';
+                case 'reserved': return 'reserved';
+                default: return 'available';
+            }
+        }
+        
+        function getStatusText(status) {
+            switch(status) {
+                case 'available': return 'فارغة';
+                case 'occupied': return 'مشغولة';
+                case 'reserved': return 'محجوزة';
+                default: return 'فارغة';
+            }
+        }
+        
+        function updateStats(tables) {
+            const stats = {
+                available: 0,
+                occupied: 0,
+                reserved: 0
+            };
+            
+            tables.forEach(table => {
+                stats[table.status] = (stats[table.status] || 0) + 1;
+            });
+            
+            document.getElementById('availableCount').textContent = stats.available || 0;
+            document.getElementById('occupiedCount').textContent = stats.occupied || 0;
+            document.getElementById('reservedCount').textContent = stats.reserved || 0;
+        }
+        
+        function selectTable(tableNumber) {
+            // Redirect to POS system with selected table
+            const posUrl = branchCode === '1' ? 
+                `/sales/china_town?table=${tableNumber}` : 
+                `/sales/palace_india?table=${tableNumber}`;
+            
+            window.location.href = posUrl;
+        }
+        
+        function refreshTables() {
+            loadTables();
+        }
+    </script>
+</body>
+</html>
