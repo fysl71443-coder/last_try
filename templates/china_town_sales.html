@@ -159,16 +159,22 @@
       background: #ee5a24;
     }
     .void-btn {
-      background: #e74c3c;
+      background: #dc3545;
       border: none;
       color: white;
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: 4px;
-      font-size: 10px;
+      font-size: 11px;
       cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
     }
     .void-btn:hover {
-      background: #c0392b;
+      background: #c82333;
+      transform: scale(1.05);
+    }
+    .void-btn:active {
+      transform: scale(0.95);
     }
   </style>
 </head>
@@ -312,6 +318,31 @@
       </div>
     </div>
     
+  </div>
+</div>
+
+<!-- Password Modal for Item Removal -->
+<div class="modal fade" id="passwordModal" tabindex="-1" aria-labelledby="passwordModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title" id="passwordModalLabel">🔐 كلمة مرور المشرف</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="supervisorPassword" class="form-label">أدخل كلمة مرور المشرف لحذف الصنف:</label>
+          <input type="password" class="form-control" id="supervisorPassword" placeholder="كلمة المرور">
+          <div class="invalid-feedback" id="passwordError" style="display: none;">
+            كلمة مرور خاطئة! حاول مرة أخرى.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-danger" id="confirmRemoveBtn">حذف الصنف</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -571,6 +602,16 @@ function setupEventListeners() {
             updateTotals();
         }
     });
+
+    // Password modal confirm button
+    document.getElementById('confirmRemoveBtn').addEventListener('click', confirmItemRemoval);
+
+    // Allow Enter key to confirm password
+    document.getElementById('supervisorPassword').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            confirmItemRemoval();
+        }
+    });
 }
 
 // Add item to invoice
@@ -623,10 +664,48 @@ function changeQuantity(index, change) {
     updateInvoiceDisplay();
 }
 
-// Remove item
+// Global variable to store item index for removal
+let itemToRemoveIndex = -1;
+
+// Remove item with password protection
 function removeItem(index) {
-    currentInvoice.splice(index, 1);
-    updateInvoiceDisplay();
+    itemToRemoveIndex = index;
+    // Show password modal
+    const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
+    modal.show();
+
+    // Clear previous password and error
+    document.getElementById('supervisorPassword').value = '';
+    document.getElementById('passwordError').style.display = 'none';
+    document.getElementById('supervisorPassword').classList.remove('is-invalid');
+}
+
+// Confirm item removal after password verification
+function confirmItemRemoval() {
+    const password = document.getElementById('supervisorPassword').value;
+    const correctPassword = '1991'; // Supervisor password
+
+    if (password === correctPassword) {
+        // Password correct, remove item
+        if (itemToRemoveIndex >= 0 && itemToRemoveIndex < currentInvoice.length) {
+            currentInvoice.splice(itemToRemoveIndex, 1);
+            updateInvoiceDisplay();
+            updateTotals();
+            autoSaveDraft();
+        }
+
+        // Hide modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
+        modal.hide();
+
+        // Reset
+        itemToRemoveIndex = -1;
+    } else {
+        // Password incorrect, show error
+        document.getElementById('passwordError').style.display = 'block';
+        document.getElementById('supervisorPassword').classList.add('is-invalid');
+        document.getElementById('supervisorPassword').focus();
+    }
 }
 
 // Calculate totals
