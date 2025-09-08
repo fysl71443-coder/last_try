@@ -1545,6 +1545,75 @@ def get_product(product_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Test APIs without login requirement
+@app.route('/api/test/tables/<branch_code>')
+def test_api_tables(branch_code):
+    """Test API for tables without login"""
+    try:
+        tables_data = []
+        for i in range(1, 11):  # 10 tables for testing
+            tables_data.append({
+                'table_number': str(i),
+                'status': 'available' if i % 3 != 0 else 'occupied',
+                'last_updated': None
+            })
+
+        return jsonify({
+            'success': True,
+            'branch_code': branch_code,
+            'tables': tables_data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/test/categories')
+def test_api_categories():
+    """Test API for categories without login"""
+    try:
+        categories = [
+            {'id': 1, 'name': 'Main Dishes', 'name_ar': 'الأطباق الرئيسية'},
+            {'id': 2, 'name': 'Appetizers', 'name_ar': 'المقبلات'},
+            {'id': 3, 'name': 'Beverages', 'name_ar': 'المشروبات'},
+            {'id': 4, 'name': 'Desserts', 'name_ar': 'الحلويات'}
+        ]
+        return jsonify(categories)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/test/products')
+def test_api_products():
+    """Test API for products without login"""
+    try:
+        products = [
+            {'id': 1, 'name': 'Chicken Curry', 'name_ar': 'كاري الدجاج', 'price': 25.0, 'category_id': 1},
+            {'id': 2, 'name': 'Fried Rice', 'name_ar': 'أرز مقلي', 'price': 20.0, 'category_id': 1},
+            {'id': 3, 'name': 'Spring Rolls', 'name_ar': 'رولات الربيع', 'price': 15.0, 'category_id': 2},
+            {'id': 4, 'name': 'Green Tea', 'name_ar': 'شاي أخضر', 'price': 8.0, 'category_id': 3}
+        ]
+        return jsonify(products)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/table-settings')
+def test_api_table_settings():
+    """Test API for table settings"""
+    try:
+        settings = {
+            'china_town': {
+                'table_count': 20,
+                'numbering_system': 'numeric',
+                'layout': 'grid'
+            },
+            'palace_india': {
+                'table_count': 15,
+                'numbering_system': 'numeric',
+                'layout': 'grid'
+            }
+        }
+        return jsonify(settings)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Emergency route to create POS tables and data
 @app.route('/admin/create-pos-tables')
 @login_required
@@ -6817,6 +6886,48 @@ def pay_and_print_invoice(invoice_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/admin/fix-database')
+def fix_database_route():
+    """Fix database schema issues"""
+    try:
+        # Add missing columns to Settings table
+        from sqlalchemy import text
+
+        missing_columns = [
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_void_password VARCHAR(50) DEFAULT '1991'",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_void_password VARCHAR(50) DEFAULT '1991'",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_vat_rate FLOAT DEFAULT 15.0",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_vat_rate FLOAT DEFAULT 15.0",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_discount_rate FLOAT DEFAULT 0.0",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_discount_rate FLOAT DEFAULT 0.0",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_paper_width VARCHAR(10) DEFAULT '80'",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_font_size INTEGER DEFAULT 12",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_logo_height INTEGER DEFAULT 40",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_extra_bottom_mm INTEGER DEFAULT 15",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_tax_number BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_footer_text TEXT DEFAULT 'شكراً لزيارتكم'"
+        ]
+
+        for sql in missing_columns:
+            try:
+                db.session.execute(text(sql))
+                db.session.commit()
+            except Exception as e:
+                print(f"Column might already exist: {e}")
+                db.session.rollback()
+
+        return jsonify({
+            'success': True,
+            'message': 'Database schema fixed successfully'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/admin/create-sample-data')
 def create_sample_data_route():

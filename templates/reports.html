@@ -74,16 +74,19 @@
       <div class="d-flex justify-content-between"><div>{{ _('Expenses / المصروفات') }}</div><div>{{ '%.2f'|format(total_expenses) }}</div></div>
       <div class="d-flex justify-content-between mt-2"><div>{{ _('Salaries / الرواتب') }}</div><div>{{ '%.2f'|format(total_salaries) }}</div></div>
     </div></div></div>
-    <div class="col-md-8"><div class="card"><div class="card-body">
+    <div class="col-md-8"><div class="card chart-container"><div class="card-body">
+      <h6 class="card-title">{{ _('Sales Trend / اتجاه المبيعات') }}</h6>
       <canvas id="lineChart" height="80"></canvas>
     </div></div></div>
   </div>
 
   <div class="row g-3 mb-4">
-    <div class="col-md-6"><div class="card"><div class="card-body">
+    <div class="col-md-6"><div class="card chart-container"><div class="card-body">
+      <h6 class="card-title">{{ _('Revenue Distribution / توزيع الإيرادات') }}</h6>
       <canvas id="pieChart" height="120"></canvas>
     </div></div></div>
-    <div class="col-md-6"><div class="card"><div class="card-body">
+    <div class="col-md-6"><div class="card chart-container"><div class="card-body">
+      <h6 class="card-title">{{ _('Profit Analysis / تحليل الأرباح') }}</h6>
       <canvas id="barChart" height="120"></canvas>
     </div></div></div>
   </div>

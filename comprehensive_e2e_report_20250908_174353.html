@@ -1,0 +1,518 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Restaurant System E2E Test Report</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
+                color: #333;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                overflow: hidden;
+            }
+            .header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 30px;
+                text-align: center;
+            }
+            .header h1 {
+                margin: 0;
+                font-size: 2.5em;
+                font-weight: 300;
+            }
+            .header p {
+                margin: 10px 0 0 0;
+                opacity: 0.9;
+                font-size: 1.1em;
+            }
+            .summary {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                padding: 30px;
+                background: #f8f9fa;
+            }
+            .stat-card {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                text-align: center;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                border-left: 4px solid #667eea;
+            }
+            .stat-card.success { border-left-color: #28a745; }
+            .stat-card.danger { border-left-color: #dc3545; }
+            .stat-card.warning { border-left-color: #ffc107; }
+            .stat-number {
+                font-size: 2.5em;
+                font-weight: bold;
+                margin: 0;
+                color: #333;
+            }
+            .stat-label {
+                color: #666;
+                margin: 5px 0 0 0;
+                font-size: 0.9em;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .test-section {
+                margin: 30px;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            .test-section-header {
+                background: #343a40;
+                color: white;
+                padding: 15px 20px;
+                font-size: 1.2em;
+                font-weight: 500;
+            }
+            .test-results {
+                padding: 20px;
+            }
+            .test-result {
+                display: flex;
+                align-items: center;
+                padding: 10px 0;
+                border-bottom: 1px solid #f1f3f4;
+            }
+            .test-result:last-child {
+                border-bottom: none;
+            }
+            .status-icon {
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                margin-right: 15px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 12px;
+                color: white;
+            }
+            .status-pass { background: #28a745; }
+            .status-fail { background: #dc3545; }
+            .status-warn { background: #ffc107; color: #333; }
+            .test-name {
+                flex: 1;
+                font-weight: 500;
+            }
+            .test-message {
+                color: #666;
+                font-size: 0.9em;
+                margin-left: 35px;
+                margin-top: 5px;
+            }
+            .timestamp {
+                color: #999;
+                font-size: 0.8em;
+                margin-left: auto;
+            }
+            .footer {
+                background: #f8f9fa;
+                padding: 20px;
+                text-align: center;
+                color: #666;
+                border-top: 1px solid #e9ecef;
+            }
+            .progress-bar {
+                width: 100%;
+                height: 8px;
+                background: #e9ecef;
+                border-radius: 4px;
+                overflow: hidden;
+                margin: 10px 0;
+            }
+            .progress-fill {
+                height: 100%;
+                background: linear-gradient(90deg, #28a745, #20c997);
+                transition: width 0.3s ease;
+            }
+            .badge {
+                display: inline-block;
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 0.75em;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .badge-success { background: #d4edda; color: #155724; }
+            .badge-danger { background: #f8d7da; color: #721c24; }
+            .badge-warning { background: #fff3cd; color: #856404; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🧪 Restaurant System E2E Test Report</h1>
+                <p>Comprehensive End-to-End Testing Results</p>
+                <p>Generated on 2025-09-08 17:43:53</p>
+            </div>
+            
+            <div class="summary">
+                <div class="stat-card">
+                    <div class="stat-number">32</div>
+                    <div class="stat-label">Total Tests</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-number">13</div>
+                    <div class="stat-label">Passed</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-number">1</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-number">18</div>
+                    <div class="stat-label">Warnings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">40.6%</div>
+                    <div class="stat-label">Success Rate</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 40.625%"></div>
+                    </div>
+                </div>
+            </div>
+    
+            <div class="test-section">
+                <div class="test-section-header">
+                    Functional E2E Test - 23.1% Success Rate
+                    <span style="float: right;">
+                        <span class="badge badge-success">3 Passed</span>
+                        <span class="badge badge-danger">1 Failed</span>
+                        <span class="badge badge-warning">9 Warnings</span>
+                    </span>
+                </div>
+                <div class="test-results">
+        
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Login Process</div>
+                            <div class="test-message">Successfully logged in</div>
+                        </div>
+                        <div class="timestamp">17:43:26</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Employee Page Access</div>
+                            <div class="test-message">Employees page accessible</div>
+                        </div>
+                        <div class="timestamp">17:43:27</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Employee Form</div>
+                            <div class="test-message">Employee form found</div>
+                        </div>
+                        <div class="timestamp">17:43:27</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">Employee Form Fields</div>
+                            <div class="test-message">Some fields missing. Found: []</div>
+                        </div>
+                        <div class="timestamp">17:43:27</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">Employee Data</div>
+                            <div class="test-message">No employee table found</div>
+                        </div>
+                        <div class="timestamp">17:43:27</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-fail">✗</div>
+                        <div>
+                            <div class="test-name">Settings Form</div>
+                            <div class="test-message">No settings form found</div>
+                        </div>
+                        <div class="timestamp">17:43:27</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">POS China Town Elements</div>
+                            <div class="test-message">Limited POS elements found: []</div>
+                        </div>
+                        <div class="timestamp">17:43:28</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">POS China Town JavaScript</div>
+                            <div class="test-message">No POS JavaScript detected</div>
+                        </div>
+                        <div class="timestamp">17:43:28</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">POS Palace India Elements</div>
+                            <div class="test-message">Limited POS elements found: []</div>
+                        </div>
+                        <div class="timestamp">17:43:28</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">POS Palace India JavaScript</div>
+                            <div class="test-message">No POS JavaScript detected</div>
+                        </div>
+                        <div class="timestamp">17:43:28</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">Reports Content</div>
+                            <div class="test-message">No report content detected</div>
+                        </div>
+                        <div class="timestamp">17:43:29</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">China Town Tables Elements</div>
+                            <div class="test-message">No table elements found</div>
+                        </div>
+                        <div class="timestamp">17:43:30</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">Palace India Tables Elements</div>
+                            <div class="test-message">No table elements found</div>
+                        </div>
+                        <div class="timestamp">17:43:30</div>
+                    </div>
+            
+                </div>
+            </div>
+        
+            <div class="test-section">
+                <div class="test-section-header">
+                    Quick E2E Test - 52.6% Success Rate
+                    <span style="float: right;">
+                        <span class="badge badge-success">10 Passed</span>
+                        <span class="badge badge-danger">0 Failed</span>
+                        <span class="badge badge-warning">9 Warnings</span>
+                    </span>
+                </div>
+                <div class="test-results">
+        
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Home/Login Page</div>
+                            <div class="test-message">Page loaded with expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:50</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Dashboard</div>
+                            <div class="test-message">Page loaded with expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:51</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Settings Page</div>
+                            <div class="test-message">Page loaded with expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:52</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Employees Page</div>
+                            <div class="test-message">Page loaded with expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:52</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">Inventory Page</div>
+                            <div class="test-message">Page loaded but missing expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:53</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">Reports Page</div>
+                            <div class="test-message">Page loaded but missing expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:54</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">China Town POS</div>
+                            <div class="test-message">Page loaded with expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:56</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">Palace India POS</div>
+                            <div class="test-message">Page loaded but missing expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:57</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">China Town Tables</div>
+                            <div class="test-message">Page loaded with expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:57</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Palace India Tables</div>
+                            <div class="test-message">Page loaded with expected content</div>
+                        </div>
+                        <div class="timestamp">17:42:59</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">API - /api/tables/1</div>
+                            <div class="test-message">Non-JSON response</div>
+                        </div>
+                        <div class="timestamp">17:43:00</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">API - /api/tables/2</div>
+                            <div class="test-message">Non-JSON response</div>
+                        </div>
+                        <div class="timestamp">17:43:01</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">API - /api/categories</div>
+                            <div class="test-message">Non-JSON response</div>
+                        </div>
+                        <div class="timestamp">17:43:03</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">API - /api/products/1</div>
+                            <div class="test-message">Non-JSON response</div>
+                        </div>
+                        <div class="timestamp">17:43:04</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">API - /api/load-draft-order/1/1</div>
+                            <div class="test-message">Non-JSON response</div>
+                        </div>
+                        <div class="timestamp">17:43:04</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-warn">!</div>
+                        <div>
+                            <div class="test-name">API - /api/table-settings</div>
+                            <div class="test-message">Non-JSON response</div>
+                        </div>
+                        <div class="timestamp">17:43:05</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Static - /static/css/style.css</div>
+                            <div class="test-message">Page loaded successfully</div>
+                        </div>
+                        <div class="timestamp">17:43:05</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Static - /static/js/main.js</div>
+                            <div class="test-message">Page loaded successfully</div>
+                        </div>
+                        <div class="timestamp">17:43:05</div>
+                    </div>
+            
+                    <div class="test-result">
+                        <div class="status-icon status-pass">✓</div>
+                        <div>
+                            <div class="test-name">Static - /static/images/logo.png</div>
+                            <div class="test-message">Page loaded successfully</div>
+                        </div>
+                        <div class="timestamp">17:43:06</div>
+                    </div>
+            
+                </div>
+            </div>
+        
+            <div class="footer">
+                <p>🏢 Restaurant Management System - E2E Test Suite</p>
+                <p>Target URL: <strong>https://restaurant-system-fnbm.onrender.com</strong></p>
+                <p>Report generated automatically by E2E Test Framework</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    
