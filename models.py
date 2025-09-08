@@ -342,7 +342,7 @@ class Table(db.Model):
     __tablename__ = 'tables'
     id = db.Column(db.Integer, primary_key=True)
     branch_code = db.Column(db.String(20), nullable=False)  # place_india, china_town
-    table_number = db.Column(db.Integer, nullable=False)
+    table_number = db.Column(db.String(20), nullable=False)  # Changed to String to support custom numbering
     status = db.Column(db.String(20), default='available')  # available, reserved, occupied
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -351,6 +351,20 @@ class Table(db.Model):
 
     def __repr__(self):
         return f'<Table {self.branch_code}-{self.table_number} ({self.status})>'
+
+class TableSettings(db.Model):
+    __tablename__ = 'table_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_code = db.Column(db.String(10), nullable=False, unique=True)
+    table_count = db.Column(db.Integer, default=20)
+    numbering_system = db.Column(db.String(20), default='numeric')  # numeric, alpha, custom
+    custom_numbers = db.Column(db.Text)  # JSON string for custom table numbers
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<TableSettings {self.branch_code}: {self.table_count} tables ({self.numbering_system})>'
 
 class DraftOrder(db.Model):
     __tablename__ = 'draft_orders'

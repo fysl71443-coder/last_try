@@ -232,6 +232,7 @@
           <label class="form-label">🪑 {{ _('Table Number') }}</label>
           <select class="form-select" id="tableSelect">
             <option value="">{{ _('Select Table') }}</option>
+            <!-- Tables will be loaded dynamically based on settings -->
           </select>
         </div>
         
@@ -430,14 +431,41 @@ async function loadProducts(categoryId) {
     }
 }
 
-// Load tables
-function loadTables() {
-    const tableSelect = document.getElementById('tableSelect');
-    for (let i = 1; i <= 20; i++) {
-        const option = document.createElement('option');
-        option.value = i;
-        option.textContent = `طاولة ${i}`;
-        tableSelect.appendChild(option);
+// Load tables dynamically based on settings
+async function loadTables() {
+    try {
+        const response = await fetch('/api/tables/1', {
+            headers: {'X-CSRFToken': getCsrf()}
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                const tableSelect = document.getElementById('tableSelect');
+                // Clear existing options except the first one
+                while (tableSelect.children.length > 1) {
+                    tableSelect.removeChild(tableSelect.lastChild);
+                }
+
+                // Add table options based on settings
+                data.tables.forEach(table => {
+                    const option = document.createElement('option');
+                    option.value = table.table_number;
+                    option.textContent = `طاولة ${table.table_number}`;
+                    tableSelect.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading tables:', error);
+        // Fallback to default tables
+        const tableSelect = document.getElementById('tableSelect');
+        for (let i = 1; i <= 20; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `طاولة ${i}`;
+            tableSelect.appendChild(option);
+        }
     }
 }
 

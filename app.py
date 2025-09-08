@@ -70,7 +70,7 @@ from db_helpers import safe_db_commit, reset_db_session, safe_db_operation, hand
 # Import models to prevent import errors in routes
 from models import Invoice
 
-from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, MealIngredient, ExpenseInvoiceItem, PurchaseInvoiceItem, UserPermission, Table, DraftOrder, DraftOrderItem, Account, LedgerEntry
+from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, SalesInvoiceItem, RawMaterial, Employee, User, Meal, MealIngredient, ExpenseInvoiceItem, PurchaseInvoiceItem, UserPermission, Table, DraftOrder, DraftOrderItem, Account, LedgerEntry, TableSettings
 
 # =========================
 # Flask App Factory
@@ -1040,20 +1040,44 @@ def table_management(branch_code):
 def api_get_tables(branch_code):
     """Get all tables and their status for a specific branch"""
     try:
-        # Create default tables if they don't exist
+        # Get table settings for this branch
+        table_settings = TableSettings.query.filter_by(branch_code=branch_code).first()
+
+        if not table_settings:
+            # Default settings
+            table_count = 20
+            numbering_system = 'numeric'
+            custom_numbers = ''
+        else:
+            table_count = table_settings.table_count
+            numbering_system = table_settings.numbering_system
+            custom_numbers = table_settings.custom_numbers or ''
+
+        # Generate table numbers based on settings
+        table_numbers = []
+        if numbering_system == 'numeric':
+            table_numbers = [str(i) for i in range(1, table_count + 1)]
+        elif numbering_system == 'alpha':
+            table_numbers = [chr(65 + i) for i in range(table_count)]  # A, B, C...
+        elif numbering_system == 'custom' and custom_numbers:
+            table_numbers = [n.strip() for n in custom_numbers.split(',') if n.strip()]
+        else:
+            # Fallback to numeric
+            table_numbers = [str(i) for i in range(1, table_count + 1)]
+
         tables_data = []
-        for table_num in range(1, 21):  # Tables 1-20
+        for table_number in table_numbers:
             # Check if there's a draft order for this table
             draft_order = DraftOrder.query.filter_by(
                 branch_code=branch_code,
-                table_number=str(table_num),
+                table_number=str(table_number),
                 status='draft'
             ).first()
 
             # Check if there's an existing table record
             table_record = Table.query.filter_by(
                 branch_code=branch_code,
-                table_number=table_num
+                table_number=str(table_number)
             ).first()
 
             if draft_order:
@@ -1067,7 +1091,7 @@ def api_get_tables(branch_code):
                 last_updated = None
 
             tables_data.append({
-                'table_number': table_num,
+                'table_number': table_number,
                 'status': status,
                 'last_updated': last_updated.isoformat() if last_updated else None
             })
@@ -1212,6 +1236,94 @@ def api_save_draft_order():
     except Exception as e:
         db.session.rollback()
         print(f"Error saving draft order: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# Table Settings Management
+@app.route('/settings/tables')
+@login_required
+def table_settings():
+    """Table settings management page"""
+    return render_template('table_settings.html')
+
+# API: Get table settings
+@app.route('/api/table-settings')
+@login_required
+def api_get_table_settings():
+    """Get table settings for all branches"""
+    try:
+        china_settings = TableSettings.query.filter_by(branch_code='1').first()
+        india_settings = TableSettings.query.filter_by(branch_code='2').first()
+
+        settings = {
+            'china': {
+                'count': china_settings.table_count if china_settings else 20,
+                'numbering': china_settings.numbering_system if china_settings else 'numeric',
+                'custom_numbers': china_settings.custom_numbers if china_settings else ''
+            },
+            'india': {
+                'count': india_settings.table_count if india_settings else 20,
+                'numbering': india_settings.numbering_system if india_settings else 'numeric',
+                'custom_numbers': india_settings.custom_numbers if india_settings else ''
+            }
+        }
+
+        return jsonify({
+            'success': True,
+            'settings': settings
+        })
+
+    except Exception as e:
+        print(f"Error getting table settings: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# API: Save table settings
+@app.route('/api/table-settings', methods=['POST'])
+@login_required
+def api_save_table_settings():
+    """Save table settings for all branches"""
+    try:
+        data = request.get_json()
+
+        # Save China Town settings
+        china_data = data.get('china', {})
+        china_settings = TableSettings.query.filter_by(branch_code='1').first()
+        if not china_settings:
+            china_settings = TableSettings(branch_code='1')
+            db.session.add(china_settings)
+
+        china_settings.table_count = china_data.get('count', 20)
+        china_settings.numbering_system = china_data.get('numbering', 'numeric')
+        china_settings.custom_numbers = china_data.get('custom_numbers', '')
+        china_settings.updated_at = datetime.utcnow()
+
+        # Save Palace India settings
+        india_data = data.get('india', {})
+        india_settings = TableSettings.query.filter_by(branch_code='2').first()
+        if not india_settings:
+            india_settings = TableSettings(branch_code='2')
+            db.session.add(india_settings)
+
+        india_settings.table_count = india_data.get('count', 20)
+        india_settings.numbering_system = india_data.get('numbering', 'numeric')
+        india_settings.custom_numbers = india_data.get('custom_numbers', '')
+        india_settings.updated_at = datetime.utcnow()
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'تم حفظ إعدادات الطاولات بنجاح'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error saving table settings: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

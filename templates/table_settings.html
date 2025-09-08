@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إعدادات الطاولات</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .settings-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            margin: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .branch-section {
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .branch-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: -20px -20px 20px -20px;
+            text-align: center;
+        }
+        
+        .table-config {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f8f9fa;
+        }
+        
+        .table-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .table-item {
+            width: 80px;
+            height: 80px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+        }
+        
+        .btn-save {
+            background: linear-gradient(135deg, #00b894, #00a085);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 184, 148, 0.3);
+            color: white;
+        }
+        
+        .btn-reset {
+            background: linear-gradient(135deg, #e17055, #d63031);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-reset:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(225, 112, 85, 0.3);
+            color: white;
+        }
+        
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .alert-success {
+            background: linear-gradient(135deg, #00b894, #00a085);
+            border: none;
+            color: white;
+            border-radius: 10px;
+        }
+        
+        .alert-danger {
+            background: linear-gradient(135deg, #e17055, #d63031);
+            border: none;
+            color: white;
+            border-radius: 10px;
+        }
+        
+        .numbering-options {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .numbering-option {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .custom-numbering {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="settings-container">
+            <div class="row align-items-center mb-4">
+                <div class="col-md-2">
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-right me-2"></i>
+                        العودة للوحة التحكم
+                    </a>
+                </div>
+                <div class="col-md-8 text-center">
+                    <h1 class="mb-0" style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 2.5rem; font-weight: bold;">
+                        🪑 إعدادات الطاولات
+                    </h1>
+                </div>
+                <div class="col-md-2 text-start">
+                    <button class="btn btn-success" onclick="saveAllSettings()">
+                        <i class="fas fa-save me-2"></i>
+                        حفظ جميع الإعدادات
+                    </button>
+                </div>
+            </div>
+
+            <!-- Success/Error Messages -->
+            <div id="messageContainer"></div>
+
+            <!-- China Town Settings -->
+            <div class="branch-section">
+                <div class="branch-header">
+                    <h3><i class="fas fa-dragon me-2"></i>🏮 China Town - إعدادات الطاولات</h3>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="table-config">
+                            <h5><i class="fas fa-cog me-2"></i>إعدادات عامة</h5>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">عدد الطاولات:</label>
+                                <input type="number" class="form-control" id="chinaTableCount" min="1" max="50" value="20" onchange="updatePreview('china')">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">نظام الترقيم:</label>
+                                <div class="numbering-options">
+                                    <div class="numbering-option">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="chinaNumbering" id="chinaNumeric" value="numeric" checked onchange="updatePreview('china')">
+                                            <label class="form-check-label" for="chinaNumeric">
+                                                رقمي (1, 2, 3...)
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="numbering-option">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="chinaNumbering" id="chinaAlpha" value="alpha" onchange="updatePreview('china')">
+                                            <label class="form-check-label" for="chinaAlpha">
+                                                أبجدي (A, B, C...)
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="numbering-option">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="chinaNumbering" id="chinaCustom" value="custom" onchange="updatePreview('china')">
+                                            <label class="form-check-label" for="chinaCustom">
+                                                مخصص
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="custom-numbering" id="chinaCustomNumbering" style="display: none;">
+                                <label class="form-label">أرقام الطاولات المخصصة (مفصولة بفواصل):</label>
+                                <textarea class="form-control" id="chinaCustomNumbers" rows="3" placeholder="مثال: VIP-1, VIP-2, A1, A2, B1, B2" onchange="updatePreview('china')"></textarea>
+                                <small class="text-muted">يمكنك استخدام أي نص أو رقم تريده</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h5><i class="fas fa-eye me-2"></i>معاينة الطاولات</h5>
+                        <div class="table-preview" id="chinaPreview">
+                            <!-- Tables will be generated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Palace India Settings -->
+            <div class="branch-section">
+                <div class="branch-header">
+                    <h3><i class="fas fa-mosque me-2"></i>🏰 Palace India - إعدادات الطاولات</h3>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="table-config">
+                            <h5><i class="fas fa-cog me-2"></i>إعدادات عامة</h5>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">عدد الطاولات:</label>
+                                <input type="number" class="form-control" id="indiaTableCount" min="1" max="50" value="20" onchange="updatePreview('india')">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">نظام الترقيم:</label>
+                                <div class="numbering-options">
+                                    <div class="numbering-option">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="indiaNumbering" id="indiaNumeric" value="numeric" checked onchange="updatePreview('india')">
+                                            <label class="form-check-label" for="indiaNumeric">
+                                                رقمي (1, 2, 3...)
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="numbering-option">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="indiaNumbering" id="indiaAlpha" value="alpha" onchange="updatePreview('india')">
+                                            <label class="form-check-label" for="indiaAlpha">
+                                                أبجدي (A, B, C...)
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="numbering-option">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="indiaNumbering" id="indiaCustom" value="custom" onchange="updatePreview('india')">
+                                            <label class="form-check-label" for="indiaCustom">
+                                                مخصص
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="custom-numbering" id="indiaCustomNumbering" style="display: none;">
+                                <label class="form-label">أرقام الطاولات المخصصة (مفصولة بفواصل):</label>
+                                <textarea class="form-control" id="indiaCustomNumbers" rows="3" placeholder="مثال: VIP-1, VIP-2, A1, A2, B1, B2" onchange="updatePreview('india')"></textarea>
+                                <small class="text-muted">يمكنك استخدام أي نص أو رقم تريده</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h5><i class="fas fa-eye me-2"></i>معاينة الطاولات</h5>
+                        <div class="table-preview" id="indiaPreview">
+                            <!-- Tables will be generated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="text-center mt-4">
+                <button class="btn btn-save me-3" onclick="saveAllSettings()">
+                    <i class="fas fa-save me-2"></i>
+                    حفظ جميع الإعدادات
+                </button>
+                <button class="btn btn-reset" onclick="resetToDefaults()">
+                    <i class="fas fa-undo me-2"></i>
+                    إعادة تعيين للافتراضي
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Load settings on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
+        });
+        
+        // Load current settings
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/table-settings');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        // Load China Town settings
+                        if (data.settings.china) {
+                            document.getElementById('chinaTableCount').value = data.settings.china.count || 20;
+                            document.querySelector(`input[name="chinaNumbering"][value="${data.settings.china.numbering || 'numeric'}"]`).checked = true;
+                            if (data.settings.china.custom_numbers) {
+                                document.getElementById('chinaCustomNumbers').value = data.settings.china.custom_numbers;
+                            }
+                        }
+                        
+                        // Load Palace India settings
+                        if (data.settings.india) {
+                            document.getElementById('indiaTableCount').value = data.settings.india.count || 20;
+                            document.querySelector(`input[name="indiaNumbering"][value="${data.settings.india.numbering || 'numeric'}"]`).checked = true;
+                            if (data.settings.india.custom_numbers) {
+                                document.getElementById('indiaCustomNumbers').value = data.settings.india.custom_numbers;
+                            }
+                        }
+                        
+                        updatePreview('china');
+                        updatePreview('india');
+                        toggleCustomNumbering();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+        
+        // Update preview when settings change
+        function updatePreview(branch) {
+            const count = parseInt(document.getElementById(branch + 'TableCount').value);
+            const numbering = document.querySelector(`input[name="${branch}Numbering"]:checked`).value;
+            const customNumbers = document.getElementById(branch + 'CustomNumbers').value;
+            
+            const preview = document.getElementById(branch + 'Preview');
+            preview.innerHTML = '';
+            
+            let tableNumbers = [];
+            
+            if (numbering === 'numeric') {
+                for (let i = 1; i <= count; i++) {
+                    tableNumbers.push(i.toString());
+                }
+            } else if (numbering === 'alpha') {
+                for (let i = 0; i < count; i++) {
+                    tableNumbers.push(String.fromCharCode(65 + i)); // A, B, C...
+                }
+            } else if (numbering === 'custom' && customNumbers) {
+                tableNumbers = customNumbers.split(',').map(n => n.trim()).filter(n => n);
+            }
+            
+            tableNumbers.forEach(number => {
+                const tableDiv = document.createElement('div');
+                tableDiv.className = 'table-item';
+                tableDiv.textContent = number;
+                preview.appendChild(tableDiv);
+            });
+            
+            toggleCustomNumbering();
+        }
+        
+        // Toggle custom numbering visibility
+        function toggleCustomNumbering() {
+            const chinaCustom = document.getElementById('chinaCustom').checked;
+            const indiaCustom = document.getElementById('indiaCustom').checked;
+            
+            document.getElementById('chinaCustomNumbering').style.display = chinaCustom ? 'block' : 'none';
+            document.getElementById('indiaCustomNumbering').style.display = indiaCustom ? 'block' : 'none';
+        }
+        
+        // Save all settings
+        async function saveAllSettings() {
+            const settings = {
+                china: {
+                    count: parseInt(document.getElementById('chinaTableCount').value),
+                    numbering: document.querySelector('input[name="chinaNumbering"]:checked').value,
+                    custom_numbers: document.getElementById('chinaCustomNumbers').value
+                },
+                india: {
+                    count: parseInt(document.getElementById('indiaTableCount').value),
+                    numbering: document.querySelector('input[name="indiaNumbering"]:checked').value,
+                    custom_numbers: document.getElementById('indiaCustomNumbers').value
+                }
+            };
+            
+            try {
+                const response = await fetch('/api/table-settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('تم حفظ الإعدادات بنجاح!', 'success');
+                } else {
+                    showMessage('خطأ في حفظ الإعدادات: ' + data.error, 'danger');
+                }
+            } catch (error) {
+                showMessage('خطأ في الاتصال بالخادم', 'danger');
+            }
+        }
+        
+        // Reset to defaults
+        function resetToDefaults() {
+            if (confirm('هل أنت متأكد من إعادة تعيين جميع الإعدادات للافتراضي؟')) {
+                document.getElementById('chinaTableCount').value = 20;
+                document.getElementById('indiaTableCount').value = 20;
+                document.getElementById('chinaNumeric').checked = true;
+                document.getElementById('indiaNumeric').checked = true;
+                document.getElementById('chinaCustomNumbers').value = '';
+                document.getElementById('indiaCustomNumbers').value = '';
+                
+                updatePreview('china');
+                updatePreview('india');
+            }
+        }
+        
+        // Show message
+        function showMessage(message, type) {
+            const container = document.getElementById('messageContainer');
+            container.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+        
+        // Get CSRF token
+        function getCsrfToken() {
+            return document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+        }
+        
+        // Add event listeners for numbering options
+        document.addEventListener('change', function(e) {
+            if (e.target.name === 'chinaNumbering') {
+                updatePreview('china');
+            } else if (e.target.name === 'indiaNumbering') {
+                updatePreview('india');
+            }
+        });
+        
+        // Initialize previews
+        updatePreview('china');
+        updatePreview('india');
+    </script>
+</body>
+</html>

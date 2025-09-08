@@ -220,6 +220,15 @@ body {
     </div>
 
     <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('table_settings') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">🪑</div>
+          <h6>{{ _('Table Settings / إعدادات الطاولات') }}</h6>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('users') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">🔑</div>
