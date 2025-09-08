@@ -210,7 +210,7 @@
     </div>
 
     <!-- {{ _('Products') }} -->
-    <div class="col-7">
+    <div class="col-6">
       <h5 class="fw-bold mb-3 text-white">🍽️ {{ _('Products') }}</h5>
       <input type="text" class="form-control mb-3 search-box" placeholder="🔍 {{ _('Search for product...') }}" id="productSearch">
 
@@ -222,7 +222,7 @@
     </div>
 
     <!-- {{ _('Invoice') }} -->
-    <div class="col-3">
+    <div class="col-4">
       <div class="invoice-section border p-3 bg-white rounded shadow-sm invoice">
         <div class="invoice-header">
           <h5 class="fw-bold mb-0 text-center">🧾 {{ _('Invoice') }}</h5>
@@ -334,6 +334,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     setupEventListeners();
+
+    // Auto-save draft when leaving page
+    window.addEventListener('beforeunload', function(e) {
+        saveDraftOrder();
+    });
+
+    // Auto-save draft when navigating away
+    window.addEventListener('pagehide', function(e) {
+        saveDraftOrder();
+    });
 });
 
 // Load draft order for table

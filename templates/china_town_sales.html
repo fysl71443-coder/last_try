@@ -210,7 +210,7 @@
     </div>
     
     <!-- {{ _('Products') }} -->
-    <div class="col-7">
+    <div class="col-6">
       <h5 class="fw-bold mb-3 text-white">🍽️ {{ _('Products') }}</h5>
       <input type="text" class="form-control mb-3 search-box" placeholder="🔍 {{ _('Search for product...') }}" id="productSearch">
 
@@ -220,12 +220,13 @@
         </div>
       </div>
     </div>
-    
+
     <!-- العمود الأيمن: الفاتورة -->
-    <div class="col-3">
-      <div class="invoice-section border p-3 bg-white rounded shadow-sm invoice">
-        <div class="invoice-header">
-          <h5 class="fw-bold mb-0 text-center">🧾 {{ _('Invoice') }}</h5>
+    <div class="col-4">
+      <div class="invoice-section border p-4 bg-white rounded shadow-lg invoice" style="min-height: 600px;">
+        <div class="invoice-header mb-3">
+          <h4 class="fw-bold mb-0 text-center text-primary">🧾 {{ _('Invoice') }}</h4>
+          <hr class="my-2">
         </div>
 
         <div class="mb-3">
@@ -253,29 +254,30 @@
         </div>
         
         <!-- {{ _('Items List') }} -->
-        <div class="mb-3">
-          <h6>{{ _('Items') }}:</h6>
-          <div id="invoiceItems" style="max-height: 200px; overflow-y: auto;">
-            <p class="text-muted text-center">{{ _('No items') }}</p>
+        <div class="mb-4">
+          <h6 class="fw-bold text-secondary">📋 {{ _('Items') }}:</h6>
+          <div id="invoiceItems" class="border rounded p-2" style="max-height: 300px; overflow-y: auto; min-height: 150px; background-color: #f8f9fa;">
+            <p class="text-muted text-center m-3">{{ _('No items') }}</p>
           </div>
         </div>
 
         <!-- {{ _('Totals') }} -->
-        <div class="total-section">
-          <div class="d-flex justify-content-between">
+        <div class="total-section bg-light p-3 rounded border">
+          <h6 class="fw-bold text-secondary mb-3">💰 {{ _('Summary') }}:</h6>
+          <div class="d-flex justify-content-between mb-2">
             <span>{{ _('Subtotal') }}:</span>
-            <span id="subtotal">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
+            <span id="subtotal" class="fw-semibold">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
           </div>
-          <div class="d-flex justify-content-between">
+          <div class="d-flex justify-content-between mb-2">
             <span>{{ _('Discount') }}:</span>
-            <span id="discountAmount">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
+            <span id="discountAmount" class="fw-semibold text-success">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
           </div>
-          <div class="d-flex justify-content-between">
+          <div class="d-flex justify-content-between mb-2">
             <span>{{ _('Tax') }} (15%):</span>
-            <span id="taxAmount">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
+            <span id="taxAmount" class="fw-semibold">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
           </div>
-          <hr>
-          <div class="d-flex justify-content-between fw-bold">
+          <hr class="my-2">
+          <div class="d-flex justify-content-between fw-bold fs-5 text-primary">
             <span>{{ _('Total') }}:</span>
             <span id="totalAmount">0.00 <img src="{{ url_for('static', filename='sar-simple.svg') }}" width="14" style="vertical-align: middle;"></span>
           </div>
@@ -335,6 +337,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     setupEventListeners();
+
+    // Auto-save draft when leaving page
+    window.addEventListener('beforeunload', function(e) {
+        saveDraftOrder();
+    });
+
+    // Auto-save draft when navigating away
+    window.addEventListener('pagehide', function(e) {
+        saveDraftOrder();
+    });
 });
 
 // Load draft order for table
@@ -360,7 +372,7 @@ async function loadDraftOrder(tableNumber) {
 // Save draft order when items change
 function saveDraftOrder() {
     const tableNumber = document.getElementById('tableSelect').value;
-    if (!tableNumber || currentInvoice.length === 0) return;
+    if (!tableNumber) return;
 
     const draftData = {
         table_number: tableNumber,
@@ -368,6 +380,7 @@ function saveDraftOrder() {
         branch_code: '1'
     };
 
+    // Save even if empty to clear the draft
     fetch('/api/save-draft-order', {
         method: 'POST',
         headers: {
@@ -378,6 +391,14 @@ function saveDraftOrder() {
     }).catch(error => {
         console.error('Error saving draft order:', error);
     });
+}
+
+// Auto-save draft after any change
+function autoSaveDraft() {
+    clearTimeout(window.draftSaveTimeout);
+    window.draftSaveTimeout = setTimeout(() => {
+        saveDraftOrder();
+    }, 1000); // Save after 1 second of inactivity
 }
 
 // Load categories
@@ -522,7 +543,7 @@ function addToInvoice(item) {
         });
     }
     updateInvoiceDisplay();
-    saveDraftOrder(); // Save draft when items change
+    autoSaveDraft(); // Auto-save draft when items change
 }
 
 // Update invoice display

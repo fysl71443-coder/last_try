@@ -51,9 +51,17 @@
         }
         
         .table-card.occupied {
-            background: linear-gradient(135deg, #f44336, #d32f2f);
+            background: linear-gradient(135deg, #ff5722, #e64a19);
             color: white;
-            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+            box-shadow: 0 4px 15px rgba(255, 87, 34, 0.4);
+            border: 2px solid #ff3d00;
+            animation: pulse-occupied 2s infinite;
+        }
+
+        @keyframes pulse-occupied {
+            0% { box-shadow: 0 4px 15px rgba(255, 87, 34, 0.4); }
+            50% { box-shadow: 0 6px 20px rgba(255, 87, 34, 0.6); }
+            100% { box-shadow: 0 4px 15px rgba(255, 87, 34, 0.4); }
         }
         
         .table-card.reserved {
