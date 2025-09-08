@@ -349,17 +349,27 @@ document.addEventListener('DOMContentLoaded', function() {
 // Load draft order for table
 async function loadDraftOrder(tableNumber) {
     try {
-        const response = await fetch(`/api/draft-order/2/${tableNumber}`, {
+        console.log(`Loading draft order for table ${tableNumber}`);
+        const response = await fetch(`/api/load-draft-order/2/${tableNumber}`, {
             headers: {'X-CSRFToken': getCsrf()}
         });
 
         if (response.ok) {
             const data = await response.json();
+            console.log('Draft order response:', data);
             if (data.success && data.items && data.items.length > 0) {
                 currentInvoice = data.items;
                 updateInvoiceDisplay();
                 updateTotals();
+                console.log(`Loaded ${data.items.length} items from draft`);
+            } else {
+                console.log('No draft items found');
+                currentInvoice = [];
+                updateInvoiceDisplay();
+                updateTotals();
             }
+        } else {
+            console.error('Failed to load draft order:', response.status);
         }
     } catch (error) {
         console.error('Error loading draft order:', error);
@@ -517,6 +527,27 @@ function setupEventListeners() {
     // Print and payment buttons
     document.getElementById('printDraftBtn').addEventListener('click', printDraft);
     document.getElementById('processPaymentBtn').addEventListener('click', processPayment);
+
+    // Table selection change
+    document.getElementById('tableSelect').addEventListener('change', function(e) {
+        const tableNumber = e.target.value;
+        if (tableNumber) {
+            console.log(`Table changed to: ${tableNumber}`);
+            // Save current draft first
+            saveDraftOrder();
+            // Clear current invoice
+            currentInvoice = [];
+            updateInvoiceDisplay();
+            updateTotals();
+            // Load draft for new table
+            loadDraftOrder(tableNumber);
+        } else {
+            // No table selected, clear invoice
+            currentInvoice = [];
+            updateInvoiceDisplay();
+            updateTotals();
+        }
+    });
 }
 
 // Add item to invoice

@@ -1272,13 +1272,13 @@ def api_save_draft_order():
             # Update table status
             table = Table.query.filter_by(
                 branch_code=branch_code,
-                table_number=int(table_number)
+                table_number=str(table_number)
             ).first()
 
             if not table:
                 table = Table(
                     branch_code=branch_code,
-                    table_number=int(table_number),
+                    table_number=str(table_number),
                     status='occupied'
                 )
                 db.session.add(table)
@@ -1289,7 +1289,7 @@ def api_save_draft_order():
             # No items, mark table as available
             table = Table.query.filter_by(
                 branch_code=branch_code,
-                table_number=int(table_number)
+                table_number=str(table_number)
             ).first()
             if table:
                 table.status = 'available'
@@ -1304,6 +1304,47 @@ def api_save_draft_order():
     except Exception as e:
         db.session.rollback()
         print(f"Error saving draft order: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# API: Load draft order
+@app.route('/api/load-draft-order/<branch_code>/<table_number>')
+@login_required
+def api_load_draft_order(branch_code, table_number):
+    """Load draft order for a table"""
+    try:
+        # Find existing draft order for this table
+        draft_order = DraftOrder.query.filter_by(
+            branch_code=branch_code,
+            table_number=table_number,
+            status='draft'
+        ).first()
+
+        if not draft_order:
+            return jsonify({
+                'success': True,
+                'items': []
+            })
+
+        # Convert draft items to format expected by frontend
+        items = []
+        for draft_item in draft_order.items:
+            items.append({
+                'id': draft_item.item_id,
+                'name': draft_item.item_name,
+                'price': float(draft_item.price),
+                'quantity': draft_item.quantity
+            })
+
+        return jsonify({
+            'success': True,
+            'items': items
+        })
+
+    except Exception as e:
+        print(f"Error loading draft order: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
