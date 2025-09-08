@@ -176,6 +176,38 @@
     .void-btn:active {
       transform: scale(0.95);
     }
+
+    /* Password Modal Animations */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+      20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+
+    .modal-content {
+      animation: modalSlideIn 0.3s ease-out;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        transform: translateY(-50px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    /* Enhanced input styling */
+    .form-control:focus {
+      border-color: #6f42c1;
+      box-shadow: 0 0 0 0.2rem rgba(111, 66, 193, 0.25);
+    }
+
+    .input-group-text {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    }
   </style>
 </head>
 <body>
@@ -319,25 +351,51 @@
 </div>
 
 <!-- Password Modal for Item Removal -->
-<div class="modal fade" id="passwordModal" tabindex="-1" aria-labelledby="passwordModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-sm">
-    <div class="modal-content">
-      <div class="modal-header bg-warning">
-        <h5 class="modal-title" id="passwordModalLabel">🔐 كلمة مرور المشرف</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="modal fade" id="passwordModal" tabindex="-1" aria-labelledby="passwordModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow-lg border-0" style="border-radius: 15px; background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);">
+      <div class="modal-header text-white text-center" style="background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%); border-radius: 15px 15px 0 0; border: none;">
+        <div class="w-100">
+          <div class="mb-2">
+            <i class="fas fa-lock fa-2x"></i>
+          </div>
+          <h4 class="modal-title fw-bold mb-0" id="passwordModalLabel">تأكيد هوية المشرف</h4>
+          <small class="opacity-75">مطلوب كلمة مرور لحذف الصنف</small>
+        </div>
       </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label for="supervisorPassword" class="form-label">أدخل كلمة مرور المشرف لحذف الصنف:</label>
-          <input type="password" class="form-control" id="supervisorPassword" placeholder="كلمة المرور">
-          <div class="invalid-feedback" id="passwordError" style="display: none;">
+      <div class="modal-body p-4">
+        <div class="text-center mb-4">
+          <div class="alert alert-warning border-0 shadow-sm" style="border-radius: 10px;">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>تحذير:</strong> سيتم حذف الصنف نهائياً من الفاتورة
+          </div>
+        </div>
+        <div class="mb-4">
+          <label for="supervisorPassword" class="form-label fw-bold text-secondary">
+            <i class="fas fa-key me-2"></i>كلمة مرور المشرف:
+          </label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0">
+              <i class="fas fa-lock text-muted"></i>
+            </span>
+            <input type="password" class="form-control border-start-0 ps-0" id="supervisorPassword"
+                   placeholder="أدخل كلمة المرور" style="font-size: 18px; padding: 12px;">
+          </div>
+          <div class="invalid-feedback d-block" id="passwordError" style="display: none !important;">
+            <i class="fas fa-times-circle me-1"></i>
             كلمة مرور خاطئة! حاول مرة أخرى.
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-        <button type="button" class="btn btn-danger" id="confirmRemoveBtn">حذف الصنف</button>
+      <div class="modal-footer border-0 p-4 pt-0">
+        <div class="d-grid gap-2 d-md-flex justify-content-md-center w-100">
+          <button type="button" class="btn btn-outline-secondary btn-lg px-4" data-bs-dismiss="modal" style="border-radius: 10px;">
+            <i class="fas fa-times me-2"></i>إلغاء
+          </button>
+          <button type="button" class="btn btn-danger btn-lg px-4" id="confirmRemoveBtn" style="border-radius: 10px;">
+            <i class="fas fa-trash me-2"></i>حذف الصنف
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -646,23 +704,38 @@ let itemToRemoveIndex = -1;
 // Remove item with password protection
 function removeItem(index) {
     itemToRemoveIndex = index;
-    // Show password modal
-    const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
-    modal.show();
 
     // Clear previous password and error
     document.getElementById('supervisorPassword').value = '';
     document.getElementById('passwordError').style.display = 'none';
     document.getElementById('supervisorPassword').classList.remove('is-invalid');
+
+    // Show password modal with animation
+    const modal = new bootstrap.Modal(document.getElementById('passwordModal'), {
+        backdrop: 'static',
+        keyboard: false
+    });
+    modal.show();
+
+    // Focus on password input after modal is shown
+    document.getElementById('passwordModal').addEventListener('shown.bs.modal', function () {
+        document.getElementById('supervisorPassword').focus();
+    }, { once: true });
 }
 
 // Confirm item removal after password verification
 function confirmItemRemoval() {
-    const password = document.getElementById('supervisorPassword').value;
+    const password = document.getElementById('supervisorPassword').value.trim();
     const correctPassword = '1991'; // Supervisor password
+    const passwordInput = document.getElementById('supervisorPassword');
+    const errorDiv = document.getElementById('passwordError');
 
     if (password === correctPassword) {
-        // Password correct, remove item
+        // Password correct - show success animation
+        passwordInput.classList.remove('is-invalid');
+        passwordInput.classList.add('is-valid');
+
+        // Remove item
         if (itemToRemoveIndex >= 0 && itemToRemoveIndex < currentInvoice.length) {
             currentInvoice.splice(itemToRemoveIndex, 1);
             updateInvoiceDisplay();
@@ -670,17 +743,30 @@ function confirmItemRemoval() {
             autoSaveDraft();
         }
 
-        // Hide modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
-        modal.hide();
+        // Hide modal with delay for visual feedback
+        setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
+            modal.hide();
 
-        // Reset
-        itemToRemoveIndex = -1;
+            // Reset
+            itemToRemoveIndex = -1;
+            passwordInput.classList.remove('is-valid');
+        }, 500);
+
     } else {
-        // Password incorrect, show error
-        document.getElementById('passwordError').style.display = 'block';
-        document.getElementById('supervisorPassword').classList.add('is-invalid');
-        document.getElementById('supervisorPassword').focus();
+        // Password incorrect - show error with animation
+        errorDiv.style.display = 'block';
+        passwordInput.classList.add('is-invalid');
+
+        // Shake animation
+        passwordInput.style.animation = 'shake 0.5s';
+        setTimeout(() => {
+            passwordInput.style.animation = '';
+        }, 500);
+
+        // Clear password and focus
+        passwordInput.value = '';
+        passwordInput.focus();
     }
 }
 
