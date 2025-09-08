@@ -763,8 +763,32 @@ def inject_safe_url():
 def get_settings_safe():
     try:
         from models import Settings
-        return Settings.query.first()
-    except Exception:
+
+        # Try to get settings with retry logic
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                settings = Settings.query.first()
+                if settings:
+                    return settings
+                else:
+                    # Create default settings if none exist
+                    settings = Settings()
+                    db.session.add(settings)
+                    db.session.commit()
+                    return settings
+            except Exception as e:
+                print(f"Settings query attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    db.session.rollback()
+                    continue
+                else:
+                    raise e
+
+    except Exception as e:
+        print(f"get_settings_safe failed: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -1875,10 +1899,15 @@ def verify_void_password(branch):
 
         # Get branch-specific password from settings
         settings = get_settings_safe()
-        if branch == 'china_town':
-            correct_password = settings.china_town_void_password if settings else '1991'
-        else:  # palace_india
-            correct_password = settings.place_india_void_password if settings else '1991'
+        try:
+            if branch == 'china_town':
+                correct_password = getattr(settings, 'china_town_void_password', '1991') if settings else '1991'
+            else:  # palace_india
+                correct_password = getattr(settings, 'place_india_void_password', '1991') if settings else '1991'
+        except Exception as e:
+            print(f"Error accessing void password: {e}")
+            # Fallback to default password
+            correct_password = '1991'
 
         is_valid = password == correct_password
 
