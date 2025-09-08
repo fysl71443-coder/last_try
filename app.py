@@ -1662,63 +1662,10 @@ def api_load_draft_order_no_login(branch_code, table_number):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/admin/run-migration')
-def run_migration():
-    """Run the latest migration to fix Settings table"""
-    try:
-        from flask_migrate import upgrade
-
-        # Run migrations
-        upgrade()
-
-        return jsonify({
-            'success': True,
-            'message': 'Migration completed successfully',
-            'migration': '20250908_03_add_all_missing_settings_columns'
-        })
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/admin/run-migration')
-def run_migration():
-    """Run the latest migration to fix Settings table"""
-    try:
-        import subprocess
-        import sys
-        import os
-
-        # Set environment variables
-        env = os.environ.copy()
-        env['FLASK_APP'] = 'app.py'
-
-        # Run flask db upgrade
-        result = subprocess.run([
-            sys.executable, '-m', 'flask', 'db', 'upgrade'
-        ], capture_output=True, text=True, env=env, cwd=os.getcwd())
-
-        if result.returncode == 0:
-            return jsonify({
-                'success': True,
-                'message': 'Migration completed successfully',
-                'output': result.stdout,
-                'migration': '20250908_01_add_missing_settings_columns'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': result.stderr or result.stdout,
-                'returncode': result.returncode
-            }), 500
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+# Deprecated: removed insecure migration endpoint.
+# Please use CLI-based migrations instead:
+#   python -m flask db upgrade
+# If you need a programmatic migration script, see scripts/run_migrations.py
 
 # Emergency route to create POS tables and data
 @app.route('/admin/create-pos-tables')
