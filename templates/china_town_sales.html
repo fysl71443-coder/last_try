@@ -813,18 +813,19 @@ async function payAndPrintFinal() {
         if (processingEl) processingEl.remove();
 
         if (data.success) {
-            // Show success message
-            alert(`✅ {{ _("Payment successful!") }}\n{{ _("Invoice Number") }}: ${data.invoice_number}`);
-
-            // Open receipt for printing
+            // Open receipt for printing immediately - no alerts
             const receiptWindow = window.open(data.print_url, '_blank', 'width=400,height=700,scrollbars=yes');
 
-            // Auto-print receipt
-            receiptWindow.onload = function() {
-                receiptWindow.print();
-            };
+            // Auto-print receipt with proper error handling
+            if (receiptWindow) {
+                receiptWindow.addEventListener('load', function() {
+                    setTimeout(() => {
+                        receiptWindow.print();
+                    }, 500);
+                });
+            }
 
-            // Clear invoice and reset form
+            // Clear invoice and reset form silently
             currentInvoice = [];
             selectedCustomer = null;
             document.getElementById('tableSelect').value = '';
@@ -832,12 +833,10 @@ async function payAndPrintFinal() {
             document.getElementById('selectedCustomer').style.display = 'none';
             updateInvoiceDisplay();
 
-            // Success feedback
-            setTimeout(() => {
-                alert('{{ _("Invoice cleared and ready for next customer") }}');
-            }, 1000);
+            // No success alerts - silent operation
 
         } else {
+            // Only show error if something went wrong
             alert('❌ {{ _("Payment error") }}: ' + (data.error || 'Unknown error'));
         }
 
