@@ -1,0 +1,149 @@
+{
+  "run_id": "quick_e2e_20250908_183606",
+  "base_url": "https://restaurant-system-fnbm.onrender.com",
+  "duration_seconds": 17.68,
+  "timestamp": "2025-09-08T18:36:23.764376",
+  "summary": {
+    "total_tests": 19,
+    "passed": 10,
+    "failed": 0,
+    "warnings": 9,
+    "success_rate": "52.6%",
+    "avg_response_time_ms": 769.0
+  },
+  "results": [
+    {
+      "test_name": "Home/Login Page",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 2321,
+      "timestamp": "2025-09-08T18:36:08.388593"
+    },
+    {
+      "test_name": "Dashboard",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 567,
+      "timestamp": "2025-09-08T18:36:09.166375"
+    },
+    {
+      "test_name": "Settings Page",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 1063,
+      "timestamp": "2025-09-08T18:36:10.442366"
+    },
+    {
+      "test_name": "Employees Page",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 554,
+      "timestamp": "2025-09-08T18:36:11.199632"
+    },
+    {
+      "test_name": "Inventory Page",
+      "status": "WARN",
+      "message": "Page loaded but missing expected content",
+      "response_time_ms": 550,
+      "timestamp": "2025-09-08T18:36:11.951952"
+    },
+    {
+      "test_name": "Reports Page",
+      "status": "WARN",
+      "message": "Page loaded but missing expected content",
+      "response_time_ms": 1402,
+      "timestamp": "2025-09-08T18:36:13.564056"
+    },
+    {
+      "test_name": "China Town POS",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 1416,
+      "timestamp": "2025-09-08T18:36:15.195597"
+    },
+    {
+      "test_name": "Palace India POS",
+      "status": "WARN",
+      "message": "Page loaded but missing expected content",
+      "response_time_ms": 924,
+      "timestamp": "2025-09-08T18:36:16.329272"
+    },
+    {
+      "test_name": "China Town Tables",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 1406,
+      "timestamp": "2025-09-08T18:36:17.946897"
+    },
+    {
+      "test_name": "Palace India Tables",
+      "status": "PASS",
+      "message": "Page loaded with expected content",
+      "response_time_ms": 689,
+      "timestamp": "2025-09-08T18:36:18.847983"
+    },
+    {
+      "test_name": "API - /api/tables/1",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 549,
+      "timestamp": "2025-09-08T18:36:19.599422"
+    },
+    {
+      "test_name": "API - /api/tables/2",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 520,
+      "timestamp": "2025-09-08T18:36:20.232395"
+    },
+    {
+      "test_name": "API - /api/categories",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 575,
+      "timestamp": "2025-09-08T18:36:20.920959"
+    },
+    {
+      "test_name": "API - /api/products/1",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 607,
+      "timestamp": "2025-09-08T18:36:21.629081"
+    },
+    {
+      "test_name": "API - /api/load-draft-order/1/1",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 580,
+      "timestamp": "2025-09-08T18:36:22.337559"
+    },
+    {
+      "test_name": "API - /api/table-settings",
+      "status": "WARN",
+      "message": "Non-JSON response",
+      "response_time_ms": 531,
+      "timestamp": "2025-09-08T18:36:22.975080"
+    },
+    {
+      "test_name": "Static - /static/css/style.css",
+      "status": "PASS",
+      "message": "Page loaded successfully",
+      "response_time_ms": 124,
+      "timestamp": "2025-09-08T18:36:23.202693"
+    },
+    {
+      "test_name": "Static - /static/js/main.js",
+      "status": "PASS",
+      "message": "Page loaded successfully",
+      "response_time_ms": 107,
+      "timestamp": "2025-09-08T18:36:23.418633"
+    },
+    {
+      "test_name": "Static - /static/images/logo.png",
+      "status": "PASS",
+      "message": "Page loaded successfully",
+      "response_time_ms": 117,
+      "timestamp": "2025-09-08T18:36:23.646623"
+    }
+  ]
+}

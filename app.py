@@ -247,8 +247,8 @@ def create_app():
                         ))
 
                     # 8) Populate simplified categories and items with sample data
-                    _conn.execute(_sa_text("SELECT COUNT(*) FROM categories"))
-                    cat_count = _conn.fetchone()[0]
+                    result = _conn.execute(_sa_text("SELECT COUNT(*) FROM categories"))
+                    cat_count = result.fetchone()[0]
 
                     if cat_count == 0:
                         # Insert sample categories
@@ -6977,41 +6977,84 @@ def pay_and_print_invoice(invoice_id):
 
 
 
-@app.route('/admin/fix-db-simple')
-def fix_database_simple():
-    """Simple database fix without login requirement"""
+@app.route('/admin/fix-db-complete')
+def fix_database_complete():
+    """Complete database fix without login requirement"""
     try:
         from sqlalchemy import text
 
-        # Add missing Settings columns
+        # Complete list of missing Settings columns
         missing_columns = [
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_void_password VARCHAR(50) DEFAULT '1991'",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_void_password VARCHAR(50) DEFAULT '1991'",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_vat_rate FLOAT DEFAULT 15.0",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_vat_rate FLOAT DEFAULT 15.0",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_discount_rate FLOAT DEFAULT 0.0",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_discount_rate FLOAT DEFAULT 0.0",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_paper_width VARCHAR(10) DEFAULT '80'",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_font_size INTEGER DEFAULT 12",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_logo_height INTEGER DEFAULT 40",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_extra_bottom_mm INTEGER DEFAULT 15",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_show_tax_number BOOLEAN DEFAULT TRUE",
-            "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_footer_text TEXT DEFAULT 'شكراً لزيارتكم'"
+            ("default_theme", "VARCHAR(50) DEFAULT 'light'"),
+            ("china_town_void_password", "VARCHAR(50) DEFAULT '1991'"),
+            ("place_india_void_password", "VARCHAR(50) DEFAULT '1991'"),
+            ("china_town_vat_rate", "FLOAT DEFAULT 15.0"),
+            ("place_india_vat_rate", "FLOAT DEFAULT 15.0"),
+            ("china_town_discount_rate", "FLOAT DEFAULT 0.0"),
+            ("place_india_discount_rate", "FLOAT DEFAULT 0.0"),
+            ("receipt_paper_width", "VARCHAR(10) DEFAULT '80'"),
+            ("receipt_margin_top_mm", "INTEGER DEFAULT 5"),
+            ("receipt_margin_bottom_mm", "INTEGER DEFAULT 5"),
+            ("receipt_margin_left_mm", "INTEGER DEFAULT 5"),
+            ("receipt_margin_right_mm", "INTEGER DEFAULT 5"),
+            ("receipt_font_size", "INTEGER DEFAULT 12"),
+            ("receipt_show_logo", "BOOLEAN DEFAULT TRUE"),
+            ("receipt_show_tax_number", "BOOLEAN DEFAULT TRUE"),
+            ("receipt_footer_text", "TEXT DEFAULT 'شكراً لزيارتكم'"),
+            ("logo_url", "VARCHAR(255)"),
+            ("receipt_logo_height", "INTEGER DEFAULT 40"),
+            ("receipt_extra_bottom_mm", "INTEGER DEFAULT 15")
         ]
 
         results = []
-        for sql in missing_columns:
+
+        # Add missing columns
+        for col_name, col_def in missing_columns:
             try:
+                sql = f"ALTER TABLE settings ADD COLUMN IF NOT EXISTS {col_name} {col_def}"
                 db.session.execute(text(sql))
                 db.session.commit()
-                results.append(f"✅ Executed: {sql[:50]}...")
+                results.append(f"✅ Added column: {col_name}")
             except Exception as e:
                 db.session.rollback()
-                results.append(f"⚠️ Already exists or error: {str(e)[:50]}...")
+                results.append(f"⚠️ Column {col_name}: {str(e)[:50]}...")
+
+        # Create default settings if none exist
+        try:
+            settings_count = db.session.execute(text("SELECT COUNT(*) FROM settings")).scalar()
+            if settings_count == 0:
+                insert_sql = """
+                INSERT INTO settings (
+                    company_name, tax_number, address, phone, email, vat_rate, currency,
+                    china_town_label, place_india_label, default_theme,
+                    china_town_void_password, place_india_void_password,
+                    china_town_vat_rate, place_india_vat_rate,
+                    china_town_discount_rate, place_india_discount_rate,
+                    receipt_paper_width, receipt_font_size, receipt_show_logo, receipt_show_tax_number,
+                    receipt_footer_text, receipt_logo_height, receipt_extra_bottom_mm
+                ) VALUES (
+                    'مطعم الصين وقصر الهند', '123456789', 'الرياض، المملكة العربية السعودية',
+                    '0112345678', 'info@restaurant.com', 15.0, 'SAR',
+                    'China Town', 'Palace India', 'light',
+                    '1991', '1991',
+                    15.0, 15.0,
+                    0.0, 0.0,
+                    '80', 12, TRUE, TRUE,
+                    'شكراً لزيارتكم - Thank you for visiting', 40, 15
+                )
+                """
+                db.session.execute(text(insert_sql))
+                db.session.commit()
+                results.append("✅ Created default settings record")
+            else:
+                results.append(f"✅ Settings record exists ({settings_count} records)")
+        except Exception as e:
+            db.session.rollback()
+            results.append(f"⚠️ Settings creation error: {str(e)[:50]}...")
 
         return jsonify({
             'success': True,
-            'message': 'Database schema fixed',
+            'message': 'Complete database schema fixed',
             'results': results
         })
 
@@ -7026,6 +7069,7 @@ def fix_database_simple():
 def create_sample_data_route():
     """Route to create sample data for testing - No login required for testing"""
     try:
+        from models import Settings
         create_sample_data()
         return jsonify({
             'success': True,
