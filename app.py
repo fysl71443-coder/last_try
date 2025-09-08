@@ -4840,12 +4840,11 @@ def reports():
                 rows = db.session.query(getattr(model, method_col), func.count('*')) \
                     .filter(getattr(model, date_col).between(start_dt, end_dt)) \
                     .group_by(getattr(model, method_col)).all()
-                return {r[0]: int(r[1]) for r in rows}
+                return {(r[0] or 'unknown'): int(r[1]) for r in rows}
             except Exception as e:
                 logging.warning(f'Error getting payment method counts for {model.__name__}: {e}')
                 db.session.rollback()
                 return {}
-
 
         pm_map = {}
         try:
@@ -4853,8 +4852,6 @@ def reports():
                       pm_counts(PurchaseInvoice, 'date', 'payment_method'),
                       pm_counts(ExpenseInvoice, 'date', 'payment_method')):
                 for k, v in d.items():
-
-
                     pm_map[k] = pm_map.get(k, 0) + v
         except Exception as e:
             logging.warning(f'Error processing payment method data: {e}')
@@ -4886,42 +4883,6 @@ def reports():
             logging.warning(f'Error calculating cash flows: {e}')
             db.session.rollback()
             inflow = outflow = net_cash = 0
-            for k, v in d.items():
-                pm_map[k or 'unknown'] = pm_map.get(k or 'unknown', 0) + v
-        except Exception as e:
-            logging.warning(f'Error processing payment method data: {e}')
-            pm_map = {}
-
-        pm_labels = list(pm_map.keys())
-        pm_values = [pm_map[k] for k in pm_labels]
-
-        # Comparison bars: totals
-        comp_labels = ['Sales', 'Purchases', 'Expenses+Salaries']
-        comp_values = [float(total_sales), float(total_purchases), float(total_expenses) + float(total_salaries)]
-        # Cash flows from Payments table
-        start_dt_dt = datetime.combine(start_dt, datetime.min.time())
-        end_dt_dt = datetime.combine(end_dt, datetime.max.time())
-        inflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-            Payment.invoice_type == 'sales', Payment.payment_date.between(start_dt_dt, end_dt_dt)
-        ).scalar() or 0)
-        outflow = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-            Payment.invoice_type.in_(['purchase','expense','salary']), Payment.payment_date.between(start_dt_dt, end_dt_dt)
-        ).scalar() or 0)
-        net_cash = inflow - outflow
-
-        # Top products by quantity
-        top_rows = db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0)) \
-            .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id) \
-            .filter(SalesInvoice.date.between(start_dt, end_dt)) \
-            .group_by(SalesInvoiceItem.product_name) \
-            .order_by(func.sum(SalesInvoiceItem.quantity).desc()) \
-            .limit(10).all()
-        top_labels = [r[0] for r in top_rows]
-
-        # Cash flows from Payments table - with error handling
-        inflow = 0
-        outflow = 0
-        net_cash = 0
 
 
         # Top products by quantity - with error handling
@@ -5161,18 +5122,41 @@ def edit_employee(emp_id):
 def delete_employee(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     try:
-        # Delete related salaries first, then employee
+        # Delete all related records first
         try:
+            # Delete salary defaults
+            from models import EmployeeSalaryDefault
+            EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).delete(synchronize_session=False)
+        except Exception as e:
+            print(f"Error deleting salary defaults: {e}")
+
+        try:
+            # Delete monthly salaries
             from models import Salary
             Salary.query.filter_by(employee_id=emp.id).delete(synchronize_session=False)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error deleting salaries: {e}")
+
+        try:
+            # Delete any other related records if they exist
+            from models import EmployeeAttendance
+            EmployeeAttendance.query.filter_by(employee_id=emp.id).delete(synchronize_session=False)
+        except Exception as e:
+            print(f"Error deleting attendance (may not exist): {e}")
+
+        # Finally delete the employee
         db.session.delete(emp)
-        safe_db_commit()
-        flash(_('تم حذف الموظف وجميع رواتبه / Employee and related salaries deleted'), 'info')
-    except Exception:
+        db.session.commit()
+
+        flash(_('تم حذف الموظف وجميع بياناته بنجاح / Employee and all related data deleted successfully'), 'success')
+
+    except Exception as e:
         db.session.rollback()
-        flash(_('تعذر حذف الموظف / Could not delete employee'), 'danger')
+        print(f"Error deleting employee: {e}")
+        import traceback
+        traceback.print_exc()
+        flash(_('تعذر حذف الموظف - يرجى المحاولة مرة أخرى / Could not delete employee - please try again'), 'danger')
+
     return redirect(url_for('employees'))
 
 # Salaries: Edit
