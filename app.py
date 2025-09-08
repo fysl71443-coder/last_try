@@ -4146,7 +4146,47 @@ def fix_database_route():
         except Exception as e:
             results.append(f"⚠️ Error with tables table: {e}")
 
-        # 3. Create draft_orders table if missing
+        # 3. Fix Settings table columns
+        try:
+            with db.engine.connect() as conn:
+                missing_columns = [
+                    ("china_town_void_password", "VARCHAR(50) DEFAULT '1991'"),
+                    ("place_india_void_password", "VARCHAR(50) DEFAULT '1991'"),
+                    ("china_town_vat_rate", "FLOAT DEFAULT 15.0"),
+                    ("place_india_vat_rate", "FLOAT DEFAULT 15.0"),
+                    ("china_town_discount_rate", "FLOAT DEFAULT 0.0"),
+                    ("place_india_discount_rate", "FLOAT DEFAULT 0.0"),
+                    ("receipt_paper_width", "VARCHAR(10) DEFAULT '80'"),
+                    ("receipt_font_size", "INTEGER DEFAULT 12"),
+                    ("receipt_logo_height", "INTEGER DEFAULT 40"),
+                    ("receipt_extra_bottom_mm", "INTEGER DEFAULT 15"),
+                    ("receipt_show_tax_number", "BOOLEAN DEFAULT TRUE"),
+                    ("receipt_footer_text", "TEXT DEFAULT 'شكراً لزيارتكم'")
+                ]
+
+                for col_name, col_def in missing_columns:
+                    try:
+                        # Check if column exists
+                        result = conn.execute(text(f"""
+                            SELECT column_name
+                            FROM information_schema.columns
+                            WHERE table_name = 'settings'
+                            AND column_name = '{col_name}'
+                        """))
+
+                        if not result.fetchone():
+                            conn.execute(text(f"ALTER TABLE settings ADD COLUMN {col_name} {col_def}"))
+                            conn.commit()
+                            results.append(f"✅ Added {col_name} to settings")
+                        else:
+                            results.append(f"✅ {col_name} already exists")
+                    except Exception as e:
+                        results.append(f"⚠️ Error with {col_name}: {e}")
+
+        except Exception as e:
+            results.append(f"⚠️ Error fixing settings table: {e}")
+
+        # 4. Create draft_orders table if missing
 
 
         try:
@@ -6887,13 +6927,15 @@ def pay_and_print_invoice(invoice_id):
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
-@app.route('/admin/fix-database')
-def fix_database_route():
-    """Fix database schema issues"""
+
+
+@app.route('/admin/fix-db-simple')
+def fix_database_simple():
+    """Simple database fix without login requirement"""
     try:
-        # Add missing columns to Settings table
         from sqlalchemy import text
 
+        # Add missing Settings columns
         missing_columns = [
             "ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_void_password VARCHAR(50) DEFAULT '1991'",
             "ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_void_password VARCHAR(50) DEFAULT '1991'",
@@ -6909,17 +6951,20 @@ def fix_database_route():
             "ALTER TABLE settings ADD COLUMN IF NOT EXISTS receipt_footer_text TEXT DEFAULT 'شكراً لزيارتكم'"
         ]
 
+        results = []
         for sql in missing_columns:
             try:
                 db.session.execute(text(sql))
                 db.session.commit()
+                results.append(f"✅ Executed: {sql[:50]}...")
             except Exception as e:
-                print(f"Column might already exist: {e}")
                 db.session.rollback()
+                results.append(f"⚠️ Already exists or error: {str(e)[:50]}...")
 
         return jsonify({
             'success': True,
-            'message': 'Database schema fixed successfully'
+            'message': 'Database schema fixed',
+            'results': results
         })
 
     except Exception as e:
