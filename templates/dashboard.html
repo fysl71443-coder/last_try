@@ -237,6 +237,16 @@ body {
       </a>
     </div>
 
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('create_sample_data_route') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card" style="border: 2px dashed #28a745;">
+          <div class="dashboard-icon">🧪</div>
+          <h6>{{ _('Create Sample Data / إنشاء بيانات تجريبية') }}</h6>
+          <small class="text-muted">{{ _('For testing purposes / لأغراض الاختبار') }}</small>
+        </div>
+      </a>
+    </div>
+
   {% if (current_user.role|default('')) == 'user' %}
   <div class="mt-4">
     <div class="alert alert-info">

@@ -4506,6 +4506,7 @@ def employees():
             return redirect(url_for('employees'))
         except Exception as e:
             db.session.rollback()
+            flash(_('تعذرت إضافة الموظف. تحقق من أن رقم الموظف والهوية غير مكررين. / Could not add employee. Ensure code and national id are unique.'), 'danger')
 
     # Pre-fill from defaults when employee selected
     if request.method == 'POST' and not form.errors:
@@ -4522,7 +4523,6 @@ def employees():
         except Exception:
             pass
 
-            flash(_('تعذرت إضافة الموظف. تحقق من أن رقم الموظف والهوية غير مكررين. / Could not add employee. Ensure code and national id are unique.'), 'danger')
     employees_list = Employee.query.order_by(Employee.full_name.asc()).all()
     return render_template('employees.html', form=form, employees=employees_list)
 
@@ -6775,6 +6775,105 @@ def pay_and_print_invoice(invoice_id):
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+@app.route('/admin/create-sample-data')
+@login_required
+def create_sample_data_route():
+    """Route to create sample data for testing"""
+    try:
+        create_sample_data()
+        flash('تم إنشاء البيانات التجريبية بنجاح / Sample data created successfully', 'success')
+    except Exception as e:
+        flash(f'خطأ في إنشاء البيانات التجريبية / Error creating sample data: {str(e)}', 'danger')
+    return redirect(url_for('dashboard'))
+
+def create_sample_data():
+    """Create sample data for testing"""
+    try:
+        # Create sample employees if none exist
+        if Employee.query.count() == 0:
+            from models import EmployeeSalaryDefault
+
+            sample_employees = [
+                {
+                    'employee_code': 'EMP001',
+                    'full_name': 'أحمد محمد علي',
+                    'national_id': '1234567890',
+                    'department': 'المطبخ',
+                    'position': 'طباخ رئيسي',
+                    'phone': '0501234567',
+                    'email': 'ahmed@restaurant.com',
+                    'hire_date': datetime.now().date(),
+                    'status': 'active'
+                },
+                {
+                    'employee_code': 'EMP002',
+                    'full_name': 'فاطمة أحمد',
+                    'national_id': '0987654321',
+                    'department': 'الخدمة',
+                    'position': 'نادلة',
+                    'phone': '0509876543',
+                    'email': 'fatima@restaurant.com',
+                    'hire_date': datetime.now().date(),
+                    'status': 'active'
+                },
+                {
+                    'employee_code': 'EMP003',
+                    'full_name': 'محمد سالم',
+                    'national_id': '1122334455',
+                    'department': 'الإدارة',
+                    'position': 'مشرف',
+                    'phone': '0501122334',
+                    'email': 'mohammed@restaurant.com',
+                    'hire_date': datetime.now().date(),
+                    'status': 'active'
+                }
+            ]
+
+            for emp_data in sample_employees:
+                emp = Employee(**emp_data)
+                db.session.add(emp)
+                db.session.flush()  # Get the ID
+
+                # Add default salary
+                salary_default = EmployeeSalaryDefault(
+                    employee_id=emp.id,
+                    base_salary=5000.0,
+                    allowances=500.0,
+                    deductions=100.0
+                )
+                db.session.add(salary_default)
+
+            db.session.commit()
+            print("✅ Sample employees created")
+
+        # Create default settings if none exist
+        from models import Settings
+        if not Settings.query.first():
+            settings = Settings(
+                company_name='مطعم الصين وقصر الهند',
+                tax_number='123456789',
+                address='الرياض، المملكة العربية السعودية',
+                phone='0112345678',
+                email='info@restaurant.com',
+                vat_rate=15.0,
+                currency='SAR',
+                china_town_label='China Town',
+                place_india_label='Palace India',
+                china_town_void_password='1991',
+                place_india_void_password='1991',
+                china_town_vat_rate=15.0,
+                place_india_vat_rate=15.0,
+                china_town_discount_rate=0.0,
+                place_india_discount_rate=0.0
+            )
+            db.session.add(settings)
+            db.session.commit()
+            print("✅ Default settings created")
+
+    except Exception as e:
+        print(f"❌ Error creating sample data: {e}")
+        db.session.rollback()
+
 if __name__ == '__main__':
     # Import eventlet and socketio only when running the server
     import eventlet
@@ -6784,6 +6883,11 @@ if __name__ == '__main__':
 
     # Initialize SocketIO with the app and assign to global variable
     socketio = SocketIO(app, cors_allowed_origins="*")
+
+    # Create database tables and sample data
+    with app.app_context():
+        db.create_all()
+        create_sample_data()
 
     # Run the application with SocketIO
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

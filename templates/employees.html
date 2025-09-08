@@ -84,6 +84,15 @@
                 </form>
               </td>
             </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
 <script>
 window.handleDeleteEmployee = async function(event, name){
   event.preventDefault();
@@ -93,12 +102,5 @@ window.handleDeleteEmployee = async function(event, name){
   }
 }
 </script>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  {% endif %}
-</div>
+
 {% endblock %}
