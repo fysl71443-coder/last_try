@@ -25,9 +25,10 @@ def with_db_context(f):
                 return f(*args, **kwargs)
     return decorated_function
 
-def safe_db_commit():
+def safe_db_commit(*_args, **_kwargs):
     """
     Safe database commit with proper error handling
+    Accepts and ignores extra args for retro-compatibility, e.g. safe_db_commit("context")
     """
     try:
         db.session.commit()

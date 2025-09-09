@@ -370,6 +370,8 @@ class DraftOrder(db.Model):
     __tablename__ = 'draft_orders'
     id = db.Column(db.Integer, primary_key=True)
     branch_code = db.Column(db.String(50), nullable=False)
+    # Legacy compatibility: some SQLite DBs still have NOT NULL table_no; keep it mapped with a safe default
+    table_no = db.Column(db.Integer, nullable=False, default=0)
     table_number = db.Column(db.String(50), nullable=False, default='0')  # NOT NULL with default for PostgreSQL
     customer_name = db.Column(db.String(100), nullable=True)
     customer_phone = db.Column(db.String(20), nullable=True)
