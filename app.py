@@ -810,13 +810,30 @@ except Exception:
     pass
 
 @app.route('/login', methods=['GET', 'POST'])
+@csrf_exempt
 def login():
     form = LoginForm()
 
     if request.method == 'POST':
-        # التحقق اليدوي من الحقول المطلوبة
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '').strip()
+        # قراءة الحقول من عدة مصادر لضمان عدم ضياع القيم على بعض المنصات
+        username = (request.form.get('username') or request.values.get('username') or '')
+        password = (request.form.get('password') or request.values.get('password') or '')
+        # دعم JSON إن أُرسل
+        if (not username or not password) and request.is_json:
+            try:
+                data = request.get_json(silent=True) or {}
+                username = username or (data.get('username') or '')
+                password = password or (data.get('password') or '')
+            except Exception:
+                pass
+        username = (username or '').strip()
+        password = (password or '').strip()
+
+        # Debug خفيف لتشخيص الإنتاج (يبقى آمن ولا يطبع كلمات المرور)
+        try:
+            print('Login POST debug => keys:', list(request.form.keys()), 'content-type:', request.headers.get('Content-Type'))
+        except Exception:
+            pass
 
         if not username or not password:
             flash('يرجى ملء جميع الحقول المطلوبة / Please fill all required fields', 'danger')
