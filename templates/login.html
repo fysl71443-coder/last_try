@@ -63,23 +63,23 @@
     {% endif %}
   {% endwith %}
 
-  <form method="POST" novalidate>
+  <form method="POST" novalidate accept-charset="UTF-8">
     {{ form.hidden_tag() }}
     <div class="mb-3 input-group">
       <span class="input-group-text bg-transparent border-0 text-white">👤</span>
-      {{ form.username(class_='form-control', placeholder=_('Username / اسم المستخدم')) }}
+      <input type="text" name="username" class="form-control" placeholder="{{ _('Username / اسم المستخدم') }}" value="{{ request.form.get('username','') }}" required>
     </div>
     <div class="mb-3 input-group">
       <span class="input-group-text bg-transparent border-0 text-white">🔒</span>
-      {{ form.password(class_='form-control', id='password', placeholder=_('Password / كلمة المرور')) }}
+      <input type="password" name="password" class="form-control" id="password" placeholder="{{ _('Password / كلمة المرور') }}" required>
       <button type="button" class="btn btn-outline-light" onclick="togglePassword()">👁</button>
     </div>
     <div class="mb-3 form-check">
-      {{ form.remember(class_='form-check-input') }}
-      {{ form.remember.label(class_='form-check-label') }}
+      <input type="checkbox" name="remember" class="form-check-input" id="remember" {% if request.form.get('remember') %}checked{% endif %}>
+      <label for="remember" class="form-check-label">{{ _('Remember Me / تذكرني') }}</label>
     </div>
     <div class="d-grid">
-      {{ form.submit(class_='btn btn-primary btn-lg') }}
+      <button type="submit" class="btn btn-primary btn-lg">{{ _('Login / تسجيل الدخول') }}</button>
     </div>
   </form>
 </div>
