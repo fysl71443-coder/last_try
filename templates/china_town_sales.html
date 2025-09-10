@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
 async function loadDraftOrder(tableNumber) {
     try {
         console.log(`Loading draft order for table ${tableNumber}`);
-        const response = await fetch(`/api/load-draft-order/1/${tableNumber}`, {
+        const response = await fetch(`/api/load-draft-order/china_town/${tableNumber}`, {
             headers: {'X-CSRFToken': getCsrf()}
         });
 
@@ -567,7 +567,7 @@ async function loadProducts(categoryId) {
 // Load tables dynamically based on settings
 async function loadTables() {
     try {
-        const response = await fetch('/api/tables/1', {
+        const response = await fetch('/api/tables/china_town', {
             headers: {'X-CSRFToken': getCsrf()}
         });
 

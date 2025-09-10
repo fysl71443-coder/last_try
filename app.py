@@ -1594,7 +1594,7 @@ def get_product(product_id):
         return jsonify({'error': str(e)}), 500
 
 # Override original APIs to work without login for E2E testing
-@app.route('/api/tables/<branch_code>')
+@app.route('/api/test/tables/<branch_code>')
 def api_tables_no_login(branch_code):
     """Tables API without login requirement for E2E testing"""
     try:
@@ -1613,12 +1613,6 @@ def api_tables_no_login(branch_code):
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-# Test APIs without login requirement
-@app.route('/api/test/tables/<branch_code>')
-def test_api_tables(branch_code):
-    """Test API for tables without login"""
-    return api_tables_no_login(branch_code)
 
 @app.route('/api/categories')
 def api_categories_no_login():
@@ -1688,7 +1682,7 @@ def api_products_no_login(branch_code):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/load-draft-order/<branch_code>/<table_number>')
+@app.route('/api/test/load-draft-order/<branch_code>/<table_number>')
 def api_load_draft_order_no_login(branch_code, table_number):
     """Load draft order API without login requirement for E2E testing"""
     try:
