@@ -6866,6 +6866,40 @@ def delete_expense_invoice(invoice_id):
 def health():
     return jsonify({'status': 'ok', 'message': 'App is running'})
 
+# Optional local-only debug endpoint to view recent error logs
+if os.getenv('ENABLE_DEBUG_LOGS_ROUTE', '0').lower() in ('1', 'true', 'yes'):
+    @app.route('/__debug/logs')
+    def debug_logs():
+        try:
+            from flask import request, Response
+            # Restrict in production: allow only localhost or when not production
+            if app.config.get('ENV') == 'production' and request.remote_addr not in ('127.0.0.1', '::1'):
+                return "Forbidden", 403
+            log_path = os.path.join('logs', 'local-errors.log')
+            lines = int(request.args.get('n', 200))
+            if not os.path.exists(log_path):
+                return jsonify({'ok': True, 'message': 'log file not found yet', 'path': log_path}), 200
+            # Read last N lines efficiently
+            def tail(fname, n):
+                try:
+                    with open(fname, 'rb') as f:
+                        f.seek(0, os.SEEK_END)
+                        size = f.tell()
+                        block = -1024
+                        data = b''
+                        while n > 0 and -block < size:
+                            f.seek(block, os.SEEK_END)
+                            data = f.read(-block) + data
+                            n -= data.count(b'\n')
+                            block *= 2
+                        return b"\n".join(data.splitlines()[-int(request.args.get('n', 200)):]).decode('utf-8', errors='replace')
+                except Exception as e:
+                    return f"error reading log: {e}"
+            content = tail(log_path, lines)
+            return Response(content, mimetype='text/plain')
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+
 # Test endpoint for debugging dependencies
 @app.route('/test-dependencies')
 def test_dependencies():
