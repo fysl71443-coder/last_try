@@ -393,10 +393,15 @@ def verify_admin_password(pw: str) -> bool:
 # Rate limiting for login attempts
 login_attempts = {}  # { ip_address: {"count": int, "last_attempt": datetime} }
 
-# Global socketio instance
+# Global socketio instance (configurable)
+DISABLE_SOCKETIO = os.getenv('DISABLE_SOCKETIO', '0').lower() in ('1', 'true', 'yes')
 try:
-    from flask_socketio import SocketIO
-    socketio = SocketIO(app, cors_allowed_origins="*")
+    if not DISABLE_SOCKETIO:
+        from flask_socketio import SocketIO
+        async_mode = 'eventlet' if _USE_EVENTLET else 'threading'
+        socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
+    else:
+        socketio = None
 except ImportError:
     socketio = None
 
