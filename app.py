@@ -1,14 +1,59 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 
 app = Flask(__name__, template_folder='templates')
+app.secret_key = "secret_key_here"
 
-# صفحة رئيسية
-@app.route('/')
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+# قائمة المستخدمين الثابتة
+USERS = {
+    "admin": "admin123",
+    "china_town": "ch0368",
+    "palace_india": "pi8307"
+}
+
+class User(UserMixin):
+    def __init__(self, username):
+        self.id = username
+
+@login_manager.user_loader
+def load_user(user_id):
+    if user_id in USERS:
+        return User(user_id)
+    return None
+
+@app.route("/")
+@login_required
 def home():
-    return render_template('index.html')
+    return render_template("index.html", username=current_user.id)
 
-if __name__ == '__main__':
-    # تشغيل السيرفر في وضع التطوير
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        if username in USERS and USERS[username] == password:
+            user = User(username)
+            login_user(user)
+            return redirect(url_for("home"))
+        return "Invalid credentials", 401
+    return """
+        <form method='POST'>
+            Username: <input name='username'>
+            Password: <input name='password' type='password'>
+            <input type='submit'>
+        </form>
+    """
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return "Logged out"
+
+if __name__ == "__main__":
     app.run(debug=True)
 
 
