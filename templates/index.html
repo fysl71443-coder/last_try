@@ -6,10 +6,10 @@
 </head>
 <body>
     {% if current_user.is_authenticated %}
-        <h1>مرحباً {{ current_user.id }} في China Town!</h1>
-        <a href="{{ url_for('logout') }}">تسجيل الخروج</a>
+        <h1>مرحباً {{ current_user.username if current_user.is_authenticated else '' }} في China Town!</h1>
+        <a href="{{ url_for('main.logout') }}">تسجيل الخروج</a>
     {% else %}
-        <a href="{{ url_for('login') }}">تسجيل الدخول</a>
+        <a href="{{ url_for('main.login') }}">تسجيل الدخول</a>
     {% endif %}
 </body>
 </html>
