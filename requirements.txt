@@ -5,7 +5,7 @@ WTForms==3.2.1
 Flask-Bcrypt==1.0.1
 Flask-Migrate==4.0.4
 Flask-SQLAlchemy==3.0.5
-psycopg2-binary==2.9.7
+psycopg2-binary==2.9.10
 python-dotenv==1.0.0
 Flask-Babel==3.0.0
 pytz==2022.7
