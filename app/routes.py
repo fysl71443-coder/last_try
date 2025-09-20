@@ -9,7 +9,7 @@ main = Blueprint('main', __name__)
 @login_required
 def home():
     # Redirect authenticated users to dashboard for main control screen
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('main.dashboard'))
 
 @main.route('/login', methods=['GET', 'POST'])
 def login():
@@ -32,14 +32,14 @@ def login():
                     db.session.commit()
                     login_user(new_admin)
                     flash('\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0645\u0633\u062a\u062e\u062f\u0645 \u0627\u0644\u0645\u062f\u064a\u0631 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a \u0628\u0646\u062c\u0627\u062d', 'success')
-                    return redirect(url_for('dashboard'))
+                    return redirect(url_for('main.dashboard'))
                 except Exception as e:
                     db.session.rollback()
                     flash('\u062e\u0637\u0623 \u0641\u064a \u062a\u0647\u064a\u0626\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a', 'danger')
 
         if user and user.check_password(password):
             login_user(user)
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('main.dashboard'))
         else:
             flash('\u062e\u0637\u0623 \u0641\u064a \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0623\u0648 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631', 'danger')
     return render_template('login.html')
@@ -141,7 +141,7 @@ def users():
 @login_required
 def create_sample_data_route():
     flash('\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0628\u064a\u0627\u0646\u0627\u062a \u062a\u062c\u0631\u064a\u0628\u064a\u0629 (\u0648\u0647\u0645\u064a\u0629) \u0644\u0623\u063a\u0631\u0627\u0636 \u0627\u0644\u0639\u0631\u0636 \u0641\u0642\u0637', 'info')
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('main.dashboard'))
 
 # ---------- VAT blueprint ----------
 vat = Blueprint('vat', __name__, url_prefix='/vat')

@@ -36,28 +36,28 @@ body {
           <h6 class="card-title mb-3">🚀 {{ _('Quick Access / الوصول السريع') }}</h6>
           <div class="d-flex flex-wrap gap-2">
             {% if can('sales','view') %}
-            <a href="{{ url_for('sales') }}" class="btn btn-primary btn-sm">
+            <a href="{{ url_for('main.sales') }}" class="btn btn-primary btn-sm">
               💰 {{ _('New Sale / مبيعة جديدة') }}
             </a>
             {% endif %}
             {% if can('purchases','view') %}
-            <a href="{{ url_for('purchases') }}" class="btn btn-warning btn-sm">
+            <a href="{{ url_for('main.purchases') }}" class="btn btn-warning btn-sm">
               🛒 {{ _('New Purchase / شراء جديد') }}
             </a>
             {% endif %}
             {% if can('inventory','view') %}
-            <a href="{{ url_for('raw_materials') }}" class="btn btn-success btn-sm">
+            <a href="{{ url_for('main.raw_materials') }}" class="btn btn-success btn-sm">
               🥘 {{ _('Add Material / إضافة مادة') }}
             </a>
-            <a href="{{ url_for('meals') }}" class="btn btn-info btn-sm">
+            <a href="{{ url_for('main.meals') }}" class="btn btn-info btn-sm">
               🍽️ {{ _('Create Meal / إنشاء وجبة') }}
             </a>
-            <a href="{{ url_for('inventory') }}" class="btn btn-secondary btn-sm">
+            <a href="{{ url_for('main.inventory') }}" class="btn btn-secondary btn-sm">
               📦 {{ _('View Inventory / عرض المخزون') }}
             </a>
             {% endif %}
             {% if can('expenses','view') %}
-            <a href="{{ url_for('expenses') }}" class="btn btn-danger btn-sm">
+            <a href="{{ url_for('main.expenses') }}" class="btn btn-danger btn-sm">
               💸 {{ _('Add Expense / إضافة مصروف') }}
             </a>
             {% endif %}
@@ -70,7 +70,7 @@ body {
   <div class="row g-4">
     {% if can('sales','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('sales') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.sales') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">💰</div>
           <h6>{{ _('Sales / المبيعات') }}</h6>
@@ -81,7 +81,7 @@ body {
 
     {% if can('purchases','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('purchases') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.purchases') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">🛒</div>
           <h6>{{ _('Purchases / المشتريات') }}</h6>
@@ -91,7 +91,7 @@ body {
     {% endif %}
 
 	    <div class="col-md-3 col-sm-6">
-	      <a href="{{ url_for('suppliers') }}" class="text-decoration-none text-dark">
+	      <a href="{{ url_for('main.suppliers') }}" class="text-decoration-none text-dark">
 	        <div class="dashboard-card">
 	          <div class="dashboard-icon">🤝</div>
 	          <h6>{{ _('Suppliers / الموردون') }}</h6>
@@ -102,7 +102,7 @@ body {
 
     {% if can('expenses','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('expenses') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.expenses') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">💸</div>
           <h6>{{ _('Expenses / المصروفات') }}</h6>
@@ -113,7 +113,7 @@ body {
 
     {% if can('sales','view') or can('purchases','view') or can('expenses','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('invoices') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.invoices') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">📄</div>
           <h6>{{ _('All Invoices / كل الفواتير') }}</h6>
@@ -124,7 +124,7 @@ body {
 
     {% if can('inventory','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('inventory') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.inventory') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">📦</div>
           <h6>{{ _('Inventory & Costs / المخزون وادارة التكاليف') }}</h6>
@@ -135,7 +135,7 @@ body {
 
     {% if can('salaries','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('employees') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.employees') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">👨‍💼</div>
           <h6>{{ _('Employees & Salaries / الموظفين والرواتب') }}</h6>
@@ -146,7 +146,7 @@ body {
 
     {% if can('sales','view') or can('purchases','view') or can('expenses','view') or can('salaries','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('payments') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.payments') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">💳</div>
           <h6>{{ _('Payments & Receivables / المدفوعات والمستحقات') }}</h6>
@@ -157,7 +157,7 @@ body {
 
     {% if can('reports','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('reports') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.reports') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">📊</div>
           <h6>{{ _('Reports / التقارير') }}</h6>
@@ -190,7 +190,7 @@ body {
 
     {% if can('sales','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('customers') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.customers') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">👥</div>
           <h6>{{ _('Customers / العملاء') }}</h6>
@@ -201,7 +201,7 @@ body {
 
     {% if can('inventory','view') or can('sales','view') %}
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('menu') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.menu') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">📖</div>
           <h6>{{ _('Menu / المنيو') }}</h6>
@@ -211,7 +211,7 @@ body {
     {% endif %}
 
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('settings') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.settings') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">⚙️</div>
           <h6>{{ _('Settings / الإعدادات') }}</h6>
@@ -220,7 +220,7 @@ body {
     </div>
 
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('table_settings') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.table_settings') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">🪑</div>
           <h6>{{ _('Table Settings / إعدادات الطاولات') }}</h6>
@@ -229,7 +229,7 @@ body {
     </div>
 
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('users') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.users') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
           <div class="dashboard-icon">🔑</div>
           <h6>{{ _('Users & Permissions / إدارة المستخدمين والصلاحيات') }}</h6>
@@ -238,7 +238,7 @@ body {
     </div>
 
     <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('create_sample_data_route') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('main.create_sample_data_route') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card" style="border: 2px dashed #28a745;">
           <div class="dashboard-icon">🧪</div>
           <h6>{{ _('Create Sample Data / إنشاء بيانات تجريبية') }}</h6>
