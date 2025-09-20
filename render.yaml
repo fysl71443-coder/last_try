@@ -1,13 +1,11 @@
 services:
   - type: web
-    name: matam-alqaria-alssini
+    name: مطعم_القرية_الصيني
     env: python
+    plan: free
     region: frankfurt
-    branch: main
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn -k gevent app:app"
-    envVars:
-      - key: DATABASE_URL
-        value: postgresql://china_town_user:itOxqXblGjRAr6IyI3K4b9gEoto6fZ5j@dpg-d2dk9c3e5dus7385023g-a.frankfurt-postgres.render.com/china_town_db
-      - key: SECRET_KEY
-        generateValue: true
+    buildCommand: |
+      pyenv install -s 3.11.7
+      pyenv global 3.11.7
+      pip install -r requirements.txt
+    startCommand: gunicorn -k gevent app:app
