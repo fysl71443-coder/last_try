@@ -54,7 +54,9 @@ def logout():
     return "Logged out"
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    from app import create_app as _create_app
+    app = _create_app()
+    app.run(host="127.0.0.1", port=5000, debug=True)
 
 
 # --- Bootstrap minimal Flask app early so decorators and Jinja loader work ---
