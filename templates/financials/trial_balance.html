@@ -5,16 +5,33 @@
   <h3>ميزان المراجعة (Trial Balance)</h3>
   <form method="get" class="row g-2 align-items-end mb-3">
     <div class="col-auto">
-      <label>حتى تاريخ</label>
+      <label class="form-label">حتى تاريخ</label>
       <input type="date" name="date" class="form-control" value="{{ data.date }}">
     </div>
     <div class="col-auto">
       <button class="btn btn-primary">عرض</button>
     </div>
   </form>
-  <div class="card">
+  <div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="fw-semibold">ميزان المراجعة</div>
+      <div class="d-flex align-items-center gap-2">
+        <small class="text-muted">حتى: {{ data.date }}</small>
+        <a target="_blank" href="{{ url_for('financials.print_trial_balance', date=data.date) }}" class="btn btn-sm btn-outline-secondary">طباعة</a>
+      </div>
+    </div>
+    <div class="card-body py-2">
+      <span class="badge bg-light text-dark border me-2">مدين: {{ '%.2f'|format(data.total_debit) }}</span>
+      <span class="badge bg-light text-dark border">دائن: {{ '%.2f'|format(data.total_credit) }}</span>
+      {% set diff = (data.total_debit or 0) - (data.total_credit or 0) %}
+      {% if diff|round(2) != 0 %}
+      <div class="alert alert-warning d-inline-flex align-items-center py-1 px-2 ms-2 my-0">
+        <small>تحذير: الميزان غير متوازن (الفرق: {{ '%.2f'|format(diff) }})</small>
+      </div>
+      {% endif %}
+    </div>
     <div class="table-responsive">
-      <table class="table table-striped mb-0">
+      <table class="table table-bordered table-striped table-hover align-middle table-sm mb-0">
         <thead>
           <tr>
             <th>الكود</th>

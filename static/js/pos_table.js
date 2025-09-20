@@ -1,0 +1,270 @@
+(function(){
+  'use strict';
+
+  // --- State ---
+  let BRANCH = '';
+  let TABLE_NO = '';
+  let VAT_RATE = 0;
+  let CURRENT_DRAFT_ID = null;
+  let items = [];
+  let CAT_MAP = {};
+
+  // --- DOM Helpers ---
+  function qs(sel, ctx=document){ return ctx.querySelector(sel); }
+  function qsa(sel, ctx=document){ return Array.from(ctx.querySelectorAll(sel)); }
+
+  function number(v, def=0){ const n = parseFloat(v); return isNaN(n) ? def : n; }
+
+  function setTotals(){
+    const taxPct = number(qs('#taxPct')?.value || VAT_RATE);
+    const discountPct = number(qs('#discountPct')?.value || 0);
+    let subtotal = 0, tax = 0;
+    items.forEach(it=>{ const sub=it.unit*it.qty; subtotal+=sub; tax += sub*(taxPct/100); });
+    const discountVal = (subtotal+tax) * (discountPct/100);
+    const grand = (subtotal+tax) - discountVal;
+    if(qs('#subtotal')) qs('#subtotal').textContent = subtotal.toFixed(2);
+    if(qs('#tax')) qs('#tax').textContent = tax.toFixed(2);
+    if(qs('#discount')) qs('#discount').textContent = discountVal.toFixed(2);
+    if(qs('#grand')) qs('#grand').textContent = grand.toFixed(2);
+  }
+
+  function renderItems(){
+    const body = qs('#itemsBody'); if(!body) return;
+    body.innerHTML = '';
+    items.forEach((it, idx)=>{
+      const tr = document.createElement('tr');
+      const nameTd = document.createElement('td'); nameTd.textContent = it.name; tr.appendChild(nameTd);
+      const qtyTd = document.createElement('td'); qtyTd.className = 'text-center';
+      const qtyInput = document.createElement('input'); qtyInput.type='number'; qtyInput.min='1'; qtyInput.step='1'; qtyInput.value = String(it.qty);
+      qtyInput.className = 'form-control form-control-sm';
+      qtyInput.addEventListener('change', async ()=>{
+        const v = number(qtyInput.value, 1);
+        if(v <= 0){
+          const pwd = await window.showPrompt('Enter supervisor password');
+          if(pwd===null) { qtyInput.value = String(it.qty); return; }
+          if(String(pwd).trim() !== '1991'){ await window.showAlert('Incorrect password'); qtyInput.value = String(it.qty); return; }
+          items.splice(idx,1); renderItems(); await saveDraftOrder({ supervisor_password: pwd });
+        } else { it.qty = v; renderItems(); await saveDraftOrder(); }
+      });
+      qtyTd.appendChild(qtyInput); tr.appendChild(qtyTd);
+      const unitTd = document.createElement('td'); unitTd.className = 'text-end'; unitTd.textContent = it.unit.toFixed(2); tr.appendChild(unitTd);
+      const lineTd = document.createElement('td'); lineTd.className = 'text-end';
+      const lineSub = it.unit * it.qty; const tax = lineSub * (number(qs('#taxPct')?.value || VAT_RATE)/100);
+      lineTd.textContent = (lineSub + tax).toFixed(2); tr.appendChild(lineTd);
+      const rmTd = document.createElement('td');
+      const rmBtn = document.createElement('button'); rmBtn.className='btn btn-sm btn-outline-danger'; rmBtn.textContent = '×';
+      rmBtn.addEventListener('click', async ()=>{
+        const pwd = await window.showPrompt('Enter supervisor password');
+        if(pwd===null) return; if(String(pwd).trim() !== '1991'){ await window.showAlert('Incorrect password'); return; }
+        items.splice(idx,1); renderItems(); await saveDraftOrder({ supervisor_password: pwd });
+      });
+      rmTd.appendChild(rmBtn); tr.appendChild(rmTd);
+      body.appendChild(tr);
+    });
+    setTotals();
+  }
+
+  async function addMenuItem(mealId, name, unit){
+    const existing = items.find(x=> x.meal_id === mealId);
+    if(existing){ existing.qty += 1; }
+    else { items.push({ meal_id: mealId, name: name, unit: number(unit), qty: 1 }); }
+    renderItems(); await saveDraftOrder();
+  }
+
+  async function openCategory(catId, catName){
+    const modalEl = qs('#catModal'); const modalTitle = qs('#catModalTitle'); const grid = qs('#catGrid'); const empty = qs('#catEmpty');
+    if(!modalEl || !grid) return;
+    modalTitle && (modalTitle.textContent = catName || 'Items');
+    grid.innerHTML = ''; empty && empty.classList.add('d-none');
+    let data = [];
+    if(!catId){
+      // No mapping for this category; just show empty message
+      data = [];
+    } else {
+      try{
+        const resp = await fetch(`/api/menu/${catId}/items`, {credentials:'same-origin'});
+        if(resp.ok) data = await resp.json(); else data = [];
+      }catch(e){ data = []; }
+    }
+
+    if(data.length === 0){ if(empty){ empty.classList.remove('d-none'); } }
+    data.forEach(m=>{
+      const col = document.createElement('div'); col.className = 'col-6 col-md-4 col-lg-3';
+      const card = document.createElement('div'); card.className = 'card meal-card h-100';
+      const body = document.createElement('div'); body.className = 'card-body d-flex flex-column justify-content-between';
+      const nm = document.createElement('div'); nm.className='fw-bold'; nm.textContent = m.name || '';
+      const pr = document.createElement('div'); pr.className='text-muted'; pr.textContent = 'Price: ' + number(m.price||0).toFixed(2);
+      body.appendChild(nm); body.appendChild(pr); card.appendChild(body); col.appendChild(card);
+      card.addEventListener('click', ()=> addMenuItem(m.meal_id ?? m.id, m.name, number((m.price ?? m.unit ?? 0))) );
+      grid.appendChild(col);
+    });
+
+    if(window.bootstrap && bootstrap.Modal){
+      if(!window.__catModalInstance){ window.__catModalInstance = new bootstrap.Modal(modalEl, { backdrop:true, keyboard:true }); }
+      window.__catModalInstance.show();
+    } else {
+      modalEl.classList.add('show'); modalEl.style.display='block';
+    }
+  }
+
+  async function saveDraftOrder(opts){
+    try{
+      const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+      const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
+
+      // If items are empty: clear draft for this table and mark table available
+      if(!items.length){
+        await fetch(`/api/draft-order/${BRANCH}/${TABLE_NO}`, {
+          method:'POST', headers, credentials:'same-origin',
+          body: JSON.stringify({ items: [] })
+        });
+        return;
+      }
+
+      // If no draft yet: create or update via branch/table endpoint (server will create if not exists)
+      if(!CURRENT_DRAFT_ID){
+        const resp = await fetch(`/api/draft-order/${BRANCH}/${TABLE_NO}`, {
+          method:'POST', headers, credentials:'same-origin',
+          body: JSON.stringify({
+            items: items.map(x=>({ id:x.meal_id, name:x.name, price:x.unit, quantity:x.qty })),
+            customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' }
+          })
+        });
+        const data = await resp.json().catch(()=>({}));
+        if(resp.ok && data.draft_id){ CURRENT_DRAFT_ID = data.draft_id; }
+      } else {
+        // Update existing draft: this endpoint expects 'qty' per item
+        await fetch(`/api/draft_orders/${CURRENT_DRAFT_ID}/update`, {
+          method:'POST', headers, credentials:'same-origin',
+          body: JSON.stringify({
+            items: items.map(x=>({ meal_id:x.meal_id, qty:x.qty })),
+            customer_name: qs('#custName')?.value || '',
+            customer_phone: qs('#custPhone')?.value || '',
+            payment_method: qs('#payMethod')?.value || 'CASH',
+            supervisor_password: opts && opts.supervisor_password ? opts.supervisor_password : undefined
+          })
+        });
+      }
+    }catch(e){ console.error('saveDraftOrder failed', e); }
+  }
+
+  async function payAndPrint(){
+    if(items.length === 0){ await window.showAlert('Add at least one item'); return; }
+    const payload = CURRENT_DRAFT_ID ? {
+      draft_id: CURRENT_DRAFT_ID,
+      customer_name: qs('#custName')?.value || '',
+      customer_phone: qs('#custPhone')?.value || '',
+      discount_pct: number(qs('#discountPct')?.value || 0),
+      tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
+      payment_method: qs('#payMethod')?.value || 'CASH'
+    } : {
+      branch_code: BRANCH,
+      table_number: Number(TABLE_NO),
+      items: items.map(x=>({ meal_id:x.meal_id, qty:x.qty })),
+      customer_name: qs('#custName')?.value || '',
+      customer_phone: qs('#custPhone')?.value || '',
+      discount_pct: number(qs('#discountPct')?.value || 0),
+      tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
+      payment_method: qs('#payMethod')?.value || 'CASH'
+    };
+    const endpoint = CURRENT_DRAFT_ID ? '/api/draft/checkout' : '/api/sales/checkout';
+
+    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
+
+    let data;
+    try{
+      const res = await fetch(endpoint, { method:'POST', headers, credentials:'same-origin', body: JSON.stringify(payload) });
+      if(!res.ok){ const txt = await res.text(); await window.showAlert(txt || ('HTTP '+res.status)); return; }
+      data = await res.json().catch(()=>null);
+    }catch(e){ await window.showAlert('Network error'); return; }
+    if(!data){ await window.showAlert('Error'); return; }
+
+    const tablesUrl = `/sales/${BRANCH}/tables`;
+    const confirmPrintAndPay = async ()=>{
+      try{
+        const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const h = {'Content-Type':'application/json'}; if(token) h['X-CSRFToken']=token;
+        const res = await fetch('/api/invoice/confirm-print', {
+          method:'POST', headers:h, credentials:'same-origin',
+          body: JSON.stringify({ invoice_id: data.invoice_id, payment_method: data.payment_method, total_amount: data.total_amount })
+        });
+        if(res.ok){ items = []; renderItems(); window.location.href = tablesUrl; }
+      }catch(e){ console.error('confirm-print failed', e); }
+    };
+
+    if(data.print_url){
+      const w = window.open(data.print_url, '_blank', 'width=800,height=600,scrollbars=yes');
+      if(w){
+        const timer = setInterval(()=>{ if(w.closed){ clearInterval(timer); confirmPrintAndPay(); } }, 500);
+        setTimeout(()=>{ try{ if(!w.closed){ w.close(); clearInterval(timer); confirmPrintAndPay(); } }catch(_e){} }, 30000);
+      } else {
+        await confirmPrintAndPay();
+      }
+    } else {
+      await confirmPrintAndPay();
+    }
+  }
+
+  async function voidInvoice(){
+    if(items.length === 0){ await window.showAlert('Invoice is already empty'); return; }
+    const pwd = await window.showPrompt('Enter void password'); if(pwd===null) return; if(String(pwd).trim()===''){ await window.showAlert('Password required'); return; }
+    try{
+      const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+      const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
+      if(CURRENT_DRAFT_ID){
+        const resp = await fetch(`/api/draft_orders/${CURRENT_DRAFT_ID}/cancel`, { method:'POST', headers, credentials:'same-origin', body: JSON.stringify({ supervisor_password: pwd }) });
+        const j = await resp.json().catch(()=>({success:false})); if(!resp.ok || !j.success){ await window.showAlert(j.error||'Incorrect password'); return; }
+      } else {
+        const resp = await fetch('/api/sales/void-check', { method:'POST', headers, credentials:'same-origin', body: JSON.stringify({ password: pwd }) });
+        const j = await resp.json().catch(()=>({ok:false})); if(!resp.ok || !j.ok){ await window.showAlert('Incorrect password'); return; }
+      }
+      items.length = 0; renderItems(); await window.showAlert('Invoice cancelled'); window.location.href = `/sales/${BRANCH}/tables`;
+    }catch(e){ await window.showAlert('Error'); }
+  }
+
+  // Expose for other scripts if needed
+  window.payAndPrint = payAndPrint;
+  window.voidInvoice = voidInvoice;
+
+  // --- Init ---
+  window.addEventListener('DOMContentLoaded', function(){
+    // Read init data
+    const init = qs('#pos-init');
+    BRANCH = init?.getAttribute('data-branch') || document.body.dataset.branch || '';
+    TABLE_NO = init?.getAttribute('data-table') || document.body.dataset.table || '';
+    VAT_RATE = number(init?.getAttribute('data-vat') || 0);
+    const draftRaw = init?.getAttribute('data-draft') || '[]';
+    try{
+      const draft = JSON.parse(draftRaw);
+      (draft||[]).forEach(d=> items.push({ meal_id: d.meal_id, name: d.name, unit: number(d.price), qty: number(d.quantity||d.qty||1) }));
+    }catch(e){ /* ignore */ }
+    CURRENT_DRAFT_ID = (init?.getAttribute('data-draft-id') || '').trim() || null;
+    const catMapRaw = init?.getAttribute('data-cat-map') || '{}';
+    try{ CAT_MAP = JSON.parse(catMapRaw) || {}; }catch(e){ CAT_MAP = {}; }
+
+    // Bind category cards (no inline)
+    qsa('.cat-card').forEach(card=>{
+      card.setAttribute('tabindex','0');
+      const name = card.textContent.trim();
+      const idAttr = card.getAttribute('data-cat-id');
+      const up = name && name.toUpperCase ? name.toUpperCase() : name;
+      const id = idAttr || CAT_MAP[name] || CAT_MAP[up] || null;
+      card.addEventListener('click', ()=> openCategory(id, name));
+      card.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openCategory(id, name); } });
+    });
+
+    // Bind primary buttons
+    qs('#btnPayPrint')?.addEventListener('click', payAndPrint);
+    qs('#btnVoidInvoice')?.addEventListener('click', voidInvoice);
+
+    // Bind auto-save for customer/payment fields
+    qs('#custName')?.addEventListener('blur', ()=> saveDraftOrder());
+    qs('#custPhone')?.addEventListener('blur', ()=> saveDraftOrder());
+    qs('#payMethod')?.addEventListener('change', ()=> saveDraftOrder());
+
+    // Initial render
+    renderItems();
+  });
+})();
+

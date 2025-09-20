@@ -36,11 +36,9 @@ def find_and_replace_engine_execute():
             
             original_content = content
             
-            # Pattern to match with engine.connect() as conn:
-        conn.execute(text(...)) calls
-            # This handles both single and multi-line patterns
-            pattern = r'(\w+\.)?engine\.execute\s*\(\s*([^)]+)\s*\)'
-            
+            # Pattern to match engine.execute(...) calls
+            pattern = r'(?:\w+\.)?engine\.execute\s*\(\s*([^)]+)\s*\)'
+
             matches = list(re.finditer(pattern, content, re.MULTILINE | re.DOTALL))
             
             if matches:

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{ get_locale() }}" dir="{{ 'rtl' if get_locale().startswith('ar') else 'ltr' }}">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -85,6 +85,8 @@
 
       <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    {% block head %}{% endblock %}
+
   </head>
   <body class="{{ (session.get('theme') or (settings.default_theme if settings else 'light')) }}">
     {% if request.endpoint != 'login' %}
@@ -99,7 +101,7 @@
             <span class="me-3 text-muted">{{ _('Welcome') }} {{ current_user.username }}</span>
           {% endif %}
           <a class="btn btn-outline-secondary" href="?lang=en">English</a>
-          <a class="btn btn-outline-primary" href="?lang=ar">العربية</a>
+
           {% if current_user.is_authenticated and (current_user.role|default('') != 'user') %}
           <form method="post" action="{{ url_for('toggle_theme') }}" class="d-inline">
             <button class="btn btn-sm btn-outline-dark" type="submit">
@@ -108,7 +110,7 @@
           </form>
           {% endif %}
           {% if current_user.is_authenticated %}
-            <a class="btn btn-outline-danger" href="{{ url_for('logout') }}">{{ _('Logout / خروج') }}</a>
+            <a class="btn btn-outline-danger" href="{{ url_for('logout') }}">{{ _('Logout') }}</a>
           {% endif %}
         </div>
       </div>
@@ -125,42 +127,17 @@
         {% endif %}
       {% endwith %}
 
-      <!-- زر الرجوع للوحة التحكم -->
+      <!-- Back button -->
 
-      <!-- زر رجوع عام مع حماية من فقدان التعديلات -->
+      <!-- Generic back button with unsaved-changes protection -->
+      {% if not hide_back_button %}
       <div class="mb-3 d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-outline-secondary" onclick="safeBack('{{ back_url or url_for('dashboard') }}')">⬅️ {{ _('Back / رجوع') }}</button>
+        <button type="button" class="btn btn-outline-secondary" id="global-back-button" data-back-url="{{ back_url or url_for('dashboard') }}">⬅️ {{ _('Back') }}</button>
       </div>
+      {% endif %}
 
       {% if request.endpoint != 'dashboard' %}
-      <div class="mb-3">
->
-
-    <script>
-      // يحذر عند الرجوع إذا توجد تعديلات غير محفوظة في أي نموذج
-      let __dirty = false;
-      window.addEventListener('load', ()=>{
-        document.querySelectorAll('form').forEach(f=>{
-          f.addEventListener('input', ()=>{ __dirty = true; });
-          f.addEventListener('change', ()=>{ __dirty = true; });
-          f.addEventListener('submit', ()=>{ __dirty = false; });
-        });
-        window.addEventListener('beforeunload', function (e) {
-          if(__dirty){
-            e.preventDefault();
-            e.returnValue = '';
-          }
-        });
-      });
-      function safeBack(url){
-        if(__dirty){
-          if(!confirm("{{ _('You have unsaved changes. Are you sure you want to go back? / لديك تغييرات غير محفوظة. هل تريد الرجوع؟') }}")) return;
-        }
-        if(url){ window.location.href = url; } else { history.back(); }
-      }
-    </script>
-
-      </div>
+      <div class="mb-3"></div>
       {% endif %}
     </div>
     {% endif %}
@@ -170,17 +147,7 @@
     <script src="{{ url_for('static', filename='js/main.js') }}?v={{ ASSET_VERSION }}"></script>
     <script src="{{ url_for('static', filename='js/modal-system.js') }}?v={{ ASSET_VERSION }}"></script>
     <script src="{{ url_for('static', filename='js/printInvoice.js') }}?v={{ ASSET_VERSION }}"></script>
-
-    <!-- CSRF Helper -->
-    <script>
-      function getCsrf() {
-        const el = document.querySelector('meta[name="csrf-token"]');
-        return el ? el.content : '';
-      }
-
-      // Global CSRF helper for AJAX requests
-      window.csrfToken = getCsrf();
-    </script>
+    <script src="{{ url_for('static', filename='js/base-behavior.js') }}?v={{ ASSET_VERSION }}"></script>
 
     {% block scripts %}{% endblock %}
   </body>

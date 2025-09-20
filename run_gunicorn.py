@@ -3,7 +3,7 @@ import sys
 import subprocess
 
 if __name__ == "__main__":
-    port = os.getenv("PORT", "8000")  # Render يرسل PORT تلقائيًا
+    port = os.getenv("PORT", "8000")  # Render sends PORT automatically
 
     cmd = [
         "gunicorn",

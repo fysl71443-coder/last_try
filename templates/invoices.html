@@ -164,10 +164,250 @@ body {
     </div>
     {% endif %}
 </div>
+
+    <!-- Detailed View / العرض التفصيلي -->
+    <div class="invoice-card mt-4">
+      <h4 class="mb-3">Detailed View / العرض التفصيلي</h4>
+      <div class="row g-2 mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Start Date</label>
+          <input type="date" id="detStart" class="form-control">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">End Date</label>
+          <input type="date" id="detEnd" class="form-control">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Payment Method</label>
+          <select id="detPM" class="form-select">
+            <option value="all" selected>All</option>
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="bank">Bank</option>
+            <option value="online">Online</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Branch (Sales)</label>
+          <select id="detBranch" class="form-select">
+            <option value="all" selected>All</option>
+            <option value="china_town">China Town</option>
+            <option value="place_india">Palace India</option>
+          </select>
+        </div>
+      </div>
+      <div class="mb-3 text-end">
+        <button id="btnApplyFilters" class="btn btn-primary btn-sm">Apply Filters</button>
+      </div>
+      <p class="text-muted">Sales are always shown as Paid. Purchases and Expenses reflect user-recorded payments.</p>
+
+      <!-- Sales Detailed -->
+      <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Sales Invoices (Itemized, grouped by Branch)</h6>
+          <div>
+            <button id="btnPrintSales" class="btn btn-sm btn-outline-dark">Print</button>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered table-striped align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Branch</th>
+                <th>Date</th>
+                <th>Invoice No.</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Amount</th>
+                <th>Discount</th>
+                <th>VAT</th>
+                <th>Total</th>
+                <th>Payment</th>
+              </tr>
+            </thead>
+            <tbody id="det-sales-body"></tbody>
+            <tfoot id="det-sales-foot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Purchases Detailed -->
+      <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Purchase Invoices (Itemized)</h6>
+          <div>
+            <button id="btnPrintPurch" class="btn btn-sm btn-outline-dark">Print</button>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered table-striped align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>Invoice No.</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Amount</th>
+                <th>Discount</th>
+                <th>VAT</th>
+                <th>Total</th>
+                <th>Payment</th>
+              </tr>
+            </thead>
+            <tbody id="det-pur-body"></tbody>
+            <tfoot id="det-pur-foot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Expenses Detailed -->
+      <div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Expenses (Itemized)</h6>
+          <div>
+            <button id="btnPrintExp" class="btn btn-sm btn-outline-dark">Print</button>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered table-striped align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>Expense No.</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Payment</th>
+              </tr>
+            </thead>
+            <tbody id="det-exp-body"></tbody>
+            <tfoot id="det-exp-foot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- Delete Modal -->
     <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog">
         <div class="modal-content">
+
+  <script>
+    // Detailed view loaders with filters
+    (function(){
+      function n2(x){ try{return Number(x||0).toFixed(2);}catch(e){return '0.00';} }
+      function enc(s){ return encodeURIComponent(s||''); }
+      function buildQS(){
+        const s = document.getElementById('detStart')?.value || '';
+        const e = document.getElementById('detEnd')?.value || '';
+        const pm = (document.getElementById('detPM')?.value || 'all');
+        const br = (document.getElementById('detBranch')?.value || 'all');
+        const parts = [];
+        if(s) parts.push('start_date='+enc(s));
+        if(e) parts.push('end_date='+enc(e));
+        if(pm && pm!=='all') parts.push('payment_method='+enc(pm));
+        if(br && br!=='all') parts.push('branch='+enc(br));
+        return parts.length ? ('?'+parts.join('&')) : '';
+      }
+
+      function loadDetSales(){
+        const qs = buildQS();
+        fetch('/api/all-invoices'+qs, {credentials:'same-origin'})
+          .then(r=>r.json()).then(data=>{
+            const body = document.getElementById('det-sales-body');
+            const foot = document.getElementById('det-sales-foot');
+            if(!body||!foot) return; body.innerHTML=''; foot.innerHTML='';
+            const rows = (data.invoices||[]).filter(r=> (r.branch||'')!=='Purchases' && (r.branch||'')!=='Expenses')
+              .sort((a,b)=> (a.branch||'').localeCompare(b.branch||'') || (b.date||'').localeCompare(a.date||''));
+            let curB=null; const totalsByB={}; let overall={amount:0,discount:0,vat:0,total:0};
+            rows.forEach(r=>{
+              if(r.branch!==curB){
+                curB=r.branch; const hdr=document.createElement('tr'); hdr.className='table-info fw-bold';
+                hdr.innerHTML = `<td colspan="10">Branch: ${curB||''}</td>`; body.appendChild(hdr);
+              }
+              const tr=document.createElement('tr');
+              tr.innerHTML = `
+                <td>${r.branch||''}</td><td>${r.date||''}</td><td>${r.invoice_number||''}</td>
+                <td>${r.item_name||''}</td><td>${Number(r.quantity||0)}</td>
+                <td>${n2(r.price)}</td><td>${n2(r.discount)}</td><td>${n2(r.vat)}</td>
+                <td>${n2(r.total)}</td><td>${r.payment_method||''}</td>`;
+              body.appendChild(tr);
+              const b=r.branch||''; const t=totalsByB[b]||(totalsByB[b]={amount:0,discount:0,vat:0,total:0});
+              t.amount+=Number(r.price||0); t.discount+=Number(r.discount||0); t.vat+=Number(r.vat||0); t.total+=Number(r.total||0);
+              overall.amount+=Number(r.price||0); overall.discount+=Number(r.discount||0); overall.vat+=Number(r.vat||0); overall.total+=Number(r.total||0);
+            });
+            Object.keys(totalsByB).sort().forEach(b=>{
+              const t=totalsByB[b]; const tr=document.createElement('tr'); tr.className='table-warning fw-bold';
+              tr.innerHTML=`<td colspan="5" class="text-end">Branch Totals (${b}):</td>
+                <td>${n2(t.amount)}</td><td>${n2(t.discount)}</td><td>${n2(t.vat)}</td><td>${n2(t.total)}</td><td></td>`;
+              foot.appendChild(tr);
+            });
+            const tro=document.createElement('tr'); tro.className='table-secondary fw-bold';
+            tro.innerHTML=`<td colspan="5" class="text-end">Overall Totals:</td>
+              <td>${n2((data.overall_totals||data.summary||overall).amount||overall.amount)}</td>
+              <td>${n2((data.overall_totals||data.summary||overall).discount||overall.discount)}</td>
+              <td>${n2((data.overall_totals||data.summary||overall).vat||overall.vat)}</td>
+              <td>${n2((data.overall_totals||data.summary||overall).total||overall.total)}</td><td></td>`;
+            foot.appendChild(tro);
+          }).catch(err=> console.error('loadDetSales failed', err));
+      }
+
+      function loadDetPurch(){
+        const qs = buildQS().replace(/(^\?|&)branch=[^&]*/,'').replace('??','?');
+        fetch('/api/reports/all-purchases'+qs, {credentials:'same-origin'})
+          .then(r=>r.json()).then(data=>{
+            const body=document.getElementById('det-pur-body'); const foot=document.getElementById('det-pur-foot');
+            if(!body||!foot) return; body.innerHTML=''; foot.innerHTML='';
+            (data.purchases||[]).forEach(r=>{
+              const tr=document.createElement('tr');
+              tr.innerHTML = `
+                <td>${r.date||''}</td><td>${r.invoice_number||''}</td><td>${r.item||''}</td>
+                <td>${Number(r.quantity||0)}</td><td>${n2(r.amount)}</td>
+                <td>${n2(r.discount)}</td><td>${n2(r.vat)}</td><td>${n2(r.total)}</td>
+                <td>${r.payment_method||''}</td>`; body.appendChild(tr);
+            });
+            const o=data.overall_totals||{amount:0,discount:0,vat:0,total:0};
+            const tro=document.createElement('tr'); tro.className='table-secondary fw-bold';
+            tro.innerHTML=`<td colspan="4" class="text-end">Overall Totals:</td>
+              <td>${n2(o.amount)}</td><td>${n2(o.discount)}</td><td>${n2(o.vat)}</td><td>${n2(o.total)}</td><td></td>`;
+            foot.appendChild(tro);
+          }).catch(err=> console.error('loadDetPurch failed', err));
+      }
+
+      function loadDetExp(){
+        const qs = buildQS().replace(/(^\?|&)branch=[^&]*/,'').replace('??','?');
+        fetch('/api/all-expenses'+qs, {credentials:'same-origin'})
+          .then(r=>r.json()).then(data=>{
+            const body=document.getElementById('det-exp-body'); const foot=document.getElementById('det-exp-foot');
+            if(!body||!foot) return; body.innerHTML=''; foot.innerHTML='';
+            (data.expenses||[]).forEach(r=>{
+              const tr=document.createElement('tr');
+              tr.innerHTML = `
+                <td>${r.date||''}</td><td>${r.expense_number||''}</td><td>${r.item||''}</td>
+                <td>${n2(r.amount)}</td><td>${r.payment_method||''}</td>`; body.appendChild(tr);
+            });
+            const o=data.overall_totals||{amount:0};
+            const tro=document.createElement('tr'); tro.className='table-secondary fw-bold';
+            tro.innerHTML=`<td colspan="3" class="text-end">Total Expenses:</td><td>${n2(o.amount)}</td><td></td>`;
+            foot.appendChild(tro);
+          }).catch(err=> console.error('loadDetExp failed', err));
+      }
+
+      function reloadAll(){ loadDetSales(); loadDetPurch(); loadDetExp(); }
+      document.getElementById('btnApplyFilters')?.addEventListener('click', function(ev){ ev.preventDefault(); reloadAll(); });
+
+      function openPrint(urlBase, dropBranch){
+        let qs = buildQS();
+        if(dropBranch){ qs = qs.replace(/(^\?|&)branch=[^&]*/,'').replace('??','?'); }
+        window.open(urlBase + qs, '_blank');
+      }
+      document.getElementById('btnPrintSales')?.addEventListener('click', function(){ openPrint('/reports/print/all-invoices/sales', false); });
+      document.getElementById('btnPrintPurch')?.addEventListener('click', function(){ openPrint('/reports/print/all-invoices/purchases', true); });
+      document.getElementById('btnPrintExp')?.addEventListener('click', function(){ openPrint('/reports/print/all-invoices/expenses', true); });
+
+      if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', reloadAll); } else { reloadAll(); }
+    })();
+  </script>
+
           <form method="post" action="{{ url_for('invoices_delete', type=current_type) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="modal-header">

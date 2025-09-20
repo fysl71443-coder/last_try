@@ -42,6 +42,7 @@ class SalesInvoiceForm(FlaskForm):
     payment_method = SelectField(_l('Payment Method / طريقة الدفع'), choices=PAYMENT_METHODS, validators=[DataRequired()])
     branch = SelectField(_l('Branch / الفرع'), choices=BRANCHES, validators=[DataRequired()])
     customer_name = StringField(_l('Customer Name / اسم العميل'))
+    special_discount_pct = DecimalField(_l('Special Discount % (KEETA/HUNGER)'), validators=[Optional(), NumberRange(min=0, max=100)], places=2)
     items = FieldList(FormField(InvoiceItemForm), min_entries=1)
     submit = SubmitField(_l('Save Invoice / حفظ الفاتورة'))
 

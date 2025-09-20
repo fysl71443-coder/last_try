@@ -1,0 +1,290 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Invoice {{ invoice.invoice_number or invoice.id }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/receipt.css') }}?v={{ ASSET_VERSION }}">
+    <style>
+        /* Enhanced receipt styles */
+        .currency-amount {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .currency-img {
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
+        }
+        
+        .zatca-qr {
+            width: 100px;
+            height: 100px;
+            border: 1px solid #ddd;
+            margin: 8px auto;
+        }
+        
+        .business-info {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        
+        .invoice-meta {
+            margin: 1rem 0;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        
+        .items-table th,
+        .items-table td {
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .items-table th {
+            background: #f1f1f1;
+            font-weight: bold;
+        }
+        
+        .totals-section {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 2px solid #333;
+        }
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 0.25rem 0;
+        }
+        
+        .grand-total {
+            font-weight: bold;
+            font-size: 1.2em;
+            border-top: 1px solid #333;
+            padding-top: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .footer-section {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px dashed #999;
+        }
+        
+        .print-actions {
+            text-align: center;
+            margin: 1rem 0;
+            page-break-inside: avoid;
+        }
+        
+        .print-actions button {
+            margin: 0 0.5rem;
+            padding: 0.5rem 1rem;
+            border: 1px solid #007bff;
+            background: #007bff;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .print-actions button:hover {
+            background: #0056b3;
+        }
+        
+        /* Print styles */
+        @media print {
+            .print-actions {
+                display: none;
+            }
+            
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            
+            .receipt {
+                width: 100%;
+                max-width: none;
+                box-shadow: none;
+                border: none;
+            }
+        }
+    </style>
+</head>
+<body onload="window.print()">
+    <div class="receipt">
+        <!-- Header with Logo and Business Info -->
+        <header class="r-header business-info">
+            {% if settings and settings.logo_url %}
+            <img class="logo" src="{{ settings.logo_url }}" alt="logo">
+            {% endif %}
+            <div class="business">
+                <h2>{{ settings.company_name if settings else branch.name }}</h2>
+                {% if settings and settings.tax_number %}
+                <div>VAT: {{ settings.tax_number }}</div>
+                {% endif %}
+                {% if settings and settings.address %}
+                <div>{{ settings.address }}</div>
+                {% endif %}
+                {% if settings and settings.phone %}
+                <div>Tel: {{ settings.phone }}</div>
+                {% endif %}
+                <div>Branch: {{ branch.name }}</div>
+            </div>
+        </header>
+
+        <!-- Invoice Metadata -->
+        <section class="invoice-meta">
+            <div><strong>Invoice:</strong> {{ invoice.invoice_number or ('INV-' + invoice.id|string) }}</div>
+            <div><strong>Date:</strong> {{ invoice.created_at.astimezone().strftime('%Y-%m-%d %H:%M:%S') if invoice.created_at else 'N/A' }}</div>
+            <div><strong>Location:</strong> {{ (settings.china_town_label if (settings and invoice.branch=='china_town') else (settings.place_india_label if settings else None)) or branch.name }}</div>
+            <div><strong>Customer:</strong> {{ invoice.customer_name or invoice.customer_phone or 'Walk-in' }}</div>
+            {% if invoice.table_number %}
+            <div><strong>Table:</strong> {{ invoice.table_number }}</div>
+            {% endif %}
+            {% if invoice.payment_method or (invoice.status and invoice.status|lower == 'paid') %}
+            <div><strong>Payment:</strong> {{ (invoice.payment_method or 'Cash')|title }}</div>
+            {% endif %}
+        </section>
+
+        <!-- Items Table -->
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.product_name }}</td>
+                    <td class="qty">{{ item.quantity }}</td>
+                    <td class="unit">
+                        {% if currency_data_url %}
+                        <span class="currency-amount">
+                            <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
+                            {{ '%.2f'|format(item.price_before_tax or 0) }}
+                        </span>
+                        {% else %}
+                        {{ '%.2f'|format(item.price_before_tax or 0) }} SAR
+                        {% endif %}
+                    </td>
+                    <td class="total">
+                        {% if currency_data_url %}
+                        <span class="currency-amount">
+                            <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
+                            {{ '%.2f'|format(item.total_price or ((item.quantity or 0) * (item.price_before_tax or 0))) }}
+                        </span>
+                        {% else %}
+                        {{ '%.2f'|format(item.total_price or ((item.quantity or 0) * (item.price_before_tax or 0))) }} SAR
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Totals Section -->
+        <div class="totals-section">
+            <div class="total-row">
+                <span>Subtotal:</span>
+                <span>
+                    {% if currency_data_url %}
+                    <span class="currency-amount">
+                        <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
+                        {{ '%.2f'|format(invoice.total_before_tax or 0) }}
+                    </span>
+                    {% else %}
+                    {{ '%.2f'|format(invoice.total_before_tax or 0) }} SAR
+                    {% endif %}
+                </span>
+            </div>
+            
+            {% if invoice.discount_amount and invoice.discount_amount > 0 %}
+            {% set base_total = (invoice.total_before_tax or 0) %}
+            {% set rate = (invoice.discount_amount / base_total * 100) if base_total > 0 else 0 %}
+            {% set cust = (invoice.customer_name or '')|upper %}
+            <div class="total-row">
+                <span>Discount{% if cust in ['KEETA','HUNGER'] %} ({{ '%.2f'|format(rate or 0) }}%){% endif %}:</span>
+                <span>
+                    {% if currency_data_url %}
+                    <span class="currency-amount">
+                        <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
+                        -{{ '%.2f'|format(invoice.discount_amount or 0) }}
+                    </span>
+                    {% else %}
+                    -{{ '%.2f'|format(invoice.discount_amount or 0) }} SAR
+                    {% endif %}
+                </span>
+            </div>
+            {% endif %}
+
+            <div class="total-row">
+                <span>VAT (15%):</span>
+                <span>
+                    {% if currency_data_url %}
+                    <span class="currency-amount">
+                        <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
+                        {{ '%.2f'|format(invoice.tax_amount or 0) }}
+                    </span>
+                    {% else %}
+                    {{ '%.2f'|format(invoice.tax_amount or 0) }} SAR
+                    {% endif %}
+                </span>
+            </div>
+            
+            <div class="total-row grand-total">
+                <span>Total:</span>
+                <span>
+                    {% if currency_data_url %}
+                    <span class="currency-amount">
+                        <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
+                        {{ '%.2f'|format(invoice.total_after_tax_discount or 0) }}
+                    </span>
+                    {% else %}
+                    {{ '%.2f'|format(invoice.total_after_tax_discount or 0) }} SAR
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- ZATCA QR Code -->
+        {% if zatca_b64 %}
+        <div class="footer-section">
+            <div>ZATCA QR Code:</div>
+            <img src="data:image/png;base64,{{ zatca_b64 }}" alt="ZATCA QR Code" class="zatca-qr">
+        </div>
+        {% endif %}
+
+        <!-- Footer Message -->
+        <div class="footer-section">
+            <div style="font-weight: bold; font-size: 1.1em;">THANK YOU FOR VISIT</div>
+            {% if settings and settings.footer_message %}
+            <div style="margin-top: 0.5rem; font-size: 0.9em;">{{ settings.footer_message }}</div>
+            {% endif %}
+        </div>
+
+        <!-- Print Actions (hidden in print) -->
+        <div class="print-actions">
+            <button onclick="window.print()">🖨️ Print Receipt</button>
+            <button onclick="window.close()">❌ Close</button>
+            <button onclick="location.href='/receipt/{{ invoice.id }}/pdf'">📄 Download PDF</button>
+        </div>
+    </div>
+</body>
+</html>

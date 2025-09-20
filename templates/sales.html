@@ -92,6 +92,14 @@ body {
                     {{ form.customer_name(class_='form-control') }}
                 </div>
             </div>
+            <div class="row mb-3" id="special-discount-row" style="display:none">
+                <div class="col-md-3">
+                    <label class="form-label">KEETA/HUNGER Discount %</label>
+                    {{ form.special_discount_pct(class_='form-control', step='0.01', placeholder='Enter % for KEETA/HUNGER') }}
+                    <div class="form-text">Applied to all items when customer is KEETA or HUNGER.</div>
+                </div>
+            </div>
+
 
             <!-- عناصر الفاتورة -->
             <h6 class="mb-3">{{ _('Invoice Items (Ready Meals) / عناصر الفاتورة (الوجبات الجاهزة)') }}</h6>
@@ -262,8 +270,12 @@ body {
             const product = products.find(p => p.id === productId);
             if(product && quantity > 0) {
                 const price = product.price_before_tax * quantity;
-                const tax = price * 0.15; // 15% tax
-                const total = price + tax - discount;
+                // Treat row discount as percentage for preview, and apply BEFORE tax
+                const discountPct = parseFloat(discountInput.value) || 0;
+                const discountVal = price * (discountPct/100);
+                const taxable = price - discountVal;
+                const tax = taxable * 0.15; // 15% tax
+                const total = taxable + tax;
 
                 priceInput.value = price.toFixed(2);
                 taxInput.value = tax.toFixed(2);
@@ -362,6 +374,27 @@ body {
                 const tokenInput = document.createElement('input');
                 tokenInput.type = 'hidden';
                 tokenInput.name = 'csrf_token';
+    // KEETA/HUNGER special discount UI toggle
+    function updateSpecialDiscountVisibility(){
+        const input = document.querySelector('input[name="customer_name"]');
+        const row = document.getElementById('special-discount-row');
+        if(!input || !row) return;
+        const name = (input.value || '').trim().toUpperCase();
+        if(name === 'KEETA' || name === 'HUNGER'){
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+            const disc = row.querySelector('input[name="special_discount_pct"]');
+            if(disc) disc.value = '';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', updateSpecialDiscountVisibility);
+    document.addEventListener('input', function(e){
+        if(e.target && e.target.name === 'customer_name'){
+            updateSpecialDiscountVisibility();
+        }
+    });
+
                 tokenInput.value = csrfToken.value;
                 form.appendChild(tokenInput);
             }

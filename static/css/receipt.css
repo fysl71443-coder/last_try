@@ -1,0 +1,290 @@
+/* Receipt Print Styles - Thermal & A4 Compatible */
+
+/* Base styles */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "DejaVu Sans", "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 0;
+    padding: 0;
+    background: white;
+    color: #000;
+}
+
+/* Receipt container */
+.receipt {
+    width: 80mm;
+    max-width: 80mm;
+    padding: 8px;
+    margin: 0 auto;
+    background: white;
+    border: 1px solid #ddd;
+}
+
+/* Text alignment */
+.center { text-align: center; }
+.left { text-align: left; }
+.right { text-align: right; }
+
+/* Logo */
+.logo {
+    max-height: 60px;
+    max-width: 100%;
+    object-fit: contain;
+    margin-bottom: 8px;
+}
+
+/* Headers */
+h1, h2, h3 {
+    margin: 8px 0;
+    font-weight: bold;
+}
+
+h2 {
+    font-size: 16px;
+    margin-bottom: 4px;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4px 0;
+}
+
+.items td {
+    padding: 3px 0;
+    border-bottom: 1px dotted #999;
+    vertical-align: top;
+}
+
+.items td:first-child {
+    width: 60%;
+}
+
+.items td:nth-child(2) {
+    width: 20%;
+    text-align: center;
+}
+
+.items td:last-child {
+    width: 20%;
+    text-align: right;
+}
+
+.totals td {
+    padding: 4px 0;
+    font-weight: normal;
+}
+
+.totals tr:last-child td {
+    font-weight: bold;
+    font-size: 14px;
+    border-top: 2px solid #000;
+    padding-top: 6px;
+}
+
+/* Text sizes */
+.small {
+    font-size: 10px;
+    color: #666;
+}
+
+.large {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+/* Dividers */
+hr {
+    border: none;
+    border-top: 1px dashed #333;
+    margin: 8px 0;
+}
+
+.solid-line {
+    border-top: 1px solid #000;
+}
+
+.double-line {
+    border-top: 3px double #000;
+}
+
+/* QR Code section */
+.qr-section {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.payment-info {
+    flex: 1;
+    font-size: 11px;
+}
+
+.qr-code {
+    width: 80px;
+    height: 80px;
+    border: 1px solid #ddd;
+}
+
+/* Footer */
+.thank-you {
+    margin-top: 16px;
+    font-weight: bold;
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+.footer-message {
+    margin-top: 8px;
+    font-size: 10px;
+    font-style: italic;
+}
+
+/* Invoice details */
+.invoice-details {
+    margin: 8px 0;
+}
+
+.invoice-details div {
+    margin: 2px 0;
+}
+
+/* Item name wrapping */
+.item-name {
+    word-wrap: break-word;
+    max-width: 100%;
+}
+
+/* Quantity and price formatting */
+.quantity {
+    font-weight: bold;
+}
+
+.price {
+    font-weight: bold;
+    font-family: "Courier New", monospace;
+}
+
+/* Currency symbol */
+.currency {
+    font-size: 10px;
+}
+
+/* Print-specific styles */
+@media print {
+    body {
+        margin: 0;
+        padding: 0;
+        background: white;
+    }
+    
+    .receipt {
+        border: none;
+        box-shadow: none;
+        width: 80mm;
+        max-width: 80mm;
+    }
+    
+    /* Hide elements that shouldn't print */
+    .no-print {
+        display: none !important;
+    }
+    
+    /* Ensure black text on white background */
+    * {
+        color: black !important;
+        background: white !important;
+    }
+    
+    /* Page settings for thermal printer */
+    @page {
+        margin: 0;
+        size: 80mm auto;
+    }
+}
+
+/* Thermal printer specific */
+@media print and (max-width: 80mm) {
+    .receipt {
+        width: 78mm;
+        padding: 4px;
+    }
+    
+    body {
+        font-size: 11px;
+    }
+    
+    .qr-code {
+        width: 60px;
+        height: 60px;
+    }
+}
+
+/* A4 printer fallback */
+@media print and (min-width: 210mm) {
+    .receipt {
+        width: 80mm;
+        margin: 20mm auto;
+        border: 1px solid #000;
+        padding: 10mm;
+    }
+    
+    @page {
+        size: A4;
+        margin: 20mm;
+    }
+}
+
+/* Dark mode support (for preview) */
+@media (prefers-color-scheme: dark) {
+    body {
+        background: #1a1a1a;
+        color: #fff;
+    }
+    
+    .receipt {
+        background: white;
+        color: black;
+        border-color: #666;
+    }
+}
+
+/* Mobile preview */
+@media screen and (max-width: 480px) {
+    .receipt {
+        width: 90%;
+        max-width: 90%;
+        margin: 10px auto;
+    }
+}
+
+/* Accessibility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Animation for preview */
+.receipt {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}

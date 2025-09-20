@@ -1,0 +1,600 @@
+{% extends 'base.html' %}
+{% block title %}Table {{ table_number }} - {{ branch_label }}{% endblock %}
+{% block content %}
+<style>
+  .cat-btn{margin:2px}
+  .item-card{cursor:pointer}
+  .totals{font-size:1.05rem}
+</style>
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div>
+      <h5 class="mb-0">Table Invoice {{ table_number }} - {{ branch_label }}</h5>
+      <small class="text-muted">{{ today }}</small>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="#" onclick="backToTables(); return false;" class="btn btn-outline-secondary">&larr; Back to tables</a>
+      <a href="{{ url_for('settings') }}" target="_blank" class="btn btn-outline-info">Settings</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-body">
+          <div class="mb-2">
+            {% if categories and categories|length > 0 %}
+              {% if categories_pairs %}
+                {% for p in categories_pairs %}
+                  <button class="btn btn-sm btn-outline-primary cat-btn" onclick="showCat({{ p[0] }})">{{ p[1] }}</button>
+                {% endfor %}
+              {% else %}
+                {% for c in categories %}
+                  <button class="btn btn-sm btn-outline-primary cat-btn" onclick="showCat(catMap[{{ c|tojson }}])">{{ c }}</button>
+                {% endfor %}
+              {% endif %}
+            {% else %}
+              <div class="alert alert-warning py-2 px-3 mb-2">
+                No categories or items found. Please add items from the Menu screen.
+                <div class="mt-2 d-flex gap-2">
+                  <a class="btn btn-sm btn-outline-primary" href="{{ safe_url('menu') or '#' }}">Open Menu</a>
+                  <a class="btn btn-sm btn-outline-secondary" href="{{ safe_url('create_sample_menu') or '#' }}">Create Sample Menu</a>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+          <div id="items-grid" class="row g-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Customer</label>
+            <div class="position-relative">
+              <input id="cust-input" class="form-control" placeholder="Search by name or phone...">
+              <div id="cust-suggest" class="list-group position-absolute w-100" style="z-index:1000; display:none; max-height:200px; overflow:auto;"></div>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Phone</label>
+            <input id="cust-phone" class="form-control" placeholder="Customer phone" autocomplete="tel">
+          </div>
+          <div id="special-box" class="border rounded p-2 mb-2" style="display:none;">
+            <div class="d-flex align-items-center justify-content-between">
+              <div>Special discount for <strong id="special-name"></strong></div>
+              <div class="input-group" style="width: 180px;">
+                <input id="special-rate" type="number" class="form-control" min="0" max="100" step="0.01" placeholder="%">
+                <button class="btn btn-outline-primary" onclick="applySpecial()">Apply</button>
+              </div>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Payment</label>
+            <select id="pay-method" class="form-select">
+              <option value="CASH">Cash</option>
+              <option value="CARD">Card</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <div id="cart-list" class="mb-3"></div>
+          <div class="totals">
+            <div class="d-flex justify-content-between"><span>Subtotal:</span><span id="t-sub">0.00</span></div>
+            <div class="d-flex justify-content-between"><span>Discount (<span id="t-disc-pct">0</span>%):</span><span id="t-disc">-0.00</span></div>
+            <div class="d-flex justify-content-between"><span>Tax ({{ '%.0f'|format(vat_rate) }}%):</span><span id="t-tax">0.00</span></div>
+            <hr class="my-2">
+            <div class="d-flex justify-content-between fw-bold"><span>Total:</span><span id="t-grand">0.00</span></div>
+          </div>
+          <div class="mt-3 d-flex gap-2">
+            <button class="btn btn-outline-secondary" onclick="printBeforePayment()">Print before payment</button>
+            <button class="btn btn-success" onclick="payAndPrint()">Pay & Print</button>
+            <button class="btn btn-outline-danger" onclick="cancelInvoice()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts container (top-right) -->
+<div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer" style="z-index: 1080"></div>
+
+<!-- Confirm after print Modal -->
+<div class="modal fade" id="printConfirmModal" tabindex="-1" aria-labelledby="printConfirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="printConfirmModalLabel">تأكيد الطباعة</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        هل تمت الطباعة بنجاح؟
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">لا</button>
+        <button type="button" class="btn btn-success" id="btnConfirmPrintOk">نعم</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+const meals = {{ meals_json|safe }};
+const catMap = {{ cat_map_json|safe }};
+const VAT = {{ '%.4f'|format(vat_rate/100.0) }}; // e.g. 0.15
+const currentDraftId = {{ current_draft.id if current_draft else 'null' }};
+const draftItems = {{ draft_items|safe }};
+
+const currentBranch = '{{ branch_code }}';
+const currentTableId = {{ table_number|int }};
+
+// Build categoryId -> [meal_ids] map from meals
+const catMealsById = {};
+meals.forEach(m => {
+  const cid = (typeof m.cat_id !== 'undefined') ? m.cat_id : (catMap[m.category] || null);
+  if(cid == null) return;
+  if(!catMealsById[cid]) catMealsById[cid] = [];
+  catMealsById[cid].push(m.id);
+});
+
+let items = []; // {meal_id, name, unit, qty}
+let special = {enabled:false, name:null, pct:0};
+let selectedCustomer = null; // {id, name, phone, discount_percent}
+let custSearchTimer = null;
+
+let isCancelling = false;
+
+// Prefill items from existing draft
+try{
+  if(Array.isArray(draftItems) && draftItems.length>0){
+    items = draftItems.map(it=>({meal_id: it.meal_id || it.id, name: it.name || it.product_name, unit: parseFloat(it.price || it.price_before_tax || 0), qty: parseFloat(it.quantity || it.qty || 1)}));
+  }
+}catch(e){}
+
+async function showCat(catId){
+  const grid = document.getElementById('items-grid');
+  if(!grid) return console.error('No #items-grid element found');
+  grid.innerHTML = '<div class="text-muted">Loading...</div>';
+
+  const cid = Number(catId);
+  if(!Number.isFinite(cid)){
+    grid.innerHTML = '<div class="text-muted">Invalid category</div>';
+    return;
+  }
+
+  let arr = [];
+
+  try {
+    // حاول جلب الأصناف من API أولًا
+    const res = await fetch(`/api/menu/${cid}/items`);
+    if(res.ok){
+      arr = await res.json();
+    }
+  } catch(e){
+    console.warn('API fetch failed, falling back to local meals', e);
+  }
+
+  // fallback إلى البيانات المحلية إذا API رجّع صفر أو فشل
+  if(!Array.isArray(arr) || arr.length === 0){
+    arr = meals.filter(m => {
+      // حاول استخدام cat_id أولًا، ثم الاسم من catMap
+      const mid = (typeof m.cat_id !== 'undefined' && m.cat_id !== null)
+                  ? Number(m.cat_id)
+                  : Number((m.category && catMap[m.category]) ? catMap[m.category] : NaN);
+      return mid === cid;
+    }).map(m => ({ id: m.id, meal_id: m.id, name: m.name, price: m.price }));
+  }
+
+  if(!Array.isArray(arr) || arr.length === 0){
+    console.log('No items found for category', cid);
+    grid.innerHTML = '<div class="text-muted">No items in this category</div>';
+    return;
+  }
+
+  // اعرض الأصناف
+  grid.innerHTML = '';
+  arr.forEach(it => {
+    const itemId = it.meal_id || it.id;
+    const col = document.createElement('div');
+    col.className = 'col-6 col-md-4';
+    const card = document.createElement('div');
+    card.className = 'card item-card';
+    card.innerHTML = `
+      <div class="card-body p-2">
+        <div class="fw-bold">${it.name}</div>
+        <div class="text-muted small">${Number(it.price||0).toFixed(2)}</div>
+      </div>
+    `;
+    card.addEventListener('click', () => addItemFromGrid(itemId, it.name, Number(it.price||0)));
+    col.appendChild(card);
+    grid.appendChild(col);
+  });
+
+  console.log('Displayed', arr.length, 'items for category', cid);
+}
+
+// Expose to global scope for inline onclick handlers
+window.showCat = showCat;
+
+function addItemFromGrid(id, name, price){
+  const ex = items.find(x=>x.meal_id===id);
+  if(ex){ ex.qty += 1; }
+  else { items.push({meal_id:id, name:String(name||''), unit:parseFloat(price||0), qty:1}); }
+  renderCart();
+  // Save draft to DB to mark table occupied
+  try{ saveDraft(); }catch(e){}
+}
+
+function addItem(id){
+  const m = meals.find(x=>x.id===id); if(!m) return;
+  const ex = items.find(x=>x.meal_id===id);
+  if(ex){ ex.qty += 1; }
+  else { items.push({meal_id:id, name:m.name, unit:parseFloat(m.price||0), qty:1}); }
+  renderCart();
+  try{ saveDraft(); }catch(e){}
+}
+function delItem(id){
+  const idx = items.findIndex(x=>x.meal_id===id);
+  if(idx>=0){ items.splice(idx,1); renderCart(); try{ saveDraft(); }catch(e){} }
+}
+async function changeQty(id, delta){
+  const it = items.find(x=>x.meal_id===id); if(!it) return;
+  if(delta < 0){
+    const pwd = prompt('Enter supervisor password to decrease quantity');
+    if(pwd===null) return;
+    const ok = await verifyVoidPassword(pwd);
+    if(!ok){ alert('Incorrect password'); return; }
+  }
+  it.qty = Math.max(1, (it.qty||1)+delta);
+  renderCart();
+  try{ saveDraft(); }catch(e){}
+}
+
+function renderCart(){
+  const list = document.getElementById('cart-list');
+  if(items.length===0){ list.innerHTML = '<div class="text-muted">No items</div>'; }
+  else {
+    list.innerHTML = items.map(it=>{
+      const line = it.unit*it.qty;
+      return `<div class=\"d-flex justify-content-between align-items-center border-bottom py-1\">
+        <div><div class=\"fw-bold\">${it.name}</div><div class=\"small text-muted\">${it.qty} x ${it.unit.toFixed(2)}</div></div>
+        <div class=\"d-flex align-items-center gap-1\">
+          <button class=\"btn btn-sm btn-outline-secondary\" onclick=\"changeQty(${it.meal_id},-1)\">-</button>
+          <button class=\"btn btn-sm btn-outline-secondary\" onclick=\"changeQty(${it.meal_id},1)\">+</button>
+          <button class=\"btn btn-sm btn-outline-danger\" onclick=\"confirmDelete(${it.meal_id})\">Delete</button>
+          <div style=\"width:80px; text-align:right;\">${line.toFixed(2)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  recalcTotals();
+}
+
+function recalcTotals(){
+  const subtotal = items.reduce((s,it)=>s + it.unit*it.qty, 0);
+  const discPct = special.enabled ? (parseFloat(special.pct)||0) : 0;
+  const discVal = subtotal * (discPct/100.0);
+  const taxable = Math.max(0, subtotal - discVal);
+  const tax = taxable * VAT;
+  const grand = taxable + tax;
+  document.getElementById('t-sub').textContent = subtotal.toFixed(2);
+  document.getElementById('t-disc').textContent = (-discVal).toFixed(2);
+  document.getElementById('t-disc-pct').textContent = discPct.toFixed(2).replace(/\.00$/,'');
+  document.getElementById('t-tax').textContent = tax.toFixed(2);
+  document.getElementById('t-grand').textContent = grand.toFixed(2);
+}
+
+// Password-protected operations
+async function verifyVoidPassword(pwd){
+  try{
+    const res = await fetch('{{ url_for('api_sales_void_check') }}', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({password: String(pwd||'')})
+    });
+    const j = await res.json();
+    return !!(res.ok && j.ok === true);
+  }catch(e){ return false; }
+}
+
+async function confirmDelete(id){
+  const pwd = prompt('Enter supervisor password to delete item');
+  if(pwd===null) return;
+  const ok = await verifyVoidPassword(pwd);
+  if(!ok){ alert('Incorrect password'); return; }
+  delItem(id);
+}
+
+async function cancelInvoice(){
+  const pwd = prompt('Enter supervisor password to cancel invoice');
+  if(pwd===null) return;
+  const ok = await verifyVoidPassword(pwd);
+  if(!ok){ alert('Incorrect password'); return; }
+  try{
+    // احصل على أحدث draft_id لأن حفظ العناصر قد يُنشئ Draft جديد بمعرّف مختلف
+    let latestId = currentDraftId;
+    try{
+      const resD = await fetch(`/api/draft-order/{{ branch_code }}/{{ table_number }}`);
+      if(resD.ok){
+        const dj = await resD.json();
+        if(dj && dj.draft_id) latestId = dj.draft_id;
+      }
+    }catch(e){}
+
+    if(latestId){
+      const r = await fetch(`/api/draft_orders/${latestId}/cancel`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({supervisor_password: String(pwd)})
+      });
+      let j = null;
+      try{ j = await r.json(); }catch(e){}
+      if(!r.ok || !j || j.success !== true){
+        // مسار احتياطي: علّم الطاولة متاحة عبر حفظ مسوّدة فارغة
+        await fetch(`/api/draft-order/{{ branch_code }}/{{ table_number }}`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ branch_code: '{{ branch_code }}', table_number: {{ table_number|int }}, items: [] })
+        });
+      }
+    } else {
+      // لا يوجد Draft: علّم الطاولة متاحة مباشرةً
+      await fetch(`/api/draft-order/{{ branch_code }}/{{ table_number }}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ branch_code: '{{ branch_code }}', table_number: {{ table_number|int }}, items: [] })
+      });
+    }
+    window.isCancelling = true;
+    window.location.href = '{{ url_for('sales_tables', branch_code=branch_code) }}';
+  }catch(e){ alert('Network error'); }
+}
+
+async function saveDraft(markAvailableIfEmpty=false){
+  try{
+    const payload = {
+      items: items.map(it=>({ id: it.meal_id, name: it.name, price: it.unit, quantity: it.qty }))
+    };
+    const res = await fetch(`/api/draft-order/{{ branch_code }}/{{ table_number }}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    return await res.json();
+  }catch(e){ return {success:false, error:String(e)}; }
+}
+
+async function backToTables(){
+  const r = await saveDraft();
+  if(!r || r.success !== true){ if(r && r.error) console.error(r.error); }
+  window.location.href = '{{ url_for('sales_tables', branch_code=branch_code) }}';
+}
+
+// Customer search + special handling
+function renderCustSuggestions(list){
+  const box = document.getElementById('cust-suggest');
+  if(!box) return;
+  if(!Array.isArray(list) || list.length===0){ box.style.display='none'; box.innerHTML=''; return; }
+  box.innerHTML = list.map(c=>`<a href="#" class="list-group-item list-group-item-action" data-id="${c.id}" data-name="${c.name}" data-phone="${c.phone||''}" data-disc="${c.discount_percent||0}">${c.name} ${c.phone?(' - '+c.phone):''} ${c.discount_percent?('('+c.discount_percent+'% off)'):''}</a>`).join('');
+  box.style.display = 'block';
+  Array.from(box.querySelectorAll('a')).forEach(a=>{
+    a.addEventListener('click', (ev)=>{
+      ev.preventDefault();
+      const c = {
+        id: Number(a.dataset.id),
+        name: a.dataset.name,
+        phone: a.dataset.phone||'',
+        discount_percent: parseFloat(a.dataset.disc||'0')||0
+      };
+      selectCustomer(c);
+    });
+  });
+}
+async function searchCustomers(q){
+  try{
+    const url = `/api/pos/${currentBranch}/customers/search?q=${encodeURIComponent(q)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if(Array.isArray(data)) renderCustSuggestions(data); else renderCustSuggestions([]);
+  }catch(e){ renderCustSuggestions([]); }
+}
+function onCustInput(){
+  const vRaw = (document.getElementById('cust-input').value||'').trim();
+  const v = vRaw.toUpperCase();
+  // Clear previous selected customer if user edits the field
+  selectedCustomer = null;
+  // KEETA/HUNGER special case UI
+  if(v==='KEETA' || v==='HUNGER'){
+    document.getElementById('special-box').style.display='block';
+    document.getElementById('special-name').textContent = v;
+  } else {
+    document.getElementById('special-box').style.display='none';
+  }
+  // Debounced search when typing
+  if(custSearchTimer) clearTimeout(custSearchTimer);
+  if(vRaw.length>=1){
+    custSearchTimer = setTimeout(()=> searchCustomers(vRaw), 200);
+  } else {
+    renderCustSuggestions([]);
+  }
+}
+function selectCustomer(c){
+  selectedCustomer = c;
+  // Apply discount immediately
+  special.enabled = true;
+  special.name = c.name;
+  special.pct = parseFloat(c.discount_percent||0) || 0;
+  // Fill UI fields
+  document.getElementById('cust-input').value = c.name;
+  const phoneEl = document.getElementById('cust-phone'); if(phoneEl) phoneEl.value = c.phone||'';
+  // Hide special box since discount is auto from customer
+  document.getElementById('special-box').style.display='none';
+  renderCustSuggestions([]);
+  recalcTotals();
+}
+
+// ---- UI helpers: Toast + Modal confirm ----
+function showToast(message, type='success', delay=2200){
+  try{
+    const container = document.getElementById('toastContainer');
+    if(!container){ alert(message); return; }
+    const el = document.createElement('div');
+    el.className = `toast align-items-center text-bg-${type} border-0`;
+    el.setAttribute('role','alert'); el.setAttribute('aria-live','assertive'); el.setAttribute('aria-atomic','true');
+    el.innerHTML = `<div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>`;
+    container.appendChild(el);
+    const t = new bootstrap.Toast(el, { delay });
+    t.show();
+    el.addEventListener('hidden.bs.toast', ()=> el.remove());
+  }catch(e){ try{ alert(message); }catch(_){} }
+}
+
+function confirmPrintModal(){
+  return new Promise(resolve => {
+    const modalEl = document.getElementById('printConfirmModal');
+    if(!modalEl){ const ok = confirm('هل تمت الطباعة بنجاح؟'); resolve(!!ok); return; }
+    const okBtn = modalEl.querySelector('#btnConfirmPrintOk');
+    const modal = new bootstrap.Modal(modalEl, { backdrop:'static', keyboard:false });
+    const onOk = ()=>{ cleanup(); resolve(true); };
+    const onHide = ()=>{ cleanup(); resolve(false); };
+    function cleanup(){ okBtn.removeEventListener('click', onOk); modalEl.removeEventListener('hidden.bs.modal', onHide); }
+    okBtn.addEventListener('click', ()=>{ modal.hide(); onOk(); });
+    modalEl.addEventListener('hidden.bs.modal', onHide);
+    modal.show();
+  });
+}
+
+function applySpecial(){
+  const name = (document.getElementById('cust-input').value||'').trim();
+  const up = name.toUpperCase();
+  // Clear selected customer when manual special used
+  selectedCustomer = null;
+  if(up==='KEETA' || up==='HUNGER'){
+    special.enabled = true;
+    special.name = name;
+    special.pct = parseFloat(document.getElementById('special-rate').value||0) || 0;
+  } else {
+    special.enabled = false; special.name=null; special.pct=0;
+  }
+  recalcTotals();
+}
+document.getElementById('cust-input').addEventListener('input', onCustInput);
+document.addEventListener('click', (e)=>{
+  const box = document.getElementById('cust-suggest');
+  if(!box) return;
+  if(!box.contains(e.target) && e.target.id !== 'cust-input'){
+    box.style.display='none';
+  }
+});
+
+async function payAndPrint(){
+  if(items.length===0){ alert('No items'); return; }
+  const payload = {
+    branch_code: '{{ branch_code }}',
+    table_number: {{ table_number|int }},
+    items: items.map(it=>({meal_id: it.meal_id, qty: it.qty})),
+    customer_name: selectedCustomer ? selectedCustomer.name : (special.name || null),
+    customer_phone: selectedCustomer ? (selectedCustomer.phone||null) : ((document.getElementById('cust-phone')?.value||'').trim()||null),
+    discount_pct: special.enabled ? (parseFloat(special.pct)||0) : 0,
+    tax_pct: {{ '%.0f'|format(vat_rate) }},
+    payment_method: document.getElementById('pay-method').value
+  };
+  try{
+    const res = await fetch('{{ url_for('api_sales_checkout') }}', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const j = await res.json();
+    if(!j.ok){ alert(j.error||'Failed'); return; }
+    let printWin = null;
+    if(j.print_url){ printWin = window.open(j.print_url, '_blank'); }
+    // Expose last invoice info for E2E tests
+    window.lastInvoiceId = j.invoice_id;
+    window.lastTotalAmount = j.total_amount;
+    // Prevent auto-draft on leave while payment in progress
+    window.isPaying = true;
+
+    async function finalizeAfterPrint(){
+      // استخدم مودال احترافي لتأكيد نجاح الطباعة
+      const ok = await confirmPrintModal();
+      if(!ok){
+        showToast('تم إلغاء الترحيل: ستبقى الفاتورة مفتوحة.', 'warning');
+        window.isPaying = false; // اسمح بالحفظ التلقائي مجدداً
+        return;
+      }
+      let confirmed = true;
+      try{
+        const meta = document.querySelector("meta[name='csrf-token']");
+        const tok = meta ? meta.getAttribute('content') : '';
+        const conf = await fetch('/api/invoice/confirm-print', {
+          method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':tok},
+          body: JSON.stringify({ invoice_id: j.invoice_id, payment_method: payload.payment_method, total_amount: j.total_amount })
+        });
+        const cj = await conf.json().catch(()=>({ok:false}));
+        if(!conf.ok || !cj || cj.ok!==true){ console.warn('confirm-print failed', cj); confirmed = false; }
+      }catch(e){ console.warn('confirm-print error', e); confirmed = false; }
+      // Force-mark table available as a safety net
+      try{
+        await fetch(`/api/draft-order/{{ branch_code }}/{{ table_number }}`, {
+          method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':tok},
+          body: JSON.stringify({ branch_code: '{{ branch_code }}', table_number: {{ table_number|int }}, items: [] })
+        });
+      }catch(_){ }
+      if(confirmed){
+        showToast('تم الدفع والترحيل بنجاح', 'success');
+      }else{
+        showToast('تم الدفع لكن تأكيد الخادم تعذّر، سيتم التوجيه...', 'warning');
+      }
+      setTimeout(()=>{ window.location.href = '{{ url_for('sales_tables', branch_code=branch_code) }}'; }, 800);
+    }
+
+    // Wait until the user closes the print window/tab, then finalize
+    if (printWin && typeof printWin.closed !== 'undefined'){
+      const iv = setInterval(()=>{
+        try{ if(printWin.closed){ clearInterval(iv); finalizeAfterPrint(); } }catch(_){ }
+      }, 700);
+      // Safety fallback in case the window stays open
+      setTimeout(()=>{ try{clearInterval(iv);}catch(_){ } finalizeAfterPrint(); }, 90000);
+    } else {
+      // Popup blocked or no separate window: use focus/fallback timer
+      let fired = false;
+      const onFocus = ()=>{ if(fired) return; fired=true; window.removeEventListener('focus', onFocus); finalizeAfterPrint(); };
+      window.addEventListener('focus', onFocus);
+      setTimeout(()=>{ if(!fired){ onFocus(); } }, 5000);
+    }
+  }catch(e){ console.error(e); alert('Network error'); }
+}
+
+async function printBeforePayment(){
+  if(items.length===0){ alert('No items'); return; }
+  const payload = {
+    branch_code: '{{ branch_code }}',
+    table_number: {{ table_number|int }},
+    items: items.map(it=>({meal_id: it.meal_id, qty: it.qty})),
+    customer_name: selectedCustomer ? selectedCustomer.name : (special.name || null),
+    customer_phone: selectedCustomer ? (selectedCustomer.phone||null) : ((document.getElementById('cust-phone')?.value||'').trim()||null),
+    discount_pct: special.enabled ? (parseFloat(special.pct)||0) : 0,
+    tax_pct: {{ '%.0f'|format(vat_rate) }},
+    preview: true
+  };
+  try{
+    const res = await fetch('{{ url_for('api_print_copy') }}', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const j = await res.json();
+    if(!j.success){ alert(j.error||'Failed'); return; }
+    if(j.print_url){ window.open(j.print_url, '_blank'); }
+  }catch(e){ console.error(e); alert('Network error'); }
+}
+
+// init: show first category if exists
+(function(){
+  try{ if({{ (categories_pairs|length) if categories_pairs is defined else 0 }} > 0){ showCat({{ categories_pairs[0][0] }}); } else if({{ categories|length }} > 0){ showCat(catMap[{{ categories[0]|tojson }}]); } }catch(e){}
+  // render draft items if any
+  try{ renderCart(); }catch(e){}
+  // auto-save on leave
+  window.addEventListener('beforeunload', (ev)=>{
+    try{
+      if(window.isCancelling || window.isPaying) return;
+      const payload = { items: items.map(it=>({ id: it.meal_id, name: it.name, price: it.unit, quantity: it.qty })) };
+      navigator.sendBeacon && navigator.sendBeacon(`/api/draft-order/{{ branch_code }}/{{ table_number }}`, new Blob([JSON.stringify(payload)], {type:'application/json'}));
+    }catch(e){}
+  });
+})();
+</script>
+{% endblock %}
+

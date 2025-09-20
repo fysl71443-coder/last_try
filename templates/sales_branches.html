@@ -1,151 +1,26 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('dashboard') %}
-
-{% block title %}Sales - Branch Selection{% endblock %}
+{% block title %}Sales / المبيعات{% endblock %}
 {% block content %}
-
-<style>
-body {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-}
-.branch-selection-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 70vh;
-  padding: 2rem;
-}
-.branch-card {
-  background: white;
-  border-radius: 20px;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-  padding: 3rem 2rem;
-  margin: 1rem;
-  text-align: center;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  min-width: 300px;
-  position: relative;
-  overflow: hidden;
-}
-.branch-card:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 25px 50px rgba(0,0,0,0.15);
-}
-.branch-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 5px;
-  border-radius: 20px 20px 0 0;
-}
-.china-town-card::before {
-  background: linear-gradient(90deg, #fd79a8, #fdcb6e);
-}
-.palace-india-card::before {
-  background: linear-gradient(90deg, #74b9ff, #0984e3);
-}
-.branch-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  display: block;
-}
-.branch-title {
-  font-size: 1.8rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
-  color: #2d3436;
-}
-.branch-description {
-  color: #636e72;
-  margin-bottom: 2rem;
-  line-height: 1.6;
-}
-.branch-btn {
-  background: linear-gradient(135deg, #74b9ff, #0984e3);
-  color: white;
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 50px;
-  font-weight: 600;
-  font-size: 1.1rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-decoration: none;
-  display: inline-block;
-}
-.china-town-card .branch-btn {
-  background: linear-gradient(135deg, #fd79a8, #e84393);
-}
-.branch-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-  color: white;
-  text-decoration: none;
-}
-.header-section {
-  text-align: center;
-  color: white;
-  margin-bottom: 2rem;
-  padding-top: 2rem;
-}
-.header-section h1 {
-  font-size: 3rem;
-  font-weight: bold;
-  margin-bottom: 0.5rem;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-}
-.header-section p {
-  font-size: 1.2rem;
-  opacity: 0.9;
-}
-</style>
-
-<div class="container-fluid">
-  <!-- Header Section -->
-  <div class="header-section">
-    <h1>💰 Sales System</h1>
-    <p>Choose your branch to start processing orders</p>
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">🧾 Sales - Select Branch</h3>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">← Dashboard</a>
   </div>
-
-  <!-- Branch Selection -->
-  <div class="branch-selection-container">
-    <div class="row justify-content-center">
-      <!-- China Town Branch -->
-      <div class="col-lg-5 col-md-6">
-        <div class="branch-card china-town-card" onclick="location.href='{{ url_for('table_management', branch_code='1') }}'">
-          <span class="branch-icon">🏮</span>
-          <h3 class="branch-title">China Town</h3>
-          <p class="branch-description">
-            Chinese cuisine point of sale system with table management,
-            draft invoice printing, and secure item management.
-          </p>
-          <a href="{{ url_for('table_management', branch_code='1') }}" class="branch-btn">
-            إدارة طاولات China Town
-          </a>
-        </div>
-      </div>
-
-      <!-- Palace India Branch -->
-      <div class="col-lg-5 col-md-6">
-        <div class="branch-card palace-india-card" onclick="location.href='{{ url_for('table_management', branch_code='2') }}'">
-          <span class="branch-icon">🏛️</span>
-          <h3 class="branch-title">Palace India</h3>
-          <p class="branch-description">
-            Indian cuisine point of sale system with table management,
-            draft invoice printing, and secure item management.
-          </p>
-          <a href="{{ url_for('table_management', branch_code='2') }}" class="branch-btn">
-            إدارة طاولات Palace India
-          </a>
+  <div class="row g-3">
+    {% for b in branches %}
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <div>
+            <div class="h5 mb-1">{{ b.label }}</div>
+            <div class="text-muted">Code: {{ b.code }}</div>
+          </div>
+          <a href="{{ b.url }}" class="btn btn-primary">Open Tables</a>
         </div>
       </div>
     </div>
+    {% endfor %}
   </div>
 </div>
-
 {% endblock %}
 

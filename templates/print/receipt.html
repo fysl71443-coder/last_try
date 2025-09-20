@@ -1,37 +1,46 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>فاتورة مبيعات</title>
+  <title>Sales Receipt</title>
   <style>
-    body{font-family:Arial, sans-serif; font-size:14px;}
-    .wrap{max-width:320px; margin:0 auto;}
+    {% set pw = (settings.receipt_paper_width if settings and settings.receipt_paper_width else '80') %}
+    {% set fs = (settings.receipt_font_size if settings and settings.receipt_font_size else 12) %}
+    {% set logo_h = (settings.receipt_logo_height if settings and settings.receipt_logo_height else 40) %}
+    {% set extra_bottom = (settings.receipt_extra_bottom_mm if settings and (settings.receipt_extra_bottom_mm is not none) else 15) %}
+    body{font-family:Arial, sans-serif; font-size: {{ fs }}px;}
+    .wrap{width: {{ pw }}mm; max-width: {{ pw }}mm; margin:0 auto;}
     .center{text-align:center}
     .muted{color:#666}
     table{width:100%; border-collapse:collapse}
     th,td{padding:6px 0; border-bottom:1px dashed #ddd}
     .total-row td{font-weight:bold}
-    .small{font-size:12px}
+    .small{font-size: {{ (fs|int - 2) if (fs|int > 8) else fs }}px}
+    .logo-img{height: {{ logo_h }}px; margin-bottom:6px; object-fit:contain}
     @media print{
       .no-print{display:none}
-      body{background:#fff}
+      body{background:#fff; font-size: {{ fs }}px}
+      @page{ margin: 0 0 {{ extra_bottom }}mm 0; size: {{ pw }}mm auto }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="center">
-      {% if settings and settings.logo_url %}
-      <img src="{{ settings.logo_url }}" alt="logo" style="height:40px; margin-bottom:6px"/>
-      {% elif logo_url %}
-      <img src="{{ logo_url }}" alt="logo" style="height:40px; margin-bottom:6px"/>
+      {% if settings and settings.receipt_show_logo and settings.logo_url %}
+      <img src="{{ settings.logo_url }}" alt="logo" class="logo-img"/>
+      {% elif (not settings or settings.receipt_show_logo) and logo_url %}
+      <img src="{{ logo_url }}" alt="logo" class="logo-img"/>
       {% endif %}
       <div><strong>{{ settings.company_name if settings else company_name }}</strong></div>
-      {% if settings and settings.tax_number %}
-      <div class="small muted">{{ _('VAT No.') }}: {{ settings.tax_number }}</div>
-      {% elif tax_number %}
-      <div class="small muted">{{ _('VAT No.') }}: {{ tax_number }}</div>
+      {% set show_vat = (not settings) or (settings and settings.receipt_show_tax_number) %}
+      {% if show_vat %}
+        {% if settings and settings.tax_number %}
+        <div class="small muted">{{ _('VAT No.') }}: {{ settings.tax_number }}</div>
+        {% elif tax_number %}
+        <div class="small muted">{{ _('VAT No.') }}: {{ tax_number }}</div>
+        {% endif %}
       {% endif %}
       {% if settings and settings.phone %}
       <div class="small muted">{{ _('Phone') }}: {{ settings.phone }}</div>
@@ -46,13 +55,15 @@
     <hr/>
 
     <div class="small">
-      <div>{{ _('Invoice') }}: {{ inv.invoice_number or inv.id }}</div>
-      <div>{{ _('Date/Time') }}: {{ inv.date }} {{ inv.created_at|saudi_time if inv.created_at else '' }}</div>
-      <div>{{ _('Branch') }}: {{ inv.branch or inv.branch_code or 'Main' }}</div>
-      {% if inv.table_number %}<div>{{ _('Table') }}: {{ inv.table_number }}</div>{% endif %}
-      <div>{{ _('Payment') }}: {{ inv.payment_method or 'Cash' }}</div>
-      <div>{{ _('Customer') }}: {{ inv.customer_name or _('Cash customer') }}</div>
-      {% if inv.customer_phone %}<div>{{ _('Phone') }}: {{ inv.customer_phone }}</div>{% endif %}
+      <div>Invoice No: {{ display_invoice_number or (inv.invoice_number or inv.id) }}</div>
+      <div>Date/Time: {{ date_time }}</div>
+      <div>Branch: {{ branch_name or (inv.branch or inv.branch_code or 'Main') }}</div>
+      {% if inv.table_number %}<div>Table: {{ inv.table_number }}</div>{% endif %}
+      {% if inv and (inv.payment_method or (inv.status in ['paid','PAID']) or paid) %}
+      <div>Payment: {{ (inv.payment_method or 'Cash')|title }}</div>
+      {% endif %}
+      <div>Customer: {{ inv.customer_name or 'Cash customer' }}</div>
+      {% if inv.customer_phone %}<div>Phone: {{ inv.customer_phone }}</div>{% endif %}
     </div>
 
     <table>
@@ -68,19 +79,25 @@
         {% for it in items %}
         <tr>
           <td>{{ it.product_name }}</td>
-          <td class="center">{{ '%.2f'|format(it.quantity) }}</td>
-          <td class="center">{{ '%.2f'|format((it.total_price or 0) / (it.quantity or 1)) }} ر.س</td>
-          <td class="right">{{ '%.2f'|format(it.total_price) }} ر.س</td>
+          <td class="center">{{ '%.2f'|format(it.quantity or 0) }}</td>
+          <td class="center">{{ '%.2f'|format(((it.total_price or 0) / (it.quantity or 1))) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
+          <td class="right">{{ '%.2f'|format(it.total_price or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot>
-        <tr class="total-row"><td colspan="3">{{ _('Subtotal / المجموع الفرعي') }}</td><td class="right">{{ '%.2f'|format(inv.total_before_tax) }} ر.س</td></tr>
-        <tr class="total-row"><td colspan="3">{{ _('VAT 15%% / ضريبة القيمة المضافة') }}</td><td class="right">{{ '%.2f'|format(inv.tax_amount) }} ر.س</td></tr>
+        <tr class="total-row"><td colspan="3">{{ _('Subtotal') }}</td><td class="right">{{ '%.2f'|format(inv.total_before_tax or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td></tr>
+        <tr class="total-row"><td colspan="3">{{ _('VAT 15%%') }}</td><td class="right">{{ '%.2f'|format(inv.tax_amount or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td></tr>
         {% if inv.discount_amount and inv.discount_amount > 0 %}
-        <tr class="total-row" style="color: #d63384;"><td colspan="3">{{ _('Discount / الخصم') }}</td><td class="right">-{{ '%.2f'|format(inv.discount_amount) }} ر.س</td></tr>
+        {% set base_total = (inv.total_before_tax or 0) %}
+        {% set rate = (inv.discount_amount / base_total * 100) if base_total > 0 else 0 %}
+        {% set cust = (inv.customer_name or '')|upper %}
+        <tr class="total-row" style="color: #d63384;">
+          <td colspan="3">{{ _('Discount') }}{% if cust in ['KEETA','HUNGER'] %} ({{ '%.2f'|format(rate or 0) }}%){% endif %}</td>
+          <td class="right">-{{ '%.2f'|format(inv.discount_amount or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
+        </tr>
         {% endif %}
-        <tr class="total-row" style="font-weight: bold; border-top: 2px solid #000;"><td colspan="3">{{ _('Total / الإجمالي') }}</td><td class="right">{{ '%.2f'|format(inv.total_after_tax_discount) }} ر.س</td></tr>
+        <tr class="total-row" style="font-weight: bold; border-top: 2px solid #000;"><td colspan="3">{{ _('Grand Total') }}</td><td class="right">{{ '%.2f'|format(inv.total_after_tax_discount or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td></tr>
       </tfoot>
     </table>
 
@@ -96,13 +113,17 @@
     </div>
 
     <div class="center small muted" style="margin-top:8px">
-      <div><strong>{{ _('THANK YOU FOR VISIT') }}</strong></div>
-      <div>{{ _('Visit us again!') }}</div>
-      <div>{{ _('Have a great day!') }}</div>
+      {% if settings and settings.receipt_footer_text %}
+        <div><strong>{{ settings.receipt_footer_text }}</strong></div>
+      {% elif settings and settings.footer_message %}
+        <div><strong>{{ settings.footer_message }}</strong></div>
+      {% else %}
+        <div><strong>{{ _('THANK YOU FOR VISIT') }}</strong></div>
+      {% endif %}
     </div>
 
     <div class="center no-print" style="margin-top:10px">
-      <button onclick="window.print()">{{ _('Print / طباعة') }}</button>
+      <button onclick="window.print()">Print</button>
     </div>
   </div>
 

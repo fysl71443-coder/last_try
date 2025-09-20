@@ -1,0 +1,118 @@
+<div style="text-align:center; margin-bottom:20px;">
+    <h2>تقرير المبيعات</h2>
+    <h3>CHINA TOWN & PALACE INDIA</h3>
+    <p>الفترة: {{ start_date or '' }} إلى {{ end_date or '' }}</p>
+</div>
+
+<h3>CHINA TOWN</h3>
+<table border="1" cellspacing="0" cellpadding="5" width="100%">
+    <thead>
+        <tr>
+            <th>التاريخ</th>
+            <th>رقم الفاتورة</th>
+            <th>الصنف</th>
+            <th>المبلغ</th>
+            <th>الخصم</th>
+            <th>الضريبة</th>
+            <th>طريقة الدفع</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in china_sales %}
+        <tr>
+            <td>{{ row.date }}</td>
+            <td>{{ row.invoice_no }}</td>
+            <td>{{ row.item }}</td>
+            <td>{{ '%.2f'|format(row.amount or 0) }}</td>
+            <td>{{ '%.2f'|format(row.discount or 0) }}</td>
+            <td>{{ '%.2f'|format(row.tax or 0) }}</td>
+            <td>{{ row.payment_method or '' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<br>
+
+<h3>PALACE INDIA</h3>
+<table border="1" cellspacing="0" cellpadding="5" width="100%">
+    <thead>
+        <tr>
+            <th>التاريخ</th>
+            <th>رقم الفاتورة</th>
+            <th>الصنف</th>
+            <th>المبلغ</th>
+            <th>الخصم</th>
+            <th>الضريبة</th>
+            <th>طريقة الدفع</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in palace_sales %}
+        <tr>
+            <td>{{ row.date }}</td>
+            <td>{{ row.invoice_no }}</td>
+            <td>{{ row.item }}</td>
+            <td>{{ '%.2f'|format(row.amount or 0) }}</td>
+            <td>{{ '%.2f'|format(row.discount or 0) }}</td>
+            <td>{{ '%.2f'|format(row.tax or 0) }}</td>
+            <td>{{ row.payment_method or '' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<br><br>
+
+<h3>إجماليات طرق الدفع</h3>
+<table border="1" cellspacing="0" cellpadding="5" width="60%">
+    <thead>
+        <tr>
+            <th>طريقة الدفع</th>
+            <th>الإجمالي</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in payment_totals %}
+        <tr>
+            <td>{{ row.payment_method or '' }}</td>
+            <td>{{ '%.2f'|format(row.total or 0) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<br>
+
+<h3>إجماليات الأصناف</h3>
+<table border="1" cellspacing="0" cellpadding="5" width="60%">
+    <thead>
+        <tr>
+            <th>الصنف</th>
+            <th>إجمالي المبلغ</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in item_totals %}
+        <tr>
+            <td>{{ row.item or '' }}</td>
+            <td>{{ '%.2f'|format(row.total or 0) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<br>
+
+<h3>الإجماليات العامة</h3>
+<table border="1" cellspacing="0" cellpadding="5" width="60%">
+    <tbody>
+        <tr><td>إجمالي المبالغ</td><td>{{ '%.2f'|format((grand_totals.total_amount if grand_totals else 0) or 0) }}</td></tr>
+        <tr><td>إجمالي الخصومات</td><td>{{ '%.2f'|format((grand_totals.total_discount if grand_totals else 0) or 0) }}</td></tr>
+        <tr><td>إجمالي الضرائب</td><td>{{ '%.2f'|format((grand_totals.total_tax if grand_totals else 0) or 0) }}</td></tr>
+        <tr><td><strong>صافي المبيعات</strong></td><td><strong>{{ '%.2f'|format((grand_totals.net_sales if grand_totals else 0) or 0) }}</strong></td></tr>
+    </tbody>
+</table>
+
+<br>
+<button onclick="window.print()" style="margin:20px 0;" class="btn btn-primary">🖨️ طباعة التقرير</button>

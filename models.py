@@ -366,6 +366,40 @@ class TableSettings(db.Model):
     def __repr__(self):
         return f'<TableSettings {self.branch_code}: {self.table_count} tables ({self.numbering_system})>'
 
+
+class TableSection(db.Model):
+    __tablename__ = 'table_sections'
+    id = db.Column(db.Integer, primary_key=True)
+    branch_code = db.Column(db.String(20), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('branch_code', 'name', name='uq_section_branch_name'),
+    )
+
+    def __repr__(self):
+        return f'<TableSection {self.branch_code}:{self.name}>'
+
+
+class TableSectionAssignment(db.Model):
+    __tablename__ = 'table_section_assignments'
+    id = db.Column(db.Integer, primary_key=True)
+    branch_code = db.Column(db.String(20), nullable=False)
+    table_number = db.Column(db.String(20), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('table_sections.id'), nullable=False)
+
+    section = db.relationship('TableSection', backref='assignments')
+
+    __table_args__ = (
+        db.UniqueConstraint('branch_code', 'table_number', name='uq_branch_table_assignment'),
+    )
+
+    def __repr__(self):
+        return f'<TableSectionAssignment {self.branch_code}:{self.table_number} -> {self.section_id}>'
+
 class DraftOrder(db.Model):
     __tablename__ = 'draft_orders'
     id = db.Column(db.Integer, primary_key=True)
@@ -417,6 +451,11 @@ class Settings(db.Model):
     currency = db.Column(db.String(10), default='SAR')
     default_theme = db.Column(db.String(10), default='light')  # 'light' or 'dark'
 
+    # New: unified print/currency settings
+    printer_type = db.Column(db.String(20), default='thermal')  # thermal / A4
+    currency_image = db.Column(db.String(300), nullable=True)   # PNG image URL/path for currency icon
+    footer_message = db.Column(db.String(300), default='THANK YOU FOR VISIT')
+
     # Branch-specific settings
     # China Town settings
     china_town_void_password = db.Column(db.String(50), default='1991')
@@ -438,6 +477,9 @@ class Settings(db.Model):
     receipt_show_logo = db.Column(db.Boolean, default=True)
     receipt_show_tax_number = db.Column(db.Boolean, default=True)
     receipt_footer_text = db.Column(db.String(300), default='')
+    # Added to align with app usage
+    receipt_logo_height = db.Column(db.Integer, default=40)
+    receipt_extra_bottom_mm = db.Column(db.Integer, default=15)
 
     logo_url = db.Column(db.String(300), default='/static/chinese-logo.svg')  # receipt logo
 

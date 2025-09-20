@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
 {% set back_url = url_for('dashboard') %}
 
-{% block title %}الإعدادات{% endblock %}
+{% block title %}Settings{% endblock %}
 {% block content %}
 <div class="container py-4">
   <!-- Navigation Tabs -->
   <ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
     <li class="nav-item" role="presentation">
       <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab">
-        🏢 الإعدادات العامة
+        🏢 General Settings
       </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -23,7 +23,7 @@
     </li>
     <li class="nav-item" role="presentation">
       <button class="nav-link" id="print-tab" data-bs-toggle="tab" data-bs-target="#print" type="button" role="tab">
-        🖨️ إعدادات الطباعة
+        🖨️ Print Settings
       </button>
     </li>
   </ul>
@@ -36,10 +36,10 @@
       <div class="tab-pane fade show active" id="general" role="tabpanel">
         <div class="row g-3">
           <div class="col-12">
-            <h4>الإعدادات العامة للشركة</h4>
+            <h4>Company General Settings</h4>
           </div>
           <div class="col-md-6">
-            <label class="form-label">اسم الشركة</label>
+            <label class="form-label">Company Name</label>
             <input type="text" name="company_name" class="form-control" value="{{ s.company_name or '' }}">
           </div>
           <div class="col-md-6">
@@ -135,22 +135,22 @@
         <div class="row g-3">
 
           <div class="col-12">
-            <h4>🖨️ إعدادات الإيصال والطباعة</h4>
-            <p class="text-muted">إعدادات طباعة الفواتير والإيصالات</p>
+            <h4>Print & Receipt Settings</h4>
+            <p class="text-muted">Configure receipt and invoice printing</p>
           </div>
           <div class="col-md-3">
-            <label class="form-label">عرض الورق (مم)</label>
+            <label class="form-label">Paper Width (mm)</label>
             <select name="receipt_paper_width" class="form-select">
               <option value="80" {% if s.receipt_paper_width=='80' %}selected{% endif %}>80mm</option>
               <option value="58" {% if s.receipt_paper_width=='58' %}selected{% endif %}>58mm</option>
             </select>
           </div>
           <div class="col-md-3">
-            <label class="form-label">حجم الخط</label>
+            <label class="form-label">Font Size</label>
             <input type="number" name="receipt_font_size" class="form-control" value="{{ s.receipt_font_size or 12 }}">
           </div>
           <div class="col-md-6">
-            <label class="form-label">الشعار (Logo)</label>
+            <label class="form-label">Logo</label>
             <div class="mb-2">
               <input type="file" name="logo_file" class="form-control" accept="image/*" id="logoFile">
               <div class="form-text">{{ _('Upload logo from computer / رفع الشعار من الكمبيوتر') }}</div>
@@ -189,12 +189,41 @@
             <input type="number" step="1" min="20" name="receipt_logo_height" class="form-control" value="{{ s.receipt_logo_height or 40 }}">
           </div>
         </div>
+      <!-- New: Printer type, footer message, currency image -->
+      <div class="row g-3 mt-3">
+        <div class="col-md-4">
+          <label class="form-label">Printer Type</label>
+          <select name="printer_type" class="form-select">
+            <option value="thermal" {% if s.printer_type=='thermal' %}selected{% endif %}>Thermal</option>
+            <option value="A4" {% if s.printer_type=='A4' %}selected{% endif %}>A4</option>
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">Receipt Footer Message</label>
+          <input type="text" name="footer_message" class="form-control" value="{{ s.footer_message or 'THANK YOU FOR VISIT' }}" placeholder="THANK YOU FOR VISIT">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Currency Image (PNG)</label>
+          <input type="file" name="currency_file" accept="image/png" class="form-control">
+          <div class="form-text">Upload a PNG to show next to amounts</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Or Currency Image URL</label>
+          <input type="text" name="currency_image_url" class="form-control" value="{{ s.currency_image or '' }}" placeholder="/static/uploads/sar.png">
+        </div>
+        {% if s and s.currency_image %}
+        <div class="col-12">
+          <label class="form-label small">Preview</label>
+          <div><img src="{{ s.currency_image }}" alt="Currency" width="24" height="24"></div>
+        </div>
+        {% endif %}
+      </div>
       </div>
     </div>
 
     <div class="mt-4 d-flex justify-content-end gap-2">
-      <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">رجوع</a>
-      <button class="btn btn-primary" type="submit">حفظ الإعدادات</button>
+      <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">Back</a>
+      <button class="btn btn-primary" type="submit">Save Settings</button>
     </div>
   </form>
 </div>

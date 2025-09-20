@@ -5,7 +5,11 @@ import json
 # أضف مجلد المشروع إلى sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import app, db
+try:
+    from app import create_app, db, get_saudi_now, generate_branch_invoice_number
+    app = create_app()
+except Exception:
+    from app import app, db, get_saudi_now, generate_branch_invoice_number  # fallback if app factory not used
 from models import User, Meal, SalesInvoice, SalesInvoiceItem, Payment
 
 def get_user(identifier):

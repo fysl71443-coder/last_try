@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ report_title }}</title>
+  <style>
+    body { font-family: "Tahoma", sans-serif; font-size: 13px; margin: 20px; }
+    h2 { margin: 5px 0; }
+    .header { text-align: center; margin-bottom: 20px; }
+    .header div { margin: 3px 0; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid #000; padding: 6px; text-align: center; }
+    th { background: #f0f0f0; }
+    tfoot th { background: #e0e0e0; }
+    .footer { text-align: left; font-size: 12px; margin-top: 15px; }
+    @media print {
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- الترويسة -->
+  <div class="header">
+    <h2>مطعم CHINA TOWN & PALACE INDIA</h2>
+    <div>📅 التاريخ: {{ current_date }}</div>
+    <div>📄 التقرير: {{ report_title }}</div>
+  </div>
+
+  <!-- جدول التقرير -->
+  <table>
+    <thead>
+      <tr>
+        {% for col in columns %}
+        <th>{{ col }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data %}
+      <tr>
+        {% for col in columns %}
+        <td>{{ row.get(col, "") }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="{{ columns|length - totals|length }}">الإجمالي</th>
+        {% for col in columns %}
+          {% if col in totals %}
+            <th>{{ totals[col] }}</th>
+          {% elif col not in ["التاريخ","رقم الفاتورة","الصنف","المصروف","طريقة الدفع"] %}
+            <th></th>
+          {% endif %}
+        {% endfor %}
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- زر الطباعة -->
+  <div class="footer no-print">
+    <button onclick="window.print()">🖨️ طباعة</button>
+  </div>
+</body>
+</html>

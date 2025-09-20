@@ -1,46 +1,84 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('sales') %}
-
-{% block title %}{{ _('Tables / الطاولات') }} — {{ branch_label }}{% endblock %}
+{% block title %}Tables - {{ branch_label }}{% endblock %}
 {% block content %}
-<div class="container py-4">
+<div id="tables-root" class="container py-4" data-branch="{{ branch_code }}">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-      <h3 class="mb-0">{{ _('Tables / الطاولات') }} — {{ branch_label }}</h3>
-      <small class="text-muted">{{ _('Select a table (1–50) / اختر طاولة') }}</small>
+      <h4 class="mb-0">{{ branch_label }} &bull; Tables</h4>
+      <small class="text-muted">Select a table to open the POS</small>
     </div>
     <div>
-      <a class="btn btn-outline-secondary" href="{{ url_for('sales') }}">← {{ _('Back / رجوع') }}</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('sales') }}">&larr; Back to Branches</a>
     </div>
   </div>
 
   <div class="row g-3">
-    {% for table in tables %}
-    <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-      <a class="card text-center text-decoration-none shadow-sm h-100 border-0
-         {% if table.status == 'occupied' %}bg-warning text-dark{% elif table.status == 'reserved' %}bg-info text-white{% else %}bg-light{% endif %}"
-         href="{{ url_for('sales_table_manage', branch_code=branch_code, table_number=table.number) }}">
-        <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 80px;">
-          <div>
-            <div class="fw-bold" style="font-size: 1.25rem;">{{ table.number }}</div>
-            <div style="font-size: .75rem;">
-              {% if table.status == 'occupied' %}
-                🔴 {{ _('Occupied / مشغول') }}
-              {% elif table.status == 'reserved' %}
-                🟡 {{ _('Reserved / محجوز') }}
-                {% if table.draft_count > 0 %}
-                <div class="badge bg-light text-dark mt-1">{{ table.draft_count }} {{ _('orders / طلبات') }}</div>
-                {% endif %}
-              {% else %}
-                🟢 {{ _('Available / متاح') }}
-              {% endif %}
-            </div>
+    {% if grouped_tables %}
+      {% if grouped_tables is mapping %}
+        {% for group, tlist in grouped_tables.items() %}
+        <div class="col-12"><h6 class="text-muted mt-3">{{ group }}</h6></div>
+          {% for t in tlist %}
+          <div class="col-6 col-md-3 col-lg-2">
+            <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=t.number) }}">
+              Table {{ t.number }}
+              <span class="badge ms-2 status-label {% if t.status=='occupied' %}bg-danger{% else %}bg-success{% endif %}">{% if t.status=='occupied' %}Occupied{% else %}Available{% endif %}</span>
+            </a>
           </div>
-        </div>
-      </a>
-    </div>
-    {% endfor %}
+          {% endfor %}
+        {% endfor %}
+      {% else %}
+        {% for sec in grouped_tables %}
+        <div class="col-12"><h6 class="text-muted mt-3">{{ sec.section }}</h6></div>
+          {% if sec.rows %}
+            {% for row in sec.rows %}
+              {% for t in row %}
+              <div class="col-6 col-md-3 col-lg-2">
+                <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=t.number) }}">
+                  Table {{ t.number }}
+                  <span class="badge ms-2 status-label {% if t.status=='occupied' %}bg-danger{% else %}bg-success{% endif %}">{% if t.status=='occupied' %}Occupied{% else %}Available{% endif %}</span>
+                </a>
+              </div>
+              {% endfor %}
+              <div class="w-100 d-none d-lg-block"></div>
+            {% endfor %}
+          {% else %}
+            {% for t in sec.tables %}
+            <div class="col-6 col-md-3 col-lg-2">
+              <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=t.number) }}">
+                Table {{ t.number }}
+                <span class="badge ms-2 status-label {% if t.status=='occupied' %}bg-danger{% else %}bg-success{% endif %}">{% if t.status=='occupied' %}Occupied{% else %}Available{% endif %}</span>
+              </a>
+            </div>
+            {% endfor %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    {% elif tables %}
+      {% for t in tables %}
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=t.number) }}">
+          Table {{ t.number }}
+          <span class="badge ms-2 status-label {% if t.status=='occupied' %}bg-danger{% else %}bg-success{% endif %}">{% if t.status=='occupied' %}Occupied{% else %}Available{% endif %}</span>
+        </a>
+      </div>
+      {% endfor %}
+    {% else %}
+      {% for n in range(1,21) %}
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-outline-primary" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=n) }}">
+          Table {{ n }}
+        </a>
+      </div>
+      {% endfor %}
+
+
+    {% endif %}
   </div>
 </div>
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='js/tables.js') }}?v={{ ASSET_VERSION }}"></script>
+{% endblock %}
+
 {% endblock %}
 

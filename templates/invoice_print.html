@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>فاتورة رقم {{ invoice.id }}</title>
+    <title>Invoice #{{ invoice.id }}</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -225,44 +225,44 @@
             {% if settings and settings.logo_url %}
             <img src="{{ settings.logo_url }}" alt="Logo" style="height: 60px; margin-bottom: 10px;">
             {% endif %}
-            <h1>{{ settings.company_name if settings else (invoice.branch_code|title if invoice.branch_code else 'مطعم') }}</h1>
-            <p>فاتورة مبيعات رقم: {{ invoice.invoice_number or invoice.id }}</p>
+            <h1>{{ settings.company_name if settings else (invoice.branch_code|title if invoice.branch_code else 'Restaurant') }}</h1>
+            <p>Sales Invoice #: {{ invoice.invoice_number or invoice.id }}</p>
             {% if settings and settings.tax_number %}
-            <p style="font-size: 12px; opacity: 0.8;">الرقم الضريبي: {{ settings.tax_number }}</p>
+            <p style="font-size: 12px; opacity: 0.8;">VAT No.: {{ settings.tax_number }}</p>
             {% endif %}
             {% if settings and settings.phone %}
-            <p style="font-size: 12px; opacity: 0.8;">الهاتف: {{ settings.phone }}</p>
+            <p style="font-size: 12px; opacity: 0.8;">Phone: {{ settings.phone }}</p>
             {% endif %}
         </div>
         
         <div class="invoice-info">
             <div>
-                <h3>معلومات الفاتورة</h3>
-                <p><strong>رقم الفاتورة:</strong> {{ invoice.id }}</p>
-                <p><strong>التاريخ:</strong> {{ invoice.date.strftime('%Y-%m-%d') if invoice.date else 'غير محدد' }}</p>
-                <p><strong>الوقت:</strong> {{ invoice.date.strftime('%H:%M') if invoice.date else 'غير محدد' }}</p>
+                <h3>Invoice Info</h3>
+                <p><strong>Invoice #:</strong> {{ invoice.id }}</p>
+                <p><strong>Date:</strong> {{ invoice.date.strftime('%Y-%m-%d') if invoice.date else 'N/A' }}</p>
+                <p><strong>Time:</strong> {{ invoice.date.strftime('%H:%M') if invoice.date else 'N/A' }}</p>
                 <p><strong>الحالة:</strong> 
                     {% if paid %}
-                        <span class="status-badge status-paid">مدفوعة</span>
+                        <span class="status-badge status-paid">PAID</span>
                     {% else %}
-                        <span class="status-badge status-unpaid">غير مدفوعة</span>
+                        <span class="status-badge status-unpaid">UNPAID</span>
                     {% endif %}
                 </p>
             </div>
             
             <div>
-                <h3>معلومات العميل</h3>
+                <h3>Customer Info</h3>
                 {% if invoice.customer_name %}
-                    <p><strong>الاسم:</strong> {{ invoice.customer_name }}</p>
+                    <p><strong>Name:</strong> {{ invoice.customer_name }}</p>
                 {% endif %}
                 {% if invoice.customer_phone %}
-                    <p><strong>الهاتف:</strong> {{ invoice.customer_phone }}</p>
+                    <p><strong>Phone:</strong> {{ invoice.customer_phone }}</p>
                 {% endif %}
                 {% if invoice.table_number %}
-                    <p><strong>رقم الطاولة:</strong> {{ invoice.table_number }}</p>
+                    <p><strong>Table #:</strong> {{ invoice.table_number }}</p>
                 {% endif %}
                 {% if not invoice.customer_name and not invoice.customer_phone and not invoice.table_number %}
-                    <p class="text-muted">لا توجد معلومات عميل</p>
+                    <p class="text-muted">No customer info</p>
                 {% endif %}
             </div>
         </div>
@@ -271,18 +271,18 @@
             <table class="items-table">
                 <thead>
                     <tr>
-                        <th>المجموع</th>
-                        <th>السعر</th>
-                        <th>الكمية</th>
-                        <th>الصنف</th>
+                        <th>Total</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th>Item</th>
                         <th>#</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in items %}
                     <tr>
-                        <td>{{ "%.2f"|format(item.total_price or (item.quantity * (item.unit_price or item.price_before_tax))) }} ر.س</td>
-                        <td>{{ "%.2f"|format(item.unit_price or item.price_before_tax) }} ر.س</td>
+                        <td>{{ "%.2f"|format(item.total_price or (item.quantity * (item.unit_price or item.price_before_tax))) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
+                        <td>{{ "%.2f"|format(item.unit_price or item.price_before_tax) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
                         <td>{{ item.quantity }}</td>
                         <td>{{ item.product_name }}</td>
                         <td>{{ loop.index }}</td>
@@ -299,22 +299,22 @@
         <div class="invoice-totals">
             <table class="totals-table">
                 <tr>
-                    <td class="total-label">المجموع الفرعي:</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.total_before_tax or invoice.subtotal or 0) }} ر.س</td>
+                    <td class="total-label">Subtotal:</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.total_before_tax or invoice.subtotal or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
                 </tr>
                 {% if invoice.discount_amount and invoice.discount_amount > 0 %}
                 <tr>
-                    <td class="total-label">الخصم:</td>
-                    <td class="total-amount">- {{ "%.2f"|format(invoice.discount_amount) }} ر.س</td>
+                    <td class="total-label">Discount:</td>
+                    <td class="total-amount">- {{ "%.2f"|format(invoice.discount_amount) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
                 </tr>
                 {% endif %}
                 <tr>
-                    <td class="total-label">الضريبة (15%):</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.tax_amount or 0) }} ر.س</td>
+                    <td class="total-label">Tax (15%):</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.tax_amount or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
                 </tr>
                 <tr class="grand-total">
-                    <td class="total-label">الإجمالي:</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.total_after_tax_discount or invoice.total_amount or 0) }} ر.س</td>
+                    <td class="total-label">Grand Total:</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.total_after_tax_discount or invoice.total_amount or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
                 </tr>
             </table>
         </div>

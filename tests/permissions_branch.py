@@ -53,7 +53,8 @@ def run():
         r = c.get('/sales')
         assert b'Place India' in r.data and b'China Town' not in r.data, 'place_user should see only Place India card'
         r2 = c.get('/sales/china_town', follow_redirects=True)
-        assert r2.status_code == 200 and (b'لا تملك صلاحية' in r2.data or b'permission' in r2.data), 'place_user should be blocked from china_town'
+        txt = r2.data.decode('utf-8', errors='ignore')
+        assert r2.status_code == 200 and ('لا تملك صلاحية' in txt or 'permission' in txt), 'place_user should be blocked from china_town'
 
         # login as china_user and check access
         c.get('/logout', follow_redirects=True)
@@ -61,7 +62,8 @@ def run():
         r = c.get('/sales')
         assert b'China Town' in r.data and b'Place India' not in r.data, 'china_user should see only China Town card'
         r2 = c.get('/sales/place_india', follow_redirects=True)
-        assert r2.status_code == 200 and (b'لا تملك صلاحية' in r2.data or b'permission' in r2.data), 'china_user should be blocked from place_india'
+        txt2 = r2.data.decode('utf-8', errors='ignore')
+        assert r2.status_code == 200 and ('لا تملك صلاحية' in txt2 or 'permission' in txt2), 'china_user should be blocked from place_india'
 
     print('Branch permissions ok')
 
