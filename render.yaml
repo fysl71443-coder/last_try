@@ -1,25 +1,13 @@
 services:
   - type: web
-    name: restaurant-system
+    name: matam-alqaria-alssini
     env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python start_production.sh
+    region: frankfurt
+    branch: main
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -k gevent app:app"
     envVars:
-      - key: FLASK_ENV
-        value: production
+      - key: DATABASE_URL
+        value: postgresql://china_town_user:itOxqXblGjRAr6IyI3K4b9gEoto6fZ5j@dpg-d2dk9c3e5dus7385023g-a.frankfurt-postgres.render.com/china_town_db
       - key: SECRET_KEY
         generateValue: true
-      - key: BABEL_DEFAULT_LOCALE
-        value: ar
-      - key: USE_EVENTLET
-        value: "0"
-      - key: USE_EVENTLET_FOR_SERVER
-        value: "0"
-      - key: FLASK_APP
-        value: app
-
-databases:
-  - name: restaurant-db
-    databaseName: restaurant_system
-    user: restaurant_user
