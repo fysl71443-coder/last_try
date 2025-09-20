@@ -1,147 +1,21 @@
-from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, current_app
-try:
-    from flask_login import LoginManager, login_required, current_user, login_user, logout_user
-except Exception:
-    class _DummyUser: pass
-    def login_required(f): return f
-    current_user = _DummyUser()
-    def login_user(*args, **kwargs): pass
-    def logout_user(*args, **kwargs): pass
-    LoginManager = lambda app=None: None
-try:
-    from flask_babel import gettext as _, Babel
-except Exception:
-    _ = lambda s, **kwargs: (s.format(**kwargs) if kwargs else s)
-    Babel = None
+from flask import Flask, render_template
 import os
-from models import SalesInvoice, SalesInvoiceItem, PurchaseInvoice, PurchaseInvoiceItem, Payment, RawMaterial, ExpenseInvoice, Salary, ExpenseInvoiceItem, Employee, Account, LedgerEntry
-# Initialize logging early (console + file)
-try:
-    from logging_config import setup_logging
-    logger = setup_logging()
-    logger.info("Logging initialized for app import")
-except Exception as _e:
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
-    logging.getLogger().error("Failed to initialize logging_config: %s", _e)
 
-app = Flask(__name__)
-from flask import jsonify, request
-# Endpoint: /api/reports/sales (ORM-based, no raw 'sales' table)
-@app.route('/api/reports/sales')
-def api_sales_report():
-    """Return sales lines split by branch for the selected period/filters.
-    Response shape matches static/js/reports.js expectations:
-    { china: [{date, invoice, item, amount, tax, payment, discount}],
-      india: [...], payment_summary: [...], item_summary: [...], general_summary: [...] }
-    """
-    try:
-        from datetime import datetime as _dt, date as _date
-        from sqlalchemy import and_, func
-        from models import SalesInvoice, SalesInvoiceItem
+# تحديد مسار القوالب بشكل صريح
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 
-        # Read filters (optional)
-        start_s = request.args.get('start_date') or ''
-        end_s = request.args.get('end_date') or ''
-        branch = (request.args.get('branch') or 'all').lower()
-        pm = (request.args.get('payment_method') or 'all').lower()
+app = Flask(__name__, template_folder=TEMPLATE_DIR)
 
-        # Parse dates, default to min/max
-        try:
-            start_d = _dt.strptime(start_s, '%Y-%m-%d').date() if start_s else _date.min
-        except Exception:
-            start_d = _date.min
-        try:
-            end_d = _dt.strptime(end_s, '%Y-%m-%d').date() if end_s else _date.max
-        except Exception:
-            end_d = _date.max
+# صفحة رئيسية
+@app.route('/')
+def home():
+    return render_template('index.html')
 
-        q = db.session.query(SalesInvoice, SalesInvoiceItem) \
-            .join(SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id)
+if __name__ == '__main__':
+    # تشغيل السيرفر في وضع التطوير
+    app.run(debug=True)
 
-        # Date range
-        q = q.filter(SalesInvoice.date.between(start_d, end_d))
-
-        # Branch filter (normalize values)
-        if branch != 'all':
-            b = 'china_town' if 'china' in branch else ('place_india' if ('india' in branch or 'place' in branch) else branch)
-            q = q.filter(SalesInvoice.branch == b)
-
-        # Payment method filter (case-insensitive)
-        if pm != 'all':
-            q = q.filter(func.lower(SalesInvoice.payment_method) == pm)
-
-        rows = q.order_by(SalesInvoice.date.asc(), SalesInvoice.id.asc(), SalesInvoiceItem.id.asc()).all()
-
-        china, india = [], []
-        pay_map = {}
-        item_map = {}
-        total_amount_sum = 0.0
-        total_tax_sum = 0.0
-        total_disc_sum = 0.0
-
-        for inv, it in rows:
-            try:
-                line = {
-                    'date': inv.date.strftime('%Y-%m-%d') if hasattr(inv, 'date') and inv.date else '',
-                    'invoice': inv.invoice_number,
-                    'item': it.product_name,
-                    'amount': float(it.total_price or ((it.price_before_tax or 0) * (it.quantity or 0) + (it.tax or 0) - (it.discount or 0))),
-                    'tax': float(it.tax or 0),
-                    'payment': inv.payment_method or '',
-                    'discount': float(it.discount or 0),
-                }
-            except Exception:
-                # Fallback in case of decimals
-                amt = float(it.total_price) if hasattr(it, 'total_price') and it.total_price is not None else 0.0
-                tx = float(it.tax) if hasattr(it, 'tax') and it.tax is not None else 0.0
-                disc = float(it.discount) if hasattr(it, 'discount') and it.discount is not None else 0.0
-                line = {
-                    'date': str(inv.date or ''),
-                    'invoice': inv.invoice_number,
-                    'item': getattr(it, 'product_name', ''),
-                    'amount': amt,
-                    'tax': tx,
-                    'payment': inv.payment_method or '',
-                    'discount': disc,
-                }
-
-            # Accumulate summaries
-            total_amount_sum += float(line['amount'] or 0)
-            total_tax_sum += float(line['tax'] or 0)
-            total_disc_sum += float(line['discount'] or 0)
-            key_pm = (line['payment'] or '').lower() or 'unknown'
-            pay_map[key_pm] = pay_map.get(key_pm, 0.0) + float(line['amount'] or 0)
-            item_map[line['item']] = item_map.get(line['item'], 0.0) + float(line['amount'] or 0)
-
-            # Split by branch
-            target = china if (inv.branch == 'china_town') else (india if inv.branch == 'place_india' else None)
-            if target is not None:
-                target.append(line)
-
-        payment_summary = [{'method': k, 'total': float(v)} for k, v in sorted(pay_map.items())]
-        item_summary = [{'item': k, 'total': float(v)} for k, v in sorted(item_map.items())]
-        general_summary = [
-            {'label': 'إجمالي المبالغ', 'value': float(total_amount_sum)},
-            {'label': 'إجمالي الخصومات', 'value': float(total_disc_sum)},
-            {'label': 'إجمالي الضرائب', 'value': float(total_tax_sum)},
-            {'label': 'صافي المبيعات', 'value': float(total_amount_sum - total_disc_sum)}
-        ]
-
-        return jsonify({
-            'china': china,
-            'india': india,
-            'payment_summary': payment_summary,
-            'item_summary': item_summary,
-            'general_summary': general_summary
-        })
-
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return jsonify({'china': [], 'india': [], 'error': str(e)}), 500
 
 # --- Bootstrap minimal Flask app early so decorators and Jinja loader work ---
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, current_app

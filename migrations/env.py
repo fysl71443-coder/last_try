@@ -1,8 +1,8 @@
 import logging
 from logging.config import fileConfig
-import os
 
-from sqlalchemy import create_engine
+from flask import current_app
+
 from alembic import context
 
 # this is the Alembic Config object, which provides
@@ -16,42 +16,28 @@ logger = logging.getLogger('alembic.env')
 
 
 def get_engine():
-    """Get engine directly from DATABASE_URL environment variable"""
-    database_url = os.environ.get('DATABASE_URL')
-    if not database_url:
-        # Fallback to SQLite for local development
-        database_url = 'sqlite:///app.db'
-
-    # Handle postgres:// to postgresql:// conversion (Render compatibility)
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-
-    return create_engine(database_url)
+    try:
+        # this works with Flask-SQLAlchemy<3 and Alchemical
+        return current_app.extensions['migrate'].db.get_engine()
+    except TypeError:
+        # this works with Flask-SQLAlchemy>=3
+        return current_app.extensions['migrate'].db.engine
 
 
 def get_engine_url():
-    """Get database URL for Alembic configuration"""
-    database_url = os.environ.get('DATABASE_URL')
-    if not database_url:
-        database_url = 'sqlite:///app.db'
-
-    # Handle postgres:// to postgresql:// conversion
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-
-    return database_url.replace('%', '%%')
+    try:
+        return get_engine().url.render_as_string(hide_password=False).replace(
+            '%', '%%')
+    except AttributeError:
+        return str(get_engine().url).replace('%', '%%')
 
 
-# Set database URL directly from environment
+# add your model's MetaData object here
+# for 'autogenerate' support
+# from myapp import mymodel
+# target_metadata = mymodel.Base.metadata
 config.set_main_option('sqlalchemy.url', get_engine_url())
-
-# Import models for metadata (without Flask context)
-try:
-    from models import db
-    target_metadata = db.metadata
-except ImportError:
-    # Fallback if models can't be imported
-    target_metadata = None
+target_db = current_app.extensions['migrate'].db
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -60,8 +46,9 @@ except ImportError:
 
 
 def get_metadata():
-    """Get metadata for migrations"""
-    return target_metadata
+    if hasattr(target_db, 'metadatas'):
+        return target_db.metadatas[None]
+    return target_db.metadata
 
 
 def run_migrations_offline():
@@ -110,7 +97,7 @@ def run_migrations_online():
             connection=connection,
             target_metadata=get_metadata(),
             process_revision_directives=process_revision_directives,
-            render_as_batch=True  # For SQLite compatibility
+            **current_app.extensions['migrate'].configure_args
         )
 
         with context.begin_transaction():
