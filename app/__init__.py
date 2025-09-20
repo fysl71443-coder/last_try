@@ -44,9 +44,16 @@ def create_app(config_class=None):
     from flask_wtf.csrf import generate_csrf
     @app.context_processor
     def inject_globals():
+        # simple permission helper: allow everything for now (can be tightened later)
+        from flask_login import current_user
+        def can(module, action='view'):
+            # In future, check current_user.role/permissions here
+            return bool(getattr(current_user, 'is_authenticated', False))
         return {
             'ASSET_VERSION': os.getenv('ASSET_VERSION', ''),
-            'csrf_token': generate_csrf
+            'csrf_token': generate_csrf,
+            'can': can,
+            'settings': None,
         }
 
 
@@ -69,8 +76,10 @@ def create_app(config_class=None):
 
 
 
-    # تسجيل Blueprints إذا كانت موجودة
-    from app.routes import main
+    # تسجيل Blueprints
+    from app.routes import main, vat, financials
     app.register_blueprint(main)
+    app.register_blueprint(vat)
+    app.register_blueprint(financials)
 
     return app
