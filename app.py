@@ -128,11 +128,12 @@ except Exception:
 
 # Ensure key models are importable at module scope to avoid NameError in routes
 try:
-    from models import RawMaterial, ExpenseInvoice, TableSettings
+    from models import RawMaterial, ExpenseInvoice, ExpenseInvoiceItem, TableSettings
 except Exception:
     # Will be imported lazily inside routes if needed
     RawMaterial = globals().get('RawMaterial')
     ExpenseInvoice = globals().get('ExpenseInvoice')
+    ExpenseInvoiceItem = globals().get('ExpenseInvoiceItem')
     TableSettings = globals().get('TableSettings')
 
 
