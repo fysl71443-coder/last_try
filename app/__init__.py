@@ -20,8 +20,16 @@ babel = Babel()
 csrf = CSRFProtect()
 
 def create_app(config_class=None):
-    template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'templates')
-    app = Flask(__name__, template_folder=template_dir)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(base_dir, '..'))
+    template_dir = os.path.join(project_root, 'templates')
+    static_dir = os.path.join(project_root, 'static')
+    app = Flask(
+        __name__,
+        template_folder=template_dir,
+        static_folder=static_dir,
+        static_url_path='/static'
+    )
 
     # إعدادات أساسية
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', os.urandom(24))
@@ -32,6 +40,15 @@ def create_app(config_class=None):
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     # Ensure CSRF secret configured
     app.config.setdefault('WTF_CSRF_SECRET_KEY', app.config['SECRET_KEY'])
+    # Inject common template globals (asset version + CSRF token helper)
+    from flask_wtf.csrf import generate_csrf
+    @app.context_processor
+    def inject_globals():
+        return {
+            'ASSET_VERSION': os.getenv('ASSET_VERSION', ''),
+            'csrf_token': generate_csrf
+        }
+
 
     # ربط الكائنات بالتطبيق
     db.init_app(app)
