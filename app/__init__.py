@@ -35,6 +35,17 @@ def create_app(config_class=None):
     login_manager.init_app(app)
     migrate.init_app(app, db)
     babel.init_app(app)
+    # Flask-Login setup: login view and user loader
+    login_manager.login_view = 'main.login'
+    from app.models import User
+    @login_manager.user_loader
+    def load_user(user_id):
+        try:
+            return db.session.get(User, int(user_id))
+        except Exception:
+            return None
+
+
 
     # تسجيل Blueprints إذا كانت موجودة
     from app.routes import main
