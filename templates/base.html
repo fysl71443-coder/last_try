@@ -89,10 +89,10 @@
 
   </head>
   <body class="{{ (session.get('theme') or (settings.default_theme if settings else 'light')) }}">
-    {% if request.endpoint != 'login' %}
+    {% if request.endpoint != 'main.login' %}
     <nav class="navbar navbar-expand-lg" style="background: var(--bg); border-bottom:1px solid #eee;">
       <div class="container-fluid">
-        <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('dashboard') }}">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.home') }}">
           <img src="/static/logo.svg" alt="logo" style="width:32px;height:32px;"/>
           <span>{{ (settings.company_name if settings and settings.company_name else 'Company') }}</span>
         </a>
@@ -103,21 +103,21 @@
           <a class="btn btn-outline-secondary" href="?lang=en">English</a>
 
           {% if current_user.is_authenticated and (current_user.role|default('') != 'user') %}
-          <form method="post" action="{{ url_for('toggle_theme') }}" class="d-inline">
-            <button class="btn btn-sm btn-outline-dark" type="submit">
+          <form method="post" action="#" class="d-inline">
+            <button class="btn btn-sm btn-outline-dark" type="button">
               <i class="fa fa-moon"></i> {{ 'Dark' if (session.get('theme') or (settings.default_theme if settings else 'light'))=='light' else 'Light' }}
             </button>
           </form>
           {% endif %}
           {% if current_user.is_authenticated %}
-            <a class="btn btn-outline-danger" href="{{ url_for('logout') }}">{{ _('Logout') }}</a>
+            <a class="btn btn-outline-danger" href="{{ url_for('main.logout') }}">{{ _('Logout') }}</a>
           {% endif %}
         </div>
       </div>
     </nav>
     {% endif %}
 
-    {% if request.endpoint != 'login' %}
+    {% if request.endpoint != 'main.login' %}
     <div class="container mt-5">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -132,11 +132,11 @@
       <!-- Generic back button with unsaved-changes protection -->
       {% if not hide_back_button %}
       <div class="mb-3 d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-outline-secondary" id="global-back-button" data-back-url="{{ back_url or url_for('dashboard') }}">⬅️ {{ _('Back') }}</button>
+        <button type="button" class="btn btn-outline-secondary" id="global-back-button" data-back-url="{{ back_url or url_for('main.home') }}">⬅️ {{ _('Back') }}</button>
       </div>
       {% endif %}
 
-      {% if request.endpoint != 'dashboard' %}
+      {% if request.endpoint != 'main.home' %}
       <div class="mb-3"></div>
       {% endif %}
     </div>

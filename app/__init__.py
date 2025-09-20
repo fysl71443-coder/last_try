@@ -5,6 +5,7 @@ from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_babel import Babel
+from flask_wtf.csrf import CSRFProtect
 
 # إنشاء كائنات db و login و bcrypt فقط مرة واحدة
 
@@ -16,6 +17,7 @@ bcrypt = Bcrypt()
 login_manager = LoginManager()
 migrate = Migrate()
 babel = Babel()
+csrf = CSRFProtect()
 
 def create_app(config_class=None):
     template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'templates')
@@ -28,6 +30,8 @@ def create_app(config_class=None):
         'postgresql://china_town_system_user:0LnEU2QR57CaIyBHp2sw9DJBWF25AtrK@dpg-d2dn9895pdvs73aa90j0-a.frankfurt-postgres.render.com/china_town_system'
     )
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # Ensure CSRF secret configured
+    app.config.setdefault('WTF_CSRF_SECRET_KEY', app.config['SECRET_KEY'])
 
     # ربط الكائنات بالتطبيق
     db.init_app(app)
@@ -35,6 +39,7 @@ def create_app(config_class=None):
     login_manager.init_app(app)
     migrate.init_app(app, db)
     babel.init_app(app)
+    csrf.init_app(app)
     # Flask-Login setup: login view and user loader
     login_manager.login_view = 'main.login'
     from app.models import User

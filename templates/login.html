@@ -64,7 +64,7 @@
   {% endwith %}
 
   <form id="login-form" method="POST" novalidate accept-charset="UTF-8">
-    {{ form.hidden_tag() }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-3 input-group">
       <span class="input-group-text bg-transparent border-0 text-white">👤</span>
       <input type="text" name="username" class="form-control" placeholder="{{ _('Username / اسم المستخدم') }}" value="{{ request.form.get('username','') }}" required>
