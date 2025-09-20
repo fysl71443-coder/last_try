@@ -11,7 +11,7 @@ Flask-Babel==3.0.0
 pytz==2022.7
 Flask-SocketIO==5.3.6
 reportlab==4.0.4
-pandas==2.2.2 --only-binary :all:
+pandas==2.3.2 --only-binary :all:
 openpyxl==3.1.5
 gunicorn==21.2.0
 gevent==23.7.0   # تم خفض النسخة لتكون أكثر استقرارًا مع Python 3.11
