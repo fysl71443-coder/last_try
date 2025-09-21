@@ -580,10 +580,159 @@ def customers():
 def suppliers():
     return render_template('suppliers.html')
 
-@main.route('/menu', endpoint='menu')
+@main.route('/menu', methods=['GET'], endpoint='menu')
 @login_required
 def menu():
-    return render_template('menu.html')
+    ensure_tables(); seed_menu_if_empty()
+    cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
+    current = None
+    cat_id = request.args.get('cat_id', type=int)
+    if cat_id:
+        try:
+            current = db.session.get(MenuCategory, int(cat_id))
+        except Exception:
+            current = None
+    if not current and cats:
+        current = cats[0]
+    items = []
+    if current:
+        items = MenuItem.query.filter_by(category_id=current.id).order_by(MenuItem.name).all()
+    # counts per category
+    item_counts = {c.id: MenuItem.query.filter_by(category_id=c.id).count() for c in cats}
+    return render_template('menu.html', sections=cats, current_section=current, items=items, item_counts=item_counts)
+
+
+@main.route('/menu/category/add', methods=['POST'], endpoint='menu_category_add')
+@login_required
+def menu_category_add():
+    ensure_tables()
+    name = (request.form.get('name') or '').strip()
+    sort = request.form.get('display_order', type=int) or 0
+    if not name:
+        flash('Name is required', 'danger')
+        return redirect(url_for('main.menu'))
+    try:
+        c = MenuCategory(name=name, sort_order=sort)
+        db.session.add(c)
+        db.session.commit()
+        return redirect(url_for('main.menu', cat_id=c.id))
+    except Exception as e:
+        db.session.rollback()
+        flash('Error creating category', 'danger')
+        return redirect(url_for('main.menu'))
+
+
+@main.route('/menu/category/<int:cat_id>/delete', methods=['POST'], endpoint='menu_category_delete')
+@login_required
+def menu_category_delete(cat_id):
+    ensure_tables()
+    try:
+        c = db.session.get(MenuCategory, int(cat_id))
+        if c:
+            MenuItem.query.filter_by(category_id=c.id).delete()
+            db.session.delete(c)
+            db.session.commit()
+            flash('Category deleted', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error deleting category', 'danger')
+    return redirect(url_for('main.menu'))
+
+
+@main.route('/menu/item/add', methods=['POST'], endpoint='menu_item_add')
+@login_required
+def menu_item_add():
+    ensure_tables()
+    cat_id = request.form.get('section_id', type=int)
+    name = (request.form.get('name') or '').strip()
+    price = request.form.get('price', type=float) or 0.0
+    if not (cat_id and name):
+        flash('Missing item name or category', 'danger')
+        return redirect(url_for('main.menu'))
+    try:
+        it = MenuItem(name=name, price=float(price or 0.0), category_id=int(cat_id))
+        db.session.add(it)
+        db.session.commit()
+        return redirect(url_for('main.menu', cat_id=cat_id))
+    except Exception:
+        db.session.rollback()
+        flash('Error creating item', 'danger')
+        return redirect(url_for('main.menu', cat_id=cat_id))
+
+
+@main.route('/menu/item/<int:item_id>/update', methods=['POST'], endpoint='menu_item_update')
+@login_required
+def menu_item_update(item_id):
+    ensure_tables()
+    name = (request.form.get('name') or '').strip()
+    price = request.form.get('price', type=float)
+    try:
+        it = db.session.get(MenuItem, int(item_id))
+        if not it:
+            flash('Item not found', 'warning')
+            return redirect(url_for('main.menu'))
+        if name:
+            it.name = name
+        if price is not None:
+            it.price = float(price)
+        db.session.commit()
+        return redirect(url_for('main.menu', cat_id=it.category_id))
+    except Exception:
+        db.session.rollback()
+        flash('Error updating item', 'danger')
+        return redirect(url_for('main.menu'))
+
+
+@main.route('/menu/item/<int:item_id>/delete', methods=['POST'], endpoint='menu_item_delete')
+@login_required
+def menu_item_delete(item_id):
+    ensure_tables()
+    try:
+        it = db.session.get(MenuItem, int(item_id))
+        if it:
+            cat_id = it.category_id
+            db.session.delete(it)
+            db.session.commit()
+            flash('Item deleted', 'info')
+            return redirect(url_for('main.menu', cat_id=cat_id))
+    except Exception:
+        db.session.rollback()
+        flash('Error deleting item', 'danger')
+    return redirect(url_for('main.menu'))
+
+
+# API endpoints for JS delete flows (optional)
+@main.route('/api/items/<int:item_id>/delete', methods=['POST'], endpoint='api_item_delete')
+@login_required
+def api_item_delete(item_id):
+    payload = request.get_json(silent=True) or {}
+    if (payload.get('password') or '') != '1991':
+        return jsonify({'ok': False, 'error': 'invalid_password'}), 403
+    try:
+        it = db.session.get(MenuItem, int(item_id))
+        if not it:
+            return jsonify({'ok': False, 'error': 'not_found'}), 404
+        db.session.delete(it)
+        db.session.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@main.route('/api/items/delete-all', methods=['POST'], endpoint='api_item_delete_all')
+@login_required
+def api_item_delete_all():
+    payload = request.get_json(silent=True) or {}
+    if (payload.get('password') or '') != '1991':
+        return jsonify({'ok': False, 'error': 'invalid_password'}), 403
+    try:
+        deleted = db.session.query(MenuItem).delete()
+        db.session.commit()
+        return jsonify({'ok': True, 'deleted': int(deleted or 0)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
 
 @main.route('/settings', endpoint='settings')
 @login_required

@@ -49,11 +49,24 @@ def create_app(config_class=None):
         def can(module, action='view'):
             # In future, check current_user.role/permissions here
             return bool(getattr(current_user, 'is_authenticated', False))
+        # simple image chooser for categories
+        def section_image_for(name: str):
+            try:
+                n = (name or '').lower()
+                if 'drink' in n or 'juice' in n: return '/static/images/section-drinks.jpg'
+                if 'biryani' in n or 'rice' in n: return '/static/images/section-biryani.jpg'
+                if 'noodle' in n or 'chow' in n: return '/static/images/section-noodles.jpg'
+                if 'chicken' in n: return '/static/images/section-chicken.jpg'
+                if 'dessert' in n or 'sweet' in n: return '/static/images/section-desserts.jpg'
+                return '/static/logo.svg'
+            except Exception:
+                return '/static/logo.svg'
         return {
             'ASSET_VERSION': os.getenv('ASSET_VERSION', ''),
             'csrf_token': generate_csrf,
             'can': can,
             'settings': None,
+            'section_image_for': section_image_for,
         }
 
 
