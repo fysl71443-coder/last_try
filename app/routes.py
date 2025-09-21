@@ -1,6 +1,7 @@
 import json
+import os
 from datetime import datetime, date, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func
 
@@ -388,6 +389,11 @@ def pos_table(branch_code, table_number):
         cat_map[c.name.upper()] = c.id
     cat_map_json = json.dumps(cat_map)
     today = datetime.utcnow().date().isoformat()
+    # Load settings for currency icon, etc.
+    try:
+        s = Settings.query.first()
+    except Exception:
+        s = None
     return render_template('sales_table_invoice.html',
                            branch_code=branch_code,
                            branch_label=branch_label,
@@ -397,7 +403,8 @@ def pos_table(branch_code, table_number):
                            current_draft=current_draft,
                            categories=categories,
                            cat_map_json=cat_map_json,
-                           today=today)
+                           today=today,
+                           settings=s)
 
 
 # ---------- Lightweight APIs used by front-end JS ----------
@@ -501,7 +508,7 @@ def api_draft_create_or_update(branch_code, table_number):
             'customer': payload.get('customer') or {},
             'discount_pct': float((payload.get('discount_pct') or 0) or 0),
             'tax_pct': float((payload.get('tax_pct') or 15) or 15),
-            'payment_method': (payload.get('payment_method') or 'CASH')
+            'payment_method': (payload.get('payment_method') or '')
         })
         return jsonify({'success': True, 'draft_id': draft_id})
     except Exception as e:
@@ -532,13 +539,44 @@ def api_draft_update(draft_id):
             return jsonify({'success': False, 'error': 'invalid_draft_id'}), 400
         payload = request.get_json(force=True) or {}
         rec = kv_get(f'draft:{branch}:{table}', {}) or {}
-        # map items to unified structure
+        # map items to unified structure while preserving name/price
         items = payload.get('items') or []
+        existing = rec.get('items') or []
+        by_id = {}
+        for eit in existing:
+            key = eit.get('meal_id') or eit.get('id')
+            if key is not None:
+                by_id[int(key)] = {
+                    'name': eit.get('name') or '',
+                    'price': float(eit.get('price') or eit.get('unit') or 0.0)
+                }
         norm = []
         for it in items:
+            mid = it.get('meal_id') or it.get('id')
+            qty = it.get('qty') or it.get('quantity') or 1
+            nm = it.get('name')
+            pr = it.get('price') or it.get('unit')
+            if (not nm or pr in [None, '', 0, 0.0]) and mid:
+                try:
+                    cached = by_id.get(int(mid))
+                except Exception:
+                    cached = None
+                if cached:
+                    nm = nm or cached.get('name')
+                    pr = pr or cached.get('price')
+            if (not nm or pr in [None, '', 0, 0.0]) and mid:
+                try:
+                    m = db.session.get(MenuItem, int(mid))
+                    if m:
+                        nm = nm or m.name
+                        pr = pr or float(m.price)
+                except Exception:
+                    pass
             norm.append({
-                'meal_id': it.get('meal_id') or it.get('id'),
-                'qty': it.get('qty') or it.get('quantity') or 1
+                'meal_id': mid,
+                'name': nm or '',
+                'price': float(pr or 0.0),
+                'qty': qty
             })
         rec['items'] = norm
         # update optional fields
@@ -548,7 +586,7 @@ def api_draft_update(draft_id):
                 'phone': (payload.get('customer_phone') or '').strip(),
             }
         if 'payment_method' in payload:
-            rec['payment_method'] = payload.get('payment_method') or 'CASH'
+            rec['payment_method'] = payload.get('payment_method') or ''
         if 'discount_pct' in payload:
             try: rec['discount_pct'] = float(payload.get('discount_pct') or 0)
             except Exception: rec['discount_pct'] = 0.0
@@ -599,7 +637,9 @@ def api_draft_checkout():
     discount_pct = float(payload.get('discount_pct') or 0)
     tax_pct = float(payload.get('tax_pct') or 15)
     total_amount = total_amount * (1 + tax_pct/100.0) * (1 - discount_pct/100.0)
-    payment_method = payload.get('payment_method') or 'CASH'
+    payment_method = (payload.get('payment_method') or '').strip().upper()
+    if payment_method not in ['CASH','CARD']:
+        return jsonify({'success': False, 'error': 'اختر طريقة الدفع (CASH أو CARD)'}), 400
     invoice_number = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
     try:
         inv = SalesInvoice(
@@ -632,7 +672,7 @@ def api_draft_checkout():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
-    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_amount, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number)})
+    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_amount, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': int(table)})
 
 
 @main.route('/api/sales/checkout', methods=['POST'], endpoint='api_sales_checkout')
@@ -663,7 +703,9 @@ def api_sales_checkout():
     discount_pct = float(payload.get('discount_pct') or 0)
     tax_pct = float(payload.get('tax_pct') or 15)
     total_amount = total_amount * (1 + tax_pct/100.0) * (1 - discount_pct/100.0)
-    payment_method = payload.get('payment_method') or 'CASH'
+    payment_method = (payload.get('payment_method') or '').strip().upper()
+    if payment_method not in ['CASH','CARD']:
+        return jsonify({'success': False, 'error': '\u0627\u062e\u062a\u0631 \u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639 (CASH \u0623\u0648 CARD)'}), 400
     invoice_number = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
     try:
         inv = SalesInvoice(
@@ -691,14 +733,22 @@ def api_sales_checkout():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
-    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_amount, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number)})
+    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_amount, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': table})
 
 
 @main.route('/api/invoice/confirm-print', methods=['POST'], endpoint='api_invoice_confirm_print')
 @login_required
 def api_invoice_confirm_print():
-    # In a real system: mark invoice as printed/paid
-    return jsonify({'success': True})
+    # Mark invoice printed/paid and free the table by clearing draft
+    try:
+        payload = request.get_json(force=True) or {}
+        branch = (payload.get('branch_code') or '').strip()
+        table = int(payload.get('table_number') or 0)
+        if branch and table:
+            kv_set(f'draft:{branch}:{table}', {'draft_id': f'{branch}:{table}', 'items': []})
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
 
 
 @main.route('/api/sales/void-check', methods=['POST'], endpoint='api_sales_void_check')
@@ -1063,6 +1113,35 @@ def settings():
                         try: val = float(val)
                         except Exception: pass
                     setattr(s, fld, val)
+            # Map currency_image_url -> currency_image
+            cur_url = (form_data.get('currency_image_url') or '').strip() if hasattr(s, 'currency_image') else ''
+            if cur_url:
+                s.currency_image = cur_url
+            # Handle file uploads (logo, currency PNG)
+            try:
+                upload_dir = os.path.join(current_app.static_folder, 'uploads')
+                os.makedirs(upload_dir, exist_ok=True)
+                # Logo file
+                logo_file = request.files.get('logo_file')
+                if logo_file and getattr(logo_file, 'filename', ''):
+                    ext = os.path.splitext(logo_file.filename)[1].lower()
+                    if ext in ['.png', '.jpg', '.jpeg', '.svg', '.gif']:
+                        fname = f"logo_{int(datetime.utcnow().timestamp())}{ext}"
+                        fpath = os.path.join(upload_dir, fname)
+                        logo_file.save(fpath)
+                        s.logo_url = f"/static/uploads/{fname}"
+                # Currency PNG
+                cur_file = request.files.get('currency_file')
+                if cur_file and getattr(cur_file, 'filename', ''):
+                    ext = os.path.splitext(cur_file.filename)[1].lower()
+                    if ext == '.png':
+                        fname = f"currency_{int(datetime.utcnow().timestamp())}{ext}"
+                        fpath = os.path.join(upload_dir, fname)
+                        cur_file.save(fpath)
+                        if hasattr(s, 'currency_image'):
+                            s.currency_image = f"/static/uploads/{fname}"
+            except Exception:
+                pass
             db.session.commit()
             flash('Settings saved', 'success')
         except Exception as e:

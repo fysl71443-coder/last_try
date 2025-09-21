@@ -130,7 +130,7 @@
             customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' },
             discount_pct: number(qs('#discountPct')?.value || 0),
             tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
-            payment_method: qs('#payMethod')?.value || 'CASH'
+            payment_method: (qs('#payMethod')?.value || '')
           })
         });
         const data = await resp.json().catch(()=>({}));
@@ -143,7 +143,7 @@
             items: items.map(x=>({ meal_id:x.meal_id, qty:x.qty })),
             customer_name: qs('#custName')?.value || '',
             customer_phone: qs('#custPhone')?.value || '',
-            payment_method: qs('#payMethod')?.value || 'CASH',
+            payment_method: (qs('#payMethod')?.value || ''),
             discount_pct: number(qs('#discountPct')?.value || 0),
             tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
             supervisor_password: opts && opts.supervisor_password ? opts.supervisor_password : undefined
@@ -155,13 +155,15 @@
 
   async function payAndPrint(){
     if(items.length === 0){ await window.showAlert('Add at least one item'); return; }
+    const pm = (qs('#payMethod')?.value || '').toUpperCase();
+    if(!(pm==='CASH' || pm==='CARD')){ await window.showAlert('يرجى اختيار طريقة الدفع (CASH أو CARD)'); return; }
     const payload = CURRENT_DRAFT_ID ? {
       draft_id: CURRENT_DRAFT_ID,
       customer_name: qs('#custName')?.value || '',
       customer_phone: qs('#custPhone')?.value || '',
       discount_pct: number(qs('#discountPct')?.value || 0),
       tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
-      payment_method: qs('#payMethod')?.value || 'CASH'
+      payment_method: pm
     } : {
       branch_code: BRANCH,
       table_number: Number(TABLE_NO),
@@ -170,7 +172,7 @@
       customer_phone: qs('#custPhone')?.value || '',
       discount_pct: number(qs('#discountPct')?.value || 0),
       tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
-      payment_method: qs('#payMethod')?.value || 'CASH'
+      payment_method: pm
     };
     const endpoint = CURRENT_DRAFT_ID ? '/api/draft/checkout' : '/api/sales/checkout';
 
@@ -192,7 +194,7 @@
         const h = {'Content-Type':'application/json'}; if(token) h['X-CSRFToken']=token;
         const res = await fetch('/api/invoice/confirm-print', {
           method:'POST', headers:h, credentials:'same-origin',
-          body: JSON.stringify({ invoice_id: data.invoice_id, payment_method: data.payment_method, total_amount: data.total_amount })
+          body: JSON.stringify({ invoice_id: data.invoice_id, payment_method: data.payment_method, total_amount: data.total_amount, branch_code: BRANCH, table_number: Number(TABLE_NO) })
         });
         if(res.ok){ items = []; renderItems(); window.location.href = tablesUrl; }
       }catch(e){ console.error('finalize failed', e); }
