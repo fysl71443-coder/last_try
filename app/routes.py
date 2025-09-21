@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db
-from app.models import User, AppKV
+from app.models import User, AppKV, MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem
 
 main = Blueprint('main', __name__)
 
@@ -31,6 +31,55 @@ def kv_set(key, value):
         rec = AppKV(k=key, v=data)
         db.session.add(rec)
     db.session.commit()
+
+
+# Ensure tables exist (safe for first runs) and seed a demo menu if empty
+_DEF_MENU = {
+    'Starters': [
+        ('Spring Rolls', 8.0), ('Samosa', 6.5)
+    ],
+    'Main Courses': [
+        ('Butter Chicken', 18.0), ('Chicken Chow Mein', 16.0)
+    ],
+    'Biryani': [
+        ('Chicken Biryani', 15.0), ('Veg Biryani', 13.0)
+    ],
+    'Noodles': [
+        ('Hakka Noodles', 12.0), ('Singapore Noodles', 13.5)
+    ],
+    'Drinks': [
+        ('Lassi', 5.0), ('Iced Tea', 4.0)
+    ],
+    'Desserts': [
+        ('Gulab Jamun', 6.0), ('Ice Cream', 4.5)
+    ],
+}
+
+def ensure_tables():
+    try:
+        db.create_all()
+    except Exception:
+        pass
+
+
+def seed_menu_if_empty():
+    try:
+        if MenuCategory.query.count() > 0:
+            return
+        # create categories in a deterministic order
+        order = 0
+        for cat_name, items in _DEF_MENU.items():
+            order += 10
+            cat = MenuCategory(name=cat_name, sort_order=order)
+            db.session.add(cat)
+            db.session.flush()
+            for nm, pr in items:
+                db.session.add(MenuItem(name=nm, price=float(pr), category_id=cat.id))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        # ignore seed errors in production path
+        pass
 
 @main.route('/')
 @login_required
@@ -191,8 +240,16 @@ def pos_table(branch_code, table_number):
     draft = kv_get(f'draft:{branch_code}:{table_number}', {}) or {}
     draft_items = json.dumps(draft.get('items') or [])
     current_draft = type('Obj', (), {'id': draft.get('draft_id')}) if draft.get('draft_id') else None
-    categories = ['Starters', 'Main Courses', 'Biryani', 'Noodles', 'Drinks', 'Desserts']
-    cat_map_json = json.dumps({})
+    # Ensure DB tables exist and seed demo menu on first run
+    ensure_tables(); seed_menu_if_empty()
+    # Load categories from DB for UI and provide a name->id map
+    cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
+    categories = [c.name for c in cats]
+    cat_map = {}
+    for c in cats:
+        cat_map[c.name] = c.id
+        cat_map[c.name.upper()] = c.id
+    cat_map_json = json.dumps(cat_map)
     today = datetime.utcnow().date().isoformat()
     return render_template('sales_table_invoice.html',
                            branch_code=branch_code,
@@ -270,38 +327,29 @@ def api_tables_status(branch_code):
 @main.route('/api/menu/<cat_id>/items', methods=['GET'], endpoint='api_menu_items')
 @login_required
 def api_menu_items(cat_id):
-    # Load items from KV if available, otherwise return a small demo set
+    # Prefer DB; fallback to KV/demo
+    ensure_tables(); seed_menu_if_empty()
+    cat = None
+    try:
+        cid = int(cat_id)
+        cat = MenuCategory.query.get(cid)
+    except Exception:
+        pass
+    if not cat:
+        try:
+            cat = MenuCategory.query.filter(db.func.lower(MenuCategory.name) == (cat_id or '').lower()).first()
+        except Exception:
+            cat = None
+    if cat:
+        items = MenuItem.query.filter_by(category_id=cat.id).order_by(MenuItem.name).all()
+        return jsonify([{'id': m.id, 'name': m.name, 'price': float(m.price)} for m in items])
+    # KV fallback
     data = kv_get(f'menu:items:{cat_id}', None)
     if isinstance(data, list):
         return jsonify(data)
-    # Demo items per category (safe defaults)
-    demo = {
-        'Starters': [
-            {'id': 101, 'name': 'Spring Rolls', 'price': 8.0},
-            {'id': 102, 'name': 'Samosa', 'price': 6.5},
-        ],
-        'Main Courses': [
-            {'id': 201, 'name': 'Butter Chicken', 'price': 18.0},
-            {'id': 202, 'name': 'Chicken Chow Mein', 'price': 16.0},
-        ],
-        'Biryani': [
-            {'id': 301, 'name': 'Chicken Biryani', 'price': 15.0},
-            {'id': 302, 'name': 'Veg Biryani', 'price': 13.0},
-        ],
-        'Noodles': [
-            {'id': 401, 'name': 'Hakka Noodles', 'price': 12.0},
-            {'id': 402, 'name': 'Singapore Noodles', 'price': 13.5},
-        ],
-        'Drinks': [
-            {'id': 501, 'name': 'Lassi', 'price': 5.0},
-            {'id': 502, 'name': 'Iced Tea', 'price': 4.0},
-        ],
-        'Desserts': [
-            {'id': 601, 'name': 'Gulab Jamun', 'price': 6.0},
-            {'id': 602, 'name': 'Ice Cream', 'price': 4.5},
-        ],
-    }
-    return jsonify(demo.get(cat_id) or [])
+    # Demo fallback
+    demo_items = [{'id': None, 'name': nm, 'price': float(pr)} for (nm, pr) in _DEF_MENU.get(cat_id, [])]
+    return jsonify(demo_items)
 
 @main.route('/api/draft-order/<branch_code>/<int:table_number>', methods=['POST'], endpoint='api_draft_create_or_update')
 @login_required
@@ -384,35 +432,113 @@ def api_draft_checkout():
     branch, table = _parse_draft_id(draft_id)
     if not branch:
         return jsonify({'error': 'invalid_draft_id'}), 400
+    ensure_tables()
     draft = kv_get(f'draft:{branch}:{table}', {}) or {}
     items = draft.get('items') or []
     total_amount = 0.0
     for it in items:
-        qty = float(it.get('qty') or 1)
-        price = float(it.get('price') or it.get('unit') or 10.0)
-        total_amount += qty * price
+        qty = float(it.get('qty') or it.get('quantity') or 1)
+        price = float(it.get('price') or it.get('unit') or 0.0)
+        if price <= 0 and it.get('meal_id'):
+            m = MenuItem.query.get(int(it.get('meal_id')))
+            if m: price = float(m.price)
+        total_amount += qty * (price or 0.0)
     discount_pct = float(payload.get('discount_pct') or 0)
     tax_pct = float(payload.get('tax_pct') or 15)
     total_amount = total_amount * (1 + tax_pct/100.0) * (1 - discount_pct/100.0)
-    invoice_id = f"INV-{int(datetime.utcnow().timestamp())}"
-    return jsonify({'invoice_id': invoice_id, 'payment_method': payload.get('payment_method') or 'CASH', 'total_amount': round(total_amount, 2), 'print_url': ''})
+    payment_method = payload.get('payment_method') or 'CASH'
+    invoice_number = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
+    try:
+        inv = SalesInvoice(
+            invoice_number=invoice_number,
+            branch_code=branch,
+            table_number=int(table),
+            customer_name=(payload.get('customer_name') or '').strip(),
+            customer_phone=(payload.get('customer_phone') or '').strip(),
+            payment_method=payment_method,
+            discount_pct=discount_pct,
+            tax_pct=tax_pct,
+            total_amount=round(total_amount, 2),
+        )
+        db.session.add(inv)
+        db.session.flush()
+        for it in items:
+            qty = float(it.get('qty') or it.get('quantity') or 1)
+            price = float(it.get('price') or it.get('unit') or 0.0)
+            if price <= 0 and it.get('meal_id'):
+                m = MenuItem.query.get(int(it.get('meal_id')))
+                if m: price = float(m.price)
+            db.session.add(SalesInvoiceItem(
+                invoice_id=inv.id,
+                meal_id=(it.get('meal_id') or it.get('id')),
+                name=(it.get('name') or ''),
+                unit_price=price or 0.0,
+                qty=qty,
+            ))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_amount, 2), 'print_url': ''})
 
 
 @main.route('/api/sales/checkout', methods=['POST'], endpoint='api_sales_checkout')
 @login_required
 def api_sales_checkout():
     payload = request.get_json(force=True) or {}
+    ensure_tables()
+    branch = (payload.get('branch_code') or '').strip() or 'unknown'
+    table = int(payload.get('table_number') or 0)
     items = payload.get('items') or []
+    # get prices from DB when missing
     total_amount = 0.0
+    resolved = []
     for it in items:
         qty = float(it.get('qty') or 1)
-        price = float(it.get('price') or 10.0)
-        total_amount += qty * price
+        price = float(it.get('price') or 0.0)
+        if price <= 0 and it.get('meal_id'):
+            m = MenuItem.query.get(int(it.get('meal_id')))
+            if m:
+                price = float(m.price)
+                name = m.name
+            else:
+                name = it.get('name') or ''
+        else:
+            name = it.get('name') or ''
+        total_amount += qty * (price or 0.0)
+        resolved.append({'meal_id': it.get('meal_id'), 'name': name, 'price': price or 0.0, 'qty': qty})
     discount_pct = float(payload.get('discount_pct') or 0)
     tax_pct = float(payload.get('tax_pct') or 15)
     total_amount = total_amount * (1 + tax_pct/100.0) * (1 - discount_pct/100.0)
-    invoice_id = f"INV-{int(datetime.utcnow().timestamp())}"
-    return jsonify({'invoice_id': invoice_id, 'payment_method': payload.get('payment_method') or 'CASH', 'total_amount': round(total_amount, 2), 'print_url': ''})
+    payment_method = payload.get('payment_method') or 'CASH'
+    invoice_number = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
+    try:
+        inv = SalesInvoice(
+            invoice_number=invoice_number,
+            branch_code=branch,
+            table_number=table,
+            customer_name=(payload.get('customer_name') or '').strip(),
+            customer_phone=(payload.get('customer_phone') or '').strip(),
+            payment_method=payment_method,
+            discount_pct=discount_pct,
+            tax_pct=tax_pct,
+            total_amount=round(total_amount, 2),
+        )
+        db.session.add(inv)
+        db.session.flush()
+        for it in resolved:
+            db.session.add(SalesInvoiceItem(
+                invoice_id=inv.id,
+                meal_id=it.get('meal_id'),
+                name=it.get('name'),
+                unit_price=float(it.get('price') or 0.0),
+                qty=float(it.get('qty') or 1),
+            ))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_amount, 2), 'print_url': ''})
 
 
 @main.route('/api/invoice/confirm-print', methods=['POST'], endpoint='api_invoice_confirm_print')
