@@ -4,6 +4,8 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+
 
 from app import db, csrf
 try:
@@ -1256,15 +1258,21 @@ def customer_toggle(cid):
 @main.route('/customers/<int:cid>/delete', methods=['POST'], endpoint='customer_delete')
 @login_required
 def customer_delete(cid):
-    # Soft delete: mark inactive to avoid FK issues
+    # Try hard delete; if constrained, fall back to soft deactivate
     try:
         c = db.session.get(Customer, cid)
         if not c:
             flash('Customer not found', 'warning')
         else:
-            c.active = False
-            db.session.commit()
-            flash('Customer deleted (soft)', 'success')
+            try:
+                db.session.delete(c)
+                db.session.commit()
+                flash('Customer deleted', 'success')
+            except IntegrityError:
+                db.session.rollback()
+                c.active = False
+                db.session.commit()
+                flash('Customer has related records; deactivated instead', 'warning')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting customer: {e}', 'danger')
@@ -1335,18 +1343,31 @@ def supplier_toggle(sid):
 @main.route('/suppliers/<int:sid>/delete', methods=['POST'], endpoint='supplier_delete')
 @login_required
 def supplier_delete(sid):
-    # Soft delete: mark inactive to avoid FK issues
+    # Try hard delete; if constrained, fall back to soft deactivate
     try:
         s = Supplier.query.get(sid)
         if not s:
             flash('Supplier not found', 'warning')
         else:
-            s.active = False
-            if ext_db is not None:
-                ext_db.session.commit()
-            else:
-                db.session.commit()
-            flash('Supplier deleted (soft)', 'success')
+            try:
+                if ext_db is not None:
+                    ext_db.session.delete(s)
+                    ext_db.session.commit()
+                else:
+                    db.session.delete(s)
+                    db.session.commit()
+                flash('Supplier deleted', 'success')
+            except IntegrityError:
+                # Rollback then soft deactivate
+                if ext_db is not None:
+                    ext_db.session.rollback()
+                    s.active = False
+                    ext_db.session.commit()
+                else:
+                    db.session.rollback()
+                    s.active = False
+                    db.session.commit()
+                flash('Supplier has related records; deactivated instead', 'warning')
     except Exception as e:
         if ext_db is not None:
             ext_db.session.rollback()
@@ -1543,6 +1564,7 @@ def api_users_create():
         data = request.get_json(silent=True) or {}
         username = (data.get('username') or '').strip()
         password = (data.get('password') or '').strip()
+        active = bool(data.get('active', True))
         if not username or not password:
             return jsonify({'ok': False, 'error': 'username_password_required'}), 400
         # uniqueness
@@ -1551,8 +1573,13 @@ def api_users_create():
         u = User(username=username)
         u.set_password(password)
         db.session.add(u)
+        db.session.flush()  # to get u.id before commit
+        try:
+            kv_set(f"user_active:{u.id}", {'active': bool(active)})
+        except Exception:
+            pass
         db.session.commit()
-        return jsonify({'ok': True, 'id': u.id})
+        return jsonify({'ok': True, 'id': u.id, 'active': bool(active)})
     except Exception as e:
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 400
@@ -1569,7 +1596,12 @@ def api_users_update(uid):
         pw = (data.get('password') or '').strip()
         if pw:
             u.set_password(pw)
-        # Email/role/active not present on model; ignore gracefully
+        # Active status persisted in AppKV to avoid schema change
+        if 'active' in data:
+            try:
+                kv_set(f"user_active:{u.id}", {'active': bool(data.get('active'))})
+            except Exception:
+                pass
         db.session.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -1663,10 +1695,9 @@ def api_users_permissions_set(uid):
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @main.route('/settings', methods=['GET', 'POST'], endpoint='settings')
-
 @login_required
 def settings():
-    # Pass Settings instance to template to avoid 's' undefined
+    # Load first (and only) settings row
     s = None
     try:
         s = Settings.query.first()
@@ -1678,26 +1709,69 @@ def settings():
                 s = Settings()
                 (ext_db.session.add(s) if ext_db is not None else db.session.add(s))
 
-            # Safely set only attributes that exist on Settings model
             form_data = request.form if request.form else (request.get_json(silent=True) or {})
-            for fld in [
-                'company_name','tax_number','phone','address','vat_rate',
-                'receipt_show_logo','receipt_paper_width','receipt_font_size','receipt_logo_height','receipt_extra_bottom_mm',
-                'logo_url','currency','currency_image','footer_message','receipt_footer_text'
-            ]:
+
+            # Helpers for coercion
+            def as_bool(val):
+                return True if str(val).lower() in ['1','true','yes','on'] else False
+            def as_int(val, default=None):
+                try:
+                    return int(str(val).strip())
+                except Exception:
+                    return default
+            def as_float(val, default=None):
+                try:
+                    return float(str(val).strip())
+                except Exception:
+                    return default
+
+            # Strings
+            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text']:
                 if hasattr(s, fld) and fld in form_data:
-                    val = form_data.get(fld)
-                    # Coerce booleans/numerics if needed
-                    if fld in ['receipt_show_logo']:
-                        val = True if str(val).lower() in ['1','true','yes','on'] else False
-                    elif fld in ['vat_rate','receipt_paper_width','receipt_font_size','receipt_logo_height','receipt_extra_bottom_mm']:
-                        try: val = float(val)
-                        except Exception: pass
-                    setattr(s, fld, val)
+                    setattr(s, fld, (form_data.get(fld) or '').strip())
+
+            # Booleans (explicitly set False when absent)
+            if hasattr(s, 'receipt_show_logo'):
+                s.receipt_show_logo = as_bool(form_data.get('receipt_show_logo'))
+            if hasattr(s, 'receipt_show_tax_number'):
+                s.receipt_show_tax_number = as_bool(form_data.get('receipt_show_tax_number'))
+
+            # Integers
+            if hasattr(s, 'receipt_font_size'):
+                s.receipt_font_size = as_int(form_data.get('receipt_font_size'), s.receipt_font_size or 12)
+            if hasattr(s, 'receipt_logo_height'):
+                s.receipt_logo_height = as_int(form_data.get('receipt_logo_height'), s.receipt_logo_height or 40)
+            if hasattr(s, 'receipt_extra_bottom_mm'):
+                s.receipt_extra_bottom_mm = as_int(form_data.get('receipt_extra_bottom_mm'), s.receipt_extra_bottom_mm or 15)
+
+            # Keep as string for width ('80' or '58')
+            if hasattr(s, 'receipt_paper_width') and 'receipt_paper_width' in form_data:
+                s.receipt_paper_width = (form_data.get('receipt_paper_width') or '80').strip()
+
+            # Floats / numerics
+            if hasattr(s, 'vat_rate') and 'vat_rate' in form_data:
+                s.vat_rate = as_float(form_data.get('vat_rate'), s.vat_rate or 15.0)
+            # Branch-specific
+            if hasattr(s, 'china_town_vat_rate') and 'china_town_vat_rate' in form_data:
+                s.china_town_vat_rate = as_float(form_data.get('china_town_vat_rate'), s.china_town_vat_rate or 15.0)
+            if hasattr(s, 'china_town_discount_rate') and 'china_town_discount_rate' in form_data:
+                s.china_town_discount_rate = as_float(form_data.get('china_town_discount_rate'), s.china_town_discount_rate or 0.0)
+            if hasattr(s, 'place_india_vat_rate') and 'place_india_vat_rate' in form_data:
+                s.place_india_vat_rate = as_float(form_data.get('place_india_vat_rate'), s.place_india_vat_rate or 15.0)
+            if hasattr(s, 'place_india_discount_rate') and 'place_india_discount_rate' in form_data:
+                s.place_india_discount_rate = as_float(form_data.get('place_india_discount_rate'), s.place_india_discount_rate or 0.0)
+            # Passwords (strings)
+            if hasattr(s, 'china_town_void_password') and 'china_town_void_password' in form_data:
+                s.china_town_void_password = (form_data.get('china_town_void_password') or '').strip()
+            if hasattr(s, 'place_india_void_password') and 'place_india_void_password' in form_data:
+                s.place_india_void_password = (form_data.get('place_india_void_password') or '').strip()
+
             # Map currency_image_url -> currency_image
-            cur_url = (form_data.get('currency_image_url') or '').strip() if hasattr(s, 'currency_image') else ''
-            if cur_url:
-                s.currency_image = cur_url
+            if hasattr(s, 'currency_image'):
+                cur_url = (form_data.get('currency_image_url') or '').strip()
+                if cur_url:
+                    s.currency_image = cur_url
+
             # Handle file uploads (logo, currency PNG)
             try:
                 upload_dir = os.path.join(current_app.static_folder, 'uploads')
@@ -1722,12 +1796,14 @@ def settings():
                         if hasattr(s, 'currency_image'):
                             s.currency_image = f"/static/uploads/{fname}"
             except Exception:
+                # Ignore upload errors but continue saving other fields
                 pass
+
             (ext_db.session.commit() if ext_db is not None else db.session.commit())
             flash('Settings saved', 'success')
         except Exception as e:
             (ext_db.session.rollback() if ext_db is not None else db.session.rollback())
-            flash('Could not save settings (placeholder handler)', 'warning')
+            flash(f'Could not save settings: {e}', 'danger')
         return redirect(url_for('main.settings'))
     return render_template('settings.html', s=s)
 
@@ -1744,6 +1820,13 @@ def users():
         users_list = User.query.order_by(User.id.asc()).all()
     except Exception:
         users_list = []
+    # Populate 'active' per user from AppKV (default True)
+    for u in users_list:
+        try:
+            info = kv_get(f"user_active:{u.id}", {'active': True}) or {}
+            setattr(u, 'active', bool(info.get('active', True)))
+        except Exception:
+            setattr(u, 'active', True)
     return render_template('users.html', users=users_list)
 
 @main.route('/create-sample-data', endpoint='create_sample_data_route')
