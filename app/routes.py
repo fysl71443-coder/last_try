@@ -1548,6 +1548,12 @@ def reports_print_all_invoices_sales():
     except Exception:
         settings = None
 
+    # Payment method totals
+    payment_totals = {}
+    for r in rows:
+        pm = (r.get('payment_method') or '').upper()
+        payment_totals[pm] = payment_totals.get(pm, 0.0) + float(r.get('total') or 0.0)
+
     meta = {
         'title': 'Sales Invoices (All) — Print',
         'payment_method': payment_method or 'all',
@@ -1556,4 +1562,136 @@ def reports_print_all_invoices_sales():
         'end_date': request.args.get('end_date') or '',
         'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
     }
-    return render_template('reports_print_sales.html', rows=rows, branch_totals=branch_totals, overall=overall, settings=settings, meta=meta)
+    return render_template('reports_print_sales.html', rows=rows, branch_totals=branch_totals, overall=overall, settings=settings, meta=meta, payment_totals=payment_totals)
+
+
+@main.route('/reports/print/all-invoices/purchases', methods=['GET'], endpoint='reports_print_all_invoices_purchases')
+@login_required
+def reports_print_all_invoices_purchases():
+    payment_method = (request.args.get('payment_method') or 'all').strip().lower()
+    start_date = request.args.get('start_date') or ''
+    end_date = request.args.get('end_date') or ''
+    rows = []
+    totals = {'Amount': 0.0, 'Discount': 0.0, 'VAT': 0.0, 'Total': 0.0}
+    payment_totals = {}
+    try:
+        q = db.session.query(PurchaseInvoice, PurchaseInvoiceItem).join(
+            PurchaseInvoiceItem, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id
+        )
+        if payment_method and payment_method != 'all':
+            q = q.filter(func.lower(PurchaseInvoice.payment_method) == payment_method)
+        # Date filtering if fields exist
+        if start_date:
+            try:
+                q = q.filter(PurchaseInvoice.date >= start_date)
+            except Exception:
+                pass
+        if end_date:
+            try:
+                q = q.filter(PurchaseInvoice.date <= end_date)
+            except Exception:
+                pass
+        q = q.order_by(PurchaseInvoice.created_at.desc()).limit(2000)
+        for inv, it in q.all():
+            d = (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
+            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
+            disc = float(it.discount or 0.0)
+            base = max(amount - disc, 0.0)
+            vat = float(it.tax or 0.0)
+            total = float(it.total_price or (base + vat))
+            pm = (inv.payment_method or '').upper()
+            rows.append({
+                'Date': d,
+                'Invoice No.': inv.invoice_number,
+                'Item': it.raw_material_name,
+                'Qty': float(it.quantity or 0.0),
+                'Amount': amount,
+                'Discount': disc,
+                'VAT': vat,
+                'Total': total,
+                'Payment': pm,
+            })
+            totals['Amount'] += amount; totals['Discount'] += disc; totals['VAT'] += vat; totals['Total'] += total
+            payment_totals[pm] = payment_totals.get(pm, 0.0) + total
+    except Exception:
+        pass
+
+    # Settings & meta
+    try:
+        settings = Settings.query.first()
+    except Exception:
+        settings = None
+    meta = {
+        'title': 'Purchase Invoices — Print',
+        'payment_method': payment_method or 'all',
+        'branch': 'all',
+        'start_date': start_date,
+        'end_date': end_date,
+        'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+    }
+    columns = ['Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment']
+    return render_template('print_report.html', report_title=meta['title'], settings=settings,
+                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
+                           payment_method=meta['payment_method'], branch=meta['branch'],
+                           columns=columns, data=rows, totals=totals, totals_columns=['Amount','Discount','VAT','Total'],
+                           totals_colspan=4, payment_totals=payment_totals)
+
+
+@main.route('/reports/print/all-invoices/expenses', methods=['GET'], endpoint='reports_print_all_invoices_expenses')
+@login_required
+def reports_print_all_invoices_expenses():
+    payment_method = (request.args.get('payment_method') or 'all').strip().lower()
+    start_date = request.args.get('start_date') or ''
+    end_date = request.args.get('end_date') or ''
+    rows = []
+    totals = {'Amount': 0.0}
+    payment_totals = {}
+    try:
+        q = ExpenseInvoice.query
+        if payment_method and payment_method != 'all':
+            q = q.filter(func.lower(ExpenseInvoice.payment_method) == payment_method)
+        if start_date:
+            try:
+                q = q.filter(ExpenseInvoice.date >= start_date)
+            except Exception:
+                pass
+        if end_date:
+            try:
+                q = q.filter(ExpenseInvoice.date <= end_date)
+            except Exception:
+                pass
+        q = q.order_by(ExpenseInvoice.created_at.desc()).limit(2000)
+        for exp in q.all():
+            d = (exp.date.strftime('%Y-%m-%d') if getattr(exp, 'date', None) else '')
+            amt = float(exp.total_after_tax_discount or 0.0)
+            pm = (exp.payment_method or '').upper()
+            rows.append({
+                'Date': d,
+                'Expense No.': exp.invoice_number,
+                'Description': getattr(exp, 'description', '') or '',
+                'Amount': amt,
+                'Payment': pm,
+            })
+            totals['Amount'] += amt
+            payment_totals[pm] = payment_totals.get(pm, 0.0) + amt
+    except Exception:
+        pass
+
+    try:
+        settings = Settings.query.first()
+    except Exception:
+        settings = None
+    meta = {
+        'title': 'Expenses — Print',
+        'payment_method': payment_method or 'all',
+        'branch': 'all',
+        'start_date': start_date,
+        'end_date': end_date,
+        'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+    }
+    columns = ['Date','Expense No.','Description','Amount','Payment']
+    return render_template('print_report.html', report_title=meta['title'], settings=settings,
+                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
+                           payment_method=meta['payment_method'], branch=meta['branch'],
+                           columns=columns, data=rows, totals=totals, totals_columns=['Amount'],
+                           totals_colspan=3, payment_totals=payment_totals)

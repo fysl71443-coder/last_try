@@ -59,7 +59,7 @@ body {
             </div>
             <div class="col-md-4 text-end">
                 <div class="btn-group" role="group">
-                  <a href="#" class="btn btn-success" target="_blank">📄 {{ _('Print All / طباعة الكل') }}</a>
+                  <a href="#" id="btnPrintAll" class="btn btn-success" target="_blank">📄 {{ _('Print All / طباعة الكل') }}</a>
                   <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">🗑️ {{ _('Delete / حذف') }}</button>
                 </div>
             </div>
@@ -403,6 +403,16 @@ body {
       document.getElementById('btnPrintSales')?.addEventListener('click', function(){ openPrint('/reports/print/all-invoices/sales', false); });
       document.getElementById('btnPrintPurch')?.addEventListener('click', function(){ openPrint('/reports/print/all-invoices/purchases', true); });
       document.getElementById('btnPrintExp')?.addEventListener('click', function(){ openPrint('/reports/print/all-invoices/expenses', true); });
+      document.getElementById('btnPrintAll')?.addEventListener('click', function(ev){
+        ev.preventDefault();
+        const t = '{{ current_type }}';
+        let base = '/reports/print/all-invoices/sales';
+        let dropBranch = false;
+        if(t==='purchases'){ base='/reports/print/all-invoices/purchases'; dropBranch=true; }
+        else if(t==='expenses'){ base='/reports/print/all-invoices/expenses'; dropBranch=true; }
+        openPrint(base, dropBranch);
+      });
+
 
       if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', reloadAll); } else { reloadAll(); }
     })();
