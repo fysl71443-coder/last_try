@@ -1,9 +1,10 @@
 import json
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db
 from app.models import User, AppKV, MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem
+from forms import SalesInvoiceForm, EmployeeForm
 
 main = Blueprint('main', __name__)
 
@@ -136,7 +137,28 @@ def dashboard():
 @main.route('/sales', endpoint='sales')
 @login_required
 def sales():
-    return render_template('sales.html')
+    # Ensure menu exists and load products
+    ensure_tables(); seed_menu_if_empty()
+    items = MenuItem.query.order_by(MenuItem.name).all()
+    product_choices = [(m.id, m.name) for m in items]
+    products = [{'id': m.id, 'name': m.name, 'price_before_tax': float(m.price)} for m in items]
+    products_json = json.dumps(products)
+
+    # Build form and populate defaults/choices
+    form = SalesInvoiceForm()
+    try:
+        form.date.data = datetime.utcnow().date()
+    except Exception:
+        pass
+    try:
+        for sub in form.items:
+            sub.product_id.choices = product_choices
+    except Exception:
+        pass
+
+    # Load recent invoices for listing
+    invoices = SalesInvoice.query.order_by(SalesInvoice.created_at.desc()).limit(50).all()
+    return render_template('sales.html', form=form, products_json=products_json, invoices=invoices)
 
 @main.route('/purchases', endpoint='purchases')
 @login_required
@@ -171,7 +193,9 @@ def invoices():
 @main.route('/employees', endpoint='employees')
 @login_required
 def employees():
-    return render_template('employees.html')
+    form = EmployeeForm()
+    employees = []  # Placeholder list until Employee model is integrated
+    return render_template('employees.html', form=form, employees=employees)
 
 @main.route('/payments', endpoint='payments')
 @login_required
@@ -748,7 +772,37 @@ vat = Blueprint('vat', __name__, url_prefix='/vat')
 @vat.route('/', endpoint='vat_dashboard')
 @login_required
 def vat_dashboard():
-    return render_template('vat/vat_dashboard.html')
+    # Read params and compute quarter date range
+    try:
+        y = request.args.get('year', type=int) or datetime.utcnow().year
+        q = request.args.get('quarter', type=int) or 1
+        q = q if q in (1, 2, 3, 4) else 1
+        start_month = {1: 1, 2: 4, 3: 7, 4: 10}[q]
+        end_month = {1: 3, 2: 6, 3: 9, 4: 12}[q]
+        start_date = date(y, start_month, 1)
+        next_month_first = date(y + (1 if end_month == 12 else 0), 1 if end_month == 12 else end_month + 1, 1)
+        end_date = next_month_first - timedelta(days=1)
+    except Exception:
+        y = datetime.utcnow().year
+        q = 1
+        start_date = date(y, 1, 1)
+        end_date = date(y, 3, 31)
+
+    data = {
+        'year': y,
+        'quarter': q,
+        'start_date': start_date.isoformat(),
+        'end_date': end_date.isoformat(),
+        'sales_place_india': 0.0,
+        'sales_china_town': 0.0,
+        'sales_total': 0.0,
+        'purchases_total': 0.0,
+        'expenses_total': 0.0,
+        'output_vat': 0.0,
+        'input_vat': 0.0,
+        'net_vat': 0.0,
+    }
+    return render_template('vat/vat_dashboard.html', data=data)
 
 # ---------- Financials blueprint ----------
 financials = Blueprint('financials', __name__, url_prefix='/financials')
@@ -756,7 +810,46 @@ financials = Blueprint('financials', __name__, url_prefix='/financials')
 @financials.route('/income-statement', endpoint='income_statement')
 @login_required
 def income_statement():
-    return render_template('financials/income_statement.html')
+    period = (request.args.get('period') or 'today').strip()
+    today = datetime.utcnow().date()
+    if period == 'today':
+        start_date = end_date = today
+    elif period == 'this_week':
+        start_date = today - timedelta(days=today.isoweekday() - 1)
+        end_date = start_date + timedelta(days=6)
+    elif period == 'this_month':
+        start_date = date(today.year, today.month, 1)
+        nm = date(today.year + (1 if today.month == 12 else 0), 1 if today.month == 12 else today.month + 1, 1)
+        end_date = nm - timedelta(days=1)
+    elif period == 'this_year':
+        start_date = date(today.year, 1, 1)
+        end_date = date(today.year, 12, 31)
+    else:
+        sd = request.args.get('start_date')
+        ed = request.args.get('end_date')
+        try:
+            start_date = datetime.strptime(sd, '%Y-%m-%d').date() if sd else today
+            end_date = datetime.strptime(ed, '%Y-%m-%d').date() if ed else today
+        except Exception:
+            start_date = end_date = today
+        period = 'custom'
+
+    data = {
+        'period': period,
+        'start_date': start_date.isoformat(),
+        'end_date': end_date.isoformat(),
+        'revenue': 0.0,
+        'cogs': 0.0,
+        'gross_profit': 0.0,
+        'operating_expenses': 0.0,
+        'operating_profit': 0.0,
+        'other_income': 0.0,
+        'other_expenses': 0.0,
+        'net_profit_before_tax': 0.0,
+        'tax': 0.0,
+        'net_profit_after_tax': 0.0,
+    }
+    return render_template('financials/income_statement.html', data=data)
 
 @financials.route('/balance-sheet', endpoint='balance_sheet')
 @login_required
