@@ -7,7 +7,7 @@ from sqlalchemy import func
 
 from app import db, csrf
 from app.models import User, AppKV, MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer
-from models import PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings
+from models import PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm
 
 main = Blueprint('main', __name__)
@@ -946,9 +946,16 @@ def menu():
     items = []
     if current:
         items = MenuItem.query.filter_by(category_id=current.id).order_by(MenuItem.name).all()
+    # meals for dropdown (active first; fallback to all)
+    try:
+        meals = Meal.query.filter_by(active=True).order_by(Meal.name.asc()).all()
+        if not meals:
+            meals = Meal.query.order_by(Meal.name.asc()).all()
+    except Exception:
+        meals = []
     # counts per category
     item_counts = {c.id: MenuItem.query.filter_by(category_id=c.id).count() for c in cats}
-    return render_template('menu.html', sections=cats, current_section=current, items=items, item_counts=item_counts)
+    return render_template('menu.html', sections=cats, current_section=current, items=items, item_counts=item_counts, meals=meals)
 
 
 @main.route('/menu/category/add', methods=['POST'], endpoint='menu_category_add')
@@ -993,13 +1000,30 @@ def menu_category_delete(cat_id):
 def menu_item_add():
     ensure_tables()
     cat_id = request.form.get('section_id', type=int)
+    meal_id = request.form.get('meal_id', type=int)
     name = (request.form.get('name') or '').strip()
-    price = request.form.get('price', type=float) or 0.0
-    if not (cat_id and name):
-        flash('Missing item name or category', 'danger')
+    price = request.form.get('price', type=float)
+    if not cat_id:
+        flash('Missing category', 'danger')
         return redirect(url_for('main.menu'))
     try:
-        it = MenuItem(name=name, price=float(price or 0.0), category_id=int(cat_id))
+        # If a meal is selected, use its name (EN/AR) and selling price by default
+        if meal_id:
+            meal = db.session.get(Meal, int(meal_id))
+        else:
+            meal = None
+        if meal:
+            disp_name = f"{meal.name} / {meal.name_ar}" if getattr(meal, 'name_ar', None) else (meal.name or name)
+            final_name = disp_name or name
+            final_price = float(price) if price is not None else float(meal.selling_price or 0.0)
+        else:
+            # Fallback to manual
+            final_name = name
+            final_price = float(price or 0.0)
+        if not final_name:
+            flash('Missing item name', 'danger')
+            return redirect(url_for('main.menu', cat_id=cat_id))
+        it = MenuItem(name=final_name, price=final_price, category_id=int(cat_id))
         db.session.add(it)
         db.session.commit()
         return redirect(url_for('main.menu', cat_id=cat_id))
