@@ -26,17 +26,9 @@ class AppKV(db.Model):
 
 
 # ---- Basic restaurant models (minimal fields to make POS work) ----
-class MenuCategory(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)
-    sort_order = db.Column(db.Integer, default=0)
-
-class MenuItem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False)
-    price = db.Column(db.Float, nullable=False, default=0.0)
-    category_id = db.Column(db.Integer, db.ForeignKey('menu_category.id'), nullable=False)
-    category = db.relationship('MenuCategory', backref='items')
+# NOTE: MenuCategory and MenuItem are defined in the main models.py
+# to avoid duplicate class names in the SQLAlchemy registry. Use:
+#   from models import MenuCategory, MenuItem
 
 class SalesInvoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)

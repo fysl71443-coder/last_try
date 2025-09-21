@@ -10,8 +10,8 @@ from sqlalchemy.exc import IntegrityError
 from app import db, csrf
 # Force single DB session usage across the app to avoid multiple SQLAlchemy instances
 ext_db = None
-from app.models import User, AppKV, MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer
-from models import PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary
+from app.models import User, AppKV, SalesInvoice, SalesInvoiceItem, Customer
+from models import MenuCategory, MenuItem, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
 main = Blueprint('main', __name__)
