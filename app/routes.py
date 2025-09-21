@@ -6,9 +6,13 @@ from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func
 
 from app import db, csrf
+try:
+    from extensions import db as ext_db
+except Exception:
+    ext_db = None
 from app.models import User, AppKV, MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer
-from models import PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal
-from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm
+from models import PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, RawMaterial, Supplier, Employee, Salary
+from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm
 
 main = Blueprint('main', __name__)
 
@@ -154,10 +158,114 @@ def sales():
     ]
     return render_template('sales_branches.html', branches=branches)
 
-@main.route('/purchases', endpoint='purchases')
+@main.route('/purchases', methods=['GET','POST'], endpoint='purchases')
 @login_required
 def purchases():
-    return render_template('purchases.html')
+    # Prepare form and lists
+    form = PurchaseInvoiceForm()
+    suppliers = []
+    try:
+        if 'Supplier' in globals():
+            suppliers = Supplier.query.order_by(Supplier.name.asc()).all()
+    except Exception:
+        suppliers = []
+    suppliers_json = []
+    for s in suppliers:
+        suppliers_json.append({
+            'id': s.id,
+            'name': s.name,
+            'phone': getattr(s, 'phone', None),
+            'tax_number': getattr(s, 'tax_number', None),
+            'address': getattr(s, 'address', None),
+            'cr_number': getattr(s, 'cr_number', None),
+            'iban': getattr(s, 'iban', None),
+            'active': getattr(s, 'active', True),
+        })
+    try:
+        materials = RawMaterial.query.filter_by(active=True).order_by(RawMaterial.name.asc()).all() if 'RawMaterial' in globals() else []
+    except Exception:
+        materials = []
+    materials_json = [{'id': m.id, 'name': m.display_name() if hasattr(m, 'display_name') else m.name, 'unit': m.unit, 'cost_per_unit': float(m.cost_per_unit or 0), 'stock_quantity': float(m.stock_quantity or 0)} for m in materials]
+
+    if request.method == 'POST':
+        # Parse minimal fields
+        pm = (request.form.get('payment_method') or 'cash').strip().lower()
+        date_str = request.form.get('date') or datetime.utcnow().date().isoformat()
+        supplier_name = (request.form.get('supplier_name') or '').strip() or None
+        try:
+            inv = PurchaseInvoice(
+                invoice_number=f"INV-PUR-{datetime.utcnow().year}-{(PurchaseInvoice.query.count()+1):04d}",
+                date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+                supplier_name=supplier_name,
+                payment_method=pm,
+                user_id=getattr(current_user, 'id', 1)
+            )
+            # Collect items
+            idx = 0
+            total_before = 0.0
+            total_tax = 0.0
+            total_disc = 0.0
+            items_created = 0
+            while True:
+                prefix = f"items-{idx}-"
+                name = request.form.get(prefix + 'item_name')
+                qty = request.form.get(prefix + 'quantity')
+                price = request.form.get(prefix + 'price_before_tax')
+                disc_pct = request.form.get(prefix + 'discount')
+                tax_pct = request.form.get(prefix + 'tax_pct')
+                if name is None and qty is None and price is None and disc_pct is None and tax_pct is None:
+                    break
+                # Skip empty rows
+                if not name and not qty and not price:
+                    idx += 1
+                    continue
+                try:
+                    q = float(qty or 0)
+                    p = float(price or 0)
+                    d_pct = float(disc_pct or 0)
+                    t_pct = float(tax_pct or 0)
+                except Exception:
+                    q = p = 0.0
+                    d_pct = t_pct = 0.0
+                before = q * p
+                disc_amt = max(0.0, min(before, before * (d_pct/100.0)))
+                base = max(0.0, before - disc_amt)
+                tax_amt = max(0.0, base * (t_pct/100.0))
+                line_total = base + tax_amt
+                total_before += before
+                total_disc += disc_amt
+                total_tax += tax_amt
+                it = PurchaseInvoiceItem(
+                    raw_material_name=name or 'Item',
+                    quantity=q,
+                    price_before_tax=p,
+                    discount=d_pct,
+                    tax=tax_amt,
+                    total_price=line_total,
+                )
+                inv.items.append(it)
+                items_created += 1
+                idx += 1
+            inv.total_before_tax = total_before
+            inv.tax_amount = total_tax
+            inv.discount_amount = total_disc
+            inv.total_after_tax_discount = max(0.0, total_before - total_disc + total_tax)
+            if ext_db is not None:
+                ext_db.session.add(inv)
+                ext_db.session.commit()
+            else:
+                db.session.add(inv)
+                db.session.commit()
+            flash('Purchase invoice saved', 'success')
+        except Exception as e:
+            if ext_db is not None:
+                ext_db.session.rollback()
+            else:
+                db.session.rollback()
+            flash(f'Could not save purchase invoice: {e}', 'danger')
+        return redirect(url_for('main.purchases'))
+
+    return render_template('purchases.html', form=form, suppliers_list=suppliers, suppliers_json=suppliers_json, materials_json=materials_json)
 
 @main.route('/raw-materials', endpoint='raw_materials')
 @login_required
@@ -288,28 +396,76 @@ def expenses():
     except Exception:
         pass
     if request.method == 'POST':
-        # Best-effort create using external ExpenseInvoice model if available
         try:
-            e = ExpenseInvoice()
-            # Populate common fields if present
-            for fld, getter in [
-                ('date', lambda: request.form.get('date') or request.json.get('date') if request.is_json else request.form.get('date')),
-                ('description', lambda: request.form.get('description') or request.json.get('description') if request.is_json else request.form.get('description')),
-                ('amount', lambda: request.form.get('amount') or request.json.get('amount') if request.is_json else request.form.get('amount')),
-                ('payment_method', lambda: request.form.get('payment_method') or request.json.get('payment_method') if request.is_json else request.form.get('payment_method')),
-                ('notes', lambda: request.form.get('notes') or request.json.get('notes') if request.is_json else request.form.get('notes')),
-            ]:
-                if hasattr(e, fld):
-                    val = getter() if getter else None
-                    setattr(e, fld, val)
-            db.session.add(e)
-            db.session.commit()
+            date_str = request.form.get('date') or datetime.utcnow().date().isoformat()
+            pm = (request.form.get('payment_method') or 'cash').strip().lower()
+            inv = ExpenseInvoice(
+                invoice_number=f"INV-EXP-{datetime.utcnow().year}-{(ExpenseInvoice.query.count()+1):04d}",
+                date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+                payment_method=pm,
+                user_id=getattr(current_user, 'id', 1)
+            )
+            # Collect items
+            idx = 0
+            total_before = 0.0
+            total_tax = 0.0
+            total_disc = 0.0
+            while True:
+                prefix = f"items-{idx}-"
+                desc = request.form.get(prefix + 'description')
+                qty = request.form.get(prefix + 'quantity')
+                price = request.form.get(prefix + 'price_before_tax')
+                tax = request.form.get(prefix + 'tax')
+                disc = request.form.get(prefix + 'discount')
+                if desc is None and qty is None and price is None and tax is None and disc is None:
+                    break
+                if not desc and not qty and not price:
+                    idx += 1
+                    continue
+                try:
+                    q = float(qty or 0)
+                    p = float(price or 0)
+                    t = float(tax or 0)
+                    d = float(disc or 0)
+                except Exception:
+                    q = p = t = d = 0.0
+                before = q * p
+                line_total = max(0.0, before + t - d)
+                total_before += before
+                total_tax += max(0.0, t)
+                total_disc += max(0.0, d)
+                inv.items.append(ExpenseInvoiceItem(
+                    description=desc or 'Expense Item',
+                    quantity=q,
+                    price_before_tax=p,
+                    tax=t,
+                    discount=d,
+                    total_price=line_total
+                ))
+                idx += 1
+            inv.total_before_tax = total_before
+            inv.tax_amount = total_tax
+            inv.discount_amount = total_disc
+            inv.total_after_tax_discount = max(0.0, total_before + total_tax - total_disc)
+            if ext_db is not None:
+                ext_db.session.add(inv)
+                ext_db.session.commit()
+            else:
+                db.session.add(inv)
+                db.session.commit()
             flash('Expense saved', 'success')
         except Exception as ex:
-            db.session.rollback()
-            flash('Could not save expense (placeholder handler)', 'warning')
+            if ext_db is not None:
+                ext_db.session.rollback()
+            else:
+                db.session.rollback()
+            flash(f'Could not save expense: {ex}', 'danger')
         return redirect(url_for('main.expenses'))
-    invoices = []
+    # Show recent invoices if possible; otherwise empty list
+    try:
+        invoices = ExpenseInvoice.query.order_by(ExpenseInvoice.id.desc()).limit(10).all()
+    except Exception:
+        invoices = []
     return render_template('expenses.html', form=form, invoices=invoices)
 
 @main.route('/invoices', endpoint='invoices')
@@ -372,12 +528,113 @@ def invoices_delete():
         flash(f"Delete failed: {e}", 'danger')
     return redirect(url_for('main.invoices', type=inv_type))
 
-@main.route('/employees', endpoint='employees')
+@main.route('/employees', methods=['GET','POST'], endpoint='employees')
 @login_required
 def employees():
     form = EmployeeForm()
-    employees = []  # Placeholder list until Employee model is integrated
-    return render_template('employees.html', form=form, employees=employees)
+    if request.method == 'POST':
+        try:
+            e = Employee(
+                employee_code=form.employee_code.data,
+                full_name=form.full_name.data,
+                national_id=form.national_id.data,
+                department=form.department.data,
+                position=form.position.data,
+                phone=form.phone.data,
+                email=form.email.data,
+                hire_date=form.hire_date.data,
+                status=form.status.data or 'active',
+            )
+            if ext_db is not None:
+                ext_db.session.add(e)
+                ext_db.session.commit()
+            else:
+                db.session.add(e)
+                db.session.commit()
+            # Save defaults if provided
+            try:
+                from models import EmployeeSalaryDefault
+                base = form.base_salary.data or 0
+                allow = form.allowances.data or 0
+                ded = form.deductions.data or 0
+                if (base or allow or ded):
+                    d = EmployeeSalaryDefault.query.filter_by(employee_id=e.id).first()
+                    if not d:
+                        d = EmployeeSalaryDefault(employee_id=e.id)
+                        if ext_db is not None:
+                            ext_db.session.add(d)
+                        else:
+                            db.session.add(d)
+                    d.base_salary = base
+                    d.allowances = allow
+                    d.deductions = ded
+                    if ext_db is not None:
+                        ext_db.session.commit()
+                    else:
+                        db.session.commit()
+            except Exception:
+                pass
+            flash('Employee saved', 'success')
+        except Exception as ex:
+            if ext_db is not None:
+                ext_db.session.rollback()
+            else:
+                db.session.rollback()
+            flash(f'Could not save employee: {ex}', 'danger')
+        return redirect(url_for('main.employees'))
+    # List employees
+    try:
+        emps = Employee.query.order_by(Employee.full_name.asc()).all()
+    except Exception:
+        emps = []
+    return render_template('employees.html', form=form, employees=emps)
+
+@main.route('/employees/create-salary', methods=['POST'], endpoint='employees_create_salary')
+@login_required
+def employees_create_salary():
+    try:
+        emp_id = int(request.form.get('employee_id') or 0)
+        year = int(request.form.get('year') or datetime.utcnow().year)
+        month = int(request.form.get('month') or datetime.utcnow().month)
+        base = float(request.form.get('basic_salary') or 0)
+        allow = float(request.form.get('allowances') or 0)
+        ded = float(request.form.get('deductions') or 0)
+        prev_due = float(request.form.get('previous_salary_due') or 0)
+        total = base + allow - ded + prev_due
+        if total < 0:
+            total = 0
+        # Ensure employee exists via the same session used by legacy models
+        emp = None
+        try:
+            emp = Employee.query.get(emp_id)
+        except Exception:
+            emp = None
+        if not emp:
+            return jsonify({'ok': False, 'error': 'employee_not_found'}), 400
+        sal = Salary(employee_id=emp_id, year=year, month=month,
+                     basic_salary=base, allowances=allow, deductions=ded,
+                     previous_salary_due=prev_due, total_salary=total,
+                     status='due')
+        try:
+            session = Employee.query.session
+        except Exception:
+            try:
+                session = Salary.query.session
+            except Exception:
+                session = (ext_db.session if ext_db is not None else db.session)
+        session.add(sal)
+        session.commit()
+        return jsonify({'ok': True, 'salary_id': sal.id, 'total': float(total)})
+    except Exception as e:
+        try:
+            session.rollback()
+        except Exception:
+            if ext_db is not None:
+                ext_db.session.rollback()
+            else:
+                db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
 
 @main.route('/payments', endpoint='payments')
 @login_required
@@ -979,10 +1236,124 @@ def customers():
     customers = qry.order_by(Customer.name.asc()).all()
     return render_template('customers.html', customers=customers, q=q)
 
-@main.route('/suppliers', endpoint='suppliers')
+@main.route('/customers/<int:cid>/toggle', methods=['POST'], endpoint='customer_toggle')
+@login_required
+def customer_toggle(cid):
+    try:
+        c = db.session.get(Customer, cid)
+        if not c:
+            flash('Customer not found', 'warning')
+            return redirect(url_for('main.customers'))
+        c.active = not bool(getattr(c, 'active', True))
+        db.session.commit()
+        flash('Customer status updated', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating customer: {e}', 'danger')
+    return redirect(url_for('main.customers'))
+
+
+@main.route('/customers/<int:cid>/delete', methods=['POST'], endpoint='customer_delete')
+@login_required
+def customer_delete(cid):
+    # Soft delete: mark inactive to avoid FK issues
+    try:
+        c = db.session.get(Customer, cid)
+        if not c:
+            flash('Customer not found', 'warning')
+        else:
+            c.active = False
+            db.session.commit()
+            flash('Customer deleted (soft)', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting customer: {e}', 'danger')
+    return redirect(url_for('main.customers'))
+
+
+@main.route('/suppliers', methods=['GET','POST'], endpoint='suppliers')
 @login_required
 def suppliers():
-    return render_template('suppliers.html')
+    if request.method == 'POST':
+        try:
+            s = Supplier(
+                name=(request.form.get('name') or '').strip(),
+                contact_person=request.form.get('contact_person') or None,
+                phone=request.form.get('phone') or None,
+                email=request.form.get('email') or None,
+                tax_number=request.form.get('tax_number') or None,
+                cr_number=request.form.get('cr_number') or None,
+                iban=request.form.get('iban') or None,
+                address=request.form.get('address') or None,
+                notes=request.form.get('notes') or None,
+                active=True if str(request.form.get('active')).lower() in ['1','true','yes','on'] else False,
+            )
+            if not s.name:
+                raise ValueError('Name is required')
+            if ext_db is not None:
+                ext_db.session.add(s)
+                ext_db.session.commit()
+            else:
+                db.session.add(s)
+                db.session.commit()
+            flash('Supplier added', 'success')
+        except Exception as e:
+            if ext_db is not None:
+                ext_db.session.rollback()
+            else:
+                db.session.rollback()
+            flash(f'Could not add supplier: {e}', 'danger')
+        return redirect(url_for('main.suppliers'))
+    try:
+        all_suppliers = Supplier.query.order_by(Supplier.name.asc()).all()
+    except Exception:
+        all_suppliers = []
+    return render_template('suppliers.html', suppliers=all_suppliers)
+
+@main.route('/suppliers/<int:sid>/toggle', methods=['POST'], endpoint='supplier_toggle')
+@login_required
+def supplier_toggle(sid):
+    try:
+        s = Supplier.query.get(sid)
+        if not s:
+            flash('Supplier not found', 'warning')
+            return redirect(url_for('main.suppliers'))
+        s.active = not bool(getattr(s, 'active', True))
+        if ext_db is not None:
+            ext_db.session.commit()
+        else:
+            db.session.commit()
+        flash('Supplier status updated', 'success')
+    except Exception as e:
+        if ext_db is not None:
+            ext_db.session.rollback()
+        else:
+            db.session.rollback()
+        flash(f'Error updating supplier: {e}', 'danger')
+    return redirect(url_for('main.suppliers'))
+
+@main.route('/suppliers/<int:sid>/delete', methods=['POST'], endpoint='supplier_delete')
+@login_required
+def supplier_delete(sid):
+    # Soft delete: mark inactive to avoid FK issues
+    try:
+        s = Supplier.query.get(sid)
+        if not s:
+            flash('Supplier not found', 'warning')
+        else:
+            s.active = False
+            if ext_db is not None:
+                ext_db.session.commit()
+            else:
+                db.session.commit()
+            flash('Supplier deleted (soft)', 'success')
+    except Exception as e:
+        if ext_db is not None:
+            ext_db.session.rollback()
+        else:
+            db.session.rollback()
+        flash(f'Error deleting supplier: {e}', 'danger')
+    return redirect(url_for('main.suppliers'))
 
 @main.route('/menu', methods=['GET'], endpoint='menu')
 @login_required
@@ -1162,7 +1533,137 @@ def api_item_delete_all():
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 400
 
+
+
+# --- Users Management API (minimal) ---
+@main.route('/api/users', methods=['POST'], endpoint='api_users_create')
+@login_required
+def api_users_create():
+    try:
+        data = request.get_json(silent=True) or {}
+        username = (data.get('username') or '').strip()
+        password = (data.get('password') or '').strip()
+        if not username or not password:
+            return jsonify({'ok': False, 'error': 'username_password_required'}), 400
+        # uniqueness
+        if User.query.filter_by(username=username).first():
+            return jsonify({'ok': False, 'error': 'username_taken'}), 400
+        u = User(username=username)
+        u.set_password(password)
+        db.session.add(u)
+        db.session.commit()
+        return jsonify({'ok': True, 'id': u.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/api/users/<int:uid>', methods=['PATCH'], endpoint='api_users_update')
+@login_required
+def api_users_update(uid):
+    try:
+        u = db.session.get(User, uid)
+        if not u:
+            return jsonify({'ok': False, 'error': 'not_found'}), 404
+        data = request.get_json(silent=True) or {}
+        # Optional: allow password change
+        pw = (data.get('password') or '').strip()
+        if pw:
+            u.set_password(pw)
+        # Email/role/active not present on model; ignore gracefully
+        db.session.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/api/users', methods=['DELETE'], endpoint='api_users_delete')
+@login_required
+def api_users_delete():
+    try:
+        data = request.get_json(silent=True) or {}
+        ids = data.get('ids') or []
+        if not isinstance(ids, list):
+            return jsonify({'ok': False, 'error': 'invalid_ids'}), 400
+        deleted = 0
+        for i in ids:
+            try:
+                i = int(i)
+            except Exception:
+                continue
+            if hasattr(current_user, 'id') and i == current_user.id:
+                continue
+            u = db.session.get(User, i)
+            if u:
+                db.session.delete(u)
+                deleted += 1
+        db.session.commit()
+        return jsonify({'ok': True, 'deleted': deleted})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+# Permissions: persist to AppKV to avoid schema changes
+PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','salaries','financials','vat','reports','settings']
+
+def _perms_k(uid, scope):
+    return f"user_perms:{scope or 'all'}:{int(uid)}"
+
+@main.route('/api/users/<int:uid>/permissions', methods=['GET'], endpoint='api_users_permissions_get')
+@login_required
+def api_users_permissions_get(uid):
+    try:
+        scope = (request.args.get('branch_scope') or 'all').strip().lower()
+        k = _perms_k(uid, scope)
+        row = AppKV.query.filter_by(k=k).first()
+        if row:
+            try:
+                saved = json.loads(row.v)
+                items = saved.get('items') or []
+            except Exception:
+                items = []
+        else:
+            items = [{ 'screen_key': s, 'view': False, 'add': False, 'edit': False, 'delete': False, 'print': False } for s in PERM_SCREENS]
+        return jsonify({'ok': True, 'items': items})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/api/users/<int:uid>/permissions', methods=['POST'], endpoint='api_users_permissions_set')
+@login_required
+def api_users_permissions_set(uid):
+    try:
+        data = request.get_json(silent=True) or {}
+        scope = (data.get('branch_scope') or 'all').strip().lower()
+        items = data.get('items') or []
+        # Basic validation
+        norm_items = []
+        for it in items:
+            key = (it.get('screen_key') or '').strip()
+            if not key:
+                continue
+            norm_items.append({
+                'screen_key': key,
+                'view': bool(it.get('view')),
+                'add': bool(it.get('add')),
+                'edit': bool(it.get('edit')),
+                'delete': bool(it.get('delete')),
+                'print': bool(it.get('print')),
+            })
+        payload = {'items': norm_items, 'saved_at': datetime.utcnow().isoformat()}
+        k = _perms_k(uid, scope)
+        row = AppKV.query.filter_by(k=k).first()
+        if not row:
+            row = AppKV(k=k, v=json.dumps(payload, ensure_ascii=False))
+            db.session.add(row)
+        else:
+            row.v = json.dumps(payload, ensure_ascii=False)
+        db.session.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
 @main.route('/settings', methods=['GET', 'POST'], endpoint='settings')
+
 @login_required
 def settings():
     # Pass Settings instance to template to avoid 's' undefined
@@ -1175,7 +1676,8 @@ def settings():
         try:
             if not s:
                 s = Settings()
-                db.session.add(s)
+                (ext_db.session.add(s) if ext_db is not None else db.session.add(s))
+
             # Safely set only attributes that exist on Settings model
             form_data = request.form if request.form else (request.get_json(silent=True) or {})
             for fld in [
@@ -1221,10 +1723,10 @@ def settings():
                             s.currency_image = f"/static/uploads/{fname}"
             except Exception:
                 pass
-            db.session.commit()
+            (ext_db.session.commit() if ext_db is not None else db.session.commit())
             flash('Settings saved', 'success')
         except Exception as e:
-            db.session.rollback()
+            (ext_db.session.rollback() if ext_db is not None else db.session.rollback())
             flash('Could not save settings (placeholder handler)', 'warning')
         return redirect(url_for('main.settings'))
     return render_template('settings.html', s=s)
@@ -1237,7 +1739,12 @@ def table_settings():
 @main.route('/users', endpoint='users')
 @login_required
 def users():
-    return render_template('users.html')
+    # Provide users list to template so toolbar/actions work
+    try:
+        users_list = User.query.order_by(User.id.asc()).all()
+    except Exception:
+        users_list = []
+    return render_template('users.html', users=users_list)
 
 @main.route('/create-sample-data', endpoint='create_sample_data_route')
 @login_required

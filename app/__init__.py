@@ -6,6 +6,11 @@ from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_babel import Babel
 from flask_wtf.csrf import CSRFProtect
+# Also support legacy extensions module models
+try:
+    from extensions import db as ext_db
+except Exception:
+    ext_db = None
 
 # إنشاء كائنات db و login و bcrypt فقط مرة واحدة
 
@@ -68,6 +73,12 @@ def create_app(config_class=None):
 
     # ربط الكائنات بالتطبيق
     db.init_app(app)
+    # Initialize legacy models' db (extensions.db) so routes using models.py work
+    if ext_db is not None:
+        try:
+            ext_db.init_app(app)
+        except Exception:
+            pass
     bcrypt.init_app(app)
     login_manager.init_app(app)
     migrate.init_app(app, db)
@@ -95,6 +106,11 @@ def create_app(config_class=None):
     try:
         with app.app_context():
             db.create_all()
+            if ext_db is not None:
+                try:
+                    ext_db.create_all()
+                except Exception:
+                    pass
     except Exception:
         pass
 

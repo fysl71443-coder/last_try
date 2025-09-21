@@ -5,14 +5,14 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">👤 {{ _('Employees / الموظفون') }}</h3>
     <div class="d-flex flex-wrap gap-2">
-      <a href="#" class="btn btn-success">💵 {{ _('Monthly Salaries / رواتب شهرية') }}</a>
-      <a href="#" class="btn btn-outline-success">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</a>
-      <a href="#" class="btn btn-outline-secondary">📝 {{ _('Salaries Form / نموذج الرواتب') }}</a>
+      <a href="#pay-salaries-section" class="btn btn-success">💵 {{ _('Monthly Salaries / رواتب شهرية') }}</a>
+      <a href="#statements-section" class="btn btn-outline-success">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</a>
+      <a href="#employees-form" class="btn btn-outline-secondary">📝 {{ _('Salaries Form / نموذج الرواتب') }}</a>
       <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
     </div>
   </div>
 
-  <div class="card mb-4">
+  <div class="card mb-4" id="employees-form">
     <div class="card-body">
       <form method="POST">
         {{ form.hidden_tag() }}
@@ -23,11 +23,25 @@
           <div class="col-md-3">{{ form.full_name.label(class_='form-label') }}{{ form.full_name(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.national_id.label(class_='form-label') }}{{ form.national_id(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.status.label(class_='form-label') }}{{ form.status(class_='form-select') }}</div>
-          <div class="col-md-3">{{ form.department.label(class_='form-label') }}{{ form.department(class_='form-control') }}</div>
+          <div class="col-md-3">{{ form.department.label(class_='form-label') }}
+            <div class="input-group">
+              {{ form.department(class_='form-control', placeholder=_('e.g. Kitchen / Admin / Cashier')) }}
+              <select class="form-select" id="deptQuickSelect" style="max-width: 9rem">
+                <option value="">{{ _('Choose') }}</option>
+                <option>Kitchen</option>
+                <option>Admin</option>
+                <option>Cashier</option>
+                <option>Store</option>
+                <option>Delivery</option>
+              </select>
+            </div>
+          </div>
           <div class="col-md-3">{{ form.position.label(class_='form-label') }}{{ form.position(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.phone.label(class_='form-label') }}{{ form.phone(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.email.label(class_='form-label') }}{{ form.email(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.hire_date.label(class_='form-label') }}{{ form.hire_date(class_='form-control') }}</div>
+          <div class="col-md-3"><label class='form-label'>{{ _('Work Hours / عدد ساعات العمل') }}</label><input type="number" step="0.1" name="work_hours" class="form-control" placeholder="0"></div>
+
         </div>
         <hr/>
         <div class="row g-3">
@@ -41,6 +55,120 @@
       </form>
     </div>
   </div>
+  <div class="card mb-4" id="pay-salaries-section">
+    <div class="card-body">
+      <h5 class="mb-3">💵 {{ _('Pay Salaries / سداد الرواتب') }}</h5>
+      <form id="paySalaryForm" onsubmit="return handleCreateSalary(event)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label">{{ _('Month / الشهر') }}</label>
+            <input type="month" class="form-control" id="pay_month" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ _('Employee / الموظف') }}</label>
+            <select class="form-select" id="pay_employee" required>
+              <option value="">-- {{ _('Select') }} --</option>
+              {% for e in employees or [] %}
+              <option value="{{ e.id }}">{{ e.full_name }}{% if e.department %} — {{ e.department }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ _('Paid Amount / المبلغ المدفوع') }}</label>
+            <input type="number" step="0.01" class="form-control" id="paid_amount" placeholder="0.00">
+          </div>
+          <div class="col-md-3 text-end">
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#monthAdjust">{{ _('Edit Allowances/Deductions / تعديل البدلات والاستقطاعات') }}</button>
+          </div>
+        </div>
+        <div class="collapse mt-3" id="monthAdjust">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label">{{ _('Basic Salary / الراتب الأساسي') }}</label>
+              <input type="number" step="0.01" class="form-control" id="basic_salary" placeholder="0.00">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">{{ _('Allowances / البدلات') }}</label>
+              <input type="number" step="0.01" class="form-control" id="allowances" placeholder="0.00">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">{{ _('Deductions / الاستقطاعات') }}</label>
+              <input type="number" step="0.01" class="form-control" id="deductions" placeholder="0.00">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">{{ _('Previous Due / مستحقات سابقة') }}</label>
+              <input type="number" step="0.01" class="form-control" id="previous_due" placeholder="0.00">
+            </div>
+          </div>
+          <div class="row g-3 mt-2">
+            <div class="col-md-3">
+              <label class="form-label">{{ _('Work Hours / عدد ساعات العمل') }}</label>
+              <input type="number" step="0.1" class="form-control" id="work_hours" placeholder="0">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">{{ _('Net Salary / الصافي') }}</label>
+              <input type="text" class="form-control" id="net_salary" readonly>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">{{ _('Remaining / المتبقي') }}</label>
+              <input type="text" class="form-control" id="remaining_salary" readonly>
+            </div>
+            <div class="col-md-3 text-end d-flex align-items-end justify-content-end">
+              <button type="submit" class="btn btn-success">{{ _('Create/Update Salary / إنشاء/تحديث الراتب') }}</button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card mb-4" id="statements-section">
+    <div class="card-body">
+      <h5 class="mb-3">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</h5>
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Month / الشهر') }}</label>
+          <input type="month" class="form-control" id="stmt_month">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button class="btn btn-outline-primary" id="btnLoadStatements">{{ _('Load / تحميل') }}</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm align-middle" id="tblStatements">
+          <thead class="table-light">
+            <tr>
+              <th>{{ _('Employee / الموظف') }}</th>
+              <th>{{ _('Department / القسم') }}</th>
+              <th>{{ _('Basic / الأساسي') }}</th>
+              <th>{{ _('Allowances / البدلات') }}</th>
+              <th>{{ _('Deductions / الاستقطاعات') }}</th>
+              <th>{{ _('Net / الصافي') }}</th>
+              <th>{{ _('Paid / المدفوع') }}</th>
+              <th>{{ _('Remaining / المتبقي') }}</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row g-3 mt-2" id="stmtTotals">
+        <div class="col">
+          <div class="small text-muted">{{ _('Totals (All Employees) / الإجماليات (كل الموظفين)') }}</div>
+          <div class="d-flex flex-wrap gap-3">
+            <div>{{ _('Employees') }}: <strong id="t_emps">0</strong></div>
+            <div>{{ _('Basic') }}: <strong id="t_basic">0.00</strong></div>
+            <div>{{ _('Allowances') }}: <strong id="t_allow">0.00</strong></div>
+            <div>{{ _('Deductions') }}: <strong id="t_ded">0.00</strong></div>
+            <div>{{ _('Paid') }}: <strong id="t_paid">0.00</strong></div>
+            <div>{{ _('Net') }}: <strong id="t_net">0.00</strong></div>
+            <div>{{ _('Remaining') }}: <strong id="t_remain">0.00</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   {% if employees %}
   <div class="card">
@@ -127,12 +255,101 @@ window.handleDeleteEmployee = async function(event, name){
   }
 }
 
-document.getElementById('empSearch')?.addEventListener('input', function(){
+// Live search in employees table
+(document.getElementById('empSearch')||{}).addEventListener?.('input', function(){
   const q = this.value.toLowerCase();
   document.querySelectorAll('#empTableBody tr').forEach(tr => {
     const txt = tr.textContent.toLowerCase();
     tr.style.display = txt.includes(q) ? '' : 'none';
   });
+});
+
+// Quick Department selector fills the input
+(function(){
+  const sel = document.getElementById('deptQuickSelect');
+  if (!sel) return;
+  sel.addEventListener('change', function(){
+    const inp = document.querySelector('input[name="department"]');
+    if (inp && this.value) inp.value = this.value;
+  });
+})();
+
+// ===== Payroll helpers (UI only) =====
+function toNum(v){ const n = parseFloat(v); return isNaN(n)?0:n; }
+function updateNet(){
+  const base = toNum(document.getElementById('basic_salary')?.value);
+  const allow = toNum(document.getElementById('allowances')?.value);
+  const ded = toNum(document.getElementById('deductions')?.value);
+  const prev = toNum(document.getElementById('previous_due')?.value);
+  const paid = toNum(document.getElementById('paid_amount')?.value);
+  const net = Math.max(0, base + allow - ded + prev);
+  const remaining = Math.max(0, net - paid);
+  const netEl = document.getElementById('net_salary');
+  const remEl = document.getElementById('remaining_salary');
+  if (netEl) netEl.value = net.toFixed(2);
+  if (remEl) remEl.value = remaining.toFixed(2);
+}
+['basic_salary','allowances','deductions','previous_due','paid_amount'].forEach(id=>{
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updateNet);
+});
+
+async function handleCreateSalary(ev){
+  ev.preventDefault();
+  const monthVal = document.getElementById('pay_month')?.value || '';
+  if (!monthVal){ alert('{{ _('Please choose month') }}'); return false; }
+  const [year, month] = monthVal.split('-');
+  const employee_id = document.getElementById('pay_employee')?.value || '';
+  if (!employee_id){ alert('{{ _('Please choose employee') }}'); return false; }
+  const base = toNum(document.getElementById('basic_salary')?.value);
+  const allow = toNum(document.getElementById('allowances')?.value);
+  const ded = toNum(document.getElementById('deductions')?.value);
+  const prev = toNum(document.getElementById('previous_due')?.value);
+  updateNet();
+  const fd = new FormData();
+  fd.append('csrf_token', document.querySelector('#paySalaryForm [name=csrf_token]')?.value || '');
+  fd.append('employee_id', employee_id);
+  fd.append('year', year);
+  fd.append('month', month);
+  fd.append('basic_salary', base);
+  fd.append('allowances', allow);
+  fd.append('deductions', ded);
+  fd.append('previous_salary_due', prev);
+  try{
+    const resp = await fetch('{{ url_for('main.employees_create_salary') }}', { method:'POST', body: fd });
+    const data = await resp.json().catch(()=>({ok:false,error:'parse_error'}));
+    if (resp.ok && data.ok){
+      alert('{{ _('Salary saved successfully / تم حفظ الراتب بنجاح') }}\n{{ _('Net') }}: ' + (data.total?.toFixed?data.total.toFixed(2):data.total));
+    } else {
+      alert('{{ _('Error') }}: ' + (data.error || resp.status));
+    }
+  }catch(err){
+    alert('{{ _('Network error') }}');
+  }
+  return false;
+}
+
+// Stub: load statements (UI only placeholder for now)
+(document.getElementById('btnLoadStatements')||{}).addEventListener?.('click', function(e){
+  e.preventDefault();
+  const tbody = document.querySelector('#tblStatements tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  let tEmps=0, tBasic=0, tAllow=0, tDed=0, tPaid=0, tNet=0, tRemain=0;
+  {% for e in employees or [] %}
+    // Defaults unknown at UI layer; render zeroed row with employee + department only
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>{{ e.full_name|e }}</td><td>{{ (e.department or '-')|e }}</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td>`;
+    tbody.appendChild(tr);
+    tEmps += 1;
+  {% endfor %}
+  document.getElementById('t_emps')?.innerText = tEmps;
+  document.getElementById('t_basic')?.innerText = tBasic.toFixed(2);
+  document.getElementById('t_allow')?.innerText = tAllow.toFixed(2);
+  document.getElementById('t_ded')?.innerText = tDed.toFixed(2);
+  document.getElementById('t_paid')?.innerText = tPaid.toFixed(2);
+  document.getElementById('t_net')?.innerText = tNet.toFixed(2);
+  document.getElementById('t_remain')?.innerText = tRemain.toFixed(2);
 });
 </script>
 

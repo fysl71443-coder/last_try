@@ -92,11 +92,11 @@
             </td>
             <td class="text-end">
               <a class="btn btn-sm btn-outline-primary" href="#">{{ _('Edit / تعديل') }}</a>
-              <form method="post" action="#" class="d-inline" onsubmit="return confirm('{{ _('Confirm toggle status? / تأكيد تغيير الحالة؟') }}')">
+              <form method="post" action="{{ url_for('main.customer_toggle', cid=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Confirm toggle status? / تأكيد تغيير الحالة؟') }}')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button class="btn btn-sm btn-outline-secondary">{{ _('Toggle / تبديل') }}</button>
               </form>
-              <form method="post" action="#" class="d-inline" onsubmit="return confirm('{{ _('Delete this customer? / حذف هذا العميل؟') }}')">
+              <form method="post" action="{{ url_for('main.customer_delete', cid=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this customer? / حذف هذا العميل؟') }}')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
               </form>
