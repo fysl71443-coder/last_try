@@ -58,17 +58,29 @@ def login():
                     db.session.add(new_admin)
                     db.session.commit()
                     login_user(new_admin)
+ render_fix
                     flash('تم إنشاء مستخدم المدير الافتراضي بنجاح', 'success')
                     return redirect(url_for('main.dashboard'))
                 except Exception as e:
                     db.session.rollback()
                     flash('خطأ في تهيئة المستخدم الافتراضي', 'danger')
 
+                    flash('\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0645\u0633\u062a\u062e\u062f\u0645 \u0627\u0644\u0645\u062f\u064a\u0631 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a \u0628\u0646\u062c\u0627\u062d', 'success')
+                    return redirect(url_for('main.dashboard'))
+                except Exception as e:
+                    db.session.rollback()
+                    flash('\u062e\u0637\u0623 \u0641\u064a \u062a\u0647\u064a\u0626\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a', 'danger')
+ main
+
         if user and user.check_password(password):
             login_user(user)
             return redirect(url_for('main.dashboard'))
         else:
+ render_fix
             flash('خطأ في اسم المستخدم أو كلمة المرور', 'danger')
+
+            flash('\u062e\u0637\u0623 \u0641\u064a \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0623\u0648 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631', 'danger')
+ main
     return render_template('login.html')
 
 @main.route('/logout')
@@ -134,6 +146,7 @@ def payments():
 def reports():
     return render_template('reports.html')
 
+ render_fix
 # ---------- POS/Tables: basic navigation ----------
 @main.route('/sales/<branch_code>/tables', endpoint='sales_tables')
 @login_required
@@ -430,6 +443,7 @@ def register_payment_ajax():
 
 
 
+ main
 @main.route('/customers', endpoint='customers')
 @login_required
 def customers():
@@ -463,7 +477,11 @@ def users():
 @main.route('/create-sample-data', endpoint='create_sample_data_route')
 @login_required
 def create_sample_data_route():
+ render_fix
     flash('تم إنشاء بيانات تجريبية (وهمية) لأغراض العرض فقط', 'info')
+
+    flash('\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0628\u064a\u0627\u0646\u0627\u062a \u062a\u062c\u0631\u064a\u0628\u064a\u0629 (\u0648\u0647\u0645\u064a\u0629) \u0644\u0623\u063a\u0631\u0627\u0636 \u0627\u0644\u0639\u0631\u0636 \u0641\u0642\u0637', 'info')
+ main
     return redirect(url_for('main.dashboard'))
 
 # ---------- VAT blueprint ----------
