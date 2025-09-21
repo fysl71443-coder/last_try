@@ -116,10 +116,10 @@
             </div>
 
             <div class="d-flex justify-content-end gap-3">
-              <div><strong>Subtotal</strong>: <span id="subtotal">0.00</span> {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="14" height="14" alt="currency">{% endif %}</div>
-              <div><strong>Tax</strong>: <span id="tax">0.00</span> {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="14" height="14" alt="currency">{% endif %}</div>
-              <div><strong>Discount</strong>: <span id="discount">0.00</span> {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="14" height="14" alt="currency">{% endif %}</div>
-              <div><strong>Grand Total</strong>: <span id="grand">0.00</span> {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="14" height="14" alt="currency">{% endif %}</div>
+              <div><strong>Subtotal</strong>: <span id="subtotal">0.00</span> {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="14" height="14" alt="currency">{% elif settings and settings.currency %} {{ settings.currency }}{% endif %}</div>
+              <div><strong>Tax</strong>: <span id="tax">0.00</span> {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="14" height="14" alt="currency">{% elif settings and settings.currency %} {{ settings.currency }}{% endif %}</div>
+              <div><strong>Discount</strong>: <span id="discount">0.00</span> {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="14" height="14" alt="currency">{% elif settings and settings.currency %} {{ settings.currency }}{% endif %}</div>
+              <div><strong>Grand Total</strong>: <span id="grand">0.00</span> {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="14" height="14" alt="currency">{% elif settings and settings.currency %} {{ settings.currency }}{% endif %}</div>
             </div>
           </div>
 

@@ -320,6 +320,58 @@ def invoices():
         t = 'sales'
     return render_template('invoices.html', current_type=t)
 
+
+@main.route('/invoices/delete', methods=['POST'], endpoint='invoices_delete')
+@login_required
+def invoices_delete():
+    scope = (request.form.get('scope') or 'selected').strip().lower()
+    inv_type = (request.form.get('invoice_type') or request.form.get('current_type') or 'sales').strip().lower()
+    ids = [int(x) for x in request.form.getlist('invoice_ids') if str(x).isdigit()]
+    deleted = 0
+    try:
+        if inv_type == 'sales':
+            q = SalesInvoice.query
+            if scope == 'selected' and ids:
+                q = q.filter(SalesInvoice.id.in_(ids))
+            rows = q.all()
+            for inv in rows:
+                try:
+                    SalesInvoiceItem.query.filter_by(invoice_id=inv.id).delete()
+                except Exception:
+                    pass
+                db.session.delete(inv)
+                deleted += 1
+        elif inv_type == 'purchases':
+            q = PurchaseInvoice.query
+            if scope == 'selected' and ids:
+                q = q.filter(PurchaseInvoice.id.in_(ids))
+            rows = q.all()
+            for inv in rows:
+                try:
+                    PurchaseInvoiceItem.query.filter_by(invoice_id=inv.id).delete()
+                except Exception:
+                    pass
+                db.session.delete(inv)
+                deleted += 1
+        elif inv_type == 'expenses':
+            q = ExpenseInvoice.query
+            if scope == 'selected' and ids:
+                q = q.filter(ExpenseInvoice.id.in_(ids))
+            rows = q.all()
+            for inv in rows:
+                try:
+                    ExpenseInvoiceItem.query.filter_by(invoice_id=inv.id).delete()
+                except Exception:
+                    pass
+                db.session.delete(inv)
+                deleted += 1
+        db.session.commit()
+        flash(f"Deleted {deleted} invoice(s)", 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Delete failed: {e}", 'danger')
+    return redirect(url_for('main.invoices', type=inv_type))
+
 @main.route('/employees', endpoint='employees')
 @login_required
 def employees():

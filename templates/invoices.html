@@ -420,7 +420,7 @@ body {
     })();
   </script>
 
-          <form method="post" action="#">
+          <form method="post" action="{{ url_for('main.invoices_delete') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="modal-header">
               <h5 class="modal-title">{{ _('Delete Invoices / حذف الفواتير') }}</h5>
