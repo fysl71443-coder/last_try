@@ -137,28 +137,12 @@ def dashboard():
 @main.route('/sales', endpoint='sales')
 @login_required
 def sales():
-    # Ensure menu exists and load products
-    ensure_tables(); seed_menu_if_empty()
-    items = MenuItem.query.order_by(MenuItem.name).all()
-    product_choices = [(m.id, m.name) for m in items]
-    products = [{'id': m.id, 'name': m.name, 'price_before_tax': float(m.price)} for m in items]
-    products_json = json.dumps(products)
-
-    # Build form and populate defaults/choices
-    form = SalesInvoiceForm()
-    try:
-        form.date.data = datetime.utcnow().date()
-    except Exception:
-        pass
-    try:
-        for sub in form.items:
-            sub.product_id.choices = product_choices
-    except Exception:
-        pass
-
-    # Load recent invoices for listing
-    invoices = SalesInvoice.query.order_by(SalesInvoice.created_at.desc()).limit(50).all()
-    return render_template('sales.html', form=form, products_json=products_json, invoices=invoices)
+    # Modern flow: show branches, then tables, then table invoice
+    branches = [
+        {'code': 'china_town', 'label': 'CHINA TOWN', 'url': url_for('main.sales_tables', branch_code='china_town')},
+        {'code': 'place_india', 'label': 'PALACE INDIA', 'url': url_for('main.sales_tables', branch_code='place_india')},
+    ]
+    return render_template('sales_branches.html', branches=branches)
 
 @main.route('/purchases', endpoint='purchases')
 @login_required
