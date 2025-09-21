@@ -80,6 +80,7 @@ body {
     <div class="meals-card">
         <h5 class="mb-3">{{ _('Create New Meal / إنشاء وجبة جديدة') }}</h5>
 
+        {% if form %}
         <form method="POST" id="meal-form">
             {{ form.hidden_tag() }}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -165,6 +166,11 @@ body {
                 </div>
             </div>
         </form>
+        {% else %}
+        <div class="alert alert-warning mb-0">
+            {{ _('The meal form is not available yet in this build. The page is shown for preview only.') }}
+        </div>
+        {% endif %}
     </div>
 
     <!-- قائمة الوجبات الموجودة -->
@@ -217,7 +223,7 @@ body {
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script>
     // Materials data for calculations
-    const materials = {{ materials_json | safe }};
+    const materials = {{ materials_json | default('[]') | safe }};
 
     // SocketIO for real-time updates
     var socket = io();
@@ -271,7 +277,7 @@ body {
     });
 
     // Add new ingredient functionality
-    let ingredientIndex = {{ form.ingredients|length }};
+    let ingredientIndex = {{ (form.ingredients|length) if form else 0 }};
 
     document.getElementById('add-ingredient').addEventListener('click', function() {
         const container = document.getElementById('ingredients-container');

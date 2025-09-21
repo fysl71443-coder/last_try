@@ -127,7 +127,10 @@
           method:'POST', headers, credentials:'same-origin',
           body: JSON.stringify({
             items: items.map(x=>({ id:x.meal_id, name:x.name, price:x.unit, quantity:x.qty })),
-            customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' }
+            customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' },
+            discount_pct: number(qs('#discountPct')?.value || 0),
+            tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
+            payment_method: qs('#payMethod')?.value || 'CASH'
           })
         });
         const data = await resp.json().catch(()=>({}));
@@ -141,6 +144,8 @@
             customer_name: qs('#custName')?.value || '',
             customer_phone: qs('#custPhone')?.value || '',
             payment_method: qs('#payMethod')?.value || 'CASH',
+            discount_pct: number(qs('#discountPct')?.value || 0),
+            tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
             supervisor_password: opts && opts.supervisor_password ? opts.supervisor_password : undefined
           })
         });
@@ -181,7 +186,7 @@
     if(!data){ await window.showAlert('Error'); return; }
 
     const tablesUrl = `/sales/${BRANCH}/tables`;
-    const confirmPrintAndPay = async ()=>{
+    const doFinalize = async ()=>{
       try{
         const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const h = {'Content-Type':'application/json'}; if(token) h['X-CSRFToken']=token;
@@ -190,19 +195,48 @@
           body: JSON.stringify({ invoice_id: data.invoice_id, payment_method: data.payment_method, total_amount: data.total_amount })
         });
         if(res.ok){ items = []; renderItems(); window.location.href = tablesUrl; }
-      }catch(e){ console.error('confirm-print failed', e); }
+      }catch(e){ console.error('finalize failed', e); }
     };
+
+    const askPrintedAndPaid = async ()=>{
+      if(typeof window.showConfirm === 'function'){
+        return await window.showConfirm('هل تم طباعة الفاتورة والدفع؟');
+      }
+      return window.confirm('هل تم طباعة الفاتورة والدفع؟');
+    };
+
+    // Show confirmation immediately (behind print window) and finalize after close
+    let userDecision = null; // true/false
+    const decisionPromise = (async ()=>{
+      try{ userDecision = await askPrintedAndPaid(); }
+      catch(_e){ userDecision = false; }
+    })();
 
     if(data.print_url){
       const w = window.open(data.print_url, '_blank', 'width=800,height=600,scrollbars=yes');
       if(w){
-        const timer = setInterval(()=>{ if(w.closed){ clearInterval(timer); confirmPrintAndPay(); } }, 500);
-        setTimeout(()=>{ try{ if(!w.closed){ w.close(); clearInterval(timer); confirmPrintAndPay(); } }catch(_e){} }, 30000);
+        const timer = setInterval(async ()=>{
+          if(w.closed){
+            clearInterval(timer);
+            try{ await decisionPromise; }catch(_e){}
+            if(userDecision){ await doFinalize(); }
+          }
+        }, 400);
+        // Safety auto-close after 30s and then proceed
+        setTimeout(async ()=>{
+          try{
+            if(!w.closed){ w.close(); }
+          }catch(_e){}
+        }, 30000);
       } else {
-        await confirmPrintAndPay();
+        // Popup blocked: proceed with decision immediately
+        try{ await decisionPromise; }catch(_e){}
+        if(userDecision){ await doFinalize(); }
       }
     } else {
-      await confirmPrintAndPay();
+      // No print URL: just ask and act
+      try{ await decisionPromise; }catch(_e){}
+      if(userDecision){ await doFinalize(); }
     }
   }
 
@@ -262,6 +296,67 @@
     qs('#custName')?.addEventListener('blur', ()=> saveDraftOrder());
     qs('#custPhone')?.addEventListener('blur', ()=> saveDraftOrder());
     qs('#payMethod')?.addEventListener('change', ()=> saveDraftOrder());
+    qs('#discountPct')?.addEventListener('input', ()=> { setTotals(); saveDraftOrder(); });
+    qs('#taxPct')?.addEventListener('input', ()=> { setTotals(); saveDraftOrder(); });
+
+    // Pre-print (thermal receipt before payment)
+    function prePrint(){
+      if(!BRANCH || !TABLE_NO){ return; }
+      const url = `/print/order-preview/${BRANCH}/${TABLE_NO}`;
+      const w = window.open(url, '_blank', 'width=800,height=600,scrollbars=yes');
+      if(w){ setTimeout(()=>{ try{ w.focus(); }catch(_e){} }, 200); }
+    }
+    const preBtn = document.querySelector('#btnPrePrint');
+    if(preBtn){ preBtn.addEventListener('click', prePrint); }
+
+    // Customer search + special discount codes
+    const custInput = qs('#custName');
+    const custPhone = qs('#custPhone');
+    const custList = qs('#custList');
+    let custFetchTimer = null;
+
+    function hideCustList(){ if(custList){ custList.style.display='none'; custList.innerHTML=''; } }
+    function showCustList(){ if(custList){ custList.style.display='block'; } }
+
+    async function fetchCustomers(q){
+      try{
+        const resp = await fetch(`/api/customers/search?q=${encodeURIComponent(q)}`, { credentials:'same-origin' });
+        if(!resp.ok) return [];
+        const j = await resp.json().catch(()=>({results:[]}));
+        return Array.isArray(j.results) ? j.results : [];
+      }catch(e){ return []; }
+    }
+
+    async function handleCustInput(){
+      const val = (custInput?.value || '').trim();
+      const up = val.toUpperCase();
+      if(up === 'KEETA' || up === 'HUNGER'){
+        const p = await (window.showPrompt ? window.showPrompt('أدخل نسبة خصم خاصة %') : Promise.resolve(prompt('أدخل نسبة خصم خاصة %')));
+        if(p!==null){ const n = number(p, 0); const dp = qs('#discountPct'); if(dp){ dp.value = String(n); } setTotals(); saveDraftOrder(); }
+      }
+      clearTimeout(custFetchTimer);
+      if(!val){ hideCustList(); return; }
+      custFetchTimer = setTimeout(async ()=>{
+        const results = await fetchCustomers(val);
+        if(!custList) return;
+        custList.innerHTML = '';
+        results.forEach(r=>{
+          const a = document.createElement('a'); a.href='#'; a.className='list-group-item list-group-item-action';
+          a.textContent = `${r.name}${r.phone ? ' ('+r.phone+')' : ''} — خصم ${number(r.discount_percent||0).toFixed(2)}%`;
+          a.addEventListener('click', (e)=>{
+            e.preventDefault();
+            if(custInput) custInput.value = r.name || '';
+            if(custPhone) custPhone.value = r.phone || '';
+            const dp = qs('#discountPct'); if(dp){ dp.value = String(number(r.discount_percent||0)); }
+            hideCustList(); setTotals(); saveDraftOrder();
+          });
+          custList.appendChild(a);
+        });
+        if(results.length){ showCustList(); } else { hideCustList(); }
+      }, 250);
+    }
+    custInput?.addEventListener('input', handleCustInput);
+    document.addEventListener('click', (e)=>{ if(!custList) return; if(!custList.contains(e.target) && e.target !== custInput){ hideCustList(); } });
 
     // Initial render
     renderItems();

@@ -58,3 +58,11 @@ class SalesInvoiceItem(db.Model):
     name = db.Column(db.String(150))
     unit_price = db.Column(db.Float, default=0.0)
     qty = db.Column(db.Float, default=1.0)
+
+class Customer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    phone = db.Column(db.String(50))
+    discount_percent = db.Column(db.Float, default=0.0)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

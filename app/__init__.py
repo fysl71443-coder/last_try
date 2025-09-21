@@ -53,11 +53,7 @@ def create_app(config_class=None):
         def section_image_for(name: str):
             try:
                 n = (name or '').lower()
-                if 'drink' in n or 'juice' in n: return '/static/images/section-drinks.jpg'
-                if 'biryani' in n or 'rice' in n: return '/static/images/section-biryani.jpg'
-                if 'noodle' in n or 'chow' in n: return '/static/images/section-noodles.jpg'
-                if 'chicken' in n: return '/static/images/section-chicken.jpg'
-                if 'dessert' in n or 'sweet' in n: return '/static/images/section-desserts.jpg'
+                # Use a single existing placeholder image to avoid 404s in development
                 return '/static/logo.svg'
             except Exception:
                 return '/static/logo.svg'
@@ -94,5 +90,12 @@ def create_app(config_class=None):
     app.register_blueprint(main)
     app.register_blueprint(vat)
     app.register_blueprint(financials)
+
+    # Ensure tables exist on startup (useful for local SQLite runs)
+    try:
+        with app.app_context():
+            db.create_all()
+    except Exception:
+        pass
 
     return app
