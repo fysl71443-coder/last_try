@@ -1014,7 +1014,7 @@ def menu_item_add():
             meal = None
         if meal:
             disp_name = f"{meal.name} / {meal.name_ar}" if getattr(meal, 'name_ar', None) else (meal.name or name)
-            final_name = disp_name or name
+            final_name = (name or '').strip() or disp_name
             final_price = float(price) if price is not None else float(meal.selling_price or 0.0)
         else:
             # Fallback to manual

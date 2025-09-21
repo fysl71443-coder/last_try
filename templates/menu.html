@@ -78,7 +78,7 @@
         <form method="post" action="{{ url_for('main.menu_item_add') }}" class="row g-2 align-items-end mb-3" id="addItemForm">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <input type="hidden" name="section_id" value="{{ current_section.id }}"/>
-          <div class="col-md-6">
+          <div class="col-md-5">
             <label class="form-label form-label-sm">{{ _('Meal / الوجبة') }}</label>
             <select name="meal_id" class="form-select form-select-sm" id="mealSelect">
               <option value="">-- {{ _('Choose a meal / اختر وجبة') }} --</option>
@@ -87,11 +87,15 @@
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-3">
+          <div class="col-md-4">
+            <label class="form-label form-label-sm">{{ _('Name / الاسم') }}</label>
+            <input type="text" name="name" class="form-control form-control-sm" placeholder="{{ _('Auto from meal (editable)') }}"/>
+          </div>
+          <div class="col-md-2">
             <label class="form-label form-label-sm">{{ _('Price') }}</label>
             <input type="number" step="0.01" name="price" class="form-control form-control-sm" placeholder="{{ _('Auto from meal') }}"/>
           </div>
-          <div class="col-md-2 d-grid">
+          <div class="col-md-1 d-grid">
             <button class="btn btn-xs btn-primary" style="padding:4px 8px; font-size:12px">{{ _('Add') }}</button>
           </div>
         </form>
