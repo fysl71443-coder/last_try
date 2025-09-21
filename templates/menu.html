@@ -216,12 +216,15 @@
   }
 
 
+</script>
+
 <!-- Import Meals Modal (Excel/CSV) -->
 <div class="modal fade" id="importMealsModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
       <form method="post" action="{{ url_for('main.meals_import') }}" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        {% if current_section %}<input type="hidden" name="cat_id" value="{{ current_section.id }}"/>{% endif %}
         <div class="modal-header">
           <h5 class="modal-title">{{ _('Import Meals / استيراد الوجبات') }}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -245,6 +248,8 @@
     </div>
   </div>
 </div>
+
+<script>
 
   async function deleteAll() {
     const ok = confirm('سيتم حذف جميع الأصناف! هل أنت متأكد؟');

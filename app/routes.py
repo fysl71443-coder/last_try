@@ -8,13 +8,11 @@ from sqlalchemy.exc import IntegrityError
 
 
 from app import db, csrf
-try:
-    from extensions import db as ext_db
-except Exception:
-    ext_db = None
+# Force single DB session usage across the app to avoid multiple SQLAlchemy instances
+ext_db = None
 from app.models import User, AppKV, MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer
-from models import PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, RawMaterial, Supplier, Employee, Salary
-from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm
+from models import PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary
+from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
 main = Blueprint('main', __name__)
 
@@ -269,15 +267,104 @@ def purchases():
 
     return render_template('purchases.html', form=form, suppliers_list=suppliers, suppliers_json=suppliers_json, materials_json=materials_json)
 
-@main.route('/raw-materials', endpoint='raw_materials')
+@main.route('/raw-materials', methods=['GET', 'POST'], endpoint='raw_materials')
 @login_required
 def raw_materials():
-    return render_template('raw_materials.html')
+    form = RawMaterialForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        try:
+            rm = RawMaterial(
+                name=form.name.data,
+                name_ar=form.name_ar.data,
+                unit=form.unit.data,
+                cost_per_unit=form.cost_per_unit.data,
+                category=form.category.data,
+            )
+            db.session.add(rm)
+            db.session.commit()
+            flash('تم حفظ المادة الخام بنجاح', 'success')
+            return redirect(url_for('main.raw_materials'))
+        except Exception as e:
+            db.session.rollback()
+            flash('فشل حفظ المادة الخام', 'danger')
+    materials = RawMaterial.query.filter_by(active=True).all()
+    return render_template('raw_materials.html', form=form, materials=materials)
 
-@main.route('/meals', endpoint='meals')
+@main.route('/meals', methods=['GET', 'POST'], endpoint='meals')
 @login_required
 def meals():
-    return render_template('meals.html')
+    # Build form and context similar to monolith, but within blueprint
+    raw_materials = RawMaterial.query.filter_by(active=True).all()
+    material_choices = [(m.id, m.display_name) for m in raw_materials]
+
+    form = MealForm()
+    # Ensure ingredient subforms have choices
+    for ingredient_form in form.ingredients:
+        ingredient_form.raw_material_id.choices = material_choices
+
+    materials_json = json.dumps([
+        {
+            'id': m.id,
+            'name': m.display_name,
+            'cost_per_unit': float(m.cost_per_unit),
+            'unit': m.unit,
+        }
+        for m in raw_materials
+    ])
+
+    if form.validate_on_submit():
+        try:
+            from decimal import Decimal
+            meal = Meal(
+                name=form.name.data,
+                name_ar=form.name_ar.data,
+                description=form.description.data,
+                category=form.category.data,
+                profit_margin_percent=form.profit_margin_percent.data,
+                user_id=current_user.id,
+            )
+            db.session.add(meal)
+            db.session.flush()  # get meal.id
+
+            total_cost = 0
+            # Parse dynamic ingredient rows from POST keys
+            idxs = set()
+            for k in request.form.keys():
+                if k.startswith('ingredients-') and k.endswith('-raw_material_id'):
+                    try:
+                        idxs.add(int(k.split('-')[1]))
+                    except Exception:
+                        pass
+            for i in sorted(idxs):
+                try:
+                    rm_id = int(request.form.get(f'ingredients-{i}-raw_material_id') or 0)
+                    qty_raw = request.form.get(f'ingredients-{i}-quantity')
+                    qty = Decimal(qty_raw) if qty_raw not in (None, '') else Decimal('0')
+                except Exception:
+                    rm_id, qty = 0, Decimal('0')
+                if rm_id and qty > 0:
+                    raw_material = RawMaterial.query.get(rm_id)
+                    if raw_material:
+                        ing = MealIngredient(meal_id=meal.id, raw_material_id=raw_material.id, quantity=qty)
+                        try:
+                            ing_cost = qty * raw_material.cost_per_unit
+                            ing.total_cost = ing_cost
+                        except Exception:
+                            ing.total_cost = 0
+                        db.session.add(ing)
+                        total_cost += float(ing.total_cost)
+
+            meal.total_cost = total_cost
+            meal.calculate_selling_price()
+            db.session.commit()
+            flash('تم إنشاء الوجبة بنجاح', 'success')
+            return redirect(url_for('main.meals'))
+        except Exception as e:
+            db.session.rollback()
+            flash('فشل حفظ الوجبة', 'danger')
+
+    all_meals = Meal.query.filter_by(active=True).all()
+    return render_template('meals.html', form=form, meals=all_meals, materials_json=materials_json)
 
 # -------- Meals import (Excel/CSV): Name, Name (Arabic), Selling Price --------
 @main.route('/meals/import', methods=['POST'], endpoint='meals_import')
@@ -288,31 +375,40 @@ def meals_import():
     file = request.files.get('file')
     if not file or not file.filename:
         flash('لم يتم اختيار ملف', 'warning')
-        return redirect(url_for('main.meals'))
+        return redirect(url_for('main.menu'))
+
+    # إن وُجد قسم حالي مرسل من النموذج نعيد التوجيه إليه بعد الاستيراد
+    cat_id = request.form.get('cat_id', type=int)
 
     ext = os.path.splitext(file.filename)[1].lower()
 
-    def ensure_category(name='Meals'):
-        cat = MenuCategory.query.filter_by(name=name).first()
-        if not cat:
-            cat = MenuCategory(name=name, sort_order=0)
-            db.session.add(cat)
-            db.session.commit()
-        return cat
-
-    def upsert_item(name_en, name_ar, price_val):
-        # دمج الاسم العربي للعرض فقط
-        display_name = (name_en or '').strip()
-        if name_ar:
-            display_name = f"{display_name} / {str(name_ar).strip()}" if display_name else str(name_ar).strip()
+    def upsert_meal(name_en, name_ar, price_val):
+        name_en = (name_en or '').strip()
+        name_ar = (name_ar or '').strip() or None
         try:
             price = float(str(price_val).replace(',', '').strip()) if price_val is not None else 0.0
         except Exception:
             price = 0.0
-        cat = ensure_category('Meals')
-        item = MenuItem(name=display_name or 'Unnamed', price=price, category_id=cat.id)
-        db.session.add(item)
-        return item
+        # محاولة إيجاد وجبة موجودة بنفس الاسم (و/أو الاسم العربي)
+        existing = None
+        if name_en and name_ar:
+            existing = Meal.query.filter_by(name=name_en, name_ar=name_ar).first()
+        if not existing and name_en:
+            existing = Meal.query.filter_by(name=name_en).first()
+        if existing:
+            # حدّث سعر البيع فقط (لا نغيّر التكاليف هنا)
+            try:
+                existing.selling_price = price
+            except Exception:
+                pass
+            return existing
+        m = Meal(name=name_en or 'Unnamed', name_ar=name_ar, description=None, category=None)
+        try:
+            m.selling_price = price
+        except Exception:
+            pass
+        db.session.add(m)
+        return m
 
     imported, errors = 0, 0
 
@@ -320,7 +416,6 @@ def meals_import():
         try:
             stream = TextIOWrapper(file.stream, encoding='utf-8')
             reader = csv.DictReader(stream)
-            # تطبيع أسماء الأعمدة
             def norm(s):
                 return (s or '').strip().lower()
             for row in reader:
@@ -331,31 +426,29 @@ def meals_import():
                 if not name and not name_ar:
                     continue
                 try:
-                    upsert_item(name, name_ar, price)
+                    upsert_meal(name, name_ar, price)
                     imported += 1
                 except Exception:
                     errors += 1
             db.session.commit()
-            flash(f'تم استيراد {imported} عنصر بنجاح' + (f'، أخطاء: {errors}' if errors else ''), 'success')
+            flash(f'تم استيراد {imported} وجبة بنجاح' + (f'، أخطاء: {errors}' if errors else ''), 'success')
         except Exception as e:
             db.session.rollback()
             flash(f'فشل استيراد CSV: {e}', 'danger')
-        return redirect(url_for('main.meals'))
+        return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
 
     elif ext in ('.xlsx', '.xls'):
         try:
             try:
-                import openpyxl  # يتطلب تثبيت openpyxl
+                import openpyxl
             except Exception:
                 flash('لا يمكن قراءة ملفات Excel بدون تثبيت openpyxl. يمكنك رفع CSV بدلاً من ذلك أو اسمح لي بتثبيت openpyxl.', 'warning')
-                return redirect(url_for('main.meals'))
+                return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
             wb = openpyxl.load_workbook(file, data_only=True)
             ws = wb.active
-            # اقرأ العناوين من الصف الأول
             headers = []
             for cell in next(ws.iter_rows(min_row=1, max_row=1, values_only=True)):
                 headers.append((cell or '').strip().lower())
-            # اصنع خريطة اسم -> فهرس
             index = {h: i for i, h in enumerate(headers)}
             def get_val(row, keys):
                 for k in keys:
@@ -369,25 +462,27 @@ def meals_import():
                 if not name and not name_ar:
                     continue
                 try:
-                    upsert_item(name, name_ar, price)
+                    upsert_meal(name, name_ar, price)
                     imported += 1
                 except Exception:
                     errors += 1
             db.session.commit()
-            flash(f'تم استيراد {imported} عنصر من Excel' + (f'، أخطاء: {errors}' if errors else ''), 'success')
+            flash(f'تم استيراد {imported} وجبة من Excel' + (f'، أخطاء: {errors}' if errors else ''), 'success')
         except Exception as e:
             db.session.rollback()
             flash(f'فشل استيراد Excel: {e}', 'danger')
-        return redirect(url_for('main.meals'))
+        return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
 
     else:
         flash('صيغة الملف غير مدعومة. الرجاء رفع ملف CSV أو Excel (.xlsx/.xls).', 'warning')
-        return redirect(url_for('main.meals'))
+        return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
 
 @main.route('/inventory', endpoint='inventory')
 @login_required
 def inventory():
-    return render_template('inventory.html')
+    raw_materials = RawMaterial.query.filter_by(active=True).all()
+    meals = Meal.query.filter_by(active=True).all()
+    return render_template('inventory.html', raw_materials=raw_materials, meals=meals)
 
 @main.route('/expenses', methods=['GET', 'POST'], endpoint='expenses')
 @login_required
@@ -1390,6 +1485,25 @@ def menu():
             current = None
     if not current and cats:
         current = cats[0]
+
+    # Cleanup exact duplicates (same name and same price) within the current section
+    if current:
+        try:
+            seen = {}
+            dups = []
+            for it in MenuItem.query.filter_by(category_id=current.id).order_by(MenuItem.id.asc()).all():
+                key = ((it.name or '').strip().lower(), round(float(it.price or 0), 2))
+                if key in seen:
+                    dups.append(it)
+                else:
+                    seen[key] = it.id
+            if dups:
+                for it in dups:
+                    db.session.delete(it)
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     items = []
     if current:
         items = MenuItem.query.filter_by(category_id=current.id).order_by(MenuItem.name).all()
