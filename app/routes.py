@@ -1797,34 +1797,36 @@ def menu_item_add():
     cat_id = request.form.get('section_id', type=int)
     meal_id = request.form.get('meal_id', type=int)
     name = (request.form.get('name') or '').strip()
-    price = request.form.get('price', type=float)
+    price_raw = request.form.get('price')
+    # parse price robustly (support comma decimal)
+    try:
+        price = float((price_raw or '').replace(',', '.')) if price_raw not in [None, ''] else None
+    except Exception:
+        price = None
     if not cat_id:
         flash('Missing category', 'danger')
         return redirect(url_for('main.menu'))
     try:
-        # If a meal is selected, use its name (EN/AR) and selling price by default
-        if meal_id:
-            meal = db.session.get(Meal, int(meal_id))
-        else:
-            meal = None
+        # Resolve meal if provided
+        meal = db.session.get(Meal, int(meal_id)) if meal_id else None
         if meal:
             disp_name = f"{meal.name} / {meal.name_ar}" if getattr(meal, 'name_ar', None) else (meal.name or name)
             final_name = (name or '').strip() or disp_name
             final_price = float(price) if price is not None else float(meal.selling_price or 0.0)
         else:
-            # Fallback to manual
             final_name = name
             final_price = float(price or 0.0)
+        final_name = (final_name or '').strip()[:150]
         if not final_name:
             flash('Missing item name', 'danger')
             return redirect(url_for('main.menu', cat_id=cat_id))
-        it = MenuItem(name=final_name, price=final_price, category_id=int(cat_id))
+        it = MenuItem(name=final_name, price=final_price, category_id=int(cat_id), meal_id=(meal.id if meal else None))
         db.session.add(it)
         db.session.commit()
         return redirect(url_for('main.menu', cat_id=cat_id))
-    except Exception:
+    except Exception as e:
         db.session.rollback()
-        flash('Error creating item', 'danger')
+        flash(f'Error creating item: {e}', 'danger')
         return redirect(url_for('main.menu', cat_id=cat_id))
 
 
@@ -2640,25 +2642,52 @@ def trial_balance():
 @login_required
 def print_balance_sheet():
     d = (request.args.get('date') or date.today().isoformat())
-    data = {
-        'date': d,
-        'assets': 0.0,
-        'liabilities': 0.0,
-        'equity': 0.0,
-    }
-    return render_template('financials/balance_sheet.html', data=data)
+    # Simple placeholders (until full ledger is implemented)
+    assets = 0.0
+    liabilities = 0.0
+    equity = float(assets - liabilities)
+    try:
+        settings = Settings.query.first()
+    except Exception:
+        settings = None
+    columns = ['Metric', 'Amount']
+    data_rows = [
+        {'Metric': 'Assets', 'Amount': float(assets or 0.0)},
+        {'Metric': 'Liabilities', 'Amount': float(liabilities or 0.0)},
+        {'Metric': 'Equity', 'Amount': float(equity or 0.0)},
+    ]
+    totals = {'Amount': float(equity or 0.0)}
+    return render_template('print_report.html', report_title=f"Balance Sheet — {d}", settings=settings,
+                           generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                           start_date=d, end_date=d,
+                           payment_method=None, branch='all',
+                           columns=columns, data=data_rows, totals=totals, totals_columns=['Amount'],
+                           totals_colspan=1, payment_totals=None)
 
 @financials.route('/trial-balance/print', endpoint='print_trial_balance')
 @login_required
 def print_trial_balance():
     d = (request.args.get('date') or date.today().isoformat())
-    data = {
-        'date': d,
-        'rows': [],
-        'total_debit': 0.0,
-        'total_credit': 0.0,
-    }
-    return render_template('financials/trial_balance.html', data=data)
+    rows = []
+    total_debit = 0.0
+    total_credit = 0.0
+    try:
+        settings = Settings.query.first()
+    except Exception:
+        settings = None
+    columns = ['Code', 'Account', 'Debit', 'Credit']
+    data_rows = [
+        {'Code': r.get('code', ''), 'Account': r.get('name', ''),
+         'Debit': float(r.get('debit') or 0.0), 'Credit': float(r.get('credit') or 0.0)}
+        for r in rows
+    ]
+    totals = {'Debit': float(total_debit or 0.0), 'Credit': float(total_credit or 0.0)}
+    return render_template('print_report.html', report_title=f"Trial Balance — {d}", settings=settings,
+                           generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                           start_date=d, end_date=d,
+                           payment_method=None, branch='all',
+                           columns=columns, data=data_rows, totals=totals, totals_columns=['Debit','Credit'],
+                           totals_colspan=2, payment_totals=None)
 
 
 # --------- Minimal report APIs to avoid 404s and support UI tables/prints ---------
