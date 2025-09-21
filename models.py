@@ -517,6 +517,7 @@ class MenuCategory(db.Model):
     __tablename__ = 'menu_categories'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), unique=True, nullable=False)
+    sort_order = db.Column(db.Integer, default=0)  # for UI ordering
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -527,8 +528,12 @@ class MenuCategory(db.Model):
 class MenuItem(db.Model):
     __tablename__ = 'menu_items'
     id = db.Column(db.Integer, primary_key=True)
+    # Backward-compatible fields used by admin UI
+    name = db.Column(db.String(150), nullable=True)
+    price = db.Column(db.Float, default=0.0)
+    # Canonical relations
     category_id = db.Column(db.Integer, db.ForeignKey('menu_categories.id'), nullable=False)
-    meal_id = db.Column(db.Integer, db.ForeignKey('meals.id'), nullable=False)
+    meal_id = db.Column(db.Integer, db.ForeignKey('meals.id'), nullable=True)
     price_override = db.Column(db.Numeric(12, 2), nullable=True)
     display_order = db.Column(db.Integer, nullable=True)
 
