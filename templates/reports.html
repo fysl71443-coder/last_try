@@ -1,122 +1,57 @@
-def get_sales_report(start_s, end_s, branch, pm):
-    start_d = _dt.strptime(start_s, '%Y-%m-%d').date() if start_s else _date.min
-    end_d = _dt.strptime(end_s, '%Y-%m-%d').date() if end_s else _date.max
-    q = db.session.query(SalesInvoice, SalesInvoiceItem)
-        .join(SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id)
-        .filter(SalesInvoice.date.between(start_d, end_d))
-    if branch != 'all':
-        b = 'china_town' if 'china' in branch else ('place_india' if 'india' in branch or 'place' in branch else branch)
-        q = q.filter(SalesInvoice.branch == b)
-    if pm != 'all':
-        q = q.filter(func.lower(SalesInvoice.payment_method) == pm)
-    rows = q.order_by(SalesInvoice.date.asc(), SalesInvoice.id.asc(), SalesInvoiceItem.id.asc()).all()
-    columns = ["التاريخ", "رقم الفاتورة", "الصنف", "الكمية", "السعر", "المبلغ", "الخصم", "الضريبة", "الإجمالي", "طريقة الدفع"]
-    data = []
-    total_amount_sum = total_tax_sum = total_disc_sum = 0
-    for inv, it in rows:
-        amount = float(it.total_price or ((it.price_before_tax or 0) * (it.quantity or 0)))
-        disc = float(it.discount or 0)
-        tax = float(it.tax or 0)
-        total = amount - disc + tax
-        data.append({
-            "التاريخ": inv.date.strftime('%Y-%m-%d'),
-            "رقم الفاتورة": inv.invoice_number,
-            "الصنف": it.product_name,
-            "الكمية": it.quantity or 0,
-            "السعر": it.price_before_tax or 0,
-            "المبلغ": amount,
-            "الخصم": disc,
-            "الضريبة": tax,
-            "الإجمالي": total,
-            "طريقة الدفع": inv.payment_method or ''
-        })
-        total_amount_sum += amount
-        total_tax_sum += tax
-        total_disc_sum += disc
-    totals = {
-        "المبلغ": total_amount_sum,
-        "الخصم": total_disc_sum,
-        "الضريبة": total_tax_sum,
-        "الإجمالي": total_amount_sum - total_disc_sum + total_tax_sum
-    }
-    return columns, data, totals
+{% extends 'base.html' %}
+{% block title %}التقارير{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3>التقارير والطباعة</h3>
+  <form class="row g-2 align-items-end mb-3" onsubmit="openPrint(); return false;">
+    <div class="col-auto">
+      <label class="form-label">النوع</label>
+      <select id="rep-cat" class="form-select">
+        <option value="sales">مبيعات</option>
+        <option value="purchases">مشتريات</option>
+        <option value="expenses">مصروفات</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label">من تاريخ</label>
+      <input id="sd" type="date" class="form-control" value="{{ request.args.get('start_date','') }}">
+    </div>
+    <div class="col-auto">
+      <label class="form-label">إلى تاريخ</label>
+      <input id="ed" type="date" class="form-control" value="{{ request.args.get('end_date','') }}">
+    </div>
+    <div class="col-auto">
+      <label class="form-label">طريقة الدفع</label>
+      <select id="pm" class="form-select">
+        <option value="all">الكل</option>
+        <option value="cash">نقدي</option>
+        <option value="card">بطاقة</option>
+        <option value="bank">تحويل/بنك</option>
+        <option value="pending">آجل</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-primary">طباعة</button>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">رجوع</a>
+    </div>
+  </form>
 
-def get_purchases_report():
-    purchases = db.session.query(PurchaseInvoice, PurchaseItem).join(
-        PurchaseItem, PurchaseItem.invoice_id == PurchaseInvoice.id
-    ).all()
-    columns = ["التاريخ", "رقم الفاتورة", "الصنف", "الكمية", "السعر", "المبلغ", "الخصم", "الضريبة", "الإجمالي", "طريقة الدفع"]
-    data = []
-    total_amount_sum = total_tax_sum = total_disc_sum = 0
-    for inv, it in purchases:
-        amount = float(it.total_price or ((it.price or 0) * (it.quantity or 0)))
-        disc = float(it.discount or 0)
-        tax = float(it.tax or 0)
-        total = amount - disc + tax
-        data.append({
-            "التاريخ": inv.date.strftime('%Y-%m-%d'),
-            "رقم الفاتورة": inv.invoice_number,
-            "الصنف": it.product_name,
-            "الكمية": it.quantity or 0,
-            "السعر": it.price or 0,
-            "المبلغ": amount,
-            "الخصم": disc,
-            "الضريبة": tax,
-            "الإجمالي": total,
-            "طريقة الدفع": inv.payment_method or ''
-        })
-        total_amount_sum += amount
-        total_tax_sum += tax
-        total_disc_sum += disc
-    totals = {
-        "المبلغ": total_amount_sum,
-        "الخصم": total_disc_sum,
-        "الضريبة": total_tax_sum,
-        "الإجمالي": total_amount_sum - total_disc_sum + total_tax_sum
-    }
-    return columns, data, totals
+  <div class="alert alert-info">
+    اختر النوع وحدد الفترة وطريقة الدفع ثم اضغط طباعة. سيتم فتح صفحة الطباعة في نافذة جديدة.
+  </div>
+</div>
 
-def get_expenses_report():
-    expenses = db.session.query(Expense).all()
-    columns = ["التاريخ", "رقم السند", "المصروف", "المبلغ", "الضريبة", "الإجمالي", "طريقة الدفع"]
-    data = []
-    total_amount_sum = total_tax_sum = 0
-    for exp in expenses:
-        amount = float(exp.amount or 0)
-        tax = float(exp.tax or 0)
-        total = amount + tax
-        data.append({
-            "التاريخ": exp.date.strftime('%Y-%m-%d'),
-            "رقم السند": exp.voucher_number,
-            "المصروف": exp.expense_type,
-            "المبلغ": amount,
-            "الضريبة": tax,
-            "الإجمالي": total,
-            "طريقة الدفع": exp.payment_method or ''
-        })
-        total_amount_sum += amount
-        total_tax_sum += tax
-    totals = {
-        "المبلغ": total_amount_sum,
-        "الضريبة": total_tax_sum,
-        "الإجمالي": total_amount_sum + total_tax_sum
-    }
-    return columns, data, totals
-
-def get_payroll_report():
-    payrolls = db.session.query(Payroll).all()
-    columns = ["الشهر", "إجمالي الراتب الأساسي", "إجمالي البدلات", "إجمالي الاستقطاعات", "صافي الراتب", "عدد الموظفين"]
-    data = []
-    total_basic = total_allow = total_deduct = total_net = 0
-    for p in payrolls:
-        data.append({
-            "الشهر": p.month,
-            "إجمالي الراتب الأساسي": p.total_basic,
-            "إجمالي البدلات": p.total_allowances,
-            "إجمالي الاستقطاعات": p.total_deductions,
-            "صافي الراتب": p.net_paid,
-            "عدد الموظفين": p.employee_count
-        })
-        total_basic += p.total_basic
-        total_allow += p.total_allowances
-        total_deduct += p.total_deductions
+<script>
+function openPrint() {
+  const cat = document.getElementById('rep-cat').value;
+  const pm = document.getElementById('pm').value || 'all';
+  const sd = document.getElementById('sd').value || '';
+  const ed = document.getElementById('ed').value || '';
+  let path = '/reports/print/all-invoices/sales';
+  if (cat === 'purchases') path = '/reports/print/all-invoices/purchases';
+  else if (cat === 'expenses') path = '/reports/print/all-invoices/expenses';
+  const url = `${path}?payment_method=${encodeURIComponent(pm)}&start_date=${encodeURIComponent(sd)}&end_date=${encodeURIComponent(ed)}`;
+  window.open(url, '_blank');
+}
+</script>
+{% endblock %}

@@ -4,15 +4,15 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+
 
 from app import db, csrf
-try:
-    from extensions import db as ext_db
-except Exception:
-    ext_db = None
+# Force single DB session usage across the app to avoid multiple SQLAlchemy instances
+ext_db = None
 from app.models import User, AppKV, MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer
-from models import PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, RawMaterial, Supplier, Employee, Salary
-from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm
+from models import PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary
+from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
 main = Blueprint('main', __name__)
 
@@ -267,15 +267,104 @@ def purchases():
 
     return render_template('purchases.html', form=form, suppliers_list=suppliers, suppliers_json=suppliers_json, materials_json=materials_json)
 
-@main.route('/raw-materials', endpoint='raw_materials')
+@main.route('/raw-materials', methods=['GET', 'POST'], endpoint='raw_materials')
 @login_required
 def raw_materials():
-    return render_template('raw_materials.html')
+    form = RawMaterialForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        try:
+            rm = RawMaterial(
+                name=form.name.data,
+                name_ar=form.name_ar.data,
+                unit=form.unit.data,
+                cost_per_unit=form.cost_per_unit.data,
+                category=form.category.data,
+            )
+            db.session.add(rm)
+            db.session.commit()
+            flash('تم حفظ المادة الخام بنجاح', 'success')
+            return redirect(url_for('main.raw_materials'))
+        except Exception as e:
+            db.session.rollback()
+            flash('فشل حفظ المادة الخام', 'danger')
+    materials = RawMaterial.query.filter_by(active=True).all()
+    return render_template('raw_materials.html', form=form, materials=materials)
 
-@main.route('/meals', endpoint='meals')
+@main.route('/meals', methods=['GET', 'POST'], endpoint='meals')
 @login_required
 def meals():
-    return render_template('meals.html')
+    # Build form and context similar to monolith, but within blueprint
+    raw_materials = RawMaterial.query.filter_by(active=True).all()
+    material_choices = [(m.id, m.display_name) for m in raw_materials]
+
+    form = MealForm()
+    # Ensure ingredient subforms have choices
+    for ingredient_form in form.ingredients:
+        ingredient_form.raw_material_id.choices = material_choices
+
+    materials_json = json.dumps([
+        {
+            'id': m.id,
+            'name': m.display_name,
+            'cost_per_unit': float(m.cost_per_unit),
+            'unit': m.unit,
+        }
+        for m in raw_materials
+    ])
+
+    if form.validate_on_submit():
+        try:
+            from decimal import Decimal
+            meal = Meal(
+                name=form.name.data,
+                name_ar=form.name_ar.data,
+                description=form.description.data,
+                category=form.category.data,
+                profit_margin_percent=form.profit_margin_percent.data,
+                user_id=current_user.id,
+            )
+            db.session.add(meal)
+            db.session.flush()  # get meal.id
+
+            total_cost = 0
+            # Parse dynamic ingredient rows from POST keys
+            idxs = set()
+            for k in request.form.keys():
+                if k.startswith('ingredients-') and k.endswith('-raw_material_id'):
+                    try:
+                        idxs.add(int(k.split('-')[1]))
+                    except Exception:
+                        pass
+            for i in sorted(idxs):
+                try:
+                    rm_id = int(request.form.get(f'ingredients-{i}-raw_material_id') or 0)
+                    qty_raw = request.form.get(f'ingredients-{i}-quantity')
+                    qty = Decimal(qty_raw) if qty_raw not in (None, '') else Decimal('0')
+                except Exception:
+                    rm_id, qty = 0, Decimal('0')
+                if rm_id and qty > 0:
+                    raw_material = RawMaterial.query.get(rm_id)
+                    if raw_material:
+                        ing = MealIngredient(meal_id=meal.id, raw_material_id=raw_material.id, quantity=qty)
+                        try:
+                            ing_cost = qty * raw_material.cost_per_unit
+                            ing.total_cost = ing_cost
+                        except Exception:
+                            ing.total_cost = 0
+                        db.session.add(ing)
+                        total_cost += float(ing.total_cost)
+
+            meal.total_cost = total_cost
+            meal.calculate_selling_price()
+            db.session.commit()
+            flash('تم إنشاء الوجبة بنجاح', 'success')
+            return redirect(url_for('main.meals'))
+        except Exception as e:
+            db.session.rollback()
+            flash('فشل حفظ الوجبة', 'danger')
+
+    all_meals = Meal.query.filter_by(active=True).all()
+    return render_template('meals.html', form=form, meals=all_meals, materials_json=materials_json)
 
 # -------- Meals import (Excel/CSV): Name, Name (Arabic), Selling Price --------
 @main.route('/meals/import', methods=['POST'], endpoint='meals_import')
@@ -286,31 +375,40 @@ def meals_import():
     file = request.files.get('file')
     if not file or not file.filename:
         flash('لم يتم اختيار ملف', 'warning')
-        return redirect(url_for('main.meals'))
+        return redirect(url_for('main.menu'))
+
+    # إن وُجد قسم حالي مرسل من النموذج نعيد التوجيه إليه بعد الاستيراد
+    cat_id = request.form.get('cat_id', type=int)
 
     ext = os.path.splitext(file.filename)[1].lower()
 
-    def ensure_category(name='Meals'):
-        cat = MenuCategory.query.filter_by(name=name).first()
-        if not cat:
-            cat = MenuCategory(name=name, sort_order=0)
-            db.session.add(cat)
-            db.session.commit()
-        return cat
-
-    def upsert_item(name_en, name_ar, price_val):
-        # دمج الاسم العربي للعرض فقط
-        display_name = (name_en or '').strip()
-        if name_ar:
-            display_name = f"{display_name} / {str(name_ar).strip()}" if display_name else str(name_ar).strip()
+    def upsert_meal(name_en, name_ar, price_val):
+        name_en = (name_en or '').strip()
+        name_ar = (name_ar or '').strip() or None
         try:
             price = float(str(price_val).replace(',', '').strip()) if price_val is not None else 0.0
         except Exception:
             price = 0.0
-        cat = ensure_category('Meals')
-        item = MenuItem(name=display_name or 'Unnamed', price=price, category_id=cat.id)
-        db.session.add(item)
-        return item
+        # محاولة إيجاد وجبة موجودة بنفس الاسم (و/أو الاسم العربي)
+        existing = None
+        if name_en and name_ar:
+            existing = Meal.query.filter_by(name=name_en, name_ar=name_ar).first()
+        if not existing and name_en:
+            existing = Meal.query.filter_by(name=name_en).first()
+        if existing:
+            # حدّث سعر البيع فقط (لا نغيّر التكاليف هنا)
+            try:
+                existing.selling_price = price
+            except Exception:
+                pass
+            return existing
+        m = Meal(name=name_en or 'Unnamed', name_ar=name_ar, description=None, category=None)
+        try:
+            m.selling_price = price
+        except Exception:
+            pass
+        db.session.add(m)
+        return m
 
     imported, errors = 0, 0
 
@@ -318,7 +416,6 @@ def meals_import():
         try:
             stream = TextIOWrapper(file.stream, encoding='utf-8')
             reader = csv.DictReader(stream)
-            # تطبيع أسماء الأعمدة
             def norm(s):
                 return (s or '').strip().lower()
             for row in reader:
@@ -329,31 +426,29 @@ def meals_import():
                 if not name and not name_ar:
                     continue
                 try:
-                    upsert_item(name, name_ar, price)
+                    upsert_meal(name, name_ar, price)
                     imported += 1
                 except Exception:
                     errors += 1
             db.session.commit()
-            flash(f'تم استيراد {imported} عنصر بنجاح' + (f'، أخطاء: {errors}' if errors else ''), 'success')
+            flash(f'تم استيراد {imported} وجبة بنجاح' + (f'، أخطاء: {errors}' if errors else ''), 'success')
         except Exception as e:
             db.session.rollback()
             flash(f'فشل استيراد CSV: {e}', 'danger')
-        return redirect(url_for('main.meals'))
+        return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
 
     elif ext in ('.xlsx', '.xls'):
         try:
             try:
-                import openpyxl  # يتطلب تثبيت openpyxl
+                import openpyxl
             except Exception:
                 flash('لا يمكن قراءة ملفات Excel بدون تثبيت openpyxl. يمكنك رفع CSV بدلاً من ذلك أو اسمح لي بتثبيت openpyxl.', 'warning')
-                return redirect(url_for('main.meals'))
+                return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
             wb = openpyxl.load_workbook(file, data_only=True)
             ws = wb.active
-            # اقرأ العناوين من الصف الأول
             headers = []
             for cell in next(ws.iter_rows(min_row=1, max_row=1, values_only=True)):
                 headers.append((cell or '').strip().lower())
-            # اصنع خريطة اسم -> فهرس
             index = {h: i for i, h in enumerate(headers)}
             def get_val(row, keys):
                 for k in keys:
@@ -367,25 +462,27 @@ def meals_import():
                 if not name and not name_ar:
                     continue
                 try:
-                    upsert_item(name, name_ar, price)
+                    upsert_meal(name, name_ar, price)
                     imported += 1
                 except Exception:
                     errors += 1
             db.session.commit()
-            flash(f'تم استيراد {imported} عنصر من Excel' + (f'، أخطاء: {errors}' if errors else ''), 'success')
+            flash(f'تم استيراد {imported} وجبة من Excel' + (f'، أخطاء: {errors}' if errors else ''), 'success')
         except Exception as e:
             db.session.rollback()
             flash(f'فشل استيراد Excel: {e}', 'danger')
-        return redirect(url_for('main.meals'))
+        return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
 
     else:
         flash('صيغة الملف غير مدعومة. الرجاء رفع ملف CSV أو Excel (.xlsx/.xls).', 'warning')
-        return redirect(url_for('main.meals'))
+        return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
 
 @main.route('/inventory', endpoint='inventory')
 @login_required
 def inventory():
-    return render_template('inventory.html')
+    raw_materials = RawMaterial.query.filter_by(active=True).all()
+    meals = Meal.query.filter_by(active=True).all()
+    return render_template('inventory.html', raw_materials=raw_materials, meals=meals)
 
 @main.route('/expenses', methods=['GET', 'POST'], endpoint='expenses')
 @login_required
@@ -1256,15 +1353,21 @@ def customer_toggle(cid):
 @main.route('/customers/<int:cid>/delete', methods=['POST'], endpoint='customer_delete')
 @login_required
 def customer_delete(cid):
-    # Soft delete: mark inactive to avoid FK issues
+    # Try hard delete; if constrained, fall back to soft deactivate
     try:
         c = db.session.get(Customer, cid)
         if not c:
             flash('Customer not found', 'warning')
         else:
-            c.active = False
-            db.session.commit()
-            flash('Customer deleted (soft)', 'success')
+            try:
+                db.session.delete(c)
+                db.session.commit()
+                flash('Customer deleted', 'success')
+            except IntegrityError:
+                db.session.rollback()
+                c.active = False
+                db.session.commit()
+                flash('Customer has related records; deactivated instead', 'warning')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting customer: {e}', 'danger')
@@ -1335,18 +1438,31 @@ def supplier_toggle(sid):
 @main.route('/suppliers/<int:sid>/delete', methods=['POST'], endpoint='supplier_delete')
 @login_required
 def supplier_delete(sid):
-    # Soft delete: mark inactive to avoid FK issues
+    # Try hard delete; if constrained, fall back to soft deactivate
     try:
         s = Supplier.query.get(sid)
         if not s:
             flash('Supplier not found', 'warning')
         else:
-            s.active = False
-            if ext_db is not None:
-                ext_db.session.commit()
-            else:
-                db.session.commit()
-            flash('Supplier deleted (soft)', 'success')
+            try:
+                if ext_db is not None:
+                    ext_db.session.delete(s)
+                    ext_db.session.commit()
+                else:
+                    db.session.delete(s)
+                    db.session.commit()
+                flash('Supplier deleted', 'success')
+            except IntegrityError:
+                # Rollback then soft deactivate
+                if ext_db is not None:
+                    ext_db.session.rollback()
+                    s.active = False
+                    ext_db.session.commit()
+                else:
+                    db.session.rollback()
+                    s.active = False
+                    db.session.commit()
+                flash('Supplier has related records; deactivated instead', 'warning')
     except Exception as e:
         if ext_db is not None:
             ext_db.session.rollback()
@@ -1369,6 +1485,25 @@ def menu():
             current = None
     if not current and cats:
         current = cats[0]
+
+    # Cleanup exact duplicates (same name and same price) within the current section
+    if current:
+        try:
+            seen = {}
+            dups = []
+            for it in MenuItem.query.filter_by(category_id=current.id).order_by(MenuItem.id.asc()).all():
+                key = ((it.name or '').strip().lower(), round(float(it.price or 0), 2))
+                if key in seen:
+                    dups.append(it)
+                else:
+                    seen[key] = it.id
+            if dups:
+                for it in dups:
+                    db.session.delete(it)
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     items = []
     if current:
         items = MenuItem.query.filter_by(category_id=current.id).order_by(MenuItem.name).all()
@@ -1543,6 +1678,7 @@ def api_users_create():
         data = request.get_json(silent=True) or {}
         username = (data.get('username') or '').strip()
         password = (data.get('password') or '').strip()
+        active = bool(data.get('active', True))
         if not username or not password:
             return jsonify({'ok': False, 'error': 'username_password_required'}), 400
         # uniqueness
@@ -1551,8 +1687,13 @@ def api_users_create():
         u = User(username=username)
         u.set_password(password)
         db.session.add(u)
+        db.session.flush()  # to get u.id before commit
+        try:
+            kv_set(f"user_active:{u.id}", {'active': bool(active)})
+        except Exception:
+            pass
         db.session.commit()
-        return jsonify({'ok': True, 'id': u.id})
+        return jsonify({'ok': True, 'id': u.id, 'active': bool(active)})
     except Exception as e:
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 400
@@ -1569,7 +1710,12 @@ def api_users_update(uid):
         pw = (data.get('password') or '').strip()
         if pw:
             u.set_password(pw)
-        # Email/role/active not present on model; ignore gracefully
+        # Active status persisted in AppKV to avoid schema change
+        if 'active' in data:
+            try:
+                kv_set(f"user_active:{u.id}", {'active': bool(data.get('active'))})
+            except Exception:
+                pass
         db.session.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -1663,10 +1809,9 @@ def api_users_permissions_set(uid):
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @main.route('/settings', methods=['GET', 'POST'], endpoint='settings')
-
 @login_required
 def settings():
-    # Pass Settings instance to template to avoid 's' undefined
+    # Load first (and only) settings row
     s = None
     try:
         s = Settings.query.first()
@@ -1678,26 +1823,69 @@ def settings():
                 s = Settings()
                 (ext_db.session.add(s) if ext_db is not None else db.session.add(s))
 
-            # Safely set only attributes that exist on Settings model
             form_data = request.form if request.form else (request.get_json(silent=True) or {})
-            for fld in [
-                'company_name','tax_number','phone','address','vat_rate',
-                'receipt_show_logo','receipt_paper_width','receipt_font_size','receipt_logo_height','receipt_extra_bottom_mm',
-                'logo_url','currency','currency_image','footer_message','receipt_footer_text'
-            ]:
+
+            # Helpers for coercion
+            def as_bool(val):
+                return True if str(val).lower() in ['1','true','yes','on'] else False
+            def as_int(val, default=None):
+                try:
+                    return int(str(val).strip())
+                except Exception:
+                    return default
+            def as_float(val, default=None):
+                try:
+                    return float(str(val).strip())
+                except Exception:
+                    return default
+
+            # Strings
+            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text']:
                 if hasattr(s, fld) and fld in form_data:
-                    val = form_data.get(fld)
-                    # Coerce booleans/numerics if needed
-                    if fld in ['receipt_show_logo']:
-                        val = True if str(val).lower() in ['1','true','yes','on'] else False
-                    elif fld in ['vat_rate','receipt_paper_width','receipt_font_size','receipt_logo_height','receipt_extra_bottom_mm']:
-                        try: val = float(val)
-                        except Exception: pass
-                    setattr(s, fld, val)
+                    setattr(s, fld, (form_data.get(fld) or '').strip())
+
+            # Booleans (explicitly set False when absent)
+            if hasattr(s, 'receipt_show_logo'):
+                s.receipt_show_logo = as_bool(form_data.get('receipt_show_logo'))
+            if hasattr(s, 'receipt_show_tax_number'):
+                s.receipt_show_tax_number = as_bool(form_data.get('receipt_show_tax_number'))
+
+            # Integers
+            if hasattr(s, 'receipt_font_size'):
+                s.receipt_font_size = as_int(form_data.get('receipt_font_size'), s.receipt_font_size or 12)
+            if hasattr(s, 'receipt_logo_height'):
+                s.receipt_logo_height = as_int(form_data.get('receipt_logo_height'), s.receipt_logo_height or 40)
+            if hasattr(s, 'receipt_extra_bottom_mm'):
+                s.receipt_extra_bottom_mm = as_int(form_data.get('receipt_extra_bottom_mm'), s.receipt_extra_bottom_mm or 15)
+
+            # Keep as string for width ('80' or '58')
+            if hasattr(s, 'receipt_paper_width') and 'receipt_paper_width' in form_data:
+                s.receipt_paper_width = (form_data.get('receipt_paper_width') or '80').strip()
+
+            # Floats / numerics
+            if hasattr(s, 'vat_rate') and 'vat_rate' in form_data:
+                s.vat_rate = as_float(form_data.get('vat_rate'), s.vat_rate or 15.0)
+            # Branch-specific
+            if hasattr(s, 'china_town_vat_rate') and 'china_town_vat_rate' in form_data:
+                s.china_town_vat_rate = as_float(form_data.get('china_town_vat_rate'), s.china_town_vat_rate or 15.0)
+            if hasattr(s, 'china_town_discount_rate') and 'china_town_discount_rate' in form_data:
+                s.china_town_discount_rate = as_float(form_data.get('china_town_discount_rate'), s.china_town_discount_rate or 0.0)
+            if hasattr(s, 'place_india_vat_rate') and 'place_india_vat_rate' in form_data:
+                s.place_india_vat_rate = as_float(form_data.get('place_india_vat_rate'), s.place_india_vat_rate or 15.0)
+            if hasattr(s, 'place_india_discount_rate') and 'place_india_discount_rate' in form_data:
+                s.place_india_discount_rate = as_float(form_data.get('place_india_discount_rate'), s.place_india_discount_rate or 0.0)
+            # Passwords (strings)
+            if hasattr(s, 'china_town_void_password') and 'china_town_void_password' in form_data:
+                s.china_town_void_password = (form_data.get('china_town_void_password') or '').strip()
+            if hasattr(s, 'place_india_void_password') and 'place_india_void_password' in form_data:
+                s.place_india_void_password = (form_data.get('place_india_void_password') or '').strip()
+
             # Map currency_image_url -> currency_image
-            cur_url = (form_data.get('currency_image_url') or '').strip() if hasattr(s, 'currency_image') else ''
-            if cur_url:
-                s.currency_image = cur_url
+            if hasattr(s, 'currency_image'):
+                cur_url = (form_data.get('currency_image_url') or '').strip()
+                if cur_url:
+                    s.currency_image = cur_url
+
             # Handle file uploads (logo, currency PNG)
             try:
                 upload_dir = os.path.join(current_app.static_folder, 'uploads')
@@ -1722,12 +1910,14 @@ def settings():
                         if hasattr(s, 'currency_image'):
                             s.currency_image = f"/static/uploads/{fname}"
             except Exception:
+                # Ignore upload errors but continue saving other fields
                 pass
+
             (ext_db.session.commit() if ext_db is not None else db.session.commit())
             flash('Settings saved', 'success')
         except Exception as e:
             (ext_db.session.rollback() if ext_db is not None else db.session.rollback())
-            flash('Could not save settings (placeholder handler)', 'warning')
+            flash(f'Could not save settings: {e}', 'danger')
         return redirect(url_for('main.settings'))
     return render_template('settings.html', s=s)
 
@@ -1744,6 +1934,13 @@ def users():
         users_list = User.query.order_by(User.id.asc()).all()
     except Exception:
         users_list = []
+    # Populate 'active' per user from AppKV (default True)
+    for u in users_list:
+        try:
+            info = kv_get(f"user_active:{u.id}", {'active': True}) or {}
+            setattr(u, 'active', bool(info.get('active', True)))
+        except Exception:
+            setattr(u, 'active', True)
     return render_template('users.html', users=users_list)
 
 @main.route('/create-sample-data', endpoint='create_sample_data_route')

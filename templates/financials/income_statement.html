@@ -30,7 +30,7 @@
   <div class="d-flex gap-2 mb-3">
     <a class="btn btn-outline-secondary" href="{{ url_for('financials.balance_sheet') }}">المركز المالي</a>
     <a class="btn btn-outline-secondary" href="{{ url_for('financials.trial_balance') }}">ميزان المراجعة</a>
-    <a target="_blank" class="btn btn-outline-secondary" href="{{ url_for('financials.income_statement', period=data.period, start_date=data.start_date, end_date=data.end_date) }}">طباعة</a>
+    <a target="_blank" class="btn btn-outline-secondary" href="/financials/print/income_statement?period={{ data.period }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}">طباعة</a>
   </div>
 
   </form>
