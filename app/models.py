@@ -30,31 +30,5 @@ class AppKV(db.Model):
 # to avoid duplicate class names in the SQLAlchemy registry. Use:
 #   from models import MenuCategory, MenuItem
 
-class SalesInvoice(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    invoice_number = db.Column(db.String(50), unique=True, nullable=False)
-    branch_code = db.Column(db.String(50), nullable=False)
-    table_number = db.Column(db.Integer)
-    customer_name = db.Column(db.String(150))
-    customer_phone = db.Column(db.String(50))
-    payment_method = db.Column(db.String(20), default='CASH')
-    discount_pct = db.Column(db.Float, default=0.0)
-    tax_pct = db.Column(db.Float, default=15.0)
-    total_amount = db.Column(db.Float, default=0.0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-class SalesInvoiceItem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    invoice_id = db.Column(db.Integer, db.ForeignKey('sales_invoice.id'), nullable=False)
-    meal_id = db.Column(db.Integer)
-    name = db.Column(db.String(150))
-    unit_price = db.Column(db.Float, default=0.0)
-    qty = db.Column(db.Float, default=1.0)
-
-class Customer(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False)
-    phone = db.Column(db.String(50))
-    discount_percent = db.Column(db.Float, default=0.0)
-    active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+# NOTE: SalesInvoice, SalesInvoiceItem, and Customer are defined in the main models.py
+# to avoid duplicate class names. Use imports from models instead.
