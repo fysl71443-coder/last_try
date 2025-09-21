@@ -19,10 +19,18 @@
       </select>
     </div>
     <div class="col-auto">
+      <label>الفرع</label>
+      <select name="branch" class="form-select">
+        <option value="all" {% if (data.branch or 'all')=='all' %}selected{% endif %}>الكل</option>
+        <option value="place_india" {% if data.branch=='place_india' %}selected{% endif %}>Place India</option>
+        <option value="china_town" {% if data.branch=='china_town' %}selected{% endif %}>China Town</option>
+      </select>
+    </div>
+    <div class="col-auto">
       <button class="btn btn-primary">عرض</button>
     </div>
     <div class="col-auto">
-      <a href="{{ url_for('vat.vat_print') }}?year={{ data.year }}&quarter={{ data.quarter }}" class="btn btn-success" target="_blank">طباعة الإقرار للربع</a>
+      <a href="{{ url_for('vat.vat_print') }}?year={{ data.year }}&quarter={{ data.quarter }}&branch={{ data.branch or 'all' }}" class="btn btn-success" target="_blank">طباعة الإقرار للربع</a>
     </div>
   </form>
 
