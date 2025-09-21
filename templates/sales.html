@@ -46,13 +46,13 @@ body {
             <h3 class="mb-0">💰 {{ _('Sales / المبيعات') }}</h3>
         </div>
         <div class="col-md-6 text-end">
-            <a href="{{ url_for('inventory') }}" class="btn btn-outline-info me-2">
+            <a href="{{ url_for('main.inventory') }}" class="btn btn-outline-info me-2">
                 📦 {{ _('Inventory / المخزون') }}
             </a>
-            <a href="{{ url_for('purchases') }}" class="btn btn-outline-warning me-2">
+            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning me-2">
                 🛒 {{ _('Purchases / المشتريات') }}
             </a>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
                 🏠 {{ _('Dashboard / لوحة التحكم') }}
             </a>
         </div>
@@ -65,7 +65,7 @@ body {
         <div class="alert alert-info">
             <strong>💡 {{ _('Note / ملاحظة') }}:</strong>
             {{ _('Meals are automatically loaded from Cost Management system with calculated prices / الوجبات يتم تحميلها تلقائياً من نظام إدارة التكاليف مع الأسعار المحسوبة') }}
-            <a href="{{ url_for('inventory') }}" class="alert-link">{{ _('Manage Meals / إدارة الوجبات') }}</a>
+            <a href="{{ url_for('main.inventory') }}" class="alert-link">{{ _('Manage Meals / إدارة الوجبات') }}</a>
         </div>
 
         <form method="POST" id="sales-form">

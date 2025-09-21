@@ -5,12 +5,12 @@
   <div class="section-header d-flex justify-content-between align-items-center">
     <h3 class="mb-0">{{ _('Suppliers / الموردون') }}</h3>
     <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary" href="{{ url_for('purchases') }}">{{ _('Go to Purchases / الذهاب إلى المشتريات') }}</a>
+      <a class="btn btn-outline_secondary" href="{{ url_for('main.purchases') }}">{{ _('Go to Purchases / الذهاب إلى المشتريات') }}</a>
     </div>
   </div>
 
   <div class="card mb-3"><div class="card-body">
-    <form method="post" action="{{ url_for('suppliers_create') }}" class="row g-2 align-items-end">
+    <form method="post" action="#" class="row g-2 align-items-end">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div class="col-md-4">
         <label class="form-label">{{ _('Name / الاسم') }}</label>
@@ -82,12 +82,12 @@
             <td>{{ s.tax_number or '-' }}</td>
             <td>{% if s.active %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}</td>
             <td class="text-end">
-              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('suppliers_edit', sid=s.id) }}">{{ _('Edit / تعديل') }}</a>
-              <form method="post" action="{{ url_for('suppliers_toggle', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Toggle status? / تبديل الحالة؟') }}')">
+              <a class="btn btn-sm btn-outline-primary" href="#">{{ _('Edit / تعديل') }}</a>
+              <form method="post" action="#" class="d-inline" onsubmit="return confirm('{{ _('Toggle status? / تبديل الحالة؟') }}')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button class="btn btn-sm btn-outline-secondary">{{ _('Toggle / تبديل') }}</button>
               </form>
-              <form method="post" action="{{ url_for('suppliers_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this supplier? / حذف هذا المورد؟') }}')">
+              <form method="post" action="#" class="d-inline" onsubmit="return confirm('{{ _('Delete this supplier? / حذف هذا المورد؟') }}')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
               </form>

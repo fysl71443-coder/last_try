@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('invoices', type=kind) %}
+{% set back_url = url_for('main.invoices', type=kind) %}
 
 {% block title %}{{ _(title) }}{% endblock %}
 {% block content %}
@@ -7,8 +7,8 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">🧾 {{ _(title) }} — {{ inv.invoice_number }}</h3>
     <div class="d-flex gap-2">
-      <a href="{{ url_for('invoices', type=kind) }}" class="btn btn-outline-secondary">⬅️ {{ _('Back / رجوع') }}</a>
-      <a href="{{ url_for('print_unpaid_invoice', invoice_id=inv.id) }}" target="_blank" class="btn btn-success">🖨 {{ _('Print / طباعة') }}</a>
+      <a href="{{ url_for('main.invoices', type=kind) }}" class="btn btn-outline-secondary">⬅️ {{ _('Back / رجوع') }}</a>
+      <a href="#" target="_blank" class="btn btn-success">🖨 {{ _('Print / طباعة') }}</a>
     </div>
   </div>
 
@@ -81,7 +81,7 @@ function sendPayment(kind, id, amount){
   form.append('amount', amount);
   const csrf = document.querySelector('input[name="csrf_token"]');
   if (csrf) form.append('csrf_token', csrf.value);
-  fetch('{{ url_for('register_payment_ajax') }}', { method:'POST', body: form, credentials:'same-origin' })
+  fetch('#', { method:'POST', body: form, credentials:'same-origin' })
     .then(r=>r.json()).then(d=>{ if(d.status==='success') location.reload(); else alert('Error'); })
     .catch(()=>alert('Network error'));
 }

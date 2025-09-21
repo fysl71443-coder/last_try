@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('dashboard') %}
+{% set back_url = url_for('main.dashboard') %}
 
 {% block title %}{{ _('Inventory & Cost Management / المخزون وإدارة التكاليف') }}{% endblock %}
 {% block content %}
@@ -58,13 +58,13 @@ body {
             <h3 class="mb-0">📦 {{ _('Inventory & Cost Management / المخزون وإدارة التكاليف') }}</h3>
         </div>
         <div class="col-md-6 text-end">
-            <a href="{{ url_for('purchases') }}" class="btn btn-outline-warning me-2">
+            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning me-2">
                 🛒 {{ _('Purchases / المشتريات') }}
             </a>
-            <a href="{{ url_for('sales') }}" class="btn btn-outline-info me-2">
+            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info me-2">
                 💰 {{ _('Sales / المبيعات') }}
             </a>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
                 🏠 {{ _('Dashboard / لوحة التحكم') }}
             </a>
         </div>
@@ -95,7 +95,7 @@ body {
     <!-- أزرار الإجراءات الرئيسية -->
     <div class="row mb-4">
         <div class="col-md-6">
-            <a href="{{ url_for('raw_materials') }}" class="text-decoration-none">
+            <a href="{{ url_for('main.raw_materials') }}" class="text-decoration-none">
                 <div class="action-card">
                     <div class="action-icon">🥘</div>
                     <h5>{{ _('Manage Raw Materials / إدارة المواد الخام') }}</h5>
@@ -104,7 +104,7 @@ body {
             </a>
         </div>
         <div class="col-md-6">
-            <a href="{{ url_for('meals') }}" class="text-decoration-none">
+            <a href="{{ url_for('main.meals') }}" class="text-decoration-none">
                 <div class="action-card">
                     <div class="action-icon">🍽️</div>
                     <h5>{{ _('Create Meals / إنشاء الوجبات') }}</h5>
@@ -150,7 +150,7 @@ body {
         </div>
 
         <div class="text-end">
-            <a href="{{ url_for('raw_materials') }}" class="btn btn-outline-primary">
+            <a href="{{ url_for('main.raw_materials') }}" class="btn btn-outline-primary">
                 {{ _('View All Materials / عرض جميع المواد') }}
             </a>
         </div>
@@ -195,7 +195,7 @@ body {
         </div>
 
         <div class="text-end">
-            <a href="{{ url_for('meals') }}" class="btn btn-outline-success">
+            <a href="{{ url_for('main.meals') }}" class="btn btn-outline-success">
                 {{ _('View All Meals / عرض جميع الوجبات') }}
             </a>
         </div>
@@ -212,12 +212,12 @@ body {
         </p>
         <div class="row">
             <div class="col-md-6">
-                <a href="{{ url_for('raw_materials') }}" class="btn btn-primary btn-lg w-100">
+                <a href="{{ url_for('main.raw_materials') }}" class="btn btn-primary btn-lg w-100">
                     🥘 {{ _('Add Raw Materials / إضافة المواد الخام') }}
                 </a>
             </div>
             <div class="col-md-6">
-                <a href="{{ url_for('meals') }}" class="btn btn-success btn-lg w-100">
+                <a href="{{ url_for('main.meals') }}" class="btn btn-success btn-lg w-100">
                     🍽️ {{ _('Create Meals / إنشاء الوجبات') }}
                 </a>
             </div>

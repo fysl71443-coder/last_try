@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('inventory') %}
+{% set back_url = url_for('main.inventory') %}
 
 {% block title %}{{ _('Meals Management / إدارة الوجبات') }}{% endblock %}
 {% block content %}
@@ -61,16 +61,16 @@ body {
             <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#importModal">
                 📥 {{ _('Import Meals / استيراد الوجبات') }}
             </button>
-            <a href="{{ url_for('raw_materials') }}" class="btn btn-outline-success me-2">
+            <a href="{{ url_for('main.raw_materials') }}" class="btn btn-outline-success me-2">
                 🥘 {{ _('Raw Materials / المواد الخام') }}
             </a>
-            <a href="{{ url_for('sales') }}" class="btn btn-outline-info me-2">
+            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info me-2">
                 💰 {{ _('Sales / المبيعات') }}
             </a>
-            <a href="{{ url_for('inventory') }}" class="btn btn-outline-warning me-2">
+            <a href="{{ url_for('main.inventory') }}" class="btn btn-outline-warning me-2">
                 📦 {{ _('Inventory / المخزون') }}
             </a>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
                 🏠 {{ _('Dashboard / لوحة التحكم') }}
             </a>
         </div>
@@ -393,7 +393,7 @@ body {
 <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="post" action="{{ url_for('import_meals') }}" enctype="multipart/form-data">
+            <form method="post" action="#" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="modal-header">
                     <h5 class="modal-title">{{ _('Import Meals / استيراد الوجبات') }}</h5>

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('dashboard') %}
+{% set back_url = url_for('main.dashboard') %}
 
 {% block title %}Settings{% endblock %}
 {% block content %}
@@ -222,7 +222,7 @@
     </div>
 
     <div class="mt-4 d-flex justify-content-end gap-2">
-      <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">Back</a>
+      <a class="btn btn-secondary" href="{{ url_for('main.dashboard') }}">Back</a>
       <button class="btn btn-primary" type="submit">Save Settings</button>
     </div>
   </form>

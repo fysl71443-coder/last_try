@@ -1,14 +1,14 @@
-{% extends 'base.html' %}{% set back_url = url_for('dashboard') %}
+{% extends 'base.html' %}{% set back_url = url_for('main.dashboard') %}
 {% block title %}{{ _('Employees / الموظفون') }}{% endblock %}
 {% block content %}
 <div class="container py-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">👤 {{ _('Employees / الموظفون') }}</h3>
     <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('salaries_monthly') }}" class="btn btn-success">💵 {{ _('Monthly Salaries / رواتب شهرية') }}</a>
-      <a href="{{ url_for('salaries_statements') }}" class="btn btn-outline-success">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</a>
-      <a href="{{ url_for('salaries') }}" class="btn btn-outline-secondary">📝 {{ _('Salaries Form / نموذج الرواتب') }}</a>
-      <a href="{{ url_for('dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+      <a href="#" class="btn btn-success">💵 {{ _('Monthly Salaries / رواتب شهرية') }}</a>
+      <a href="#" class="btn btn-outline-success">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</a>
+      <a href="#" class="btn btn-outline-secondary">📝 {{ _('Salaries Form / نموذج الرواتب') }}</a>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
     </div>
   </div>
 
@@ -100,9 +100,9 @@
               <td>{% if e.status=='active' %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}</td>
               <td>
                 <div class="d-flex flex-wrap gap-1">
-                  <a href="{{ url_for('edit_employee', emp_id=e.id) }}" class="btn btn-sm btn-outline-primary">{{ _('Edit / تعديل') }}</a>
-                  <a href="{{ url_for('edit_employee_defaults', emp_id=e.id) }}" class="btn btn-sm btn-outline-success">{{ _('Defaults / الافتراضات') }}</a>
-                  <form method="POST" action="{{ url_for('delete_employee', emp_id=e.id) }}" onsubmit="return handleDeleteEmployee(event, '{{ e.full_name }}')">
+                  <a href="#" class="btn btn-sm btn-outline-primary">{{ _('Edit / تعديل') }}</a>
+                  <a href="#" class="btn btn-sm btn-outline-success">{{ _('Defaults / الافتراضات') }}</a>
+                  <form method="POST" action="#" onsubmit="return handleDeleteEmployee(event, '{{ e.full_name }}')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
                   </form>
