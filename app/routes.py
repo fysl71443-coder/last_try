@@ -257,8 +257,38 @@ def api_tables_status(branch_code):
 @main.route('/api/menu/<cat_id>/items', methods=['GET'], endpoint='api_menu_items')
 @login_required
 def api_menu_items(cat_id):
-    # Placeholder: return empty list until menu management backend is implemented
-    return jsonify([])
+    # Load items from KV if available, otherwise return a small demo set
+    data = kv_get(f'menu:items:{cat_id}', None)
+    if isinstance(data, list):
+        return jsonify(data)
+    # Demo items per category (safe defaults)
+    demo = {
+        'Starters': [
+            {'id': 101, 'name': 'Spring Rolls', 'price': 8.0},
+            {'id': 102, 'name': 'Samosa', 'price': 6.5},
+        ],
+        'Main Courses': [
+            {'id': 201, 'name': 'Butter Chicken', 'price': 18.0},
+            {'id': 202, 'name': 'Chicken Chow Mein', 'price': 16.0},
+        ],
+        'Biryani': [
+            {'id': 301, 'name': 'Chicken Biryani', 'price': 15.0},
+            {'id': 302, 'name': 'Veg Biryani', 'price': 13.0},
+        ],
+        'Noodles': [
+            {'id': 401, 'name': 'Hakka Noodles', 'price': 12.0},
+            {'id': 402, 'name': 'Singapore Noodles', 'price': 13.5},
+        ],
+        'Drinks': [
+            {'id': 501, 'name': 'Lassi', 'price': 5.0},
+            {'id': 502, 'name': 'Iced Tea', 'price': 4.0},
+        ],
+        'Desserts': [
+            {'id': 601, 'name': 'Gulab Jamun', 'price': 6.0},
+            {'id': 602, 'name': 'Ice Cream', 'price': 4.5},
+        ],
+    }
+    return jsonify(demo.get(cat_id) or [])
 
 @main.route('/api/draft-order/<branch_code>/<int:table_number>', methods=['POST'], endpoint='api_draft_create_or_update')
 @login_required
