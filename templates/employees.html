@@ -5,9 +5,9 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">👤 {{ _('Employees / الموظفون') }}</h3>
     <div class="d-flex flex-wrap gap-2">
-      <a href="#pay-salaries-section" class="btn btn-success">💵 {{ _('Monthly Salaries / رواتب شهرية') }}</a>
-      <a href="#statements-section" class="btn btn-outline-success">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</a>
-      <a href="#employees-form" class="btn btn-outline-secondary">📝 {{ _('Salaries Form / نموذج الرواتب') }}</a>
+      <a href="{{ url_for('main.salaries_pay') }}" class="btn btn-success">💵 {{ _('Pay Salaries / سداد الرواتب') }}</a>
+      <a href="{{ url_for('main.salaries_statements') }}" class="btn btn-outline-success">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</a>
+      <a href="#employees-form" class="btn btn-outline-secondary">📝 {{ _('Add Employee / إضافة موظف') }}</a>
       <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
     </div>
   </div>

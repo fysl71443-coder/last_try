@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% set back_url = url_for('main.employees') %}
+{% block title %}{{ _('Pay Salaries / سداد الرواتب') }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">💵 {{ _('Pay Salaries / سداد الرواتب') }}</h3>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.employees') }}">👤 {{ _('Employees') }}</a>
+      <a class="btn btn-outline-success" href="{{ url_for('main.salaries_statements', month=month) }}">🧾 {{ _('Payroll Statements') }}</a>
+      <a class="btn btn-primary" href="{{ url_for('main.dashboard') }}">🏠 {{ _('Dashboard') }}</a>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('main.salaries_pay') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label">{{ _('Month / الشهر') }}</label>
+            <input type="month" class="form-control" name="month" value="{{ month }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ _('Employee / الموظف') }}</label>
+            <select class="form-select" name="employee_id" required>
+              <option value="">-- {{ _('Select') }} --</option>
+              {% for e in employees or [] %}
+              <option value="{{ e.id }}">{{ e.full_name }}{% if e.department %} — {{ e.department }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ _('Paid Amount / المبلغ المدفوع') }}</label>
+            <input type="number" step="0.01" class="form-control" name="paid_amount" placeholder="0.00">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ _('Payment Method / طريقة الدفع') }}</label>
+            <select class="form-select" name="payment_method">
+              <option value="cash">{{ _('Cash') }}</option>
+              <option value="bank">{{ _('Bank') }}</option>
+              <option value="visa">{{ _('Visa/Mada') }}</option>
+            </select>
+          </div>
+          <div class="col-md-1 text-end">
+            <button type="submit" class="btn btn-success">{{ _('Save / حفظ') }}</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">{{ _('Current Month Salaries / رواتب الشهر الحالي') }} ({{ month }})</h6>
+        <form class="d-flex gap-2" method="GET" action="{{ url_for('main.salaries_pay') }}">
+          <input type="month" class="form-control" name="month" value="{{ month }}">
+          <button class="btn btn-outline-primary">{{ _('Load') }}</button>
+        </form>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>{{ _('Employee') }}</th>
+              <th>{{ _('Basic') }}</th>
+              <th>{{ _('Allowances') }}</th>
+              <th>{{ _('Deductions') }}</th>
+              <th>{{ _('Prev Due') }}</th>
+              <th>{{ _('Net') }}</th>
+              <th>{{ _('Paid') }}</th>
+              <th>{{ _('Remaining') }}</th>
+              <th>{{ _('Status') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in salaries or [] %}
+              {% set basic = (s.basic_salary or 0)|float %}
+              {% set allow = (s.allowances or 0)|float %}
+              {% set ded = (s.deductions or 0)|float %}
+              {% set prev = (s.previous_salary_due or 0)|float %}
+              {% set net = (basic + allow - ded + prev) %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ s.employee_id }}</td>
+                <td>{{ '%.2f'|format(basic) }}</td>
+                <td>{{ '%.2f'|format(allow) }}</td>
+                <td>{{ '%.2f'|format(ded) }}</td>
+                <td>{{ '%.2f'|format(prev) }}</td>
+                <td>{{ '%.2f'|format(net) }}</td>
+                <td>—</td>
+                <td>—</td>
+                <td>{{ s.status or '-' }}</td>
+              </tr>
+            {% endfor %}
+            {% if not salaries %}
+              <tr><td colspan="10" class="text-center text-muted">{{ _('No records for this month yet') }}</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

@@ -3,7 +3,7 @@ import os
 from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
-from sqlalchemy import func
+from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 
@@ -11,7 +11,7 @@ from app import db, csrf
 # Force single DB session usage across the app to avoid multiple SQLAlchemy instances
 ext_db = None
 from app.models import User, AppKV
-from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary
+from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
 main = Blueprint('main', __name__)
@@ -64,11 +64,55 @@ _DEF_MENU = {
     ],
 }
 
+def ensure_menu_sort_order_column():
+    """Ensure menu_categories.sort_order exists; add it if missing (safe no-op otherwise)."""
+    try:
+        insp = inspect(db.engine)
+        cols = [c['name'] for c in insp.get_columns('menu_categories')]
+        if 'sort_order' not in cols:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE menu_categories ADD COLUMN sort_order INTEGER DEFAULT 0'))
+                    conn.execute(text('UPDATE menu_categories SET sort_order = COALESCE(sort_order, 0)'))
+            except Exception:
+                # If ALTER fails (e.g., permissions), just continue; fallbacks in queries handle it
+                pass
+    except Exception:
+        pass
+def ensure_menuitem_compat_columns():
+    """Ensure menu_items has backward-compatible columns (name, price, display_order)."""
+    try:
+        insp = inspect(db.engine)
+        cols = {c['name'] for c in insp.get_columns('menu_items')}
+        with db.engine.begin() as conn:
+            if 'name' not in cols:
+                try:
+                    conn.execute(text('ALTER TABLE menu_items ADD COLUMN name VARCHAR(150)'))
+                except Exception:
+                    pass
+            if 'price' not in cols:
+                try:
+                    conn.execute(text('ALTER TABLE menu_items ADD COLUMN price FLOAT DEFAULT 0.0'))
+                except Exception:
+                    pass
+            if 'display_order' not in cols:
+                try:
+                    conn.execute(text('ALTER TABLE menu_items ADD COLUMN display_order INTEGER'))
+                except Exception:
+                    pass
+    except Exception:
+        # If introspection fails, ignore; query fallbacks may still work
+        pass
+
+
 def ensure_tables():
     try:
         db.create_all()
     except Exception:
         pass
+    # Ensure new columns exist for compatibility with older DBs
+    ensure_menu_sort_order_column()
+    ensure_menuitem_compat_columns()
 
 
 def seed_menu_if_empty():
@@ -185,18 +229,33 @@ def purchases():
         materials = RawMaterial.query.filter_by(active=True).order_by(RawMaterial.name.asc()).all() if 'RawMaterial' in globals() else []
     except Exception:
         materials = []
-    materials_json = [{'id': m.id, 'name': m.display_name() if hasattr(m, 'display_name') else m.name, 'unit': m.unit, 'cost_per_unit': float(m.cost_per_unit or 0), 'stock_quantity': float(m.stock_quantity or 0)} for m in materials]
+    materials_json = []
+    for m in materials:
+        disp = getattr(m, 'display_name', None)
+        if callable(disp):
+            name = disp()
+        else:
+            name = disp if isinstance(disp, str) else m.name
+        materials_json.append({
+            'id': m.id,
+            'name': name,
+            'unit': m.unit,
+            'cost_per_unit': float(m.cost_per_unit or 0),
+            'stock_quantity': float(m.stock_quantity or 0),
+        })
 
     if request.method == 'POST':
         # Parse minimal fields
         pm = (request.form.get('payment_method') or 'cash').strip().lower()
         date_str = request.form.get('date') or datetime.utcnow().date().isoformat()
         supplier_name = (request.form.get('supplier_name') or '').strip() or None
+        supplier_id = request.form.get('supplier_id', type=int)
         try:
             inv = PurchaseInvoice(
                 invoice_number=f"INV-PUR-{datetime.utcnow().year}-{(PurchaseInvoice.query.count()+1):04d}",
                 date=datetime.strptime(date_str, '%Y-%m-%d').date(),
                 supplier_name=supplier_name,
+                supplier_id=supplier_id,
                 payment_method=pm,
                 user_id=getattr(current_user, 'id', 1)
             )
@@ -209,6 +268,7 @@ def purchases():
             while True:
                 prefix = f"items-{idx}-"
                 name = request.form.get(prefix + 'item_name')
+                unit = (request.form.get(prefix + 'unit') or '').strip() or None
                 qty = request.form.get(prefix + 'quantity')
                 price = request.form.get(prefix + 'price_before_tax')
                 disc_pct = request.form.get(prefix + 'discount')
@@ -235,6 +295,33 @@ def purchases():
                 total_before += before
                 total_disc += disc_amt
                 total_tax += tax_amt
+
+                # Resolve RawMaterial by name; create if not exists
+                rm = None
+                try:
+                    n = (name or '').strip().lower()
+                    if n:
+                        rm = RawMaterial.query.filter(func.lower(RawMaterial.name) == n).first()
+                        if not rm:
+                            rm = RawMaterial.query.filter(func.lower(RawMaterial.name_ar) == n).first()
+                except Exception:
+                    rm = None
+                if not rm and name:
+                    # Create minimal RawMaterial to satisfy FK
+                    try:
+                        rm = RawMaterial(name=name.strip(), unit=(unit or 'unit'), cost_per_unit=p or 0)
+                        db.session.add(rm)
+                        db.session.flush()
+                    except Exception:
+                        # As a last resort, set unit to 'unit'
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        db.session.add(RawMaterial(name=name.strip(), unit='unit', cost_per_unit=p or 0))
+                        db.session.flush()
+                        rm = RawMaterial.query.filter(func.lower(RawMaterial.name) == n).first()
+
                 it = PurchaseInvoiceItem(
                     raw_material_name=name or 'Item',
                     quantity=q,
@@ -243,6 +330,8 @@ def purchases():
                     tax=tax_amt,
                     total_price=line_total,
                 )
+                if rm:
+                    it.raw_material_id = rm.id
                 inv.items.append(it)
                 items_created += 1
                 idx += 1
@@ -396,13 +485,19 @@ def meals_import():
         if not existing and name_en:
             existing = Meal.query.filter_by(name=name_en).first()
         if existing:
-            # حدّث سعر البيع فقط (لا نغيّر التكاليف هنا)
+            # تأكد من وجود user_id، ثم حدّث سعر البيع فقط
+            try:
+                if getattr(existing, 'user_id', None) is None:
+                    existing.user_id = current_user.id
+            except Exception:
+                pass
             try:
                 existing.selling_price = price
             except Exception:
                 pass
             return existing
-        m = Meal(name=name_en or 'Unnamed', name_ar=name_ar, description=None, category=None)
+        # إنشاء وجبة جديدة مع تعيين user_id
+        m = Meal(name=name_en or 'Unnamed', name_ar=name_ar, description=None, category=None, user_id=current_user.id)
         try:
             m.selling_price = price
         except Exception:
@@ -700,7 +795,6 @@ def employees_create_salary():
         total = base + allow - ded + prev_due
         if total < 0:
             total = 0
-        # Ensure employee exists via the same session used by legacy models
         emp = None
         try:
             emp = Employee.query.get(emp_id)
@@ -721,16 +815,133 @@ def employees_create_salary():
                 session = (ext_db.session if ext_db is not None else db.session)
         session.add(sal)
         session.commit()
-        return jsonify({'ok': True, 'salary_id': sal.id, 'total': float(total)})
+        return jsonify({'ok': True, 'salary_id': sal.id}), 200
     except Exception as e:
         try:
-            session.rollback()
+            (ext_db.session if ext_db is not None else db.session).rollback()
         except Exception:
-            if ext_db is not None:
-                ext_db.session.rollback()
-            else:
-                db.session.rollback()
+            pass
         return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/salaries/pay', methods=['GET','POST'], endpoint='salaries_pay')
+@login_required
+def salaries_pay():
+    # Create/update salary for a month and optionally record a payment
+    if request.method == 'POST':
+        try:
+            emp_id = request.form.get('employee_id', type=int)
+            month_str = (request.form.get('month') or request.form.get('pay_month') or datetime.utcnow().strftime('%Y-%m')).strip()
+            y, m = month_str.split('-')
+            year = int(y); month = int(m)
+            amount = float(request.form.get('paid_amount') or 0)
+            method = (request.form.get('payment_method') or 'cash').strip().lower()
+
+            # Ensure salary exists for this period
+            sal = Salary.query.filter_by(employee_id=emp_id, year=year, month=month).first()
+            if not sal:
+                base = allow = ded = prev = 0.0
+                try:
+                    from models import EmployeeSalaryDefault
+                    d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
+                    if d:
+                        base = float(d.base_salary or 0)
+                        allow = float(d.allowances or 0)
+                        ded = float(d.deductions or 0)
+                except Exception:
+                    pass
+                total = max(0.0, base + allow - ded + prev)
+                sal = Salary(employee_id=emp_id, year=year, month=month,
+                             basic_salary=base, allowances=allow, deductions=ded,
+                             previous_salary_due=prev, total_salary=total, status='due')
+                db.session.add(sal)
+                db.session.flush()
+
+            # Record payment if provided
+            if amount > 0:
+                pay = Payment(invoice_id=sal.id, invoice_type='salary', amount_paid=amount, payment_method=method)
+                db.session.add(pay)
+
+            # Update status by paid sum
+            paid_sum = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).\
+                filter(Payment.invoice_type == 'salary', Payment.invoice_id == sal.id).scalar() or 0
+            paid_sum = float(paid_sum or 0)
+            total_due = float(sal.total_salary or 0)
+            if paid_sum >= total_due and total_due > 0:
+                sal.status = 'paid'
+            elif paid_sum > 0:
+                sal.status = 'partial'
+            else:
+                sal.status = 'due'
+
+            db.session.commit()
+            flash('Salary payment recorded', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error saving salary/payment: {e}', 'danger')
+        return redirect(url_for('main.salaries_pay', month=month_str))
+
+    # GET
+    try:
+        employees = Employee.query.order_by(Employee.full_name.asc()).all()
+    except Exception:
+        employees = []
+    selected_month = request.args.get('month') or datetime.utcnow().strftime('%Y-%m')
+
+    # Optional: list current month salaries
+    try:
+        y, m = selected_month.split('-'); year = int(y); month = int(m)
+        current_salaries = Salary.query.filter_by(year=year, month=month).all()
+    except Exception:
+        current_salaries = []
+    return render_template('salaries_pay.html', employees=employees, month=selected_month, salaries=current_salaries)
+
+
+@main.route('/salaries/statements', methods=['GET'], endpoint='salaries_statements')
+@login_required
+def salaries_statements():
+    # Accept either ?month=YYYY-MM or ?year=&month=
+    month_param = (request.args.get('month') or '').strip()
+    if '-' in month_param:
+        try:
+            y, m = month_param.split('-'); year = int(y); month = int(m)
+        except Exception:
+            year = datetime.utcnow().year; month = datetime.utcnow().month
+    else:
+        year = request.args.get('year', type=int) or datetime.utcnow().year
+        month = request.args.get('month', type=int) or datetime.utcnow().month
+    rows = []
+    totals = {'basic': 0.0, 'allow': 0.0, 'ded': 0.0, 'prev': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0}
+    try:
+        sal_list = Salary.query.filter_by(year=year, month=month).all()
+        for s in sal_list:
+            paid = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).\
+                filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0
+            paid = float(paid or 0)
+            basic = float(s.basic_salary or 0)
+            allow = float(s.allowances or 0)
+            ded = float(s.deductions or 0)
+            prev = float(s.previous_salary_due or 0)
+            total = max(0.0, basic + allow - ded + prev)
+            remaining = max(0.0, total - paid)
+            emp = db.session.get(Employee, s.employee_id)
+            rows.append({
+                'employee_name': (emp.full_name if emp else f"#{s.employee_id}"),
+                'basic': basic,
+                'allow': allow,
+                'ded': ded,
+                'prev': prev,
+                'total': total,
+                'paid': paid,
+                'remaining': remaining,
+                'status': s.status or 'due'
+            })
+            totals['basic'] += basic; totals['allow'] += allow; totals['ded'] += ded
+            totals['prev'] += prev; totals['total'] += total; totals['paid'] += paid; totals['remaining'] += remaining
+    except Exception:
+        pass
+    return render_template('salaries_statements.html', year=year, month=month, rows=rows, totals=totals)
+
+
 
 
 @main.route('/payments', endpoint='payments')
@@ -790,7 +1001,13 @@ def pos_table(branch_code, table_number):
     # Ensure DB tables exist and seed demo menu on first run
     ensure_tables(); seed_menu_if_empty()
     # Load categories from DB for UI and provide a name->id map
-    cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
+    try:
+        cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
+    except Exception:
+        try:
+            cats = MenuCategory.query.order_by(MenuCategory.name).all()
+        except Exception:
+            cats = MenuCategory.query.all()
     categories = [c.name for c in cats]
     cat_map = {}
     for c in cats:
@@ -1379,16 +1596,27 @@ def customer_delete(cid):
 def suppliers():
     if request.method == 'POST':
         try:
+            # Accept optional CR/IBAN even if model lacks fields; store in notes
+            cr = (request.form.get('cr_number') or '').strip() or None
+            iban = (request.form.get('iban') or '').strip() or None
+            notes_in = (request.form.get('notes') or '').strip() or None
+            notes_extra = []
+            if notes_in:
+                notes_extra.append(notes_in)
+            if cr:
+                notes_extra.append(f"CR: {cr}")
+            if iban:
+                notes_extra.append(f"IBAN: {iban}")
+            notes_text = ' | '.join(notes_extra) if notes_extra else None
+
             s = Supplier(
                 name=(request.form.get('name') or '').strip(),
                 contact_person=request.form.get('contact_person') or None,
                 phone=request.form.get('phone') or None,
                 email=request.form.get('email') or None,
                 tax_number=request.form.get('tax_number') or None,
-                cr_number=request.form.get('cr_number') or None,
-                iban=request.form.get('iban') or None,
                 address=request.form.get('address') or None,
-                notes=request.form.get('notes') or None,
+                notes=notes_text,
                 active=True if str(request.form.get('active')).lower() in ['1','true','yes','on'] else False,
             )
             if not s.name:
@@ -1475,7 +1703,13 @@ def supplier_delete(sid):
 @login_required
 def menu():
     ensure_tables(); seed_menu_if_empty()
-    cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
+    try:
+        cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
+    except Exception:
+        try:
+            cats = MenuCategory.query.order_by(MenuCategory.name).all()
+        except Exception:
+            cats = MenuCategory.query.all()
     current = None
     cat_id = request.args.get('cat_id', type=int)
     if cat_id:
@@ -1972,19 +2206,80 @@ def vat_dashboard():
         start_date = date(y, 1, 1)
         end_date = date(y, 3, 31)
 
+    # Aggregate sales by branch (support both model variants)
+    sales_place_india = 0.0
+    sales_china_town = 0.0
+    try:
+        if hasattr(SalesInvoice, 'total_amount') and hasattr(SalesInvoice, 'created_at') and hasattr(SalesInvoice, 'branch_code'):
+            sales_place_india = db.session.query(func.coalesce(func.sum(SalesInvoice.total_amount), 0)) \
+                .filter(SalesInvoice.branch_code == 'place_india') \
+                .filter(SalesInvoice.created_at.between(start_date, end_date)).scalar() or 0.0
+            sales_china_town = db.session.query(func.coalesce(func.sum(SalesInvoice.total_amount), 0)) \
+                .filter(SalesInvoice.branch_code == 'china_town') \
+                .filter(SalesInvoice.created_at.between(start_date, end_date)).scalar() or 0.0
+        elif hasattr(SalesInvoice, 'total_before_tax') and hasattr(SalesInvoice, 'date') and hasattr(SalesInvoice, 'branch'):
+            sales_place_india = db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)) \
+                .filter(SalesInvoice.branch == 'place_india') \
+                .filter(SalesInvoice.date.between(start_date, end_date)).scalar() or 0.0
+            sales_china_town = db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)) \
+                .filter(SalesInvoice.branch == 'china_town') \
+                .filter(SalesInvoice.date.between(start_date, end_date)).scalar() or 0.0
+    except Exception:
+        sales_place_india = sales_china_town = 0.0
+
+    # Branch filter
+    branch = (request.args.get('branch') or 'all').strip()
+    if branch == 'place_india':
+        sales_total = float(sales_place_india or 0.0)
+    elif branch == 'china_town':
+        sales_total = float(sales_china_town or 0.0)
+    else:
+        sales_total = float(sales_place_india or 0.0) + float(sales_china_town or 0.0)
+
+    # Aggregate purchases (sum of total_price of items in period)
+    purchases_total = 0.0
+    try:
+        q_p = db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0)) \
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id) \
+            .filter(PurchaseInvoice.date.between(start_date, end_date))
+        purchases_total = float(q_p.scalar() or 0.0)
+    except Exception:
+        purchases_total = 0.0
+
+    # Aggregate expenses (sum invoice totals in period)
+    expenses_total = 0.0
+    try:
+        q_e = db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0)) \
+            .filter(ExpenseInvoice.date.between(start_date, end_date))
+        expenses_total = float(q_e.scalar() or 0.0)
+    except Exception:
+        expenses_total = 0.0
+
+    # VAT rate from Settings
+    try:
+        s = Settings.query.first()
+    except Exception:
+        s = None
+    vat_rate = float(getattr(s, 'vat_rate', 15) or 15) / 100.0
+
+    output_vat = float(sales_total or 0.0) * vat_rate
+    input_vat = float((purchases_total or 0.0) + (expenses_total or 0.0)) * vat_rate
+    net_vat = output_vat - input_vat
+
     data = {
         'year': y,
         'quarter': q,
         'start_date': start_date.isoformat(),
         'end_date': end_date.isoformat(),
-        'sales_place_india': 0.0,
-        'sales_china_town': 0.0,
-        'sales_total': 0.0,
-        'purchases_total': 0.0,
-        'expenses_total': 0.0,
-        'output_vat': 0.0,
-        'input_vat': 0.0,
-        'net_vat': 0.0,
+        'branch': branch,
+        'sales_place_india': float(sales_place_india or 0.0),
+        'sales_china_town': float(sales_china_town or 0.0),
+        'sales_total': float(sales_total or 0.0),
+        'purchases_total': float(purchases_total or 0.0),
+        'expenses_total': float(expenses_total or 0.0),
+        'output_vat': float(output_vat or 0.0),
+        'input_vat': float(input_vat or 0.0),
+        'net_vat': float(net_vat or 0.0),
     }
 
     return render_template('vat/vat_dashboard.html', data=data)
@@ -2038,11 +2333,27 @@ def vat_print():
         sales_place_india = 0
         sales_china_town = 0
 
-    sales_total = float(sales_place_india or 0) + float(sales_china_town or 0)
+    # Branch filter for sales total
+    branch = (request.args.get('branch') or 'all').strip()
+    if branch == 'place_india':
+        sales_total = float(sales_place_india or 0)
+    elif branch == 'china_town':
+        sales_total = float(sales_china_town or 0)
+    else:
+        sales_total = float(sales_place_india or 0) + float(sales_china_town or 0)
 
-    # For now, avoid cross-DB model usage; default to 0 if models are not available in this context
-    purchases_total = 0
-    expenses_total = 0
+    # Aggregate purchases and expenses within the period
+    try:
+        purchases_total = float(db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0))
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id)
+            .filter(PurchaseInvoice.date.between(start_date, end_date)).scalar() or 0.0)
+    except Exception:
+        purchases_total = 0.0
+    try:
+        expenses_total = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0))
+            .filter(ExpenseInvoice.date.between(start_date, end_date)).scalar() or 0.0)
+    except Exception:
+        expenses_total = 0.0
 
     s = None
     try:
@@ -2055,24 +2366,26 @@ def vat_print():
     input_vat = float((purchases_total or 0) + (expenses_total or 0)) * vat_rate
     net_vat = output_vat - input_vat
 
-    company_name = getattr(s, 'company_name', '') if s else ''
-    tax_number = getattr(s, 'tax_number', '') if s else ''
-    place_lbl = getattr(s, 'place_india_label', 'Place India') if s else 'Place India'
-    china_lbl = getattr(s, 'china_town_label', 'China Town') if s else 'China Town'
-    currency = getattr(s, 'currency', 'SAR') if s else 'SAR'
-
-    return render_template('vat/vat_print_fallback.html',
-                           year=year, quarter=quarter,
-                           start_date=start_date, end_date=end_date,
-                           sales_place_india=float(sales_place_india or 0),
-                           sales_china_town=float(sales_china_town or 0),
-                           sales_total=float(sales_total or 0),
-                           purchases_total=float(purchases_total or 0),
-                           expenses_total=float(expenses_total or 0),
-                           output_vat=output_vat, input_vat=input_vat, net_vat=net_vat,
-                           vat_rate=vat_rate,
-                           company_name=company_name, tax_number=tax_number,
-                           place_lbl=place_lbl, china_lbl=china_lbl, currency=currency)
+    # Render unified print report
+    report_title = f"VAT Report — Q{quarter} {year}"
+    if branch and branch != 'all':
+        report_title += f" — {branch}"
+    columns = ['Metric', 'Amount']
+    data_rows = [
+        {'Metric': 'Sales (Net Base)', 'Amount': float(sales_total or 0.0)},
+        {'Metric': 'Purchases', 'Amount': float(purchases_total or 0.0)},
+        {'Metric': 'Expenses', 'Amount': float(expenses_total or 0.0)},
+        {'Metric': 'Output VAT', 'Amount': float(output_vat or 0.0)},
+        {'Metric': 'Input VAT', 'Amount': float(input_vat or 0.0)},
+        {'Metric': 'Net VAT', 'Amount': float(net_vat or 0.0)},
+    ]
+    totals = {'Amount': float(net_vat or 0.0)}
+    return render_template('print_report.html', report_title=report_title, settings=s,
+                           generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                           start_date=start_date.isoformat(), end_date=end_date.isoformat(),
+                           payment_method=None, branch=branch or 'all',
+                           columns=columns, data=data_rows, totals=totals, totals_columns=['Amount'],
+                           totals_colspan=1, payment_totals=None)
 
 # ---------- Financials blueprint ----------
 financials = Blueprint('financials', __name__, url_prefix='/financials')
@@ -2104,22 +2417,199 @@ def income_statement():
             start_date = end_date = today
         period = 'custom'
 
+    # Branch filter (optional)
+    branch = (request.args.get('branch') or 'all').strip()
+
+    # Revenue from Sales (net of invoice discount; excludes VAT)
+    revenue = 0.0
+    try:
+        q = db.session.query(SalesInvoice, SalesInvoiceItem).join(
+            SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id
+        )
+        if hasattr(SalesInvoice, 'created_at'):
+            q = q.filter(SalesInvoice.created_at.between(start_date, end_date))
+        elif hasattr(SalesInvoice, 'date'):
+            q = q.filter(SalesInvoice.date.between(start_date, end_date))
+        if branch and branch != 'all':
+            if hasattr(SalesInvoice, 'branch_code'):
+                q = q.filter(SalesInvoice.branch_code == branch)
+            elif hasattr(SalesInvoice, 'branch'):
+                q = q.filter(SalesInvoice.branch == branch)
+        for inv, it in q.all():
+            if hasattr(it, 'unit_price') and hasattr(it, 'qty'):
+                line = float((it.unit_price or 0.0) * (it.qty or 0.0))
+            elif hasattr(it, 'price_before_tax') and hasattr(it, 'quantity'):
+                line = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
+            else:
+                line = 0.0
+            disc_pct = float(getattr(inv, 'discount_pct', 0.0) or 0.0)
+            revenue += line * (1.0 - disc_pct/100.0)
+    except Exception:
+        revenue = 0.0
+
+    # COGS approximated by purchase costs in period (before tax)
+    cogs = 0.0
+    try:
+        q_p = db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.price_before_tax * PurchaseInvoiceItem.quantity), 0)) \
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id) \
+            .filter(PurchaseInvoice.date.between(start_date, end_date))
+        cogs = float(q_p.scalar() or 0.0)
+    except Exception:
+        cogs = 0.0
+
+    # Operating expenses from Expense invoices (after tax and discount)
+    operating_expenses = 0.0
+    try:
+        q_e = db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0)) \
+            .filter(ExpenseInvoice.date.between(start_date, end_date))
+        operating_expenses = float(q_e.scalar() or 0.0)
+    except Exception:
+        operating_expenses = 0.0
+
+    gross_profit = max(revenue - cogs, 0.0)
+    operating_profit = gross_profit - operating_expenses
+    other_income = 0.0
+    other_expenses = 0.0
+    net_profit_before_tax = operating_profit + other_income - other_expenses
+    tax = 0.0
+    net_profit_after_tax = net_profit_before_tax - tax
+
     data = {
         'period': period,
         'start_date': start_date.isoformat(),
         'end_date': end_date.isoformat(),
-        'revenue': 0.0,
-        'cogs': 0.0,
-        'gross_profit': 0.0,
-        'operating_expenses': 0.0,
-        'operating_profit': 0.0,
-        'other_income': 0.0,
-        'other_expenses': 0.0,
-        'net_profit_before_tax': 0.0,
-        'tax': 0.0,
-        'net_profit_after_tax': 0.0,
+        'branch': branch,
+        'revenue': float(revenue or 0.0),
+        'cogs': float(cogs or 0.0),
+        'gross_profit': float(gross_profit or 0.0),
+        'operating_expenses': float(operating_expenses or 0.0),
+        'operating_profit': float(operating_profit or 0.0),
+        'other_income': float(other_income or 0.0),
+        'other_expenses': float(other_expenses or 0.0),
+        'net_profit_before_tax': float(net_profit_before_tax or 0.0),
+        'tax': float(tax or 0.0),
+        'net_profit_after_tax': float(net_profit_after_tax or 0.0),
     }
     return render_template('financials/income_statement.html', data=data)
+
+
+@financials.route('/print/income_statement', methods=['GET'], endpoint='print_income_statement')
+@login_required
+def print_income_statement():
+    # Period params
+    period = (request.args.get('period') or 'today').strip()
+    today = datetime.utcnow().date()
+    if period == 'today':
+        start_date = end_date = today
+    elif period == 'this_week':
+        start_date = today - timedelta(days=today.isoweekday() - 1)
+        end_date = start_date + timedelta(days=6)
+    elif period == 'this_month':
+        start_date = date(today.year, today.month, 1)
+        nm = date(today.year + (1 if today.month == 12 else 0), 1 if today.month == 12 else today.month + 1, 1)
+        end_date = nm - timedelta(days=1)
+    elif period == 'this_year':
+        start_date = date(today.year, 1, 1)
+        end_date = date(today.year, 12, 31)
+    else:
+        sd = request.args.get('start_date')
+        ed = request.args.get('end_date')
+        try:
+            start_date = datetime.strptime(sd, '%Y-%m-%d').date() if sd else today
+            end_date = datetime.strptime(ed, '%Y-%m-%d').date() if ed else today
+        except Exception:
+            start_date = end_date = today
+        period = 'custom'
+
+    branch = (request.args.get('branch') or 'all').strip()
+
+    # Compute revenue
+    revenue = 0.0
+    try:
+        q = db.session.query(SalesInvoice, SalesInvoiceItem).join(
+            SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id
+        )
+        if hasattr(SalesInvoice, 'created_at'):
+            q = q.filter(SalesInvoice.created_at.between(start_date, end_date))
+        elif hasattr(SalesInvoice, 'date'):
+            q = q.filter(SalesInvoice.date.between(start_date, end_date))
+        if branch and branch != 'all':
+            if hasattr(SalesInvoice, 'branch_code'):
+                q = q.filter(SalesInvoice.branch_code == branch)
+            elif hasattr(SalesInvoice, 'branch'):
+                q = q.filter(SalesInvoice.branch == branch)
+        for inv, it in q.all():
+            if hasattr(it, 'unit_price') and hasattr(it, 'qty'):
+                line = float((it.unit_price or 0.0) * (it.qty or 0.0))
+            elif hasattr(it, 'price_before_tax') and hasattr(it, 'quantity'):
+                line = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
+            else:
+                line = 0.0
+            disc_pct = float(getattr(inv, 'discount_pct', 0.0) or 0.0)
+            revenue += line * (1.0 - disc_pct/100.0)
+    except Exception:
+        revenue = 0.0
+
+    # COGS
+    cogs = 0.0
+    try:
+        q_p = db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.price_before_tax * PurchaseInvoiceItem.quantity), 0)) \
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id) \
+            .filter(PurchaseInvoice.date.between(start_date, end_date))
+        cogs = float(q_p.scalar() or 0.0)
+    except Exception:
+        cogs = 0.0
+
+    # Operating expenses
+    operating_expenses = 0.0
+    try:
+        q_e = db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0)) \
+            .filter(ExpenseInvoice.date.between(start_date, end_date))
+        operating_expenses = float(q_e.scalar() or 0.0)
+    except Exception:
+        operating_expenses = 0.0
+
+    gross_profit = max(revenue - cogs, 0.0)
+    operating_profit = gross_profit - operating_expenses
+    other_income = 0.0
+    other_expenses = 0.0
+    net_profit_before_tax = operating_profit + other_income - other_expenses
+    tax = 0.0
+    net_profit_after_tax = net_profit_before_tax - tax
+
+    # Settings for header
+    try:
+        settings = Settings.query.first()
+    except Exception:
+        settings = None
+
+    # Prepare print data
+    report_title = 'Income Statement'
+    if branch and branch != 'all':
+        report_title += f' — {branch}'
+    columns = ['Item', 'Amount']
+    rows = [
+        {'Item': 'Revenue', 'Amount': float(revenue or 0.0)},
+        {'Item': 'COGS', 'Amount': float(cogs or 0.0)},
+        {'Item': 'Gross Profit', 'Amount': float(gross_profit or 0.0)},
+        {'Item': 'Operating Expenses', 'Amount': float(operating_expenses or 0.0)},
+        {'Item': 'Operating Profit', 'Amount': float(operating_profit or 0.0)},
+        {'Item': 'Other Income', 'Amount': float(other_income or 0.0)},
+        {'Item': 'Other Expenses', 'Amount': float(other_expenses or 0.0)},
+        {'Item': 'Net Profit Before Tax', 'Amount': float(net_profit_before_tax or 0.0)},
+        {'Item': 'Tax', 'Amount': float(tax or 0.0)},
+        {'Item': 'Net Profit After Tax', 'Amount': float(net_profit_after_tax or 0.0)},
+    ]
+    totals = {'Amount': float(net_profit_after_tax or 0.0)}
+
+    return render_template('print_report.html', report_title=report_title, settings=settings,
+                           generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                           start_date=start_date.isoformat(), end_date=end_date.isoformat(),
+                           payment_method=None, branch=branch or 'all',
+                           columns=columns, data=rows, totals=totals, totals_columns=['Amount'],
+                           totals_colspan=1, payment_totals=None)
+
+
 
 @financials.route('/balance-sheet', endpoint='balance_sheet')
 @login_required
@@ -2345,7 +2835,35 @@ def reports_print_all_invoices_sales():
         'end_date': request.args.get('end_date') or '',
         'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
     }
-    return render_template('reports_print_sales.html', rows=rows, branch_totals=branch_totals, overall=overall, settings=settings, meta=meta, payment_totals=payment_totals)
+    # Use unified print_report.html like purchases/expenses
+    columns = ['Branch','Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment']
+    data = []
+    for r in rows:
+        data.append({
+            'Branch': r.get('branch') or '',
+            'Date': r.get('date') or '',
+            'Invoice No.': r.get('invoice_number') or '',
+            'Item': r.get('item_name') or '',
+            'Qty': float(r.get('quantity') or 0.0),
+            'Amount': float(r.get('amount') or 0.0),
+            'Discount': float(r.get('discount') or 0.0),
+            'VAT': float(r.get('vat') or 0.0),
+            'Total': float(r.get('total') or 0.0),
+            'Payment': r.get('payment_method') or '',
+        })
+    totals = {
+        'Amount': float(overall.get('amount') or 0.0),
+        'Discount': float(overall.get('discount') or 0.0),
+        'VAT': float(overall.get('vat') or 0.0),
+        'Total': float(overall.get('total') or 0.0),
+    }
+    totals_columns = ['Amount','Discount','VAT','Total']
+    totals_colspan = len(columns) - len(totals_columns)
+    return render_template('print_report.html', report_title=meta['title'], settings=settings,
+                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
+                           payment_method=meta['payment_method'], branch=meta['branch'],
+                           columns=columns, data=data, totals=totals, totals_columns=totals_columns,
+                           totals_colspan=totals_colspan, payment_totals=payment_totals)
 
 
 @main.route('/reports/print/all-invoices/purchases', methods=['GET'], endpoint='reports_print_all_invoices_purchases')
