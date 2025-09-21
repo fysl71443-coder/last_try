@@ -1,0 +1,2 @@
+This is a no-op file to trigger a fresh Render deploy of the current main commit.
+No functional changes.
