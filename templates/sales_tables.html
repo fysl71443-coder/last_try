@@ -8,7 +8,7 @@
       <small class="text-muted">Select a table to open the POS</small>
     </div>
     <div>
-      <a class="btn btn-outline-secondary" href="{{ url_for('sales') }}">&larr; Back to Branches</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.sales') }}">&larr; Back to Branches</a>
     </div>
   </div>
 
@@ -19,7 +19,7 @@
         <div class="col-12"><h6 class="text-muted mt-3">{{ group }}</h6></div>
           {% for t in tlist %}
           <div class="col-6 col-md-3 col-lg-2">
-            <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=t.number) }}">
+            <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('main.pos_table', branch_code=branch_code, table_number=t.number) }}">
               Table {{ t.number }}
               <span class="badge ms-2 status-label {% if t.status=='occupied' %}bg-danger{% else %}bg-success{% endif %}">{% if t.status=='occupied' %}Occupied{% else %}Available{% endif %}</span>
             </a>
@@ -33,7 +33,7 @@
             {% for row in sec.rows %}
               {% for t in row %}
               <div class="col-6 col-md-3 col-lg-2">
-                <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=t.number) }}">
+                <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('main.pos_table', branch_code=branch_code, table_number=t.number) }}">
                   Table {{ t.number }}
                   <span class="badge ms-2 status-label {% if t.status=='occupied' %}bg-danger{% else %}bg-success{% endif %}">{% if t.status=='occupied' %}Occupied{% else %}Available{% endif %}</span>
                 </a>
@@ -44,7 +44,7 @@
           {% else %}
             {% for t in sec.tables %}
             <div class="col-6 col-md-3 col-lg-2">
-              <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=t.number) }}">
+              <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('main.pos_table', branch_code=branch_code, table_number=t.number) }}">
                 Table {{ t.number }}
                 <span class="badge ms-2 status-label {% if t.status=='occupied' %}bg-danger{% else %}bg-success{% endif %}">{% if t.status=='occupied' %}Occupied{% else %}Available{% endif %}</span>
               </a>
@@ -56,7 +56,7 @@
     {% elif tables %}
       {% for t in tables %}
       <div class="col-6 col-md-3 col-lg-2">
-        <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=t.number) }}">
+        <a class="btn w-100 {% if t.status=='occupied' %}btn-danger{% else %}btn-success{% endif %}" data-table="{{ t.number }}" href="{{ url_for('main.pos_table', branch_code=branch_code, table_number=t.number) }}">
           Table {{ t.number }}
           <span class="badge ms-2 status-label {% if t.status=='occupied' %}bg-danger{% else %}bg-success{% endif %}">{% if t.status=='occupied' %}Occupied{% else %}Available{% endif %}</span>
         </a>
@@ -65,7 +65,7 @@
     {% else %}
       {% for n in range(1,21) %}
       <div class="col-6 col-md-3 col-lg-2">
-        <a class="btn w-100 btn-outline-primary" href="{{ url_for('sales_table_invoice', branch_code=branch_code, table_number=n) }}">
+        <a class="btn w-100 btn-outline-primary" href="{{ url_for('main.pos_table', branch_code=branch_code, table_number=n) }}">
           Table {{ n }}
         </a>
       </div>

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('dashboard') %}
+{% set back_url = url_for('main.dashboard') %}
 
 {% block title %}{{ _('Expenses / المصروفات') }}{% endblock %}
 {% block content %}
@@ -43,13 +43,13 @@ body {
             <h3 class="mb-0">💸 {{ _('Expenses / المصروفات') }}</h3>
         </div>
         <div class="col-md-6 text-end">
-            <a href="{{ url_for('purchases') }}" class="btn btn-outline-warning me-2">
+            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning me-2">
                 🛒 {{ _('Purchases / المشتريات') }}
             </a>
-            <a href="{{ url_for('sales') }}" class="btn btn-outline-info me-2">
+            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info me-2">
                 💰 {{ _('Sales / المبيعات') }}
             </a>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
                 🏠 {{ _('Dashboard / لوحة التحكم') }}
             </a>
         </div>

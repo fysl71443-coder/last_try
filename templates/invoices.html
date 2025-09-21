@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('dashboard') %}
+{% set back_url = url_for('main.dashboard') %}
 
 {% block title %}{{ _('All Invoices / كل الفواتير') }}{% endblock %}
 {% block content %}
@@ -40,26 +40,26 @@ body {
     <div class="nav-buttons">
         <div class="row">
             <div class="col-md-8">
-                <a href="{{ url_for('invoices', type='sales') }}"
+                <a href="{{ url_for('main.invoices', type='sales') }}"
                    class="btn btn-outline-primary me-2 {{ 'active' if current_type == 'sales' else '' }}">
                    {{ _('Sales / المبيعات') }}
                 </a>
-                <a href="{{ url_for('invoices', type='purchases') }}"
+                <a href="{{ url_for('main.invoices', type='purchases') }}"
                    class="btn btn-outline-primary me-2 {{ 'active' if current_type == 'purchases' else '' }}">
                    {{ _('Purchases / المشتريات') }}
                 </a>
-                <a href="{{ url_for('invoices', type='expenses') }}"
+                <a href="{{ url_for('main.invoices', type='expenses') }}"
                    class="btn btn-outline-primary me-2 {{ 'active' if current_type == 'expenses' else '' }}">
                    {{ _('Expenses / المصروفات') }}
                 </a>
-                <a href="{{ url_for('invoices', type='all') }}"
+                <a href="{{ url_for('main.invoices', type='all') }}"
                    class="btn btn-outline-secondary {{ 'active' if current_type == 'all' else '' }}">
                    {{ _('All / الكل') }}
                 </a>
             </div>
             <div class="col-md-4 text-end">
                 <div class="btn-group" role="group">
-                  <a href="{{ url_for('print_invoices', section=current_type) }}" class="btn btn-success" target="_blank">📄 {{ _('Print All / طباعة الكل') }}</a>
+                  <a href="#" class="btn btn-success" target="_blank">📄 {{ _('Print All / طباعة الكل') }}</a>
                   <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">🗑️ {{ _('Delete / حذف') }}</button>
                 </div>
             </div>
@@ -69,7 +69,7 @@ body {
     {% if invoices %}
     <!-- نموذج الدفع المتعدد -->
     <div class="invoice-card">
-        <form method="post" action="{{ url_for('bulk_payment') }}">
+        <form method="post" action="#">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
             <div class="table-responsive">
@@ -114,7 +114,7 @@ body {
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
                                 {% if invoice.status != 'paid' %}
-                                <form method="post" action="{{ url_for('single_payment', invoice_id=invoice.id) }}" class="d-flex">
+                                <form method="post" action="#" class="d-flex">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     <input type="number" step="0.01" name="payment_amount"
                                            placeholder="Amount" class="form-control form-control-sm me-1"
@@ -129,7 +129,7 @@ body {
 
                                 </td>
                                 <td>
-                                  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('view_invoice', kind=invoice.invoice_type, invoice_id=invoice.id) }}">{{ _('View / عرض') }}</a>
+                                  <a class="btn btn-sm btn-outline-secondary" href="#">{{ _('View / عرض') }}</a>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -408,7 +408,7 @@ body {
     })();
   </script>
 
-          <form method="post" action="{{ url_for('invoices_delete', type=current_type) }}">
+          <form method="post" action="#">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="modal-header">
               <h5 class="modal-title">{{ _('Delete Invoices / حذف الفواتير') }}</h5>
