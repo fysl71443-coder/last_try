@@ -399,7 +399,7 @@ body {
 <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="post" action="#" enctype="multipart/form-data">
+            <form method="post" action="{{ url_for('main.meals_import') }}" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="modal-header">
                     <h5 class="modal-title">{{ _('Import Meals / استيراد الوجبات') }}</h5>
@@ -412,8 +412,8 @@ body {
                         <div class="form-text">{{ _('Supported formats: Excel (.xlsx, .xls), CSV / الصيغ المدعومة: إكسل، CSV') }}</div>
                     </div>
                     <div class="alert alert-info">
-                        <strong>{{ _('File Format / تنسيق الملف') }}:</strong><br>
-                        {{ _('Columns should be: Name, Name (Arabic), Category, Cost, Selling Price / الأعمدة يجب أن تكون: الاسم، الاسم بالعربية، الفئة، التكلفة، سعر البيع') }}
+                        <strong>{{ _('Required columns / الأعمدة المطلوبة') }}:</strong><br>
+                        {{ _('Name, Name (Arabic), Selling Price / الاسم، الاسم بالعربية، سعر البيع') }}
                     </div>
                 </div>
                 <div class="modal-footer">

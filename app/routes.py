@@ -168,6 +168,111 @@ def raw_materials():
 def meals():
     return render_template('meals.html')
 
+# -------- Meals import (Excel/CSV): Name, Name (Arabic), Selling Price --------
+@main.route('/meals/import', methods=['POST'], endpoint='meals_import')
+@login_required
+def meals_import():
+    import os, csv
+    from io import TextIOWrapper
+    file = request.files.get('file')
+    if not file or not file.filename:
+        flash('لم يتم اختيار ملف', 'warning')
+        return redirect(url_for('main.meals'))
+
+    ext = os.path.splitext(file.filename)[1].lower()
+
+    def ensure_category(name='Meals'):
+        cat = MenuCategory.query.filter_by(name=name).first()
+        if not cat:
+            cat = MenuCategory(name=name, sort_order=0)
+            db.session.add(cat)
+            db.session.commit()
+        return cat
+
+    def upsert_item(name_en, name_ar, price_val):
+        # دمج الاسم العربي للعرض فقط
+        display_name = (name_en or '').strip()
+        if name_ar:
+            display_name = f"{display_name} / {str(name_ar).strip()}" if display_name else str(name_ar).strip()
+        try:
+            price = float(str(price_val).replace(',', '').strip()) if price_val is not None else 0.0
+        except Exception:
+            price = 0.0
+        cat = ensure_category('Meals')
+        item = MenuItem(name=display_name or 'Unnamed', price=price, category_id=cat.id)
+        db.session.add(item)
+        return item
+
+    imported, errors = 0, 0
+
+    if ext == '.csv':
+        try:
+            stream = TextIOWrapper(file.stream, encoding='utf-8')
+            reader = csv.DictReader(stream)
+            # تطبيع أسماء الأعمدة
+            def norm(s):
+                return (s or '').strip().lower()
+            for row in reader:
+                cols = {norm(k): v for k, v in row.items()}
+                name = cols.get('name') or cols.get('اسم') or cols.get('product')
+                name_ar = cols.get('name (arabic)') or cols.get('name_ar') or cols.get('arabic') or cols.get('الاسم العربي')
+                price = cols.get('selling price') or cols.get('price') or cols.get('السعر')
+                if not name and not name_ar:
+                    continue
+                try:
+                    upsert_item(name, name_ar, price)
+                    imported += 1
+                except Exception:
+                    errors += 1
+            db.session.commit()
+            flash(f'تم استيراد {imported} عنصر بنجاح' + (f'، أخطاء: {errors}' if errors else ''), 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'فشل استيراد CSV: {e}', 'danger')
+        return redirect(url_for('main.meals'))
+
+    elif ext in ('.xlsx', '.xls'):
+        try:
+            try:
+                import openpyxl  # يتطلب تثبيت openpyxl
+            except Exception:
+                flash('لا يمكن قراءة ملفات Excel بدون تثبيت openpyxl. يمكنك رفع CSV بدلاً من ذلك أو اسمح لي بتثبيت openpyxl.', 'warning')
+                return redirect(url_for('main.meals'))
+            wb = openpyxl.load_workbook(file, data_only=True)
+            ws = wb.active
+            # اقرأ العناوين من الصف الأول
+            headers = []
+            for cell in next(ws.iter_rows(min_row=1, max_row=1, values_only=True)):
+                headers.append((cell or '').strip().lower())
+            # اصنع خريطة اسم -> فهرس
+            index = {h: i for i, h in enumerate(headers)}
+            def get_val(row, keys):
+                for k in keys:
+                    if k in index:
+                        return row[index[k]]
+                return None
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                name = get_val(row, ['name', 'اسم'])
+                name_ar = get_val(row, ['name (arabic)', 'name_ar', 'arabic', 'الاسم العربي'])
+                price = get_val(row, ['selling price', 'price', 'السعر'])
+                if not name and not name_ar:
+                    continue
+                try:
+                    upsert_item(name, name_ar, price)
+                    imported += 1
+                except Exception:
+                    errors += 1
+            db.session.commit()
+            flash(f'تم استيراد {imported} عنصر من Excel' + (f'، أخطاء: {errors}' if errors else ''), 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'فشل استيراد Excel: {e}', 'danger')
+        return redirect(url_for('main.meals'))
+
+    else:
+        flash('صيغة الملف غير مدعومة. الرجاء رفع ملف CSV أو Excel (.xlsx/.xls).', 'warning')
+        return redirect(url_for('main.meals'))
+
 @main.route('/inventory', endpoint='inventory')
 @login_required
 def inventory():
