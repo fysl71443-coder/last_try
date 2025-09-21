@@ -315,7 +315,10 @@ def expenses():
 @main.route('/invoices', endpoint='invoices')
 @login_required
 def invoices():
-    return render_template('invoices.html')
+    t = (request.args.get('type') or 'sales').strip().lower()
+    if t not in ('sales','purchases','expenses','all'):
+        t = 'sales'
+    return render_template('invoices.html', current_type=t)
 
 @main.route('/employees', endpoint='employees')
 @login_required
