@@ -1041,7 +1041,7 @@ def preview_receipt(branch_code, table_number):
     if not inv.get('invoice_no'):
         inv['invoice_no'] = next_invoice_no(branch_code)
     invoice_no = inv['invoice_no']
-    timestamp_iso = datetime.now(ZoneInfo("Asia/Riyadh")).isoformat()
+    timestamp_iso = datetime.now(ZoneInfo("Asia/Riyadh")).isoformat(timespec='seconds')
     zatca_qr_b64 = zatca_tlv_base64(settings_sales.get('restaurant_name'), settings_sales.get('vat_number'), timestamp_iso, grand_total, vat_amount)
     return render_template(
         "receipt.html",
@@ -1120,7 +1120,7 @@ def pay_invoice(branch_code, table_number):
     if not inv.get('invoice_no'):
         inv['invoice_no'] = next_invoice_no(branch_code)
     invoice_no = inv['invoice_no']
-    timestamp_iso = datetime.now(ZoneInfo("Asia/Riyadh")).isoformat()
+    timestamp_iso = datetime.now(ZoneInfo("Asia/Riyadh")).isoformat(timespec='seconds')
     zatca_qr_b64 = zatca_tlv_base64(settings_sales.get('restaurant_name'), settings_sales.get('vat_number'), timestamp_iso, grand_total, vat_amount)
     return render_template(
         "receipt.html",
@@ -4724,7 +4724,8 @@ def sales_receipt(invoice_id):
             return bytes([tag & 0xFF, len(b) & 0xFF]) + b
         seller = (settings.company_name or '').strip().encode('utf-8') if settings else b''
         vat = (settings.tax_number or '').strip().encode('utf-8') if settings else b''
-        ts = (invoice.created_at.astimezone().isoformat() if invoice.created_at else str(invoice.date)).encode('utf-8')
+        dt_ksa = (invoice.created_at.astimezone(KSA_TZ) if getattr(invoice, 'created_at', None) else get_saudi_now())
+        ts = dt_ksa.isoformat(timespec='seconds').encode('utf-8')
         total = (f"{float(invoice.total_after_tax_discount or 0):.2f}").encode('utf-8')
         vat_amt = (f"{float(invoice.tax_amount or 0):.2f}").encode('utf-8')
         payload = base64.b64encode(_tlv(1, seller) + _tlv(2, vat) + _tlv(3, ts) + _tlv(4, total) + _tlv(5, vat_amt)).decode('ascii')
@@ -8783,7 +8784,7 @@ def print_invoice(invoice_id: int):
             return bytes([tag & 0xFF, len(b) & 0xFF]) + b
         seller = (getattr(settings, 'company_name', '') or '').encode('utf-8')
         vat_no = (getattr(settings, 'tax_number', '') or '').encode('utf-8')
-        ts = (date_time or '').encode('utf-8')
+        ts = dt_ksa.isoformat(timespec='seconds').encode('utf-8')
         total_b = (f"{float(inv.total_after_tax_discount or 0):.2f}").encode('utf-8')
         vat_b = (f"{float(inv.tax_amount or 0):.2f}").encode('utf-8')
         payload_b64 = base64.b64encode(_tlv(1, seller) + _tlv(2, vat_no) + _tlv(3, ts) + _tlv(4, total_b) + _tlv(5, vat_b)).decode('ascii')
@@ -8860,7 +8861,7 @@ def print_unpaid_invoice(invoice_id):
                 return bytes([tag & 0xFF, len(b) & 0xFF]) + b
             seller = (getattr(settings, 'company_name', '') or '').encode('utf-8')
             vat_no = (getattr(settings, 'tax_number', '') or '').encode('utf-8')
-            ts = (date_time or '').encode('utf-8')
+            ts = dt_ksa.isoformat(timespec='seconds').encode('utf-8')
             total_b = (f"{float(inv.total_after_tax_discount or 0):.2f}").encode('utf-8')
             vat_b = (f"{float(inv.tax_amount or 0):.2f}").encode('utf-8')
             payload_b64 = base64.b64encode(_tlv(1, seller) + _tlv(2, vat_no) + _tlv(3, ts) + _tlv(4, total_b) + _tlv(5, vat_b)).decode('ascii')
