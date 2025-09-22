@@ -2067,7 +2067,7 @@ def api_users_delete():
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 # Permissions: persist to AppKV to avoid schema changes
-PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','salaries','financials','vat','reports','settings']
+PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','salaries','financials','vat','reports','settings','suppliers','table_settings','users','sample_data']
 
 def _perms_k(uid, scope):
     return f"user_perms:{scope or 'all'}:{int(uid)}"
