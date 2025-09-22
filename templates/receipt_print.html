@@ -121,21 +121,21 @@
         <table class="totals">
             <tr>
                 <td>Subtotal</td>
-                <td style="text-align:right">{{ '%.2f' % subtotal }} SAR</td>
+                <td style="text-align:right">{{ '%.2f' % subtotal }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
             </tr>
             {% if invoice.discount_amount and invoice.discount_amount > 0 %}
             <tr>
                 <td>Discount</td>
-                <td style="text-align:right">-{{ '%.2f' % invoice.discount_amount }} SAR</td>
+                <td style="text-align:right">-{{ '%.2f' % invoice.discount_amount }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
             </tr>
             {% endif %}
             <tr>
                 <td>VAT ({{ (settings.vat_rate if settings else 15)|int }}%)</td>
-                <td style="text-align:right">{{ '%.2f' % vat_amount }} SAR</td>
+                <td style="text-align:right">{{ '%.2f' % vat_amount }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
             </tr>
             <tr style="border-top: 2px solid #333;">
                 <td><strong>Total</strong></td>
-                <td style="text-align:right"><strong>{{ '%.2f' % total }} SAR</strong></td>
+                <td style="text-align:right"><strong>{{ '%.2f' % total }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</strong></td>
             </tr>
         </table>
 
