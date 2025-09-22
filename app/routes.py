@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime, date, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, send_from_directory
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +21,63 @@ BRANCH_LABELS = {
     'place_india': 'Place India',
     'china_town': 'China Town',
 }
+
+# --- Permission helpers (reuse AppKV like template can()) ---
+def _normalize_scope(s: str) -> str:
+    s = (s or '').strip().lower()
+    if s in ('place','palace','india','palace_india'): return 'place_india'
+    if s in ('china','china town','chinatown'): return 'china_town'
+    return s or 'all'
+
+
+def _read_user_perms(uid: int, scope: str):
+    try:
+        k = f"user_perms:{scope}:{int(uid)}"
+        row = AppKV.query.filter_by(k=k).first()
+        if not row:
+            return {}
+        data = json.loads(row.v)
+        items = data.get('items') or []
+        out = {}
+        for it in items:
+            key = (it.get('screen_key') or '').strip()
+            if not key:
+                continue
+            out[key] = {
+                'view': bool(it.get('view')),
+                'add': bool(it.get('add')),
+                'edit': bool(it.get('edit')),
+                'delete': bool(it.get('delete')),
+                'print': bool(it.get('print')),
+            }
+        return out
+    except Exception:
+        return {}
+
+
+def user_can(screen: str, action: str = 'view', branch_scope: str = None) -> bool:
+    try:
+        if not getattr(current_user, 'is_authenticated', False):
+            return False
+        # Admin bypass
+        if getattr(current_user, 'username', '') == 'admin' or getattr(current_user, 'id', None) == 1:
+            return True
+        if getattr(current_user, 'role', '') == 'admin':
+            return True
+        scopes = []
+        if branch_scope:
+            scopes = [_normalize_scope(branch_scope), 'all']
+        else:
+            scopes = ['all']
+        for sc in scopes:
+            perms = _read_user_perms(current_user.id, sc)
+            scr = perms.get(screen)
+            if scr and scr.get(action):
+                return True
+        return False
+    except Exception:
+        return False
+
 
 
 # Safe helper: current time in Saudi Arabia timezone
@@ -234,6 +291,8 @@ def sales():
         {'code': 'china_town', 'label': 'CHINA TOWN', 'url': url_for('main.sales_tables', branch_code='china_town')},
         {'code': 'place_india', 'label': 'PALACE INDIA', 'url': url_for('main.sales_tables', branch_code='place_india')},
     ]
+    # Filter branches by user permissions (allow via specific branch or global 'all')
+    branches = [b for b in branches if user_can('sales', 'view', b['code'])]
     return render_template('sales_branches.html', branches=branches)
 
 @main.route('/purchases', methods=['GET','POST'], endpoint='purchases')
@@ -992,6 +1051,9 @@ def reports():
 @main.route('/sales/<branch_code>/tables', endpoint='sales_tables')
 @login_required
 def sales_tables(branch_code):
+    if not user_can('sales','view', branch_code):
+        flash('لا تملك صلاحية الوصول لفرع المبيعات هذا', 'warning')
+        return redirect(url_for('main.sales'))
     branch_label = BRANCH_LABELS.get(branch_code, branch_code)
     # Try to load grouped layout from saved sections; otherwise simple 1..20
     settings = kv_get('table_settings', {}) or {}
@@ -1020,12 +1082,19 @@ def sales_india():
 @main.route('/pos/<branch_code>', endpoint='pos_home')
 @login_required
 def pos_home(branch_code):
+    if not user_can('sales','view', branch_code):
+        flash('\u0644\u0627 \u062a\u0645\u0644\u0643 \u0635\u0644\u0627\u062d\u064a\u0629 \u0627\u0644\u0648\u0635\u0648\u0644 \u0644\u0641\u0631\u0639 \u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0647\u0630\u0627', 'warning')
+        return redirect(url_for('main.sales'))
+
     return redirect(url_for('main.sales_tables', branch_code=branch_code))
 
 
 @main.route('/pos/<branch_code>/table/<int:table_number>', endpoint='pos_table')
 @login_required
 def pos_table(branch_code, table_number):
+    if not user_can('sales','view', branch_code):
+        flash('\u0644\u0627 \u062a\u0645\u0644\u0643 \u0635\u0644\u0627\u062d\u064a\u0629 \u0627\u0644\u0648\u0635\u0648\u0644 \u0644\u0641\u0631\u0639 \u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0647\u0630\u0627', 'warning')
+        return redirect(url_for('main.sales'))
     branch_label = BRANCH_LABELS.get(branch_code, branch_code)
     vat_rate = 15
     # Load any existing draft for this table
@@ -1079,6 +1148,7 @@ def api_table_settings():
     # POST
     try:
         data = request.get_json(force=True) or {}
+
         kv_set('table_settings', data)
         return jsonify({'success': True})
     except Exception as e:
@@ -1090,6 +1160,8 @@ def api_table_settings():
 @login_required
 def api_table_sections(branch_code):
     key = f'sections:{branch_code}'
+    if not user_can('sales','view', branch_code):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
     if request.method == 'GET':
         data = kv_get(key, {}) or {}
         return jsonify({'success': True, 'sections': data.get('sections') or [], 'assignments': data.get('assignments') or []})
@@ -1111,8 +1183,11 @@ def api_table_sections(branch_code):
 
 @main.route('/api/tables/<branch_code>', methods=['GET'], endpoint='api_tables_status')
 @login_required
+
 def api_tables_status(branch_code):
     # Read drafts to mark occupied tables
+    if not user_can('sales','view', branch_code):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
     settings = kv_get('table_settings', {}) or {}
     if branch_code == 'china_town':
         count = int((settings.get('china') or {}).get('count', 20))
@@ -1153,11 +1228,16 @@ def api_menu_items(cat_id):
         return jsonify(data)
     # Demo fallback
     demo_items = [{'id': None, 'name': nm, 'price': float(pr)} for (nm, pr) in _DEF_MENU.get(cat_id, [])]
+
+
     return jsonify(demo_items)
 
 @main.route('/api/draft-order/<branch_code>/<int:table_number>', methods=['POST'], endpoint='api_draft_create_or_update')
 @login_required
 def api_draft_create_or_update(branch_code, table_number):
+    if not user_can('sales','view', branch_code):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
+
     try:
         payload = request.get_json(force=True) or {}
         items = payload.get('items') or []
@@ -1177,6 +1257,8 @@ def api_draft_create_or_update(branch_code, table_number):
 
 
 def _parse_draft_id(draft_id):
+
+
     # supports both branch:table and branch-table
     if ':' in draft_id:
         branch, num = draft_id.split(':', 1)
@@ -1198,6 +1280,9 @@ def api_draft_update(draft_id):
         if not branch:
             return jsonify({'success': False, 'error': 'invalid_draft_id'}), 400
         payload = request.get_json(force=True) or {}
+        if not user_can('sales','view', branch):
+            return jsonify({'success': False, 'error': 'forbidden'}), 403
+
         rec = kv_get(f'draft:{branch}:{table}', {}) or {}
         # map items to unified structure while preserving name/price
         items = payload.get('items') or []
@@ -1265,8 +1350,13 @@ def api_draft_update(draft_id):
 def api_draft_cancel(draft_id):
     try:
         branch, table = _parse_draft_id(draft_id)
+
+
         if not branch:
             return jsonify({'success': False, 'error': 'invalid_draft_id'}), 400
+        if not user_can('sales','view', branch):
+            return jsonify({'success': False, 'error': 'forbidden'}), 403
+
         # clear draft
         kv_set(f'draft:{branch}:{table}', {'draft_id': draft_id, 'items': []})
         return jsonify({'success': True})
@@ -1276,6 +1366,8 @@ def api_draft_cancel(draft_id):
 
 
 @main.route('/api/draft/checkout', methods=['POST'], endpoint='api_draft_checkout')
+
+
 @login_required
 def api_draft_checkout():
     payload = request.get_json(force=True) or {}
@@ -1283,6 +1375,9 @@ def api_draft_checkout():
     branch, table = _parse_draft_id(draft_id)
     if not branch:
         return jsonify({'error': 'invalid_draft_id'}), 400
+    if not user_can('sales','view', branch):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
+
     warmup_db_once()
     draft = kv_get(f'draft:{branch}:{table}', {}) or {}
     items = draft.get('items') or []
@@ -1338,6 +1433,8 @@ def api_draft_checkout():
             ))
         db.session.commit()
     except Exception as e:
+
+
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
     return jsonify({'ok': True, 'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': int(table)})
@@ -1350,6 +1447,9 @@ def api_sales_checkout():
     warmup_db_once()
     branch = (payload.get('branch_code') or '').strip() or 'unknown'
     table = int(payload.get('table_number') or 0)
+    if not user_can('sales','view', branch):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
+
     items = payload.get('items') or []
     # get prices from DB when missing
     subtotal = 0.0
@@ -1534,6 +1634,29 @@ def print_receipt(invoice_number):
         s = None
     branch_name = BRANCH_LABELS.get(getattr(inv, 'branch', None) or '', getattr(inv, 'branch', ''))
     dt_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # Prepare embedded logo as data URL for more reliable thermal printing
+    logo_data_url = None
+    try:
+        if s and getattr(s, 'receipt_show_logo', False) and (s.logo_url or '').strip():
+            url = s.logo_url.strip()
+            import base64, mimetypes, os
+            fpath = None
+            # Static folder
+            if url.startswith('/static/'):
+                rel = url.split('/static/', 1)[1]
+                fpath = os.path.join(current_app.static_folder, rel)
+            # Persistent uploads folder
+            elif url.startswith('/uploads/'):
+                upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
+                rel = url.split('/uploads/', 1)[1]
+                fpath = os.path.join(upload_dir, rel)
+            if fpath and os.path.exists(fpath):
+                with open(fpath, 'rb') as f:
+                    b = f.read()
+                mime = mimetypes.guess_type(fpath)[0] or 'image/png'
+                logo_data_url = f'data:{mime};base64,' + base64.b64encode(b).decode('ascii')
+    except Exception:
+        logo_data_url = None
     # Generate ZATCA-compliant QR (server-side) if possible
     qr_data_url = None
     try:
@@ -1547,6 +1670,7 @@ def print_receipt(invoice_number):
                            settings=s, branch_name=branch_name, date_time=dt_str,
                            display_invoice_number=inv.invoice_number,
                            qr_data_url=qr_data_url,
+                           logo_data_url=logo_data_url,
                            paid=True)
 
 
@@ -2067,7 +2191,7 @@ def api_users_delete():
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 # Permissions: persist to AppKV to avoid schema changes
-PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','salaries','financials','vat','reports','settings','suppliers','table_settings','users','sample_data']
+PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','salaries','financials','vat','reports','invoices','payments','customers','menu','settings','suppliers','table_settings','users','sample_data']
 
 def _perms_k(uid, scope):
     return f"user_perms:{scope or 'all'}:{int(uid)}"
@@ -2195,10 +2319,15 @@ def settings():
             if hasattr(s, 'place_india_discount_rate') and 'place_india_discount_rate' in form_data:
                 s.place_india_discount_rate = as_float(form_data.get('place_india_discount_rate'), s.place_india_discount_rate or 0.0)
             # Passwords (strings)
+            # Passwords: do not overwrite with empty string (avoid accidental clearing)
             if hasattr(s, 'china_town_void_password') and 'china_town_void_password' in form_data:
-                s.china_town_void_password = (form_data.get('china_town_void_password') or '').strip()
+                _pwd = (form_data.get('china_town_void_password') or '').strip()
+                if _pwd != '':
+                    s.china_town_void_password = _pwd
             if hasattr(s, 'place_india_void_password') and 'place_india_void_password' in form_data:
-                s.place_india_void_password = (form_data.get('place_india_void_password') or '').strip()
+                _pwd2 = (form_data.get('place_india_void_password') or '').strip()
+                if _pwd2 != '':
+                    s.place_india_void_password = _pwd2
 
             # Map currency_image_url -> currency_image
             if hasattr(s, 'currency_image'):
@@ -2208,8 +2337,10 @@ def settings():
 
             # Handle file uploads (logo, currency PNG)
             try:
-                upload_dir = os.path.join(current_app.static_folder, 'uploads')
+                # Support persistent uploads directory via env var
+                upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
                 os.makedirs(upload_dir, exist_ok=True)
+                path_prefix = '/uploads/' if os.getenv('UPLOAD_DIR') else '/static/uploads/'
                 # Logo file
                 logo_file = request.files.get('logo_file')
                 if logo_file and getattr(logo_file, 'filename', ''):
@@ -2218,17 +2349,19 @@ def settings():
                         fname = f"logo_{int(datetime.utcnow().timestamp())}{ext}"
                         fpath = os.path.join(upload_dir, fname)
                         logo_file.save(fpath)
-                        s.logo_url = f"/static/uploads/{fname}"
+                        s.logo_url = f"{path_prefix}{fname}"
                 # Currency PNG
                 cur_file = request.files.get('currency_file')
                 if cur_file and getattr(cur_file, 'filename', ''):
+
+
                     ext = os.path.splitext(cur_file.filename)[1].lower()
                     if ext == '.png':
                         fname = f"currency_{int(datetime.utcnow().timestamp())}{ext}"
                         fpath = os.path.join(upload_dir, fname)
                         cur_file.save(fpath)
                         if hasattr(s, 'currency_image'):
-                            s.currency_image = f"/static/uploads/{fname}"
+                            s.currency_image = f"{path_prefix}{fname}"
             except Exception:
                 # Ignore upload errors but continue saving other fields
                 pass
@@ -2245,6 +2378,16 @@ def settings():
 @login_required
 def table_settings():
     return render_template('table_settings.html')
+
+
+# Serve uploaded files from a persistent directory when UPLOAD_DIR is set
+@main.route('/uploads/<path:filename>', methods=['GET'], endpoint='serve_uploads')
+def serve_uploads(filename):
+    try:
+        upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
+        return send_from_directory(upload_dir, filename)
+    except Exception:
+        return 'File not found', 404
 
 @main.route('/users', endpoint='users')
 @login_required
@@ -2789,6 +2932,10 @@ def api_all_invoices():
         )
         if payment_method and payment_method != 'all':
             q = q.filter(func.lower(SalesInvoice.payment_method) == payment_method)
+        # Optional branch filter (sales only)
+        branch = (request.args.get('branch') or '').strip().lower()
+        if branch and branch != 'all':
+            q = q.filter(func.lower(SalesInvoice.branch) == branch)
         if hasattr(SalesInvoice, 'created_at'):
             q = q.order_by(SalesInvoice.created_at.desc())
         elif hasattr(SalesInvoice, 'date'):
@@ -2948,6 +3095,10 @@ def reports_print_all_invoices_sales():
         )
         if payment_method and payment_method != 'all':
             q = q.filter(func.lower(SalesInvoice.payment_method) == payment_method)
+        # Optional branch filter (sales only)
+        branch = (request.args.get('branch') or 'all').strip().lower()
+        if branch and branch != 'all':
+            q = q.filter(func.lower(SalesInvoice.branch) == branch)
         if hasattr(SalesInvoice, 'created_at'):
             q = q.order_by(SalesInvoice.created_at.desc())
         elif hasattr(SalesInvoice, 'date'):
@@ -3016,7 +3167,7 @@ def reports_print_all_invoices_sales():
     meta = {
         'title': 'Sales Invoices (All) — Print',
         'payment_method': payment_method or 'all',
-        'branch': 'all',
+        'branch': (branch or 'all'),
         'start_date': request.args.get('start_date') or '',
         'end_date': request.args.get('end_date') or '',
         'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')

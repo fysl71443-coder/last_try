@@ -34,7 +34,9 @@
   {% endif %}
   <div class="wrap">
     <div class="center">
-      {% if settings and settings.receipt_show_logo and settings.logo_url %}
+      {% if logo_data_url %}
+      <img src="{{ logo_data_url }}" alt="logo" class="logo-img"/>
+      {% elif settings and settings.receipt_show_logo and settings.logo_url %}
       <img src="{{ settings.logo_url }}" alt="logo" class="logo-img"/>
       {% elif (not settings or settings.receipt_show_logo) and logo_url %}
       <img src="{{ logo_url }}" alt="logo" class="logo-img"/>

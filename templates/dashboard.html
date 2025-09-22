@@ -113,7 +113,7 @@ body {
     </div>
     {% endif %}
 
-    {% if can('sales','view') or can('purchases','view') or can('expenses','view') %}
+    {% if can('invoices','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('main.invoices') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -146,7 +146,7 @@ body {
     </div>
     {% endif %}
 
-    {% if can('sales','view') or can('purchases','view') or can('expenses','view') or can('salaries','view') %}
+    {% if can('payments','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('main.payments') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -190,7 +190,7 @@ body {
     </div>
     {% endif %}
 
-    {% if can('sales','view') %}
+    {% if can('customers','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('main.customers') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -201,7 +201,7 @@ body {
     </div>
     {% endif %}
 
-    {% if can('inventory','view') or can('sales','view') %}
+    {% if can('menu','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('main.menu') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
