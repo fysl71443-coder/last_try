@@ -1252,17 +1252,20 @@ def api_draft_checkout():
     ensure_tables()
     draft = kv_get(f'draft:{branch}:{table}', {}) or {}
     items = draft.get('items') or []
-    total_amount = 0.0
+    subtotal = 0.0
     for it in items:
         qty = float(it.get('qty') or it.get('quantity') or 1)
         price = float(it.get('price') or it.get('unit') or 0.0)
         if price <= 0 and it.get('meal_id'):
             m = MenuItem.query.get(int(it.get('meal_id')))
-            if m: price = float(m.price)
-        total_amount += qty * (price or 0.0)
+            if m:
+                price = float(m.price)
+        subtotal += qty * (price or 0.0)
     discount_pct = float(payload.get('discount_pct') or 0)
     tax_pct = float(payload.get('tax_pct') or 15)
-    total_amount = total_amount * (1 + tax_pct/100.0) * (1 - discount_pct/100.0)
+    vat_amount = subtotal * (tax_pct/100.0)
+    discount_amount = subtotal * (discount_pct/100.0)
+    total_after = subtotal + vat_amount - discount_amount
     payment_method = (payload.get('payment_method') or '').strip().upper()
     if payment_method not in ['CASH','CARD']:
         return jsonify({'success': False, 'error': 'اختر طريقة الدفع (CASH أو CARD)'}), 400
@@ -1270,14 +1273,16 @@ def api_draft_checkout():
     try:
         inv = SalesInvoice(
             invoice_number=invoice_number,
-            branch_code=branch,
+            branch=branch,
             table_number=int(table),
             customer_name=(payload.get('customer_name') or '').strip(),
             customer_phone=(payload.get('customer_phone') or '').strip(),
             payment_method=payment_method,
-            discount_pct=discount_pct,
-            tax_pct=tax_pct,
-            total_amount=round(total_amount, 2),
+            total_before_tax=round(subtotal, 2),
+            tax_amount=round(vat_amount, 2),
+            discount_amount=round(discount_amount, 2),
+            total_after_tax_discount=round(total_after, 2),
+            user_id=int(getattr(current_user, 'id', 1) or 1),
         )
         db.session.add(inv)
         db.session.flush()
@@ -1286,19 +1291,21 @@ def api_draft_checkout():
             price = float(it.get('price') or it.get('unit') or 0.0)
             if price <= 0 and it.get('meal_id'):
                 m = MenuItem.query.get(int(it.get('meal_id')))
-                if m: price = float(m.price)
+                if m:
+                    price = float(m.price)
             db.session.add(SalesInvoiceItem(
                 invoice_id=inv.id,
-                meal_id=(it.get('meal_id') or it.get('id')),
-                name=(it.get('name') or ''),
-                unit_price=price or 0.0,
-                qty=qty,
+                product_name=(it.get('name') or ''),
+                quantity=qty,
+                price_before_tax=price or 0.0,
+                tax=0,
+                discount=0,
             ))
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
-    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_amount, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': int(table)})
+    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': int(table)})
 
 
 @main.route('/api/sales/checkout', methods=['POST'], endpoint='api_sales_checkout')
@@ -1310,7 +1317,7 @@ def api_sales_checkout():
     table = int(payload.get('table_number') or 0)
     items = payload.get('items') or []
     # get prices from DB when missing
-    total_amount = 0.0
+    subtotal = 0.0
     resolved = []
     for it in items:
         qty = float(it.get('qty') or 1)
@@ -1324,11 +1331,13 @@ def api_sales_checkout():
                 name = it.get('name') or ''
         else:
             name = it.get('name') or ''
-        total_amount += qty * (price or 0.0)
+        subtotal += qty * (price or 0.0)
         resolved.append({'meal_id': it.get('meal_id'), 'name': name, 'price': price or 0.0, 'qty': qty})
     discount_pct = float(payload.get('discount_pct') or 0)
     tax_pct = float(payload.get('tax_pct') or 15)
-    total_amount = total_amount * (1 + tax_pct/100.0) * (1 - discount_pct/100.0)
+    vat_amount = subtotal * (tax_pct/100.0)
+    discount_amount = subtotal * (discount_pct/100.0)
+    total_after = subtotal + vat_amount - discount_amount
     payment_method = (payload.get('payment_method') or '').strip().upper()
     if payment_method not in ['CASH','CARD']:
         return jsonify({'success': False, 'error': '\u0627\u062e\u062a\u0631 \u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639 (CASH \u0623\u0648 CARD)'}), 400
@@ -1336,30 +1345,33 @@ def api_sales_checkout():
     try:
         inv = SalesInvoice(
             invoice_number=invoice_number,
-            branch_code=branch,
+            branch=branch,
             table_number=table,
             customer_name=(payload.get('customer_name') or '').strip(),
             customer_phone=(payload.get('customer_phone') or '').strip(),
             payment_method=payment_method,
-            discount_pct=discount_pct,
-            tax_pct=tax_pct,
-            total_amount=round(total_amount, 2),
+            total_before_tax=round(subtotal, 2),
+            tax_amount=round(vat_amount, 2),
+            discount_amount=round(discount_amount, 2),
+            total_after_tax_discount=round(total_after, 2),
+            user_id=int(getattr(current_user, 'id', 1) or 1),
         )
         db.session.add(inv)
         db.session.flush()
         for it in resolved:
             db.session.add(SalesInvoiceItem(
                 invoice_id=inv.id,
-                meal_id=it.get('meal_id'),
-                name=it.get('name'),
-                unit_price=float(it.get('price') or 0.0),
-                qty=float(it.get('qty') or 1),
+                product_name=it.get('name'),
+                quantity=float(it.get('qty') or 1),
+                price_before_tax=float(it.get('price') or 0.0),
+                tax=0,
+                discount=0,
             ))
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
-    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_amount, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': table})
+    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': table})
 
 
 @main.route('/api/invoice/confirm-print', methods=['POST'], endpoint='api_invoice_confirm_print')
@@ -1427,22 +1439,15 @@ def print_receipt(invoice_number):
     if not inv:
         return 'Invoice not found', 404
     items = SalesInvoiceItem.query.filter_by(invoice_id=inv.id).all()
-    # compute totals
-    subtotal = 0.0
+    # compute items context and use stored totals
     items_ctx = []
     for it in items:
-        line = float(it.unit_price or 0) * float(it.qty or 0)
-        subtotal += line
+        line = float(it.price_before_tax or 0) * float(it.quantity or 0)
         items_ctx.append({
-            'product_name': it.name or '',
-            'quantity': float(it.qty or 0),
+            'product_name': it.product_name or '',
+            'quantity': float(it.quantity or 0),
             'total_price': line,
         })
-    tax_pct = float(inv.tax_pct or 15)
-    discount_pct = float(inv.discount_pct or 0)
-    vat_amount = subtotal * (tax_pct/100.0)
-    discount_amount = (subtotal + vat_amount) * (discount_pct/100.0)
-    total_after = subtotal + vat_amount - discount_amount
 
     inv_ctx = {
         'invoice_number': inv.invoice_number,
@@ -1451,16 +1456,16 @@ def print_receipt(invoice_number):
         'customer_phone': inv.customer_phone,
         'payment_method': inv.payment_method,
         'status': 'PAID',
-        'total_before_tax': round(subtotal, 2),
-        'tax_amount': round(vat_amount, 2),
-        'discount_amount': round(discount_amount, 2),
-        'total_after_tax_discount': round(total_after, 2),
+        'total_before_tax': float(inv.total_before_tax or 0.0),
+        'tax_amount': float(inv.tax_amount or 0.0),
+        'discount_amount': float(inv.discount_amount or 0.0),
+        'total_after_tax_discount': float(inv.total_after_tax_discount or 0.0),
     }
     try:
         s = Settings.query.first()
     except Exception:
         s = None
-    branch_name = BRANCH_LABELS.get(inv.branch_code, inv.branch_code)
+    branch_name = BRANCH_LABELS.get(getattr(inv, 'branch', None) or '', getattr(inv, 'branch', ''))
     dt_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     return render_template('print/receipt.html', inv=inv_ctx, items=items_ctx,
                            settings=s, branch_name=branch_name, date_time=dt_str,
@@ -2075,10 +2080,12 @@ def settings():
                 except Exception:
                     return default
 
-            # Strings
+            # Strings (do not overwrite with empty string)
             for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text']:
                 if hasattr(s, fld) and fld in form_data:
-                    setattr(s, fld, (form_data.get(fld) or '').strip())
+                    val = (form_data.get(fld) or '').strip()
+                    if val != '':
+                        setattr(s, fld, val)
 
             # Booleans (explicitly set False when absent)
             if hasattr(s, 'receipt_show_logo'):

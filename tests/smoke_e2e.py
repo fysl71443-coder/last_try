@@ -3,7 +3,22 @@ from datetime import datetime
 
 os.environ.setdefault('USE_EVENTLET', '0')
 
-from app import app, db
+# Robust import: prefer packaged create_app; fallback to monolith app.py if needed
+try:
+    from app import create_app, db  # package import
+    app = create_app()
+except Exception:
+    import importlib.util, pathlib, sys
+    root = pathlib.Path(__file__).resolve().parent.parent
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    spec = importlib.util.spec_from_file_location("monolith_app", str(root / "app.py"))
+    monolith = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(monolith)
+    app = getattr(monolith, 'app')
+    db = getattr(monolith, 'db')
+
 from models import User, Meal, SalesInvoice, SalesInvoiceItem, Payment
 
 # Optional helpers from repo

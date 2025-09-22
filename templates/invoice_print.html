@@ -281,8 +281,8 @@
                 <tbody>
                     {% for item in items %}
                     <tr>
-                        <td>{{ "%.2f"|format(item.total_price or (item.quantity * (item.unit_price or item.price_before_tax))) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
-                        <td>{{ "%.2f"|format(item.unit_price or item.price_before_tax) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
+                        <td>{{ "%.2f"|format(item.total_price or (item.quantity * (item.unit_price or item.price_before_tax))) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
+                        <td>{{ "%.2f"|format(item.unit_price or item.price_before_tax) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
                         <td>{{ item.quantity }}</td>
                         <td>{{ item.product_name }}</td>
                         <td>{{ loop.index }}</td>
@@ -300,21 +300,21 @@
             <table class="totals-table">
                 <tr>
                     <td class="total-label">Subtotal:</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.total_before_tax or invoice.subtotal or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.total_before_tax or invoice.subtotal or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
                 </tr>
                 {% if invoice.discount_amount and invoice.discount_amount > 0 %}
                 <tr>
                     <td class="total-label">Discount:</td>
-                    <td class="total-amount">- {{ "%.2f"|format(invoice.discount_amount) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
+                    <td class="total-amount">- {{ "%.2f"|format(invoice.discount_amount) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
                 </tr>
                 {% endif %}
                 <tr>
                     <td class="total-label">Tax (15%):</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.tax_amount or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.tax_amount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
                 </tr>
                 <tr class="grand-total">
                     <td class="total-label">Grand Total:</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.total_after_tax_discount or invoice.total_amount or 0) }} {% if settings and settings.currency_image %}<img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% endif %}</td>
+                    <td class="total-amount">{{ "%.2f"|format(invoice.total_after_tax_discount or invoice.total_amount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
                 </tr>
             </table>
         </div>

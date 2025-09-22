@@ -175,24 +175,10 @@
                     <td>{{ item.product_name }}</td>
                     <td class="qty">{{ item.quantity }}</td>
                     <td class="unit">
-                        {% if currency_data_url %}
-                        <span class="currency-amount">
-                            <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
-                            {{ '%.2f'|format(item.price_before_tax or 0) }}
-                        </span>
-                        {% else %}
-                        {{ '%.2f'|format(item.price_before_tax or 0) }} SAR
-                        {% endif %}
+                        <span class="currency-amount">{{ '%.2f'|format(item.price_before_tax or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" class="currency-img" alt="currency">{% endif %}</span>
                     </td>
                     <td class="total">
-                        {% if currency_data_url %}
-                        <span class="currency-amount">
-                            <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
-                            {{ '%.2f'|format(item.total_price or ((item.quantity or 0) * (item.price_before_tax or 0))) }}
-                        </span>
-                        {% else %}
-                        {{ '%.2f'|format(item.total_price or ((item.quantity or 0) * (item.price_before_tax or 0))) }} SAR
-                        {% endif %}
+                        <span class="currency-amount">{{ '%.2f'|format(item.total_price or ((item.quantity or 0) * (item.price_before_tax or 0))) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" class="currency-img" alt="currency">{% endif %}</span>
                     </td>
                 </tr>
                 {% endfor %}
@@ -204,14 +190,7 @@
             <div class="total-row">
                 <span>Subtotal:</span>
                 <span>
-                    {% if currency_data_url %}
-                    <span class="currency-amount">
-                        <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
-                        {{ '%.2f'|format(invoice.total_before_tax or 0) }}
-                    </span>
-                    {% else %}
-                    {{ '%.2f'|format(invoice.total_before_tax or 0) }} SAR
-                    {% endif %}
+                    <span class="currency-amount">{{ '%.2f'|format(invoice.total_before_tax or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" class="currency-img" alt="currency">{% endif %}</span>
                 </span>
             </div>
             
@@ -222,14 +201,7 @@
             <div class="total-row">
                 <span>Discount{% if cust in ['KEETA','HUNGER'] %} ({{ '%.2f'|format(rate or 0) }}%){% endif %}:</span>
                 <span>
-                    {% if currency_data_url %}
-                    <span class="currency-amount">
-                        <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
-                        -{{ '%.2f'|format(invoice.discount_amount or 0) }}
-                    </span>
-                    {% else %}
-                    -{{ '%.2f'|format(invoice.discount_amount or 0) }} SAR
-                    {% endif %}
+                    <span class="currency-amount">-{{ '%.2f'|format(invoice.discount_amount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" class="currency-img" alt="currency">{% endif %}</span>
                 </span>
             </div>
             {% endif %}
@@ -237,28 +209,14 @@
             <div class="total-row">
                 <span>VAT (15%):</span>
                 <span>
-                    {% if currency_data_url %}
-                    <span class="currency-amount">
-                        <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
-                        {{ '%.2f'|format(invoice.tax_amount or 0) }}
-                    </span>
-                    {% else %}
-                    {{ '%.2f'|format(invoice.tax_amount or 0) }} SAR
-                    {% endif %}
+                    <span class="currency-amount">{{ '%.2f'|format(invoice.tax_amount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" class="currency-img" alt="currency">{% endif %}</span>
                 </span>
             </div>
             
             <div class="total-row grand-total">
                 <span>Total:</span>
                 <span>
-                    {% if currency_data_url %}
-                    <span class="currency-amount">
-                        <img src="{{ currency_data_url }}" class="currency-img" alt="SAR">
-                        {{ '%.2f'|format(invoice.total_after_tax_discount or 0) }}
-                    </span>
-                    {% else %}
-                    {{ '%.2f'|format(invoice.total_after_tax_discount or 0) }} SAR
-                    {% endif %}
+                    <span class="currency-amount">{{ '%.2f'|format(invoice.total_after_tax_discount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" class="currency-img" alt="currency">{% endif %}</span>
                 </span>
             </div>
         </div>

@@ -35,18 +35,25 @@
       const tr = document.createElement('tr');
       const nameTd = document.createElement('td'); nameTd.textContent = it.name; tr.appendChild(nameTd);
       const qtyTd = document.createElement('td'); qtyTd.className = 'text-center';
-      const qtyInput = document.createElement('input'); qtyInput.type='number'; qtyInput.min='1'; qtyInput.step='1'; qtyInput.value = String(it.qty);
-      qtyInput.className = 'form-control form-control-sm';
-      qtyInput.addEventListener('change', async ()=>{
-        const v = number(qtyInput.value, 1);
-        if(v <= 0){
-          const pwd = await window.showPrompt('Enter supervisor password');
-          if(pwd===null) { qtyInput.value = String(it.qty); return; }
-          if(String(pwd).trim() !== '1991'){ await window.showAlert('Incorrect password'); qtyInput.value = String(it.qty); return; }
-          items.splice(idx,1); renderItems(); await saveDraftOrder({ supervisor_password: pwd });
-        } else { it.qty = v; renderItems(); await saveDraftOrder(); }
+      const controls = document.createElement('div'); controls.className = 'd-flex align-items-center justify-content-center gap-1';
+      const minusBtn = document.createElement('button'); minusBtn.type='button'; minusBtn.className='btn btn-sm btn-outline-secondary'; minusBtn.textContent='-';
+      const qtyText = document.createElement('input'); qtyText.type='text'; qtyText.readOnly = true; qtyText.value = String(it.qty); qtyText.className = 'form-control form-control-sm text-center'; qtyText.style.width = '50px';
+      const plusBtn = document.createElement('button'); plusBtn.type='button'; plusBtn.className='btn btn-sm btn-outline-secondary'; plusBtn.textContent='+';
+      minusBtn.addEventListener('click', async ()=>{
+        const pwd = await (window.showPrompt ? window.showPrompt('Enter supervisor password') : Promise.resolve(prompt('Enter supervisor password')));
+        if(pwd===null) return; if(String(pwd).trim() !== '1991'){ if(window.showAlert) await window.showAlert('Incorrect password'); else alert('Incorrect password'); return; }
+        if((it.qty||1) <= 1){
+          items.splice(idx,1);
+        } else {
+          it.qty = (it.qty||1) - 1;
+        }
+        renderItems(); await saveDraftOrder({ supervisor_password: pwd });
       });
-      qtyTd.appendChild(qtyInput); tr.appendChild(qtyTd);
+      plusBtn.addEventListener('click', async ()=>{
+        it.qty = (it.qty||1) + 1; renderItems(); await saveDraftOrder();
+      });
+      controls.appendChild(minusBtn); controls.appendChild(qtyText); controls.appendChild(plusBtn);
+      qtyTd.appendChild(controls); tr.appendChild(qtyTd);
       const unitTd = document.createElement('td'); unitTd.className = 'text-end'; unitTd.textContent = it.unit.toFixed(2); tr.appendChild(unitTd);
       const lineTd = document.createElement('td'); lineTd.className = 'text-end';
       const lineSub = it.unit * it.qty; const tax = lineSub * (number(qs('#taxPct')?.value || VAT_RATE)/100);
