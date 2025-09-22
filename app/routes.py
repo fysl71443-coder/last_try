@@ -1300,6 +1300,7 @@ def api_draft_checkout():
                 price_before_tax=price or 0.0,
                 tax=0,
                 discount=0,
+                total_price=round((price or 0.0) * qty, 2),
             ))
         db.session.commit()
     except Exception as e:
@@ -1366,6 +1367,7 @@ def api_sales_checkout():
                 price_before_tax=float(it.get('price') or 0.0),
                 tax=0,
                 discount=0,
+                total_price=round(float(it.get('price') or 0.0) * float(it.get('qty') or 1), 2),
             ))
         db.session.commit()
     except Exception as e:
