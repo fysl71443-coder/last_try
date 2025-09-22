@@ -19,37 +19,34 @@ def generate_zatca_tlv(seller_name: str, vat_number: str, time: datetime, total_
     parts = []
     parts.append(_tlv(1, seller_name.encode('utf-8')))
     parts.append(_tlv(2, vat_number.encode('utf-8')))
-    parts.append(_tlv(3, time.isoformat().encode('utf-8')))
+    # التأكد من استخدام ISO8601 بدون أجزاء الميكروثانية
+    parts.append(_tlv(3, time.isoformat(timespec='seconds').encode('utf-8')))
     parts.append(_tlv(4, f"{total_amount:.2f}".encode('utf-8')))
     parts.append(_tlv(5, f"{vat_amount:.2f}".encode('utf-8')))
     return b''.join(parts)
 
+def get_zatca_tlv_base64(seller_name: str, vat_number: str, time: datetime, total_amount: float, vat_amount: float) -> str:
+    """إنشاء Base64 لمحتوى TLV حسب مواصفات ZATCA (لا يُرجِع صورة)."""
+    tlv = generate_zatca_tlv(seller_name, vat_number, time, total_amount, vat_amount)
+    return base64.b64encode(tlv).decode('ascii')
+
 def generate_zatca_qr_base64(seller_name: str, vat_number: str, time: datetime, total_amount: float, vat_amount: float) -> str:
-    """إنشاء QR code متوافق مع ZATCA وإرجاعه كـ base64 PNG"""
+    """إنشاء صورة QR (PNG) حيث المحتوى هو Base64(TLV) وفق ZATCA، وإرجاع الصورة كـ base64."""
     try:
-        tlv = generate_zatca_tlv(seller_name, vat_number, time, total_amount, vat_amount)
-        
-        # بعض مكتبات QR تأخذ نص، لذلك نحتاج لترميز TLV لbase64 قبل التضمين
-        # لكن ZATCA يتوقع قاعدة64 عن QR للملف الثنائي. سنقوم بإنشاء PNG ل QR للبايت
+        # مواصفات ZATCA: محتوى الـ QR يجب أن يكون Base64 لسلسلة TLV
+        tlv_b64 = get_zatca_tlv_base64(seller_name, vat_number, time, total_amount, vat_amount)
         qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
             box_size=4,
             border=2
         )
-        qr.add_data(tlv)
+        qr.add_data(tlv_b64)
         qr.make(fit=True)
-        
-        # إنشاء صورة PNG
         img = qr.make_image(fill_color="black", back_color="white")
-        
-        # تحويل لـ base64
         buff = BytesIO()
         img.save(buff, format='PNG')
-        b64 = base64.b64encode(buff.getvalue()).decode('ascii')
-        
-        return b64
-        
+        return base64.b64encode(buff.getvalue()).decode('ascii')
     except Exception as e:
         print(f"Error generating ZATCA QR code: {e}")
         # إرجاع QR code بسيط في حالة الخطأ

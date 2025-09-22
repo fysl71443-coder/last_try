@@ -22,6 +22,23 @@ BRANCH_LABELS = {
     'china_town': 'China Town',
 }
 
+
+# Safe helper: current time in Saudi Arabia timezone
+try:
+    import pytz as _pytz
+except Exception:  # pragma: no cover
+    _pytz = None
+from datetime import datetime as _dt
+
+def get_saudi_now():
+    """Return timezone-aware now() in Asia/Riyadh; falls back to UTC naive on error."""
+    try:
+        if _pytz is not None:
+            return _dt.now(_pytz.timezone("Asia/Riyadh"))
+    except Exception:
+        pass
+    return _dt.utcnow()
+
 def kv_get(key, default=None):
     rec = AppKV.query.filter_by(k=key).first()
     if not rec:
