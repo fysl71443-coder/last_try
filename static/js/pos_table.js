@@ -8,6 +8,15 @@
   let CURRENT_DRAFT_ID = null;
   let items = [];
   let CAT_MAP = {};
+  let SAVE_TIMER = null;
+  function scheduleSave(opts){
+    if(SAVE_TIMER){ clearTimeout(SAVE_TIMER); }
+    SAVE_TIMER = setTimeout(()=>{ SAVE_TIMER=null; saveDraftOrder(opts); }, 250);
+  }
+  function flushPendingSave(){
+    if(SAVE_TIMER){ clearTimeout(SAVE_TIMER); SAVE_TIMER=null; return saveDraftOrder(); }
+    return Promise.resolve();
+  }
 
   // --- DOM Helpers ---
   function qs(sel, ctx=document){ return ctx.querySelector(sel); }
@@ -47,10 +56,10 @@
         } else {
           it.qty = (it.qty||1) - 1;
         }
-        renderItems(); await saveDraftOrder({ supervisor_password: pwd });
+        renderItems(); scheduleSave({ supervisor_password: pwd });
       });
       plusBtn.addEventListener('click', async ()=>{
-        it.qty = (it.qty||1) + 1; renderItems(); await saveDraftOrder();
+        it.qty = (it.qty||1) + 1; renderItems(); scheduleSave();
       });
       controls.appendChild(minusBtn); controls.appendChild(qtyText); controls.appendChild(plusBtn);
       qtyTd.appendChild(controls); tr.appendChild(qtyTd);
@@ -63,7 +72,7 @@
       rmBtn.addEventListener('click', async ()=>{
         const pwd = await window.showPrompt('Enter supervisor password');
         if(pwd===null) return; if(String(pwd).trim() !== '1991'){ await window.showAlert('Incorrect password'); return; }
-        items.splice(idx,1); renderItems(); await saveDraftOrder({ supervisor_password: pwd });
+        items.splice(idx,1); renderItems(); scheduleSave({ supervisor_password: pwd });
       });
       rmTd.appendChild(rmBtn); tr.appendChild(rmTd);
       body.appendChild(tr);
@@ -75,7 +84,7 @@
     const existing = items.find(x=> x.meal_id === mealId);
     if(existing){ existing.qty += 1; }
     else { items.push({ meal_id: mealId, name: name, unit: number(unit), qty: 1 }); }
-    renderItems(); await saveDraftOrder();
+    renderItems(); scheduleSave();
   }
 
   async function openCategory(catId, catName){
@@ -164,6 +173,7 @@
     if(items.length === 0){ await window.showAlert('Add at least one item'); return; }
     const pm = (qs('#payMethod')?.value || '').toUpperCase();
     if(!(pm==='CASH' || pm==='CARD')){ await window.showAlert('يرجى اختيار طريقة الدفع (CASH أو CARD)'); return; }
+    await flushPendingSave();
     const payload = CURRENT_DRAFT_ID ? {
       draft_id: CURRENT_DRAFT_ID,
       customer_name: qs('#custName')?.value || '',
@@ -302,11 +312,11 @@
     qs('#btnVoidInvoice')?.addEventListener('click', voidInvoice);
 
     // Bind auto-save for customer/payment fields
-    qs('#custName')?.addEventListener('blur', ()=> saveDraftOrder());
-    qs('#custPhone')?.addEventListener('blur', ()=> saveDraftOrder());
-    qs('#payMethod')?.addEventListener('change', ()=> saveDraftOrder());
-    qs('#discountPct')?.addEventListener('input', ()=> { setTotals(); saveDraftOrder(); });
-    qs('#taxPct')?.addEventListener('input', ()=> { setTotals(); saveDraftOrder(); });
+    qs('#custName')?.addEventListener('blur', ()=> scheduleSave());
+    qs('#custPhone')?.addEventListener('blur', ()=> scheduleSave());
+    qs('#payMethod')?.addEventListener('change', ()=> scheduleSave());
+    qs('#discountPct')?.addEventListener('input', ()=> { setTotals(); scheduleSave(); });
+    qs('#taxPct')?.addEventListener('input', ()=> { setTotals(); scheduleSave(); });
 
     // Pre-print (thermal receipt before payment)
     function prePrint(){

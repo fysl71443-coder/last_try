@@ -134,6 +134,23 @@ def seed_menu_if_empty():
         # ignore seed errors in production path
         pass
 
+
+# Warmup DB only once per process to avoid heavy create_all/seed on hot paths
+_DB_WARMED_UP = False
+
+def warmup_db_once():
+    global _DB_WARMED_UP
+    if _DB_WARMED_UP:
+        return
+    try:
+        ensure_tables()
+        seed_menu_if_empty()
+    except Exception:
+        # ignore errors to avoid blocking requests
+        pass
+    finally:
+        _DB_WARMED_UP = True
+
 @main.route('/')
 @login_required
 def home():
@@ -998,8 +1015,8 @@ def pos_table(branch_code, table_number):
     draft = kv_get(f'draft:{branch_code}:{table_number}', {}) or {}
     draft_items = json.dumps(draft.get('items') or [])
     current_draft = type('Obj', (), {'id': draft.get('draft_id')}) if draft.get('draft_id') else None
-    # Ensure DB tables exist and seed demo menu on first run
-    ensure_tables(); seed_menu_if_empty()
+    # Warmup DB (avoid heavy create_all/seed on every request)
+    warmup_db_once()
     # Load categories from DB for UI and provide a name->id map
     try:
         cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
@@ -1097,8 +1114,8 @@ def api_tables_status(branch_code):
 @main.route('/api/menu/<cat_id>/items', methods=['GET'], endpoint='api_menu_items')
 @login_required
 def api_menu_items(cat_id):
-    # Prefer DB; fallback to KV/demo
-    ensure_tables(); seed_menu_if_empty()
+    # Prefer DB; fallback to KV/demo — warm up once
+    warmup_db_once()
     cat = None
     try:
         cid = int(cat_id)
@@ -1249,7 +1266,7 @@ def api_draft_checkout():
     branch, table = _parse_draft_id(draft_id)
     if not branch:
         return jsonify({'error': 'invalid_draft_id'}), 400
-    ensure_tables()
+    warmup_db_once()
     draft = kv_get(f'draft:{branch}:{table}', {}) or {}
     items = draft.get('items') or []
     subtotal = 0.0
@@ -1313,7 +1330,7 @@ def api_draft_checkout():
 @login_required
 def api_sales_checkout():
     payload = request.get_json(force=True) or {}
-    ensure_tables()
+    warmup_db_once()
     branch = (payload.get('branch_code') or '').strip() or 'unknown'
     table = int(payload.get('table_number') or 0)
     items = payload.get('items') or []
@@ -1750,7 +1767,7 @@ def supplier_delete(sid):
 @main.route('/menu', methods=['GET'], endpoint='menu')
 @login_required
 def menu():
-    ensure_tables(); seed_menu_if_empty()
+    warmup_db_once()
     try:
         cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
     except Exception:
@@ -1804,7 +1821,7 @@ def menu():
 @main.route('/menu/category/add', methods=['POST'], endpoint='menu_category_add')
 @login_required
 def menu_category_add():
-    ensure_tables()
+    warmup_db_once()
     name = (request.form.get('name') or '').strip()
     sort = request.form.get('display_order', type=int) or 0
     if not name:
@@ -1824,7 +1841,7 @@ def menu_category_add():
 @main.route('/menu/category/<int:cat_id>/delete', methods=['POST'], endpoint='menu_category_delete')
 @login_required
 def menu_category_delete(cat_id):
-    ensure_tables()
+    warmup_db_once()
     try:
         c = db.session.get(MenuCategory, int(cat_id))
         if c:
@@ -1841,7 +1858,7 @@ def menu_category_delete(cat_id):
 @main.route('/menu/item/add', methods=['POST'], endpoint='menu_item_add')
 @login_required
 def menu_item_add():
-    ensure_tables()
+    warmup_db_once()
     cat_id = request.form.get('section_id', type=int)
     meal_id = request.form.get('meal_id', type=int)
     name = (request.form.get('name') or '').strip()
@@ -1881,7 +1898,7 @@ def menu_item_add():
 @main.route('/menu/item/<int:item_id>/update', methods=['POST'], endpoint='menu_item_update')
 @login_required
 def menu_item_update(item_id):
-    ensure_tables()
+    warmup_db_once()
     name = (request.form.get('name') or '').strip()
     price = request.form.get('price', type=float)
     try:
@@ -1904,7 +1921,7 @@ def menu_item_update(item_id):
 @main.route('/menu/item/<int:item_id>/delete', methods=['POST'], endpoint='menu_item_delete')
 @login_required
 def menu_item_delete(item_id):
-    ensure_tables()
+    warmup_db_once()
     try:
         it = db.session.get(MenuItem, int(item_id))
         if it:
