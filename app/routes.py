@@ -1340,7 +1340,7 @@ def api_draft_checkout():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
-    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': int(table)})
+    return jsonify({'ok': True, 'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': int(table)})
 
 
 @main.route('/api/sales/checkout', methods=['POST'], endpoint='api_sales_checkout')
@@ -1407,7 +1407,7 @@ def api_sales_checkout():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
-    return jsonify({'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': table})
+    return jsonify({'ok': True, 'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': table})
 
 
 @main.route('/api/invoice/confirm-print', methods=['POST'], endpoint='api_invoice_confirm_print')
@@ -2789,38 +2789,62 @@ def api_all_invoices():
         )
         if payment_method and payment_method != 'all':
             q = q.filter(func.lower(SalesInvoice.payment_method) == payment_method)
-        q = q.order_by(SalesInvoice.created_at.desc()).limit(1000)
+        if hasattr(SalesInvoice, 'created_at'):
+            q = q.order_by(SalesInvoice.created_at.desc())
+        elif hasattr(SalesInvoice, 'date'):
+            q = q.order_by(SalesInvoice.date.desc())
+        q = q.limit(1000)
 
-        for inv, it in q.all():
-            branch = inv.branch_code
-            date_s = (inv.created_at.date().isoformat() if getattr(inv, 'created_at', None) else '')
-            amount = float((it.unit_price or 0.0) * (it.qty or 0.0))
-            disc = float(((inv.discount_pct or 0.0) / 100.0) * amount) if hasattr(inv, 'discount_pct') else 0.0
-            base = max(amount - disc, 0.0)
-            vat = float(((inv.tax_pct or 0.0) / 100.0) * base) if hasattr(inv, 'tax_pct') else 0.0
-            total = base + vat
+        results = q.all()
+        # اجمع أساس البنود لكل فاتورة لتوزيع الخصم والضريبة بشكل نسبي
+        inv_base = {}
+        for inv, it in results:
+            line_base = float(it.price_before_tax or 0.0) * float(it.quantity or 0.0)
+            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
+
+        for inv, it in results:
+            branch = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
+            if getattr(inv, 'created_at', None):
+                date_s = inv.created_at.date().isoformat()
+            elif getattr(inv, 'date', None):
+                date_s = inv.date.isoformat()
+            else:
+                date_s = ''
+            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
+            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
+            disc_share = 0.0
+            vat_share = 0.0
+            if base_total > 0:
+                disc_share = float(getattr(inv, 'discount_amount', 0.0) or 0.0) * (amount / base_total)
+                vat_share = float(getattr(inv, 'tax_amount', 0.0) or 0.0) * (amount / base_total)
+            base_after_disc = max(amount - disc_share, 0.0)
+            total = base_after_disc + vat_share
             pm = (inv.payment_method or '').upper()
             rows.append({
                 'branch': branch,
                 'date': date_s,
                 'invoice_number': inv.invoice_number,
-                'item_name': it.name,
-                'quantity': float(it.qty or 0.0),
-                'price': float(it.unit_price or 0.0),
+                'item_name': it.product_name,
+                'quantity': float(it.quantity or 0.0),
+                'price': float(it.price_before_tax or 0.0),
                 'amount': amount,
-                'discount': disc,
-                'vat': vat,
-                'total': total,
+                'discount': round(disc_share, 2),
+                'vat': round(vat_share, 2),
+                'total': round(total, 2),
                 'payment_method': pm,
             })
             bt = branch_totals.setdefault(branch, {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0})
-            bt['amount'] += amount; bt['discount'] += disc; bt['vat'] += vat; bt['total'] += total
-            overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += total
+            bt['amount'] += amount; bt['discount'] += disc_share; bt['vat'] += vat_share; bt['total'] += total
+            overall['amount'] += amount; overall['discount'] += disc_share; overall['vat'] += vat_share; overall['total'] += total
 
         return jsonify({'invoices': rows, 'branch_totals': branch_totals, 'overall_totals': overall})
     except Exception as e:
-        # Return empty but 200 to avoid UI breaking
-        return jsonify({'invoices': [], 'branch_totals': {}, 'overall_totals': {'amount':0,'discount':0,'vat':0,'total':0}, 'note': 'stub'}), 200
+        # Log the error for diagnosis, but return empty to avoid UI breaking
+        try:
+            current_app.logger.exception(f"/api/all-invoices failed: {e}")
+        except Exception:
+            pass
+        return jsonify({'invoices': [], 'branch_totals': {}, 'overall_totals': {'amount':0,'discount':0,'vat':0,'total':0}, 'note': 'stub', 'error': str(e)}), 200
 
 
 @main.route('/api/reports/all-purchases', methods=['GET'], endpoint='api_reports_all_purchases')
@@ -2835,14 +2859,38 @@ def api_reports_all_purchases():
         )
         if payment_method and payment_method != 'all':
             q = q.filter(func.lower(PurchaseInvoice.payment_method) == payment_method)
-        q = q.order_by(PurchaseInvoice.created_at.desc()).limit(1000)
-        for inv, it in q.all():
+        # ترتيب آمن
+        if hasattr(PurchaseInvoice, 'created_at'):
+            q = q.order_by(PurchaseInvoice.created_at.desc())
+        elif hasattr(PurchaseInvoice, 'date'):
+            q = q.order_by(PurchaseInvoice.date.desc())
+        q = q.limit(1000)
+
+        results = q.all()
+        # اجمع أساس البنود لكل فاتورة لتوزيع الخصم/الضريبة من رأس الفاتورة
+        inv_base = {}
+        for inv, it in results:
+            line_base = float(it.price_before_tax or 0.0) * float(it.quantity or 0.0)
+            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
+
+        for inv, it in results:
             date_s = (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
             amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
-            disc = float(it.discount or 0.0)
-            base = max(amount - disc, 0.0)
-            vat = float(it.tax or 0.0)
-            total = float(it.total_price or (base + vat))
+            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
+            # استخدم خصم وضريبة رأس الفاتورة إن توفّرا، وإلا ارجع لقيم البند
+            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+            inv_vat = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
+            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
+                disc = inv_disc * (amount / base_total)
+                vat = inv_vat * (amount / base_total)
+            else:
+                disc = float(it.discount or 0.0)
+                base = max(amount - disc, 0.0)
+                vat = float(it.tax or 0.0)
+            base_after_disc = max(amount - disc, 0.0)
+            total = float(getattr(inv, 'total_after_tax_discount', 0.0) or 0.0)
+            if total <= 0:
+                total = base_after_disc + vat
             rows.append({
                 'date': date_s,
                 'invoice_number': inv.invoice_number,
@@ -2850,12 +2898,12 @@ def api_reports_all_purchases():
                 'quantity': float(it.quantity or 0.0),
                 'price': float(it.price_before_tax or 0.0),
                 'amount': amount,
-                'discount': disc,
-                'vat': vat,
-                'total': total,
+                'discount': round(disc, 2),
+                'vat': round(vat, 2),
+                'total': round(base_after_disc + vat, 2),
                 'payment_method': (inv.payment_method or '').upper(),
             })
-            overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += total
+            overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += (base_after_disc + vat)
         return jsonify({'purchases': rows, 'overall_totals': overall})
     except Exception:
         return jsonify({'purchases': [], 'overall_totals': {'amount':0,'discount':0,'vat':0,'total':0}, 'note': 'stub'}), 200
@@ -2900,26 +2948,51 @@ def reports_print_all_invoices_sales():
         )
         if payment_method and payment_method != 'all':
             q = q.filter(func.lower(SalesInvoice.payment_method) == payment_method)
-        q = q.order_by(SalesInvoice.created_at.desc()).limit(1000)
-        for inv, it in q.all():
-            branch = inv.branch_code
-            date_s = (inv.created_at.date().isoformat() if getattr(inv, 'created_at', None) else '')
-            amount = float((it.unit_price or 0.0) * (it.qty or 0.0))
-            disc = float(((inv.discount_pct or 0.0) / 100.0) * amount) if hasattr(inv, 'discount_pct') else 0.0
-            base = max(amount - disc, 0.0)
-            vat = float(((inv.tax_pct or 0.0) / 100.0) * base) if hasattr(inv, 'tax_pct') else 0.0
-            total = base + vat
+        if hasattr(SalesInvoice, 'created_at'):
+            q = q.order_by(SalesInvoice.created_at.desc())
+        elif hasattr(SalesInvoice, 'date'):
+            q = q.order_by(SalesInvoice.date.desc())
+        q = q.limit(1000)
+
+        results = q.all()
+        # اجمع أساس البنود لكل فاتورة لتوزيع الخصم/الضريبة من رأس الفاتورة
+        inv_base = {}
+        for inv, it in results:
+            line_base = float(it.price_before_tax or 0.0) * float(it.quantity or 0.0)
+            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
+
+        for inv, it in results:
+            branch = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
+            if getattr(inv, 'created_at', None):
+                date_s = inv.created_at.date().isoformat()
+            elif getattr(inv, 'date', None):
+                date_s = inv.date.isoformat()
+            else:
+                date_s = ''
+            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
+            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
+            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+            inv_vat  = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
+            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
+                disc = inv_disc * (amount / base_total)
+                vat  = inv_vat  * (amount / base_total)
+            else:
+                disc = float(getattr(it, 'discount', 0.0) or 0.0)
+                base = max(amount - disc, 0.0)
+                vat  = float(getattr(it, 'tax', 0.0) or 0.0)
+            base_after_disc = max(amount - disc, 0.0)
+            total = base_after_disc + vat
             pm = (inv.payment_method or '').upper()
             rows.append({
                 'branch': branch,
                 'date': date_s,
                 'invoice_number': inv.invoice_number,
-                'item_name': it.name,
-                'quantity': float(it.qty or 0.0),
+                'item_name': it.product_name,
+                'quantity': float(it.quantity or 0.0),
                 'amount': amount,
-                'discount': disc,
-                'vat': vat,
-                'total': total,
+                'discount': round(disc, 2),
+                'vat': round(vat, 2),
+                'total': round(total, 2),
                 'payment_method': pm,
             })
             bt = branch_totals.setdefault(branch, {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0})
@@ -3005,14 +3078,34 @@ def reports_print_all_invoices_purchases():
                 q = q.filter(PurchaseInvoice.date <= end_date)
             except Exception:
                 pass
-        q = q.order_by(PurchaseInvoice.created_at.desc()).limit(2000)
-        for inv, it in q.all():
+        if hasattr(PurchaseInvoice, 'created_at'):
+            q = q.order_by(PurchaseInvoice.created_at.desc())
+        elif hasattr(PurchaseInvoice, 'date'):
+            q = q.order_by(PurchaseInvoice.date.desc())
+        q = q.limit(2000)
+
+        results = q.all()
+        # Aggregate base per invoice for proportional discount/VAT allocation
+        inv_base = {}
+        for inv, it in results:
+            line_base = float(it.price_before_tax or 0.0) * float(it.quantity or 0.0)
+            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
+
+        for inv, it in results:
             d = (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
             amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
-            disc = float(it.discount or 0.0)
-            base = max(amount - disc, 0.0)
-            vat = float(it.tax or 0.0)
-            total = float(it.total_price or (base + vat))
+            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
+            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+            inv_vat = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
+            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
+                disc = inv_disc * (amount / base_total)
+                vat = inv_vat * (amount / base_total)
+            else:
+                disc = float(it.discount or 0.0)
+                base = max(amount - disc, 0.0)
+                vat = float(it.tax or 0.0)
+            base_after_disc = max(amount - disc, 0.0)
+            line_total = base_after_disc + vat
             pm = (inv.payment_method or '').upper()
             rows.append({
                 'Date': d,
@@ -3020,13 +3113,13 @@ def reports_print_all_invoices_purchases():
                 'Item': it.raw_material_name,
                 'Qty': float(it.quantity or 0.0),
                 'Amount': amount,
-                'Discount': disc,
-                'VAT': vat,
-                'Total': total,
+                'Discount': round(disc, 2),
+                'VAT': round(vat, 2),
+                'Total': round(line_total, 2),
                 'Payment': pm,
             })
-            totals['Amount'] += amount; totals['Discount'] += disc; totals['VAT'] += vat; totals['Total'] += total
-            payment_totals[pm] = payment_totals.get(pm, 0.0) + total
+            totals['Amount'] += amount; totals['Discount'] += disc; totals['VAT'] += vat; totals['Total'] += line_total
+            payment_totals[pm] = payment_totals.get(pm, 0.0) + line_total
     except Exception:
         pass
 
