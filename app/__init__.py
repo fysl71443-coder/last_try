@@ -80,18 +80,21 @@ def create_app(config_class=None):
         def can(screen: str, action: str = 'view', branch_scope: str = None) -> bool:
             try:
                 # Admins can do everything
-                if getattr(current_user, 'role', '') == 'admin':
-                    return True
-                if not getattr(current_user, 'is_authenticated', False):
+                if getattr(current_user, 'is_authenticated', False):
+                    # Treat username 'admin' (or user id==1) as superuser since User has no role field
+                    if getattr(current_user, 'username', '') == 'admin' or getattr(current_user, 'id', None) == 1:
+                        return True
+                    if getattr(current_user, 'role', '') == 'admin':
+                        return True
+                else:
                     return False
-                scopes = []
+                # Resolve scopes to check
                 if branch_scope:
                     scopes = [_normalize_scope(branch_scope), 'all']
                 else:
-                    # Try to infer from request branch filter; fallback to 'all'
-                    scopes = [_normalize_scope(request.args.get('branch') or 'all')]
-                    if scopes[0] != 'all':
-                        scopes.append('all')
+                    # For top-level menus with no explicit branch, consider any allowed scope
+                    scopes = ['all', 'china_town', 'place_india']
+                # Evaluate
                 for sc in scopes:
                     perms = _read_perms(current_user.id, sc)
                     scr = perms.get(screen)
