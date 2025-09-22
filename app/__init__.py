@@ -41,19 +41,75 @@ def create_app(config_class=None):
     from flask_wtf.csrf import generate_csrf
     @app.context_processor
     def inject_globals():
-        # simple permission helper: allow everything for now (can be tightened later)
+        # Permission helper using AppKV-based storage (user_perms:<scope>:<uid>)
+        import json
+        from flask import request
         from flask_login import current_user
-        def can(module, action='view'):
-            # In future, check current_user.role/permissions here
-            return bool(getattr(current_user, 'is_authenticated', False))
+        from app.models import AppKV
+
+        def _normalize_scope(s: str) -> str:
+            s = (s or '').strip().lower()
+            if s in ('place', 'palace', 'india', 'palace_india'): return 'place_india'
+            if s in ('china', 'china town', 'chinatown'): return 'china_town'
+            return s or 'all'
+
+        def _read_perms(uid: int, scope: str):
+            try:
+                k = f"user_perms:{scope}:{int(uid)}"
+                row = AppKV.query.filter_by(k=k).first()
+                if not row:
+                    return {}
+                data = json.loads(row.v)
+                items = data.get('items') or []
+                out = {}
+                for it in items:
+                    key = it.get('screen_key')
+                    if not key:
+                        continue
+                    out[key] = {
+                        'view': bool(it.get('view')),
+                        'add': bool(it.get('add')),
+                        'edit': bool(it.get('edit')),
+                        'delete': bool(it.get('delete')),
+                        'print': bool(it.get('print')),
+                    }
+                return out
+            except Exception:
+                return {}
+
+        def can(screen: str, action: str = 'view', branch_scope: str = None) -> bool:
+            try:
+                # Admins can do everything
+                if getattr(current_user, 'role', '') == 'admin':
+                    return True
+                if not getattr(current_user, 'is_authenticated', False):
+                    return False
+                scopes = []
+                if branch_scope:
+                    scopes = [_normalize_scope(branch_scope), 'all']
+                else:
+                    # Try to infer from request branch filter; fallback to 'all'
+                    scopes = [_normalize_scope(request.args.get('branch') or 'all')]
+                    if scopes[0] != 'all':
+                        scopes.append('all')
+                for sc in scopes:
+                    perms = _read_perms(current_user.id, sc)
+                    scr = perms.get(screen)
+                    if scr and scr.get(action):
+                        return True
+                return False
+            except Exception:
+                # Fail-closed for non-admins
+                return False
+
         # simple image chooser for categories
         def section_image_for(name: str):
             try:
-                n = (name or '').lower()
                 # Use a single existing placeholder image to avoid 404s in development
                 return '/static/logo.svg'
             except Exception:
                 return '/static/logo.svg'
+
         return {
             'ASSET_VERSION': os.getenv('ASSET_VERSION', ''),
             'csrf_token': generate_csrf,
