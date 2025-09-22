@@ -1379,15 +1379,46 @@ def api_sales_checkout():
 @main.route('/api/invoice/confirm-print', methods=['POST'], endpoint='api_invoice_confirm_print')
 @login_required
 def api_invoice_confirm_print():
-    # Mark invoice printed/paid and free the table by clearing draft
+    # Mark invoice paid and free the table. Create payment record.
     try:
+        from models import SalesInvoice, Payment
         payload = request.get_json(force=True) or {}
         branch = (payload.get('branch_code') or '').strip()
         table = int(payload.get('table_number') or 0)
+        raw_invoice_id = payload.get('invoice_id')
+        payment_method = (payload.get('payment_method') or '').upper() or None
+        total_amount = float(payload.get('total_amount') or 0)
+
+        # Resolve invoice by number or numeric id
+        inv = None
+        if isinstance(raw_invoice_id, str) and not raw_invoice_id.isdigit():
+            inv = SalesInvoice.query.filter_by(invoice_number=raw_invoice_id).first()
+        else:
+            try:
+                inv = SalesInvoice.query.get(int(raw_invoice_id))
+            except Exception:
+                inv = None
+        if not inv:
+            return jsonify({'success': False, 'error': 'Invoice not found'}), 404
+
+        if (inv.status or '').lower() != 'paid':
+            if payment_method:
+                db.session.add(Payment(
+                    invoice_id=inv.id,
+                    invoice_type='sales',
+                    amount_paid=total_amount or float(inv.total_after_tax_discount or 0),
+                    payment_method=payment_method,
+                    payment_date=get_saudi_now()
+                ))
+            inv.status = 'paid'
+            db.session.commit()
+
+        # Clear draft to free the table
         if branch and table:
             kv_set(f'draft:{branch}:{table}', {'draft_id': f'{branch}:{table}', 'items': []})
         return jsonify({'success': True})
     except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
@@ -1469,9 +1500,19 @@ def print_receipt(invoice_number):
         s = None
     branch_name = BRANCH_LABELS.get(getattr(inv, 'branch', None) or '', getattr(inv, 'branch', ''))
     dt_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # Generate ZATCA-compliant QR (server-side) if possible
+    qr_data_url = None
+    try:
+        from utils.qr import generate_zatca_qr_from_invoice
+        b64 = generate_zatca_qr_from_invoice(inv, s, None)
+        if b64:
+            qr_data_url = 'data:image/png;base64,' + b64
+    except Exception:
+        qr_data_url = None
     return render_template('print/receipt.html', inv=inv_ctx, items=items_ctx,
                            settings=s, branch_name=branch_name, date_time=dt_str,
                            display_invoice_number=inv.invoice_number,
+                           qr_data_url=qr_data_url,
                            paid=True)
 
 
