@@ -255,7 +255,8 @@
     uf_email.value = row.children[3].innerText==='-'?'':row.children[3].innerText;
     uf_role.value = row.children[4].innerText || 'user';
     uf_active.checked = (row.dataset.active==='1');
-    pwGroup.classList.add('d-none');
+    uf_password.value = '';
+    pwGroup.classList.remove('d-none'); // allow optional password change
     userFormAlert.classList.add('d-none');
     userModal.show();
   });
@@ -274,6 +275,8 @@
         payload.password = uf_password.value.trim();
         await api('POST','/api/users', payload);
       }else{
+        const pw = uf_password.value.trim();
+        if(pw){ payload.password = pw; }
         await api('PATCH', `/api/users/${editId}`, payload);
       }
       location.reload();
@@ -339,18 +342,15 @@
   });
 
   const permsModal = new bootstrap.Modal(document.getElementById('permsModal'));
-  btnPerms.onclick=async ()=>{
+  btnPerms?.addEventListener('click', async ()=>{
     const ids = selectedIds(); if(ids.length!==1) return;
     const uid = ids[0];
-    // fetch existing permissions for branch scope
     try{
       const scope = document.getElementById('branchSelect').value;
       const res = await fetch(`/api/users/${uid}/permissions?branch_scope=${encodeURIComponent(scope)}`);
       const data = await res.json();
-      // reset all first
       list.querySelectorAll('.permCheck, .screenCheck').forEach(cb=>cb.checked=false);
-      data.items.forEach(p=>{
-        // tick screen if any permission
+      (data.items||[]).forEach(p=>{
         const hasAny = p.view||p.add||p.edit||p.delete||p.print;
         const scrCb = document.getElementById(`sc_${p.screen_key}`);
         if(scrCb) scrCb.checked = hasAny;
@@ -358,8 +358,10 @@
           const el = document.getElementById(`${p.screen_key}_${k}`);
           if(el) el.checked = !!p[k];
         });
-
-
+      });
+      permsModal.show();
+    }catch(e){ console.warn('load perms failed', e); }
+  });
 
   // branch change reloads perms if modal is open
   document.getElementById('branchSelect')?.addEventListener('change', async ()=>{
@@ -372,7 +374,7 @@
       const res = await fetch(`/api/users/${uid}/permissions?branch_scope=${encodeURIComponent(scope)}`);
       const data = await res.json();
       list.querySelectorAll('.permCheck, .screenCheck').forEach(cb=>cb.checked=false);
-      data.items.forEach(p=>{
+      (data.items||[]).forEach(p=>{
         const hasAny = p.view||p.add||p.edit||p.delete||p.print;
         const scrCb = document.getElementById(`sc_${p.screen_key}`);
         if(scrCb) scrCb.checked = hasAny;
@@ -383,15 +385,7 @@
       });
     }catch(e){ console.warn('reload perms failed', e); }
   });
-        const scrCb = document.getElementById(`sc_${p.screen_key}`);
-        if(scrCb) scrCb.checked = hasAny;
-        ['view','add','edit','delete','print'].forEach(k=>{
-          const el = document.getElementById(`${p.screen_key}_${k}`);
-          if(el) el.checked = !!p[k];
-        });
-      });
-    }catch(e){ console.warn('load perms failed', e); }
-    permsModal.show();
+
   // save permissions (bind once)
   document.getElementById('savePerms')?.addEventListener('click', async ()=>{
     const ids = selectedIds(); if(ids.length!==1){ alert('اختر مستخدماً واحداً'); return; }
@@ -406,24 +400,10 @@
     });
     try{
       await api('POST', `/api/users/${uid}/permissions`, { items, branch_scope: scope });
-      // re-fetch to reflect saved values
-      const res2 = await fetch(`/api/users/${uid}/permissions?branch_scope=${scope}`);
-      const data = await res2.json();
-      list.querySelectorAll('.permCheck, .screenCheck').forEach(cb=>cb.checked=false);
-      data.items.forEach(p=>{
-        const hasAny = p.view||p.add||p.edit||p.delete||p.print;
-        const scrCb = document.getElementById(`sc_${p.screen_key}`);
-        if(scrCb) scrCb.checked = hasAny;
-        ['view','add','edit','delete','print'].forEach(k=>{
-          const el = document.getElementById(`${p.screen_key}_${k}`);
-          if(el) el.checked = !!p[k];
-        });
-      });
       alert('تم حفظ الصلاحيات');
     }catch(e){ alert('تعذر الحفظ: '+(e.message||e)); }
   });
 
-  };
 })();
 </script>
 {% endblock %}
