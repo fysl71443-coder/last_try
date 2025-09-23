@@ -81,6 +81,17 @@ body {
                     {{ form.payment_method(class_='form-select') }}
                 </div>
             </div>
+            <div class="row mb-3">
+              <div class="col-md-4">
+                <label class="form-label">{{ _('Payment Status / \u062d\u0627\u0644\u0629 \u0627\u0644\u062f\u0641\u0639') }}</label>
+                <select name="status" class="form-select">
+                  <option value="paid">{{ _('Paid / \u0645\u062f\u0641\u0648\u0639') }}</option>
+                  <option value="partial">{{ _('Partial / \u0645\u062f\u0641\u0648\u0639 \u062c\u0632\u0626\u064a\u0627\u064b') }}</option>
+                  <option value="unpaid">{{ _('Unpaid / \u063a\u064a\u0631 \u0645\u062f\u0641\u0648\u0639') }}</option>
+                </select>
+              </div>
+            </div>
+
 
             <!-- عناصر الفاتورة -->
             <h6 class="mb-3">{{ _('Expense Items / بنود المصروفات') }}</h6>

@@ -126,6 +126,17 @@ body {
                     <input name="reference_number" class="form-control" placeholder="PO/Ref if provided">
                   </div>
                 </div>
+                  <div class="row g-3 mt-1">
+                    <div class="col-md-3">
+                      <label class="form-label">{{ _('Payment Status / حالة الدفع') }}</label>
+                      <select name="status" class="form-select">
+                        <option value="unpaid">{{ _('Unpaid / غير مدفوع') }}</option>
+                        <option value="partial">{{ _('Partial / مدفوع جزئياً') }}</option>
+                        <option value="paid">{{ _('Paid / مدفوع') }}</option>
+                      </select>
+                    </div>
+                  </div>
+
 
             <!-- عناصر الفاتورة -->
             <h6 class="mb-3">{{ _('Invoice Items / أصناف الفاتورة') }}</h6>
