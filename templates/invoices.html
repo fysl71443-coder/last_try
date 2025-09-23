@@ -359,13 +359,68 @@ body {
           .then(r=>r.json()).then(data=>{
             const body=document.getElementById('det-pur-body'); const foot=document.getElementById('det-pur-foot');
             if(!body||!foot) return; body.innerHTML=''; foot.innerHTML='';
+            // Group purchases by invoice number (and payment/date) and show items under one invoice row
+            const groups = {};
             (data.purchases||[]).forEach(r=>{
-              const tr=document.createElement('tr');
+              const key = `${r.invoice_number||''}|${r.payment_method||''}|${r.date||''}`;
+              if(!groups[key]){
+                groups[key] = { date: r.date||'', invoice_number: r.invoice_number||'', payment_method: r.payment_method||'',
+                  items: [], totals: { qty: 0, amount: 0, discount: 0, vat: 0, total: 0 } };
+              }
+              groups[key].items.push({ item: r.item||r.item_name||'', quantity: Number(r.quantity||0), amount: Number(r.amount||0), discount: Number(r.discount||0), vat: Number(r.vat||0), total: Number(r.total||0) });
+              groups[key].totals.qty += Number(r.quantity||0);
+              groups[key].totals.amount += Number(r.amount||0);
+              groups[key].totals.discount += Number(r.discount||0);
+              groups[key].totals.vat += Number(r.vat||0);
+              groups[key].totals.total += Number(r.total||0);
+            });
+            Object.values(groups).forEach((g,idx)=>{
+              const tr = document.createElement('tr');
+              tr.className = 'table-row-summary';
+              const btnId = `pur_items_${idx}`;
               tr.innerHTML = `
-                <td>${r.date||''}</td><td>${r.invoice_number||''}</td><td>${r.item||''}</td>
-                <td>${Number(r.quantity||0)}</td><td>${n2(r.amount)}</td>
-                <td>${n2(r.discount)}</td><td>${n2(r.vat)}</td><td>${n2(r.total)}</td>
-                <td>${r.payment_method||''}</td>`; body.appendChild(tr);
+                <td>${g.date}</td>
+                <td><button class="btn btn-sm btn-link p-0" type="button" data-target="#${btnId}">🔽</button> ${g.invoice_number}</td>
+                <td>${g.items.length} item(s)</td>
+                <td>${Number(g.totals.qty)}</td>
+                <td>${n2(g.totals.amount)}</td>
+                <td>${n2(g.totals.discount)}</td>
+                <td>${n2(g.totals.vat)}</td>
+                <td>${n2(g.totals.total)}</td>
+                <td>${g.payment_method||''}</td>`;
+              body.appendChild(tr);
+              const dtr = document.createElement('tr');
+              dtr.className = 'table-row-details';
+              dtr.innerHTML = `<td colspan="9">
+                <div id="${btnId}" style="display:none;">
+                  <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                      <thead class="table-light">
+                        <tr><th>Item</th><th>Qty</th><th>Amount</th><th>Discount</th><th>VAT</th><th>Total</th></tr>
+                      </thead>
+                      <tbody>
+                        ${g.items.map(it=>`<tr>
+                          <td>${it.item||''}</td>
+                          <td>${Number(it.quantity)}</td>
+                          <td>${n2(it.amount)}</td>
+                          <td>${n2(it.discount)}</td>
+                          <td>${n2(it.vat)}</td>
+                          <td>${n2(it.total)}</td>
+                        </tr>`).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </td>`;
+              body.appendChild(dtr);
+            });
+            // Toggle details
+            body.addEventListener('click', function(ev){
+              const btn = ev.target.closest('button[data-target]');
+              if(!btn) return;
+              const sel = btn.getAttribute('data-target');
+              const panel = body.querySelector(sel);
+              if(panel){ panel.style.display = (panel.style.display==='none'||panel.style.display==='') ? 'block' : 'none'; }
             });
             const o=data.overall_totals||{amount:0,discount:0,vat:0,total:0};
             const tro=document.createElement('tr'); tro.className='table-secondary fw-bold';
