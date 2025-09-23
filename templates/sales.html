@@ -91,12 +91,15 @@ body {
                     {{ form.customer_name.label(class_='form-label') }}
                     {{ form.customer_name(class_='form-control') }}
                 </div>
+                    <div class="mt-1">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAddCustomerModalSales()">➕ {{ _('Add Customer / إضافة عميل') }}</button>
+                    </div>
             </div>
             <div class="row mb-3" id="special-discount-row" style="display:none">
                 <div class="col-md-3">
-                    <label class="form-label">KEETA/HUNGER Discount %</label>
-                    {{ form.special_discount_pct(class_='form-control', step='0.01', placeholder='Enter % for KEETA/HUNGER') }}
-                    <div class="form-text">Applied to all items when customer is KEETA or HUNGER.</div>
+                    <label class="form-label">{{ _('Customer Discount % / نسبة خصم العميل') }}</label>
+                    {{ form.special_discount_pct(class_='form-control', step='0.01', placeholder=_('Enter customer discount %')) }}
+                    <div class="form-text">{{ _('Applied to all items when a customer-specific discount is set.') }}</div>
                 </div>
             </div>
 
@@ -145,6 +148,37 @@ body {
                 </div>
                 <div class="col-md-6 text-end">
                     {{ form.submit(class_='btn btn-primary btn-lg') }}
+
+        <!-- Add Customer Modal (Sales) -->
+        <div class="modal fade" id="addCustomerSalesModal" tabindex="-1" aria-labelledby="addCustomerSalesModalLabel" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="addCustomerSalesModalLabel">{{ _('Add Customer / إضافة عميل') }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <div class="mb-2">
+                  <label class="form-label">{{ _('Name / الاسم') }}</label>
+                  <input id="salesNewCustName" class="form-control" placeholder="{{ _('Customer name') }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">{{ _('Phone / الهاتف') }}</label>
+                  <input id="salesNewCustPhone" class="form-control" placeholder="{{ _('Phone (optional)') }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">{{ _('Discount % / نسبة الخصم') }}</label>
+                  <input id="salesNewCustDisc" type="number" min="0" max="100" step="0.01" class="form-control" value="0">
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Close / إغلاق') }}</button>
+                <button type="button" class="btn btn-primary" onclick="submitNewCustomerSales()">{{ _('Save / حفظ') }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
                 </div>
             </div>
         </form>
@@ -370,22 +404,55 @@ body {
 
             // Add CSRF token if available
             const csrfToken = document.querySelector('input[name="csrf_token"]');
+
+    // Add Customer (Sales screen)
+    function openAddCustomerModalSales(){
+        try{
+            document.getElementById('salesNewCustName').value='';
+            document.getElementById('salesNewCustPhone').value='';
+            document.getElementById('salesNewCustDisc').value='0';
+            const m = new bootstrap.Modal(document.getElementById('addCustomerSalesModal'));
+            m.show();
+        }catch(e){ alert('Cannot open modal'); }
+    }
+    async function submitNewCustomerSales(){
+        const name = (document.getElementById('salesNewCustName').value||'').trim();
+        const phone = (document.getElementById('salesNewCustPhone').value||'').trim();
+        const discount = parseFloat(document.getElementById('salesNewCustDisc').value||'0')||0;
+        if(!name){ alert('{{ _("Name is required /  ") if false else _("Name is required /  ") }}'); return; }
+        try{
+            const tokMeta = document.querySelector("meta[name='csrf-token']");
+            const tok = tokMeta ? tokMeta.getAttribute('content') : '';
+            const res = await fetch('{{ url_for('main.api_customers_create') }}',{
+                method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':tok},
+                body: JSON.stringify({name, phone, discount_percent: discount})
+            });
+            const j = await res.json();
+            if(!res.ok || !j || j.ok!==true){ throw new Error((j && j.error) || 'Failed'); }
+            // Fill the form field with new customer
+            const input = document.querySelector('input[name="customer_name"]');
+            if(input) input.value = j.customer.name || '';
+            try{ bootstrap.Modal.getInstance(document.getElementById('addCustomerSalesModal')).hide(); }catch(_){ }
+        }catch(e){ alert(String(e.message||e)); }
+    }
+
             if (csrfToken) {
                 const tokenInput = document.createElement('input');
                 tokenInput.type = 'hidden';
                 tokenInput.name = 'csrf_token';
-    // KEETA/HUNGER special discount UI toggle
+    // Customer discount UI toggle (show if KEETA/HUNGER or any positive discount value)
     function updateSpecialDiscountVisibility(){
         const input = document.querySelector('input[name="customer_name"]');
         const row = document.getElementById('special-discount-row');
         if(!input || !row) return;
         const name = (input.value || '').trim().toUpperCase();
-        if(name === 'KEETA' || name === 'HUNGER'){
+        const discInput = row.querySelector('input[name="special_discount_pct"]');
+        const discVal = parseFloat(discInput && discInput.value || '0') || 0;
+        if(name === 'KEETA' || name === 'HUNGER' || discVal > 0){
             row.style.display = '';
         } else {
             row.style.display = 'none';
-            const disc = row.querySelector('input[name="special_discount_pct"]');
-            if(disc) disc.value = '';
+            if(discInput) discInput.value = '';
         }
     }
     document.addEventListener('DOMContentLoaded', updateSpecialDiscountVisibility);
@@ -404,5 +471,44 @@ body {
         }
     }
 </script>
+
+<script>
+// Global handlers for Add Customer (Sales)
+window.openAddCustomerModalSales = function(){
+  try{
+    document.getElementById('salesNewCustName').value='';
+    document.getElementById('salesNewCustPhone').value='';
+    document.getElementById('salesNewCustDisc').value='0';
+    const m = new bootstrap.Modal(document.getElementById('addCustomerSalesModal'));
+    m.show();
+  }catch(e){ alert('Cannot open modal'); }
+}
+window.submitNewCustomerSales = async function(){
+  const name = (document.getElementById('salesNewCustName').value||'').trim();
+  const phone = (document.getElementById('salesNewCustPhone').value||'').trim();
+  const discount = parseFloat(document.getElementById('salesNewCustDisc').value||'0')||0;
+  if(!name){ alert('{{ _('Name is required / الاسم مطلوب') }}'); return; }
+  try{
+    const tokMeta = document.querySelector("meta[name='csrf-token']");
+    const tok = tokMeta ? tokMeta.getAttribute('content') : '';
+    const res = await fetch('{{ url_for('main.api_customers_create') }}',{
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':tok},
+      body: JSON.stringify({name, phone, discount_percent: discount})
+    });
+    const j = await res.json();
+    if(!res.ok || !j || j.ok!==true){ throw new Error((j && j.error) || 'Failed'); }
+    const input = document.querySelector('input[name="customer_name"]');
+    if(input) input.value = j.customer.name || '';
+    // Apply customer discount to the special discount field and show the row
+    const row = document.getElementById('special-discount-row');
+    const discInput = row ? row.querySelector('input[name="special_discount_pct"]') : null;
+    if(discInput){ discInput.value = (j.customer.discount_percent || 0); }
+    if(row){ row.style.display = ''; }
+    try{ updateSpecialDiscountVisibility && updateSpecialDiscountVisibility(); }catch(_){ }
+    try{ bootstrap.Modal.getInstance(document.getElementById('addCustomerSalesModal')).hide(); }catch(_){ }
+  }catch(e){ alert(String(e.message||e)); }
+}
+</script>
+
 
 {% endblock %}
