@@ -442,6 +442,23 @@ def purchases():
             else:
                 db.session.add(inv)
                 db.session.commit()
+            # Auto-create full payment if status chosen as 'paid'
+            try:
+                if (getattr(inv, 'status', '') or '').lower() == 'paid':
+                    total_amt = float(inv.total_after_tax_discount or 0.0)
+                    if total_amt > 0:
+                        db.session.add(Payment(
+                            invoice_id=inv.id,
+                            invoice_type='purchase',
+                            amount_paid=total_amt,
+                            payment_method=(pm or 'CASH').upper()
+                        ))
+                        db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
             flash('Purchase invoice saved', 'success')
         except Exception as e:
             if ext_db is not None:
@@ -746,6 +763,23 @@ def expenses():
             else:
                 db.session.add(inv)
                 db.session.commit()
+            # Auto-create full payment if status chosen as 'paid'
+            try:
+                if (getattr(inv, 'status', '') or '').lower() == 'paid':
+                    total_amt = float(inv.total_after_tax_discount or 0.0)
+                    if total_amt > 0:
+                        db.session.add(Payment(
+                            invoice_id=inv.id,
+                            invoice_type='expense',
+                            amount_paid=total_amt,
+                            payment_method=(pm or 'CASH').upper()
+                        ))
+                        db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
             flash('Expense saved', 'success')
         except Exception as ex:
             if ext_db is not None:
@@ -3168,10 +3202,24 @@ def api_all_expenses():
             q = q.filter(func.lower(ExpenseInvoice.payment_method) == payment_method)
         q = q.order_by(ExpenseInvoice.created_at.desc()).limit(1000)
         for exp in q.all():
+            # Build a short description from expense items (first item + count)
+            desc_text = ''
+            try:
+                items = ExpenseInvoiceItem.query.with_entities(ExpenseInvoiceItem.description) \
+                    .filter_by(invoice_id=exp.id).limit(3).all()
+                if items:
+                    first_desc = (items[0][0] if isinstance(items[0], tuple) else items[0]) or ''
+                    # If more than one item, indicate there are more
+                    if len(items) > 1:
+                        desc_text = f"{first_desc} + {len(items)-1} more"
+                    else:
+                        desc_text = first_desc
+            except Exception:
+                desc_text = ''
             rows.append({
                 'date': (exp.date.strftime('%Y-%m-%d') if getattr(exp, 'date', None) else ''),
                 'expense_number': exp.invoice_number,
-                'item': '',
+                'item': desc_text,
                 'amount': float(exp.total_after_tax_discount or 0.0),
                 'payment_method': (exp.payment_method or '').upper(),
             })
@@ -3423,10 +3471,23 @@ def reports_print_all_invoices_expenses():
             d = (exp.date.strftime('%Y-%m-%d') if getattr(exp, 'date', None) else '')
             amt = float(exp.total_after_tax_discount or 0.0)
             pm = (exp.payment_method or '').upper()
+            # Build description from items
+            desc_text = ''
+            try:
+                items = ExpenseInvoiceItem.query.with_entities(ExpenseInvoiceItem.description) \
+                    .filter_by(invoice_id=exp.id).limit(3).all()
+                if items:
+                    first_desc = (items[0][0] if isinstance(items[0], tuple) else items[0]) or ''
+                    if len(items) > 1:
+                        desc_text = f"{first_desc} + {len(items)-1} more"
+                    else:
+                        desc_text = first_desc
+            except Exception:
+                desc_text = ''
             rows.append({
                 'Date': d,
                 'Expense No.': exp.invoice_number,
-                'Description': getattr(exp, 'description', '') or '',
+                'Description': desc_text,
                 'Amount': amt,
                 'Payment': pm,
             })
