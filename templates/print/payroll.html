@@ -23,6 +23,8 @@
       <div class="muted">{{ meta }}</div>
     </div>
 
+    <!-- Current Month -->
+    <h3 class="center">{{ _('Current Month / الشهر الحالي') }}</h3>
     <table>
       <thead>
         <tr>
@@ -70,6 +72,42 @@
       </tfoot>
       {% endif %}
     </table>
+
+    <!-- Previous Months -->
+    {% if prev_rows is not none %}
+    <h3 class="center" style="margin-top:18px">{{ _('Previous Months / الشهور السابقة') }}</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>{{ _('Month / الشهر') }}</th>
+          <th>{{ _('Employee / الموظف') }}</th>
+          <th class="right">{{ _('Total Due / إجمالي مستحق') }}</th>
+          <th class="right">{{ _('Paid / المدفوع') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in prev_rows %}
+        <tr>
+          <td>{{ r.month }}</td>
+          <td>{{ r.employee_name }}</td>
+          <td class="right">{{ '%.2f'|format(r.due) }}</td>
+          <td class="right">{{ '%.2f'|format(r.paid) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="center muted">{{ _('No data') }}</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if prev_totals %}
+      <tfoot>
+        <tr class="total-row">
+          <td colspan="2">{{ _('Totals / الإجماليات') }}</td>
+          <td class="right">{{ '%.2f'|format(prev_totals.due) }}</td>
+          <td class="right">{{ '%.2f'|format(prev_totals.paid) }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+    {% endif %}
 
     <div class="center no-print" style="margin-top:8px">
       <button onclick="window.print()">{{ _('Print / طباعة') }}</button>

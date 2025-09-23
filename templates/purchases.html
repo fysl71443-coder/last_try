@@ -129,11 +129,16 @@ body {
                   <div class="row g-3 mt-1">
                     <div class="col-md-3">
                       <label class="form-label">{{ _('Payment Status / حالة الدفع') }}</label>
-                      <select name="status" class="form-select">
+                      <select name="status" id="purchase-status" class="form-select">
                         <option value="unpaid">{{ _('Unpaid / غير مدفوع') }}</option>
                         <option value="partial">{{ _('Partial / مدفوع جزئياً') }}</option>
                         <option value="paid">{{ _('Paid / مدفوع') }}</option>
                       </select>
+                    </div>
+                    <div class="col-md-3" id="partial-paid-box" style="display:none;">
+                      <label class="form-label">{{ _('Paid Amount (Partial) / المبلغ المدفوع (جزئي)') }}</label>
+                      <input name="partial_paid_amount" id="partial-paid-amount" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
+                      <div class="form-text">{{ _('Max is Final Total / الحد الأقصى هو الإجمالي النهائي') }}: <span id="partial-max"></span></div>
                     </div>
                   </div>
 
@@ -259,11 +264,13 @@ body {
             finalTotal += lineTotal;
             const totalDisplay = row.querySelector('.item-total');
             if (totalDisplay) totalDisplay.textContent = '$' + lineTotal.toFixed(2);
+
         });
         document.getElementById('total-before-tax').textContent = '$' + totalBefore.toFixed(2);
         document.getElementById('tax-amount').textContent = '$' + totalTax.toFixed(2);
         document.getElementById('total-discount').textContent = '$' + totalDiscount.toFixed(2);
         document.getElementById('final-total').textContent = '$' + finalTotal.toFixed(2);
+        try{ if(typeof updatePartialMax==='function') updatePartialMax(); }catch(e){}
     }
 
     // Show stock info when material is selected
@@ -288,6 +295,7 @@ body {
 
     // Event listeners
     document.addEventListener('change', e => {
+
         if (e.target.matches('input[name$="-item_name"]')) {
             updateStockInfoByName(e.target);
             calculateTotals();
@@ -317,6 +325,7 @@ body {
                 <div class="col-md-2">
                     <label class="form-label">{{ _('Quantity / الكمية') }}</label>
                     <input class="form-control" name="items-${itemIndex}-quantity" step="0.0001" type="number">
+
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">{{ _('Price / السعر') }}</label>
@@ -412,5 +421,34 @@ body {
         calculateTotals();
     });
 </script>
+
+<script>
+(function(){
+  function parseMoneyText(txt){
+    const s = String(txt||'').replace(/[^0-9.\-]/g,'');
+    const v = parseFloat(s); return isNaN(v)?0:v;
+  }
+  function updatePartialMax(){
+    const max = parseMoneyText(document.getElementById('final-total')?.textContent||'0');
+    const span = document.getElementById('partial-max'); if(span) span.textContent = '$' + max.toFixed(2);
+    const inp = document.getElementById('partial-paid-amount');
+    if(inp){ let v = parseFloat(inp.value||'0'); if(isNaN(v)) v = 0; if(v>max) inp.value = max.toFixed(2); if(v<0) inp.value='0.00'; }
+  }
+  function togglePartialBox(){
+    const sel = document.getElementById('purchase-status');
+    const box = document.getElementById('partial-paid-box');
+    if(!sel || !box) return;
+    if((sel.value||'').toLowerCase()==='partial'){ box.style.display=''; updatePartialMax(); }
+    else { box.style.display='none'; }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    const sel = document.getElementById('purchase-status');
+    if(sel){ sel.addEventListener('change', togglePartialBox); }
+    togglePartialBox();
+    updatePartialMax();
+  });
+})();
+</script>
+
 
 {% endblock %}

@@ -134,25 +134,35 @@ async function deleteInvoice(id, type) {
   if (!confirmed) return;
 
   try {
-    // Create form and submit
     const form = document.createElement('form');
     form.method = 'POST';
+    form.action = '/invoices/delete';
 
-    // Determine the correct delete endpoint based on type
-    if (type === 'sales') {
-      form.action = `/delete_sales_invoice/${id}`;
-    } else if (type === 'purchase') {
-      form.action = `/delete_purchase_invoice/${id}`;
-    } else if (type === 'expense') {
-      form.action = `/delete_expense_invoice/${id}`;
-    } else {
-      await showAlert('{{ _('Unknown invoice type / نوع فاتورة غير معروف') }}');
-      return;
-    }
+    // Map type to invoices_delete expected values
+    let invoiceType = type;
+    if (type === 'purchase') invoiceType = 'purchases';
+    if (type === 'expense') invoiceType = 'expenses';
 
-    // Add CSRF token
-    const csrfToken = document.querySelector('input[name="csrf_token"]') ||
-                     document.querySelector('meta[name="csrf-token"]');
+    // Hidden inputs
+    const addHidden = (name, value) => {
+      const inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = name;
+      inp.value = value;
+      form.appendChild(inp);
+    };
+
+    addHidden('scope', 'selected');
+    addHidden('invoice_type', invoiceType);
+    // invoices_delete expects list 'invoice_ids'
+    const idInput = document.createElement('input');
+    idInput.type = 'hidden';
+    idInput.name = 'invoice_ids';
+    idInput.value = String(id);
+    form.appendChild(idInput);
+
+    // CSRF
+    const csrfToken = document.querySelector('input[name="csrf_token"]') || document.querySelector('meta[name="csrf-token"]');
     if (csrfToken) {
       const tokenInput = document.createElement('input');
       tokenInput.type = 'hidden';
@@ -163,7 +173,6 @@ async function deleteInvoice(id, type) {
 
     document.body.appendChild(form);
     form.submit();
-
   } catch (error) {
     await showAlert('{{ _('Error deleting invoice / خطأ في حذف الفاتورة') }}');
   }

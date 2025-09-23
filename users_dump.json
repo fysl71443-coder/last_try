@@ -1,0 +1,364 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "active": true,
+      "permissions": {}
+    },
+    {
+      "id": 2,
+      "username": "user_china",
+      "active": true,
+      "permissions": {
+        "china_town": {
+          "items": [
+            {
+              "screen_key": "dashboard",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "sales",
+              "view": true,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "purchases",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "inventory",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "expenses",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "salaries",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "financials",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "vat",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "reports",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "settings",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            }
+          ],
+          "saved_at": "2025-09-22T16:42:35.277374"
+        },
+        "place_india": {
+          "items": [
+            {
+              "screen_key": "dashboard",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "sales",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "purchases",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "inventory",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "expenses",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "salaries",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "financials",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "vat",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "reports",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "settings",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            }
+          ],
+          "saved_at": "2025-09-22T16:42:35.558641"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "username": "user_india",
+      "active": true,
+      "permissions": {
+        "place_india": {
+          "items": [
+            {
+              "screen_key": "dashboard",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "sales",
+              "view": true,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "purchases",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "inventory",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "expenses",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "salaries",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "financials",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "vat",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "reports",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "settings",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            }
+          ],
+          "saved_at": "2025-09-22T16:42:35.859008"
+        },
+        "china_town": {
+          "items": [
+            {
+              "screen_key": "dashboard",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "sales",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "purchases",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "inventory",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "expenses",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "salaries",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "financials",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "vat",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "reports",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            },
+            {
+              "screen_key": "settings",
+              "view": false,
+              "add": false,
+              "edit": false,
+              "delete": false,
+              "print": false
+            }
+          ],
+          "saved_at": "2025-09-22T16:42:36.154085"
+        }
+      }
+    }
+  ]
+}
