@@ -442,6 +442,23 @@ def purchases():
             else:
                 db.session.add(inv)
                 db.session.commit()
+            # Auto-create full payment if status chosen as 'paid'
+            try:
+                if (getattr(inv, 'status', '') or '').lower() == 'paid':
+                    total_amt = float(inv.total_after_tax_discount or 0.0)
+                    if total_amt > 0:
+                        db.session.add(Payment(
+                            invoice_id=inv.id,
+                            invoice_type='purchase',
+                            amount_paid=total_amt,
+                            payment_method=(pm or 'CASH').upper()
+                        ))
+                        db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
             flash('Purchase invoice saved', 'success')
         except Exception as e:
             if ext_db is not None:
@@ -746,6 +763,23 @@ def expenses():
             else:
                 db.session.add(inv)
                 db.session.commit()
+            # Auto-create full payment if status chosen as 'paid'
+            try:
+                if (getattr(inv, 'status', '') or '').lower() == 'paid':
+                    total_amt = float(inv.total_after_tax_discount or 0.0)
+                    if total_amt > 0:
+                        db.session.add(Payment(
+                            invoice_id=inv.id,
+                            invoice_type='expense',
+                            amount_paid=total_amt,
+                            payment_method=(pm or 'CASH').upper()
+                        ))
+                        db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
             flash('Expense saved', 'success')
         except Exception as ex:
             if ext_db is not None:
@@ -1063,6 +1097,7 @@ def payments():
                          .filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'purchase').scalar() or 0.0)
             invoices.append({
                 'id': inv.id,
+                'invoice_number': getattr(inv, 'invoice_number', None) or inv.id,
                 'type': 'purchase',
                 'party': inv.supplier_name or 'Supplier',
                 'total': total,
@@ -1082,6 +1117,7 @@ def payments():
                          .filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'expense').scalar() or 0.0)
             invoices.append({
                 'id': inv.id,
+                'invoice_number': getattr(inv, 'invoice_number', None) or inv.id,
                 'type': 'expense',
                 'party': 'Expense',
                 'total': total,
@@ -1101,7 +1137,7 @@ def payments():
         if type_f == 'expenses': type_f = 'expense'
         invoices = [i for i in invoices if (i.get('type') or '') == type_f]
 
-    return render_template('payments.html', invoices=invoices, PAYMENT_METHODS=PAYMENT_METHODS)
+    return render_template('payments.html', invoices=invoices, PAYMENT_METHODS=PAYMENT_METHODS, status_f=status_f, type_f=type_f)
 
 @main.route('/reports', endpoint='reports')
 @login_required
@@ -3168,10 +3204,29 @@ def api_all_expenses():
             q = q.filter(func.lower(ExpenseInvoice.payment_method) == payment_method)
         q = q.order_by(ExpenseInvoice.created_at.desc()).limit(1000)
         for exp in q.all():
+            # Build full items list for this expense invoice
+            items_list = []
+            try:
+                for it in ExpenseInvoiceItem.query.filter_by(invoice_id=exp.id).all():
+                    qty = float(getattr(it, 'quantity', 0.0) or 0.0)
+                    price = float(getattr(it, 'price_before_tax', 0.0) or 0.0)
+                    tax = float(getattr(it, 'tax', 0.0) or 0.0)
+                    disc = float(getattr(it, 'discount', 0.0) or 0.0)
+                    line_total = float(getattr(it, 'total_price', None) or (max(price*qty - disc, 0.0) + tax) or 0.0)
+                    items_list.append({
+                        'description': getattr(it, 'description', '') or '',
+                        'quantity': qty,
+                        'price': price,
+                        'tax': tax,
+                        'discount': disc,
+                        'total': line_total,
+                    })
+            except Exception:
+                items_list = []
             rows.append({
                 'date': (exp.date.strftime('%Y-%m-%d') if getattr(exp, 'date', None) else ''),
                 'expense_number': exp.invoice_number,
-                'item': '',
+                'items': items_list,
                 'amount': float(exp.total_after_tax_discount or 0.0),
                 'payment_method': (exp.payment_method or '').upper(),
             })
@@ -3421,17 +3476,34 @@ def reports_print_all_invoices_expenses():
         q = q.order_by(ExpenseInvoice.created_at.desc()).limit(2000)
         for exp in q.all():
             d = (exp.date.strftime('%Y-%m-%d') if getattr(exp, 'date', None) else '')
-            amt = float(exp.total_after_tax_discount or 0.0)
             pm = (exp.payment_method or '').upper()
-            rows.append({
-                'Date': d,
-                'Expense No.': exp.invoice_number,
-                'Description': getattr(exp, 'description', '') or '',
-                'Amount': amt,
-                'Payment': pm,
-            })
-            totals['Amount'] += amt
-            payment_totals[pm] = payment_totals.get(pm, 0.0) + amt
+            # Print per item
+            try:
+                items = ExpenseInvoiceItem.query.filter_by(invoice_id=exp.id).all()
+            except Exception:
+                items = []
+            for it in items:
+                qty = float(getattr(it, 'quantity', 0.0) or 0.0)
+                price = float(getattr(it, 'price_before_tax', 0.0) or 0.0)
+                tax = float(getattr(it, 'tax', 0.0) or 0.0)
+                disc = float(getattr(it, 'discount', 0.0) or 0.0)
+                line_total = float(getattr(it, 'total_price', None) or (max(price*qty - disc, 0.0) + tax) or 0.0)
+                rows.append({
+                    'Date': d,
+                    'Expense No.': exp.invoice_number,
+                    'Description': getattr(it, 'description', '') or '',
+                    'Qty': qty,
+                    'Amount': price * qty,
+                    'Tax': tax,
+                    'Discount': disc,
+                    'Line Total': line_total,
+                    'Payment': pm,
+                })
+                totals['Amount'] += (price * qty)
+                totals['Tax'] = float(totals.get('Tax', 0.0) or 0.0) + tax
+                totals['Discount'] = float(totals.get('Discount', 0.0) or 0.0) + disc
+                totals['Line Total'] = float(totals.get('Line Total', 0.0) or 0.0) + line_total
+                payment_totals[pm] = payment_totals.get(pm, 0.0) + line_total
     except Exception:
         pass
 
@@ -3447,9 +3519,11 @@ def reports_print_all_invoices_expenses():
         'end_date': end_date,
         'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
     }
-    columns = ['Date','Expense No.','Description','Amount','Payment']
+    columns = ['Date','Expense No.','Description','Qty','Amount','Tax','Discount','Line Total','Payment']
+    totals_columns = ['Amount','Tax','Discount','Line Total']
+    totals_colspan = len(columns) - len(totals_columns)
     return render_template('print_report.html', report_title=meta['title'], settings=settings,
                            generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
                            payment_method=meta['payment_method'], branch=meta['branch'],
-                           columns=columns, data=rows, totals=totals, totals_columns=['Amount'],
-                           totals_colspan=3, payment_totals=payment_totals)
+                           columns=columns, data=rows, totals=totals, totals_columns=totals_columns,
+                           totals_colspan=totals_colspan, payment_totals=payment_totals)
