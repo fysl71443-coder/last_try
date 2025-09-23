@@ -60,11 +60,11 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">نسبة VAT العامة (%)</label>
-            <input type="number" step="0.01" name="vat_rate" class="form-control" value="{{ s.vat_rate or 15 }}">
+            <input type="number" step="0.01" name="vat_rate" class="form-control" value="{{ s.vat_rate if s.vat_rate is not none else 15 }}">
           </div>
           <div class="col-md-3">
             <label class="form-label">العملة</label>
-            <input type="text" name="currency" class="form-control" value="{{ s.currency or 'SAR' }}">
+            <input type="text" name="currency" class="form-control" value="{{ s.currency if s.currency is not none else 'SAR' }}">
           </div>
           <div class="col-md-3">
             <label class="form-label">سمة الواجهة الافتراضية</label>
@@ -75,11 +75,11 @@
           </div>
           <div class="col-md-6">
             <label class="form-label">تسمية فرع Place India</label>
-            <input type="text" name="place_india_label" class="form-control" value="{{ s.place_india_label or 'Place India' }}">
+            <input type="text" name="place_india_label" class="form-control" value="{{ s.place_india_label if s.place_india_label is not none else 'Place India' }}">
           </div>
           <div class="col-md-6">
             <label class="form-label">تسمية فرع China Town</label>
-            <input type="text" name="china_town_label" class="form-control" value="{{ s.china_town_label or 'China Town' }}">
+            <input type="text" name="china_town_label" class="form-control" value="{{ s.china_town_label if s.china_town_label is not none else 'China Town' }}">
           </div>
         </div>
       </div>
@@ -93,16 +93,16 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">كلمة سر حذف الأصناف</label>
-            <input type="password" name="china_town_void_password" class="form-control" value="{{ s.china_town_void_password or '1991' }}">
+            <input type="password" name="china_town_void_password" class="form-control" value="{{ s.china_town_void_password if s.china_town_void_password is not none else '1991' }}">
             <div class="form-text">كلمة السر المطلوبة لحذف الأصناف من الفاتورة</div>
           </div>
           <div class="col-md-4">
             <label class="form-label">نسبة الضريبة (%)</label>
-            <input type="number" step="0.01" name="china_town_vat_rate" class="form-control" value="{{ s.china_town_vat_rate or 15 }}">
+            <input type="number" step="0.01" name="china_town_vat_rate" class="form-control" value="{{ s.china_town_vat_rate if s.china_town_vat_rate is not none else 15 }}">
           </div>
           <div class="col-md-4">
             <label class="form-label">نسبة الخصم الافتراضية (%)</label>
-            <input type="number" step="0.01" name="china_town_discount_rate" class="form-control" value="{{ s.china_town_discount_rate or 0 }}">
+            <input type="number" step="0.01" name="china_town_discount_rate" class="form-control" value="{{ s.china_town_discount_rate if s.china_town_discount_rate is not none else 0 }}">
           </div>
         </div>
       </div>
@@ -116,16 +116,16 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">كلمة سر حذف الأصناف</label>
-            <input type="password" name="place_india_void_password" class="form-control" value="{{ s.place_india_void_password or '1991' }}">
+            <input type="password" name="place_india_void_password" class="form-control" value="{{ s.place_india_void_password if s.place_india_void_password is not none else '1991' }}">
             <div class="form-text">كلمة السر المطلوبة لحذف الأصناف من الفاتورة</div>
           </div>
           <div class="col-md-4">
             <label class="form-label">نسبة الضريبة (%)</label>
-            <input type="number" step="0.01" name="place_india_vat_rate" class="form-control" value="{{ s.place_india_vat_rate or 15 }}">
+            <input type="number" step="0.01" name="place_india_vat_rate" class="form-control" value="{{ s.place_india_vat_rate if s.place_india_vat_rate is not none else 15 }}">
           </div>
           <div class="col-md-4">
             <label class="form-label">نسبة الخصم الافتراضية (%)</label>
-            <input type="number" step="0.01" name="place_india_discount_rate" class="form-control" value="{{ s.place_india_discount_rate or 0 }}">
+            <input type="number" step="0.01" name="place_india_discount_rate" class="form-control" value="{{ s.place_india_discount_rate if s.place_india_discount_rate is not none else 0 }}">
           </div>
         </div>
       </div>
@@ -147,7 +147,7 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">Font Size</label>
-            <input type="number" name="receipt_font_size" class="form-control" value="{{ s.receipt_font_size or 12 }}">
+            <input type="number" name="receipt_font_size" class="form-control" value="{{ s.receipt_font_size if s.receipt_font_size is not none else 12 }}">
           </div>
           <div class="col-md-6">
             <label class="form-label">Logo</label>
@@ -157,7 +157,7 @@
             </div>
             <div class="mb-2">
               <label class="form-label small">{{ _('Or enter logo URL / أو أدخل رابط الشعار') }}</label>
-              <input type="text" name="logo_url" class="form-control" value="{{ s.logo_url or '/static/chinese-logo.svg' }}">
+              <input type="text" name="logo_url" class="form-control" value="{{ s.logo_url if s.logo_url is not none else '' }}">
             </div>
             {% if s and s.logo_url %}
             <div class="mt-2">
@@ -182,11 +182,11 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">طول إضافي أسفل الإيصال (مم)</label>
-            <input type="number" step="1" min="0" name="receipt_extra_bottom_mm" class="form-control" value="{{ s.receipt_extra_bottom_mm or 15 }}">
+            <input type="number" step="1" min="0" name="receipt_extra_bottom_mm" class="form-control" value="{{ s.receipt_extra_bottom_mm if s.receipt_extra_bottom_mm is not none else 15 }}">
           </div>
           <div class="col-md-3">
             <label class="form-label">ارتفاع الشعار (px)</label>
-            <input type="number" step="1" min="20" name="receipt_logo_height" class="form-control" value="{{ s.receipt_logo_height or 40 }}">
+            <input type="number" step="1" min="20" name="receipt_logo_height" class="form-control" value="{{ s.receipt_logo_height if s.receipt_logo_height is not none else 40 }}">
           </div>
         </div>
       <!-- New: Printer type, footer message, currency image -->
@@ -200,7 +200,7 @@
         </div>
         <div class="col-md-8">
           <label class="form-label">Receipt Footer Message</label>
-          <input type="text" name="footer_message" class="form-control" value="{{ s.footer_message or 'THANK YOU FOR VISIT' }}" placeholder="THANK YOU FOR VISIT">
+          <input type="text" name="footer_message" class="form-control" value="{{ s.footer_message if s.footer_message is not none else 'THANK YOU FOR VISIT' }}" placeholder="THANK YOU FOR VISIT">
         </div>
         <div class="col-md-6">
           <label class="form-label">Currency Image (PNG)</label>

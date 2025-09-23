@@ -2296,11 +2296,11 @@ def settings():
 
             # Integers
             if hasattr(s, 'receipt_font_size'):
-                s.receipt_font_size = as_int(form_data.get('receipt_font_size'), s.receipt_font_size or 12)
+                s.receipt_font_size = as_int(form_data.get('receipt_font_size'), s.receipt_font_size if s.receipt_font_size is not None else 12)
             if hasattr(s, 'receipt_logo_height'):
-                s.receipt_logo_height = as_int(form_data.get('receipt_logo_height'), s.receipt_logo_height or 40)
+                s.receipt_logo_height = as_int(form_data.get('receipt_logo_height'), s.receipt_logo_height if s.receipt_logo_height is not None else 40)
             if hasattr(s, 'receipt_extra_bottom_mm'):
-                s.receipt_extra_bottom_mm = as_int(form_data.get('receipt_extra_bottom_mm'), s.receipt_extra_bottom_mm or 15)
+                s.receipt_extra_bottom_mm = as_int(form_data.get('receipt_extra_bottom_mm'), s.receipt_extra_bottom_mm if s.receipt_extra_bottom_mm is not None else 15)
 
             # Keep as string for width ('80' or '58')
             if hasattr(s, 'receipt_paper_width') and 'receipt_paper_width' in form_data:
@@ -2308,16 +2308,16 @@ def settings():
 
             # Floats / numerics
             if hasattr(s, 'vat_rate') and 'vat_rate' in form_data:
-                s.vat_rate = as_float(form_data.get('vat_rate'), s.vat_rate or 15.0)
+                s.vat_rate = as_float(form_data.get('vat_rate'), s.vat_rate if s.vat_rate is not None else 15.0)
             # Branch-specific
             if hasattr(s, 'china_town_vat_rate') and 'china_town_vat_rate' in form_data:
-                s.china_town_vat_rate = as_float(form_data.get('china_town_vat_rate'), s.china_town_vat_rate or 15.0)
+                s.china_town_vat_rate = as_float(form_data.get('china_town_vat_rate'), s.china_town_vat_rate if s.china_town_vat_rate is not None else 15.0)
             if hasattr(s, 'china_town_discount_rate') and 'china_town_discount_rate' in form_data:
-                s.china_town_discount_rate = as_float(form_data.get('china_town_discount_rate'), s.china_town_discount_rate or 0.0)
+                s.china_town_discount_rate = as_float(form_data.get('china_town_discount_rate'), s.china_town_discount_rate if s.china_town_discount_rate is not None else 0.0)
             if hasattr(s, 'place_india_vat_rate') and 'place_india_vat_rate' in form_data:
-                s.place_india_vat_rate = as_float(form_data.get('place_india_vat_rate'), s.place_india_vat_rate or 15.0)
+                s.place_india_vat_rate = as_float(form_data.get('place_india_vat_rate'), s.place_india_vat_rate if s.place_india_vat_rate is not None else 15.0)
             if hasattr(s, 'place_india_discount_rate') and 'place_india_discount_rate' in form_data:
-                s.place_india_discount_rate = as_float(form_data.get('place_india_discount_rate'), s.place_india_discount_rate or 0.0)
+                s.place_india_discount_rate = as_float(form_data.get('place_india_discount_rate'), s.place_india_discount_rate if s.place_india_discount_rate is not None else 0.0)
             # Passwords (strings)
             # Passwords: do not overwrite with empty string (avoid accidental clearing)
             if hasattr(s, 'china_town_void_password') and 'china_town_void_password' in form_data:
