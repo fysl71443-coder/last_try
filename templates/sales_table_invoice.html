@@ -76,8 +76,11 @@
               <input id="invNo" type="text" class="form-control" placeholder="Auto" readonly>
             </div>
             <div class="col-md-8">
-              <label class="form-label">Customer</label>
-              <input id="custName" type="text" class="form-control" placeholder="Type name or phone...">
+              <div class="d-flex align-items-center justify-content-between">
+                <label class="form-label mb-0">Customer</label>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAddCustomerModalTable()">➕ {{ _('New Customer / عميل جديد') }}</button>
+              </div>
+              <input id="custName" type="text" class="form-control mt-1" placeholder="Type name or phone...">
               <div id="custList" class="list-group position-absolute w-50" style="z-index:10; display:none;"></div>
             </div>
             <div class="col-md-4">
@@ -86,7 +89,7 @@
             </div>
             <div class="col-md-4">
               <label class="form-label">Discount %</label>
-              <input id="discountPct" type="number" step="0.01" value="0" class="form-control">
+              <input id="discountPct" type="number" step="0.01" value="0" class="form-control bg-light" readonly title="Auto from customer; editable only for KEETA/HUNGER">
             </div>
             <div class="col-md-4">
               <label class="form-label">Tax %</label>
@@ -169,6 +172,75 @@
      data-draft-id="{{ current_draft.id if current_draft else '' }}"
      data-cat-map='{{ cat_map_json|safe }}'>
 </div>
+
+<!-- Add Customer Modal (Table Invoice) -->
+<div class="modal fade" id="addCustomerTableModal" tabindex="-1" aria-labelledby="addCustomerTableModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addCustomerTableModalLabel">{{ _('Add Customer / إضافة عميل') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label">{{ _('Name / الاسم') }}</label>
+          <input id="tblNewCustName" class="form-control" placeholder="{{ _('Customer name') }}">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">{{ _('Phone / الهاتف') }}</label>
+          <input id="tblNewCustPhone" class="form-control" placeholder="{{ _('Phone (optional)') }}">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">{{ _('Discount %% / نسبة الخصم') }}</label>
+          <input id="tblNewCustDisc" type="number" min="0" max="100" step="0.01" class="form-control" value="0">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Close / إغلاق') }}</button>
+        <button type="button" class="btn btn-primary" onclick="submitNewCustomerTable()">{{ _('Save / حفظ') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openAddCustomerModalTable(){
+    try{
+      document.getElementById('tblNewCustName').value = '';
+      document.getElementById('tblNewCustPhone').value = '';
+      document.getElementById('tblNewCustDisc').value = '0';
+      const m = new bootstrap.Modal(document.getElementById('addCustomerTableModal'));
+      m.show();
+    }catch(e){ alert('Cannot open modal'); }
+  }
+  async function submitNewCustomerTable(){
+    const name = (document.getElementById('tblNewCustName').value||'').trim();
+    const phone = (document.getElementById('tblNewCustPhone').value||'').trim();
+    const discount = parseFloat(document.getElementById('tblNewCustDisc').value||'0')||0;
+    if(!name){ alert('Name is required / الاسم مطلوب'); return; }
+    try{
+      const res = await fetch('{{ url_for('main.api_customers_create') }}', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, phone, discount_percent: discount})
+      });
+      const j = await res.json();
+      if(!res.ok || !j || j.ok !== true){ throw new Error((j && j.error) || 'Failed'); }
+      const c = j.customer || {};
+      // Populate fields on the invoice form
+      const nameInput = document.getElementById('custName');
+      const phoneInput = document.getElementById('custPhone');
+      const discInput = document.getElementById('discountPct');
+      if(nameInput) nameInput.value = c.name || name;
+      if(phoneInput) phoneInput.value = c.phone || phone || '';
+      if(discInput){
+        const d = (typeof c.discount_percent !== 'undefined') ? c.discount_percent : discount;
+        discInput.value = (parseFloat(d||0) || 0).toString();
+      }
+      try{ bootstrap.Modal.getInstance(document.getElementById('addCustomerTableModal')).hide(); }catch(_){ }
+    }catch(e){ alert(String(e.message||e)); }
+  }
+</script>
+
 <script src="{{ url_for('static', filename='js/pos_table.js') }}?v={{ ASSET_VERSION }}"></script>
 
 {% endblock %}
