@@ -916,6 +916,27 @@ def employees():
         emps = []
     return render_template('employees.html', form=form, employees=emps)
 
+
+@main.route('/employees/<int:eid>/delete', methods=['POST'], endpoint='employee_delete')
+@login_required
+def employee_delete(eid):
+    try:
+        emp = Employee.query.get_or_404(eid)
+        # If salaries exist, mark inactive; otherwise delete
+        has_salaries = Salary.query.filter_by(employee_id=eid).first() is not None
+        if has_salaries:
+            emp.status = 'inactive'
+            db.session.commit()
+            flash('Employee has related salaries; marked as inactive instead of deleting.', 'warning')
+        else:
+            db.session.delete(emp)
+            db.session.commit()
+            flash('Employee deleted successfully', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting employee: {e}', 'danger')
+    return redirect(url_for('main.employees'))
+
 @main.route('/employees/create-salary', methods=['POST'], endpoint='employees_create_salary')
 @login_required
 def employees_create_salary():
@@ -1076,6 +1097,128 @@ def salaries_statements():
         pass
     return render_template('salaries_statements.html', year=year, month=month, rows=rows, totals=totals)
 
+
+
+@main.route('/reports/print/salaries', methods=['GET'], endpoint='reports_print_salaries')
+@login_required
+def reports_print_salaries():
+    # Accept ?month=YYYY-MM or ?year=&month=
+    month_param = (request.args.get('month') or '').strip()
+    if '-' in month_param:
+        try:
+            y, m = month_param.split('-'); year = int(y); month = int(m)
+        except Exception:
+            year = datetime.utcnow().year; month = datetime.utcnow().month
+    else:
+        year = request.args.get('year', type=int) or datetime.utcnow().year
+        month = request.args.get('month', type=int) or datetime.utcnow().month
+
+    # Build current month rows (reuse logic from salaries_statements)
+    rows = []
+    totals = {'basic': 0.0, 'allow': 0.0, 'ded': 0.0, 'prev': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0}
+    try:
+        sal_list = Salary.query.filter_by(year=year, month=month).all()
+        for s in sal_list:
+            paid = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)). \
+                filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0
+            paid = float(paid or 0)
+            basic = float(s.basic_salary or 0)
+            allow = float(s.allowances or 0)
+            ded = float(s.deductions or 0)
+            prev = float(s.previous_salary_due or 0)
+            total = max(0.0, basic + allow - ded + prev)
+            remaining = max(0.0, total - paid)
+            emp = db.session.get(Employee, s.employee_id)
+            rows.append({
+                'employee_name': (emp.full_name if emp else f"#{s.employee_id}"),
+                'basic': basic, 'allow': allow, 'ded': ded, 'prev': prev,
+                'total': total, 'paid': paid, 'remaining': remaining,
+                'status': s.status or 'due'
+            })
+            totals['basic'] += basic; totals['allow'] += allow; totals['ded'] += ded
+            totals['prev'] += prev; totals['total'] += total; totals['paid'] += paid; totals['remaining'] += remaining
+    except Exception:
+        pass
+
+    # Build previous months breakdown from hire_date up to previous month
+    prev_rows = []
+    prev_totals = {'due': 0.0, 'paid': 0.0}
+    try:
+        # Helper to iterate months
+        def month_iter(y0, m0, y1, m1):
+            y, m = y0, m0
+            count = 0
+            while (y < y1) or (y == y1 and m <= m1):
+                yield y, m
+                m += 1
+                if m > 12:
+                    m = 1; y += 1
+                count += 1
+                if count > 240:  # safety guard: max 20 years
+                    break
+        # Compute previous month reference
+        from calendar import monthrange
+        cur_y, cur_m = year, month
+        # previous month
+        if cur_m == 1:
+            prev_y, prev_m = cur_y - 1, 12
+        else:
+            prev_y, prev_m = cur_y, cur_m - 1
+        employees = Employee.query.order_by(Employee.full_name.asc()).all()
+        # Preload defaults map
+        try:
+            from models import EmployeeSalaryDefault
+            defaults = {d.employee_id: d for d in EmployeeSalaryDefault.query.all()}
+        except Exception:
+            defaults = {}
+        for emp in employees:
+            if not emp.hire_date:
+                continue
+            start_y = emp.hire_date.year
+            start_m = emp.hire_date.month
+            # Iterate months from hire to prev month
+            for y, m in month_iter(start_y, start_m, prev_y, prev_m):
+                s = Salary.query.filter_by(employee_id=emp.id, year=y, month=m).first()
+                if s:
+                    due = float(s.total_salary or 0.0)
+                    paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)). \
+                        filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0.0)
+                else:
+                    d = defaults.get(emp.id)
+                    if not d:
+                        continue  # no info to compute
+                    base = float(d.base_salary or 0.0)
+                    allow = float(d.allowances or 0.0)
+                    ded = float(d.deductions or 0.0)
+                    due = max(0.0, base + allow - ded)
+                    paid = 0.0
+                # Skip empty rows
+                if (due or paid):
+                    prev_rows.append({
+                        'month': f"{y:04d}-{m:02d}",
+                        'employee_name': emp.full_name,
+                        'due': due,
+                        'paid': float(paid or 0.0)
+                    })
+                    prev_totals['due'] += due
+                    prev_totals['paid'] += float(paid or 0.0)
+    except Exception:
+        pass
+
+    # Settings/header
+    try:
+        settings = Settings.query.first()
+        company_name = settings.company_name or 'Company'
+        logo_url = settings.logo_url or ''
+    except Exception:
+        company_name = 'Company'; logo_url = ''
+
+    title = f"Payroll Statement — {year:04d}-{month:02d}"
+    meta = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+    return render_template('print/payroll.html', title=title, meta=meta,
+                           company_name=company_name, logo_url=logo_url,
+                           rows=rows, totals=totals,
+                           prev_rows=prev_rows, prev_totals=prev_totals)
 
 
 
@@ -1931,6 +2074,55 @@ def customer_delete(cid):
         db.session.rollback()
         flash(f'Error deleting customer: {e}', 'danger')
     return redirect(url_for('main.customers'))
+
+
+# ---- Customers: POS-friendly search alias and AJAX create ----
+@main.route('/api/pos/<branch>/customers/search', methods=['GET'], endpoint='api_pos_customers_search')
+@login_required
+def api_pos_customers_search(branch):
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        rows = Customer.query.filter_by(active=True).order_by(Customer.name.asc()).limit(10).all()
+    else:
+        like = f"%{q}%"
+        rows = Customer.query.filter(
+            Customer.active == True,
+            (Customer.name.ilike(like)) | (Customer.phone.ilike(like))
+        ).order_by(Customer.name.asc()).limit(20).all()
+    return jsonify([{
+        'id': c.id,
+        'name': c.name,
+        'phone': c.phone,
+        'discount_percent': float(c.discount_percent or 0)
+    } for c in rows])
+
+
+@main.route('/api/customers', methods=['POST'], endpoint='api_customers_create')
+@login_required
+@csrf.exempt
+def api_customers_create():
+    try:
+        if request.is_json:
+            data = request.get_json() or {}
+            name = (data.get('name') or '').strip()
+            phone = (data.get('phone') or '').strip() or None
+            discount = float((data.get('discount_percent') or 0) or 0)
+        else:
+            name = (request.form.get('name') or '').strip()
+            phone = (request.form.get('phone') or '').strip() or None
+            discount = request.form.get('discount_percent', type=float) or 0.0
+        if not name:
+            return jsonify({'ok': False, 'error': 'Name is required'}), 400
+        c = Customer(name=name, phone=phone, discount_percent=float(discount or 0))
+        db.session.add(c)
+        db.session.commit()
+        return jsonify({'ok': True, 'customer': {
+            'id': c.id, 'name': c.name, 'phone': c.phone,
+            'discount_percent': float(c.discount_percent or 0)
+        }})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
 
 
 @main.route('/suppliers', methods=['GET','POST'], endpoint='suppliers')
