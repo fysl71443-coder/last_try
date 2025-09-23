@@ -11,7 +11,7 @@ from app import db, csrf
 # Force single DB session usage across the app to avoid multiple SQLAlchemy instances
 ext_db = None
 from app.models import User, AppKV
-from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment
+from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
 main = Blueprint('main', __name__)
@@ -442,15 +442,31 @@ def purchases():
             else:
                 db.session.add(inv)
                 db.session.commit()
-            # Auto-create full payment if status chosen as 'paid'
+            # Auto-create payment if status is 'paid' or 'partial'
             try:
-                if (getattr(inv, 'status', '') or '').lower() == 'paid':
-                    total_amt = float(inv.total_after_tax_discount or 0.0)
-                    if total_amt > 0:
+                st = (getattr(inv, 'status', '') or '').lower()
+                total_amt = float(inv.total_after_tax_discount or 0.0)
+                if st == 'paid' and total_amt > 0:
+                    db.session.add(Payment(
+                        invoice_id=inv.id,
+                        invoice_type='purchase',
+                        amount_paid=total_amt,
+                        payment_method=(pm or 'CASH').upper()
+                    ))
+                    db.session.commit()
+                elif st == 'partial':
+                    amt_raw = request.form.get('partial_paid_amount')
+                    try:
+                        amt = float(amt_raw or 0.0)
+                    except Exception:
+                        amt = 0.0
+                    if total_amt > 0 and amt > 0:
+                        if amt > total_amt:
+                            amt = total_amt
                         db.session.add(Payment(
                             invoice_id=inv.id,
                             invoice_type='purchase',
-                            amount_paid=total_amt,
+                            amount_paid=amt,
                             payment_method=(pm or 'CASH').upper()
                         ))
                         db.session.commit()
@@ -763,15 +779,31 @@ def expenses():
             else:
                 db.session.add(inv)
                 db.session.commit()
-            # Auto-create full payment if status chosen as 'paid'
+            # Auto-create payment if status is 'paid' or 'partial'
             try:
-                if (getattr(inv, 'status', '') or '').lower() == 'paid':
-                    total_amt = float(inv.total_after_tax_discount or 0.0)
-                    if total_amt > 0:
+                st = (getattr(inv, 'status', '') or '').lower()
+                total_amt = float(inv.total_after_tax_discount or 0.0)
+                if st == 'paid' and total_amt > 0:
+                    db.session.add(Payment(
+                        invoice_id=inv.id,
+                        invoice_type='expense',
+                        amount_paid=total_amt,
+                        payment_method=(pm or 'CASH').upper()
+                    ))
+                    db.session.commit()
+                elif st == 'partial':
+                    amt_raw = request.form.get('partial_paid_amount')
+                    try:
+                        amt = float(amt_raw or 0.0)
+                    except Exception:
+                        amt = 0.0
+                    if total_amt > 0 and amt > 0:
+                        if amt > total_amt:
+                            amt = total_amt
                         db.session.add(Payment(
                             invoice_id=inv.id,
                             invoice_type='expense',
-                            amount_paid=total_amt,
+                            amount_paid=amt,
                             payment_method=(pm or 'CASH').upper()
                         ))
                         db.session.commit()
@@ -819,7 +851,11 @@ def invoices_delete():
             rows = q.all()
             for inv in rows:
                 try:
-                    SalesInvoiceItem.query.filter_by(invoice_id=inv.id).delete()
+                    SalesInvoiceItem.query.filter_by(invoice_id=inv.id).delete(synchronize_session=False)
+                except Exception:
+                    pass
+                try:
+                    Payment.query.filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'sales').delete(synchronize_session=False)
                 except Exception:
                     pass
                 db.session.delete(inv)
@@ -831,7 +867,11 @@ def invoices_delete():
             rows = q.all()
             for inv in rows:
                 try:
-                    PurchaseInvoiceItem.query.filter_by(invoice_id=inv.id).delete()
+                    PurchaseInvoiceItem.query.filter_by(invoice_id=inv.id).delete(synchronize_session=False)
+                except Exception:
+                    pass
+                try:
+                    Payment.query.filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'purchase').delete(synchronize_session=False)
                 except Exception:
                     pass
                 db.session.delete(inv)
@@ -843,7 +883,11 @@ def invoices_delete():
             rows = q.all()
             for inv in rows:
                 try:
-                    ExpenseInvoiceItem.query.filter_by(invoice_id=inv.id).delete()
+                    ExpenseInvoiceItem.query.filter_by(invoice_id=inv.id).delete(synchronize_session=False)
+                except Exception:
+                    pass
+                try:
+                    Payment.query.filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'expense').delete(synchronize_session=False)
                 except Exception:
                     pass
                 db.session.delete(inv)
@@ -922,16 +966,22 @@ def employees():
 def employee_delete(eid):
     try:
         emp = Employee.query.get_or_404(eid)
-        # If salaries exist, mark inactive; otherwise delete
-        has_salaries = Salary.query.filter_by(employee_id=eid).first() is not None
-        if has_salaries:
-            emp.status = 'inactive'
-            db.session.commit()
-            flash('Employee has related salaries; marked as inactive instead of deleting.', 'warning')
-        else:
-            db.session.delete(emp)
-            db.session.commit()
-            flash('Employee deleted successfully', 'success')
+        # Delete related salary payments, salaries, and defaults, then employee
+        sal_rows = Salary.query.filter_by(employee_id=eid).all()
+        sal_ids = [s.id for s in sal_rows]
+        if sal_ids:
+            try:
+                Payment.query.filter(Payment.invoice_type == 'salary', Payment.invoice_id.in_(sal_ids)).delete(synchronize_session=False)
+            except Exception:
+                pass
+            Salary.query.filter(Salary.id.in_(sal_ids)).delete(synchronize_session=False)
+        try:
+            EmployeeSalaryDefault.query.filter_by(employee_id=eid).delete(synchronize_session=False)
+        except Exception:
+            pass
+        db.session.delete(emp)
+        db.session.commit()
+        flash('Employee and all related records deleted successfully', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting employee: {e}', 'danger')
@@ -1268,6 +1318,9 @@ def payments():
                 'status': (inv.status or 'paid'),
                 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
             })
+
+
+
     except Exception:
         pass
 
@@ -1345,9 +1398,13 @@ def pos_table(branch_code, table_number):
     warmup_db_once()
     # Load categories from DB for UI and provide a name->id map
     try:
+
+
         cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
     except Exception:
         try:
+
+
             cats = MenuCategory.query.order_by(MenuCategory.name).all()
         except Exception:
             cats = MenuCategory.query.all()
@@ -1439,6 +1496,8 @@ def api_tables_status(branch_code):
     for i in range(1, count+1):
         draft = kv_get(f'draft:{branch_code}:{i}', {}) or {}
         status = 'occupied' if (draft.get('items') or []) else 'available'
+
+
         items.append({'table_number': i, 'status': status})
     return jsonify(items)
 

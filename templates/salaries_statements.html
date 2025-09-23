@@ -9,6 +9,7 @@
     <div class="d-flex gap-2">
       <a class="btn btn-outline-secondary" href="{{ url_for('main.employees') }}">👤 {{ _('Employees') }}</a>
       <a class="btn btn-outline-success" href="{{ url_for('main.salaries_pay', month='%04d-%02d' % (year, month)) }}">💵 {{ _('Pay Salaries') }}</a>
+      <a class="btn btn-outline-primary" target="_blank" href="{{ url_for('main.reports_print_salaries', month='%04d-%02d' % (year, month)) }}">📄 {{ _('Print Statement / طباعة الكشف') }}</a>
       <a class="btn btn-primary" href="{{ url_for('main.dashboard') }}">🏠 {{ _('Dashboard') }}</a>
     </div>
   </div>

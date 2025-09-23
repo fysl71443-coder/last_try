@@ -84,11 +84,16 @@ body {
             <div class="row mb-3">
               <div class="col-md-4">
                 <label class="form-label">{{ _('Payment Status / \u062d\u0627\u0644\u0629 \u0627\u0644\u062f\u0641\u0639') }}</label>
-                <select name="status" class="form-select">
+                <select name="status" id="expense-status" class="form-select">
                   <option value="paid">{{ _('Paid / \u0645\u062f\u0641\u0648\u0639') }}</option>
                   <option value="partial">{{ _('Partial / \u0645\u062f\u0641\u0648\u0639 \u062c\u0632\u0626\u064a\u0627\u064b') }}</option>
                   <option value="unpaid">{{ _('Unpaid / \u063a\u064a\u0631 \u0645\u062f\u0641\u0648\u0639') }}</option>
                 </select>
+              </div>
+              <div class="col-md-4" id="expense-partial-box" style="display:none;">
+                <label class="form-label">{{ _('Paid Amount (Partial) / \u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0645\u062f\u0641\u0648\u0639 (\u062c\u0632\u0626\u064a)') }}</label>
+                <input name="partial_paid_amount" id="expense-partial-amount" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
+                <div class="form-text">{{ _('Max is Final Total / \u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 \u0647\u0648 \u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0646\u0647\u0627\u0626\u064a') }}: <span id="expense-partial-max"></span></div>
               </div>
             </div>
 
@@ -274,6 +279,7 @@ body {
         document.getElementById('tax-amount').textContent = '$' + totalTax.toFixed(2);
         document.getElementById('total-discount').textContent = '$' + totalDiscount.toFixed(2);
         document.getElementById('final-total').textContent = '$' + finalTotal.toFixed(2);
+        try{ if(typeof updateExpensePartialMax==='function') updateExpensePartialMax(); }catch(e){}
     }
 
     // Event listeners
@@ -359,6 +365,32 @@ body {
             form.submit();
         }
     }
+
+<script>
+(function(){
+  function parseMoneyText(txt){ const s = String(txt||'').replace(/[^0-9.\-]/g,''); const v = parseFloat(s); return isNaN(v)?0:v; }
+  function updateExpensePartialMax(){
+    const max = parseMoneyText(document.getElementById('final-total')?.textContent||'0');
+    const span = document.getElementById('expense-partial-max'); if(span) span.textContent = '$' + max.toFixed(2);
+    const inp = document.getElementById('expense-partial-amount');
+    if(inp){ let v = parseFloat(inp.value||'0'); if(isNaN(v)) v = 0; if(v>max) inp.value = max.toFixed(2); if(v<0) inp.value='0.00'; }
+  }
+  function toggleExpensePartial(){
+    const sel = document.getElementById('expense-status');
+    const box = document.getElementById('expense-partial-box');
+    if(!sel || !box) return;
+    if((sel.value||'').toLowerCase()==='partial'){ box.style.display=''; updateExpensePartialMax(); }
+    else { box.style.display='none'; }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    const sel = document.getElementById('expense-status');
+    if(sel){ sel.addEventListener('change', toggleExpensePartial); }
+    toggleExpensePartial();
+    updateExpensePartialMax();
+  });
+})();
+</script>
+
 
     // Initialize calculations
     document.addEventListener('DOMContentLoaded', function() {
