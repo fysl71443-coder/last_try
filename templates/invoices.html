@@ -436,11 +436,42 @@ body {
           .then(r=>r.json()).then(data=>{
             const body=document.getElementById('det-exp-body'); const foot=document.getElementById('det-exp-foot');
             if(!body||!foot) return; body.innerHTML=''; foot.innerHTML='';
-            (data.expenses||[]).forEach(r=>{
+            (data.expenses||[]).forEach((r,idx)=>{
+              const items = r.items||[]; const panelId = 'exp-items-'+idx;
               const tr=document.createElement('tr');
               tr.innerHTML = `
-                <td>${r.date||''}</td><td>${r.expense_number||''}</td><td>${r.item||''}</td>
-                <td>${n2(r.amount)}</td><td>${r.payment_method||''}</td>`; body.appendChild(tr);
+                <td>${r.date||''}</td>
+                <td>${r.expense_number||''}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-primary" type="button" data-target="#${panelId}">Show Items (${items.length})</button>
+                  <div id="${panelId}" class="mt-2" style="display:none;">
+                    <div class="table-responsive">
+                      <table class="table table-sm table-bordered">
+                        <thead class="table-light"><tr>
+                          <th>Description</th><th>Qty</th><th>Price</th><th>Tax</th><th>Discount</th><th>Total</th>
+                        </tr></thead>
+                        <tbody>
+                          ${items.map(it=>`<tr>
+                            <td>${it.description||''}</td>
+                            <td>${n2(it.quantity||0)}</td>
+                            <td>${n2(it.price||0)}</td>
+                            <td>${n2(it.tax||0)}</td>
+                            <td>${n2(it.discount||0)}</td>
+                            <td>${n2(it.total||0)}</td>
+                          </tr>`).join('')}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </td>
+                <td>${n2(r.amount)}</td>
+                <td>${r.payment_method||''}</td>`;
+              body.appendChild(tr);
+              const btn = tr.querySelector('button[data-target]');
+              const panel = tr.querySelector(btn?.getAttribute('data-target'));
+              btn?.addEventListener('click', ()=>{
+                if(panel){ panel.style.display = (panel.style.display==='none'||panel.style.display==='') ? 'block' : 'none'; }
+              });
             });
             const o=data.overall_totals||{amount:0};
             const tro=document.createElement('tr'); tro.className='table-secondary fw-bold';

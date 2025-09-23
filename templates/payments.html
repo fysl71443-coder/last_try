@@ -13,19 +13,19 @@
       <label class="form-label">{{ _('Status / الحالة') }}</label>
       <select name="status" class="form-select">
         <option value="">{{ _('All / الكل') }}</option>
-        <option value="paid">{{ _('Paid / مدفوع') }}</option>
-        <option value="partial">{{ _('Partial / جزئي') }}</option>
-        <option value="unpaid">{{ _('Unpaid / غير مدفوع') }}</option>
+        <option value="paid" {{ 'selected' if (status_f or '')=='paid' else '' }}>{{ _('Paid / مدفوع') }}</option>
+        <option value="partial" {{ 'selected' if (status_f or '')=='partial' else '' }}>{{ _('Partial / جزئي') }}</option>
+        <option value="unpaid" {{ 'selected' if (status_f or '')=='unpaid' else '' }}>{{ _('Unpaid / غير مدفوع') }}</option>
       </select>
     </div>
     <div class="col-md-3">
       <label class="form-label">{{ _('Type / النوع') }}</label>
       <select name="type" class="form-select">
         <option value="">{{ _('All / الكل') }}</option>
-        <option value="sales">{{ _('Sales / مبيعات') }}</option>
-        <option value="purchase">{{ _('Purchases / مشتريات') }}</option>
-        <option value="expense">{{ _('Expenses / مصروفات') }}</option>
-        <option value="salary">{{ _('Salaries / رواتب') }}</option>
+        <option value="sales" {{ 'selected' if (type_f or '')=='sales' else '' }}>{{ _('Sales / مبيعات') }}</option>
+        <option value="purchase" {{ 'selected' if (type_f or '')=='purchase' else '' }}>{{ _('Purchases / مشتريات') }}</option>
+        <option value="expense" {{ 'selected' if (type_f or '')=='expense' else '' }}>{{ _('Expenses / مصروفات') }}</option>
+        <option value="salary" {{ 'selected' if (type_f or '')=='salary' else '' }}>{{ _('Salaries / رواتب') }}</option>
       </select>
     </div>
     <div class="col-md-3 d-flex align-items-end">
@@ -59,13 +59,16 @@
             {% set remaining = (i.total - i.paid) if i.total and i.paid else (i.total or 0) %}
             <tr>
               <td>{{ loop.index }}</td>
-              <td>{{ i.id }}</td>
+              <td>{{ i.invoice_number or i.id }}</td>
               <td>{{ i.type }}</td>
               <td>{{ i.party }}</td>
               <td>{{ '%.2f'|format(i.total) }}</td>
               <td>{{ '%.2f'|format(i.paid) }}</td>
-              <td>{{ '%.2f'|format(remaining) }}</td>
-              <td>{{ i.status }}</td>
+              <td class="{{ 'text-danger' if (i.total - i.paid) > 0 else 'text-success' }}">{{ '%.2f'|format(remaining) }}</td>
+              <td>
+                {% set st = (i.status or '').lower() %}
+                <span class="badge {{ 'bg-success' if st=='paid' else ('bg-warning text-dark' if st=='partial' else 'bg-danger') }}">{{ i.status }}</span>
+              </td>
               <td>{{ i.date }}</td>
               <td>
                 <select class="form-select form-select-sm pay-method" data-id="{{ i.id }}" data-type="{{ i.type }}">
@@ -74,10 +77,12 @@
                   {% endfor %}
                 </select>
 
-                <button class="btn btn-sm btn-success" onclick="payFull('{{ i.id }}','{{ i.type }}','{{ remaining }}')">{{ _('Pay Full / دفع كامل') }}</button>
-                <button class="btn btn-sm btn-outline-success" onclick="openPaymentCustom('{{ i.id }}','{{ i.type }}','{{ remaining }}')">{{ _('Enter Amount / ادخال مبلغ') }}</button>
-                <button class="btn btn-sm btn-outline-primary" onclick="viewDetails('{{ i.id }}','{{ i.type }}')">{{ _('Details / تفاصيل') }}</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteInvoice('{{ i.id }}','{{ i.type }}')">🗑️ {{ _('Delete / حذف') }}</button>
+                <div class="btn-group" role="group">
+                  <button class="btn btn-sm btn-success" onclick="payFull('{{ i.id }}','{{ i.type }}','{{ remaining }}')">{{ _('Pay Full / دفع كامل') }}</button>
+                  <button class="btn btn-sm btn-outline-success" onclick="openPaymentCustom('{{ i.id }}','{{ i.type }}','{{ remaining }}')">{{ _('Enter Amount / ادخال مبلغ') }}</button>
+                  <button class="btn btn-sm btn-outline-primary" onclick="viewDetails('{{ i.id }}','{{ i.type }}')">{{ _('Details / تفاصيل') }}</button>
+                  <button class="btn btn-sm btn-outline-danger" onclick="deleteInvoice('{{ i.id }}','{{ i.type }}')">🗑️ {{ _('Delete / حذف') }}</button>
+                </div>
               </td>
             </tr>
             {% endfor %}
