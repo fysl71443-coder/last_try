@@ -352,6 +352,10 @@ def purchases():
                 payment_method=pm,
                 user_id=getattr(current_user, 'id', 1)
             )
+            # Payment status from form (paid / partial / unpaid)
+            inv.status = (request.form.get('status') or (getattr(PurchaseInvoice, 'status', None) and 'unpaid') or 'unpaid').strip().lower()
+            if inv.status not in ('paid','partial','unpaid'):
+                inv.status = 'unpaid'
             # Collect items
             idx = 0
             total_before = 0.0
@@ -690,6 +694,10 @@ def expenses():
                 payment_method=pm,
                 user_id=getattr(current_user, 'id', 1)
             )
+            # Payment status from form (paid / partial / unpaid)
+            inv.status = (request.form.get('status') or inv.status or 'paid').strip().lower()
+            if inv.status not in ('paid','partial','unpaid'):
+                inv.status = 'paid'
             # Collect items
             idx = 0
             total_before = 0.0
@@ -1040,7 +1048,60 @@ def salaries_statements():
 @main.route('/payments', endpoint='payments')
 @login_required
 def payments():
-    return render_template('payments.html')
+    # Build unified list of purchase and expense invoices with paid totals
+    status_f = (request.args.get('status') or '').strip().lower()
+    type_f = (request.args.get('type') or '').strip().lower()
+    invoices = []
+    PAYMENT_METHODS = ['CASH','CARD','BANK','ONLINE','MADA','VISA']
+
+    try:
+        # Purchases
+        q = PurchaseInvoice.query
+        for inv in q.order_by(PurchaseInvoice.created_at.desc()).limit(1000).all():
+            total = float(inv.total_after_tax_discount or 0.0)
+            paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                         .filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'purchase').scalar() or 0.0)
+            invoices.append({
+                'id': inv.id,
+                'type': 'purchase',
+                'party': inv.supplier_name or 'Supplier',
+                'total': total,
+                'paid': paid,
+                'status': (inv.status or 'unpaid'),
+                'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
+            })
+    except Exception:
+        pass
+
+    try:
+        # Expenses
+        q = ExpenseInvoice.query
+        for inv in q.order_by(ExpenseInvoice.created_at.desc()).limit(1000).all():
+            total = float(inv.total_after_tax_discount or 0.0)
+            paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                         .filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'expense').scalar() or 0.0)
+            invoices.append({
+                'id': inv.id,
+                'type': 'expense',
+                'party': 'Expense',
+                'total': total,
+                'paid': paid,
+                'status': (inv.status or 'paid'),
+                'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
+            })
+    except Exception:
+        pass
+
+    # Apply filters
+    if status_f:
+        invoices = [i for i in invoices if (i.get('status') or '').lower() == status_f]
+    if type_f:
+        # normalize: purchases->purchase, expenses->expense, sales ignored
+        if type_f == 'purchases': type_f = 'purchase'
+        if type_f == 'expenses': type_f = 'expense'
+        invoices = [i for i in invoices if (i.get('type') or '') == type_f]
+
+    return render_template('payments.html', invoices=invoices, PAYMENT_METHODS=PAYMENT_METHODS)
 
 @main.route('/reports', endpoint='reports')
 @login_required
@@ -1568,11 +1629,50 @@ def api_sales_void_check():
 @login_required
 def register_payment_ajax():
     # Accept both form and JSON
-    invoice_id = request.form.get('invoice_id') or (request.get_json(silent=True) or {}).get('invoice_id')
-    amount = request.form.get('amount') or (request.get_json(silent=True) or {}).get('amount')
-    payment_method = request.form.get('payment_method') or (request.get_json(silent=True) or {}).get('payment_method')
-    # For now just return success; integrate with real ledger later
-    return jsonify({'status': 'success', 'invoice_id': invoice_id, 'amount': amount, 'payment_method': payment_method})
+    payload = request.get_json(silent=True) or {}
+    invoice_id = request.form.get('invoice_id') or payload.get('invoice_id')
+    invoice_type = (request.form.get('invoice_type') or payload.get('invoice_type') or '').strip().lower()
+    amount = request.form.get('amount') or payload.get('amount')
+    payment_method = (request.form.get('payment_method') or payload.get('payment_method') or 'CASH').strip().upper()
+    try:
+        inv_id = int(invoice_id)
+        amt = float(amount or 0)
+    except Exception:
+        return jsonify({'status': 'error', 'message': 'Invalid invoice id or amount'}), 400
+    if amt <= 0:
+        return jsonify({'status': 'error', 'message': 'Amount must be > 0'}), 400
+    if invoice_type not in ('purchase','expense'):
+        return jsonify({'status': 'error', 'message': 'Unsupported invoice type'}), 400
+
+    try:
+        # Create payment record
+        p = Payment(invoice_id=inv_id, invoice_type=invoice_type, amount_paid=amt, payment_method=payment_method)
+        db.session.add(p)
+        db.session.flush()
+
+        # Fetch invoice and totals
+        if invoice_type == 'purchase':
+            inv = PurchaseInvoice.query.get(inv_id)
+            total = float(inv.total_after_tax_discount or 0.0) if inv else 0.0
+        else:
+            inv = ExpenseInvoice.query.get(inv_id)
+            total = float(inv.total_after_tax_discount or 0.0) if inv else 0.0
+        # Sum paid so far (including this payment)
+        paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                     .filter(Payment.invoice_id == inv_id, Payment.invoice_type == invoice_type).scalar() or 0.0)
+        # Update status
+        if inv:
+            if paid >= total and total > 0:
+                inv.status = 'paid'
+            elif paid > 0:
+                inv.status = 'partial'
+            else:
+                inv.status = inv.status or ('unpaid' if invoice_type=='purchase' else 'paid')
+        db.session.commit()
+        return jsonify({'status': 'success', 'invoice_id': inv_id, 'amount': amt, 'paid': paid, 'total': total, 'new_status': getattr(inv, 'status', None)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 
