@@ -345,7 +345,7 @@ body {
 
 <script>
 (function(){
-  const SUPPLIERS = JSON.parse({{ (suppliers_json or '[]') | tojson | safe }});
+  const SUPPLIERS = {{ (suppliers_json or '[]') | tojson | safe }};
   const input = document.getElementById('supplier_select');
   const hiddenId = document.getElementById('supplier_id');
   const phone = document.getElementById('s_phone');
