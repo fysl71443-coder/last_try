@@ -7,7 +7,7 @@
 <div class="container py-4">
 
   {# === شعار الشركة الكبير أعلى الفاتورة === #}
-  {% if settings and settings.logo_url %}
+  {% if settings is defined and settings.logo_url %}
   <div class="text-center mb-3">
     <img src="{{ settings.logo_url }}" alt="Logo" style="height: 120px; width: auto; margin-bottom: 10px;">
   </div>
@@ -127,8 +127,16 @@
 </div>
 
 <script>
+const translations = {
+    enter_amount: "{{ _('Enter amount to pay / ادخل مبلغ الدفع') }}",
+    remaining: "{{ _('Remaining / المتبقي') }}",
+    invalid_amount: "{{ _('Invalid amount / مبلغ غير صالح') }}",
+    nothing_to_pay: "{{ _('Nothing to pay / لا يوجد متبقي للدفع') }}",
+    confirm_full: "{{ _('Confirm full payment / تأكيد دفع كامل') }}"
+};
+
 function sendPayment(kind, id, amount){
-  if(!amount || parseFloat(amount)<=0){ alert('{{ _('Invalid amount / مبلغ غير صالح') }}'); return; }
+  if(!amount || parseFloat(amount)<=0){ alert(translations.invalid_amount); return; }
   const form = new FormData();
   form.append('invoice_id', id);
   form.append('invoice_type', kind);
@@ -139,17 +147,19 @@ function sendPayment(kind, id, amount){
     .then(r=>r.json()).then(d=>{ if(d.status==='success') location.reload(); else alert('Error'); })
     .catch(()=>alert('Network error'));
 }
+
 function payFull(kind, id, remaining){
   const amt = parseFloat(remaining||0);
-  if(!amt || amt<=0){ alert('{{ _('Nothing to pay / لا يوجد متبقي للدفع') }}'); return; }
-  if(!confirm('{{ _('Confirm full payment / تأكيد دفع كامل') }}: '+amt)) return;
+  if(!amt || amt<=0){ alert(translations.nothing_to_pay); return; }
+  if(!confirm(translations.confirm_full + ": "+amt)) return;
   sendPayment(kind, id, amt);
 }
+
 function payCustom(kind, id, remaining){
-  const input = prompt("{{ _('Enter amount to pay / ادخل مبلغ الدفع') }}\n{{ _('Remaining / المتبقي') }}: "+remaining);
+  const input = prompt(translations.enter_amount + "\n" + translations.remaining + ": " + remaining);
   if(!input) return;
   const amt = parseFloat((input||'').toString().replace(',', '.'));
-  if(!amt || isNaN(amt) || amt<=0){ alert('{{ _('Invalid amount / مبلغ غير صالح') }}'); return; }
+  if(!amt || isNaN(amt) || amt<=0){ alert(translations.invalid_amount); return; }
   sendPayment(kind, id, amt);
 }
 </script>
