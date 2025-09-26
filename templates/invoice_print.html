@@ -223,7 +223,7 @@
     <div class="invoice-container">
         <div class="invoice-header">
             {% if settings and settings.logo_url %}
-            <img src="{{ settings.logo_url }}" alt="Logo" style="height: 60px; margin-bottom: 10px;">
+            <img src="{{ settings.logo_url }}" alt="Logo" style="height: 120px; width: auto; margin-bottom: 10px;">
             {% endif %}
             <h1>{{ settings.company_name if settings else (invoice.branch_code|title if invoice.branch_code else 'Restaurant') }}</h1>
             <p>Sales Invoice #: {{ invoice.invoice_number or invoice.id }}</p>
