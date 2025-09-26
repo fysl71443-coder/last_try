@@ -19,11 +19,13 @@
     width: 100%;
     max-width: 380px;
     color: white;
+    position: relative;
   }
   .form-control {
     background: rgba(255, 255, 255, 0.1);
     border: none;
     color: white;
+    padding-right: 12px;
   }
   .form-control::placeholder {
     color: rgba(255,255,255,0.7);
@@ -40,6 +42,8 @@
     top: 20px;
     right: 20px;
   }
+  /* make input icons match style without affecting password behavior */
+  .input-group-text { background: transparent; border: none; color: white; }
 </style>
 
 <div class="lang-switch">
@@ -49,7 +53,7 @@
 
 <div class="login-card">
   <div class="text-center mb-4">
-    <img src="/static/logo.svg" alt="China Town" style="max-width:120px;">
+    <img src="/static/logo.svg" alt="Company" style="max-width:120px;">
     <h5 style="margin-top:8px; font-weight:700;">{{ (settings.company_name if settings and settings.company_name else 'Company') }}</h5>
     <h4>{{ _('Welcome / مرحباً') }}</h4>
     <p style="font-size:0.9rem; opacity:0.8;">{{ _('Please sign in to continue / الرجاء تسجيل الدخول للمتابعة') }}</p>
@@ -63,57 +67,55 @@
     {% endif %}
   {% endwith %}
 
-  <form id="login-form" method="POST" novalidate accept-charset="UTF-8">
+  <form id="login-form" method="POST" novalidate accept-charset="UTF-8" autocomplete="off">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-3 input-group">
-      <span class="input-group-text bg-transparent border-0 text-white">👤</span>
-      <input type="text" name="username" class="form-control" placeholder="{{ _('Username / اسم المستخدم') }}" value="{{ request.form.get('username','') }}" required>
+      <span class="input-group-text">👤</span>
+      <input type="text" name="username" class="form-control" placeholder="{{ _('Username / اسم المستخدم') }}"
+             value="{{ request.form.get('username','') }}" required autocomplete="username" inputmode="text" />
     </div>
+
     <div class="mb-3 input-group">
-      <span class="input-group-text bg-transparent border-0 text-white">🔒</span>
-      <input type="password" name="password" class="form-control" id="password" placeholder="{{ _('Password / كلمة المرور') }}" required>
-      <button type="button" class="btn btn-outline-light" onclick="togglePassword()">👁</button>
+      <span class="input-group-text">🔒</span>
+      <!-- PASSWORD: always type=password, NO toggle, NO reveal -->
+      <input type="password" name="password" class="form-control" id="password"
+             placeholder="{{ _('Password / كلمة المرور') }}" required autocomplete="current-password" inputmode="text" />
     </div>
+
     <div class="mb-3 form-check">
       <input type="checkbox" name="remember" class="form-check-input" id="remember" {% if request.form.get('remember') %}checked{% endif %}>
       <label for="remember" class="form-check-label">{{ _('Remember Me / تذكرني') }}</label>
     </div>
+
     <div class="d-grid">
       <button type="submit" class="btn btn-primary btn-lg">{{ _('Login / تسجيل الدخول') }}</button>
     </div>
   </form>
 </div>
 
-<script>
-function togglePassword() {
-  var pwd = document.getElementById("password");
-  pwd.type = (pwd.type === "password") ? "text" : "password";
-}
-</script>
-
+{# Client-side validation only; no code that reveals the password or logs it #}
 {% block scripts %}
 <script>
-// Safety: ensure login form always submits, even if an old JS cached listener blocks it
 (function(){
   const f = document.getElementById('login-form');
   if(!f) return;
-  // Remove any existing submit listeners that call preventDefault indirectly
+  // replace form node to remove any previously attached malicious listeners (defensive)
   const clone = f.cloneNode(true);
   f.parentNode.replaceChild(clone, f);
-  // As extra guarantee, attach simple submit validator that only checks required fields quickly
+
   clone.addEventListener('submit', function(e){
     const u = clone.querySelector('input[name="username"]');
     const p = clone.querySelector('input[name="password"]');
     if(!u || !p || !u.value.trim() || !p.value.trim()){
       e.preventDefault();
-      alert('يرجى ملء جميع الحقول المطلوبة');
+      alert('{{ _("Please fill all required fields / يرجى ملء جميع الحقول المطلوبة") }}');
       return;
     }
+    // IMPORTANT: Do not read or log p.value here. Let server handle authentication securely.
     // allow normal submission to server
   }, { once:false });
 })();
 </script>
 {% endblock %}
-
 
 {% endblock %}
