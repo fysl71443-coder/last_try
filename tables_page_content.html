@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="ImIyOGRjYzg1ZjcyOGUzZGQzZThmYmNkYmRmNDQwNjIwMzUwOWM0MmMi.aNgkUA.C4DEI6slQwYxTNGXaPJojO29UOc">
+    <title>Tables - China Town</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="/static/css/style.css?v=" rel="stylesheet">
+    <style>
+      :root{
+        --primary:#D35400; /* Orange */
+        --secondary:#2C3E50; /* Dark Gray */
+        --bg:#F8F9FA; /* Light */
+        --success:#27AE60;
+        --danger:#E74C3C;
+      }
+      html,body{ background:var(--bg); font-family:'Tajawal', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; font-size:15px; }
+      h1,h2,h3,h4{ font-weight:700; color:var(--secondary); }
+      h3{ font-size:22px; }
+      body[dir="rtl"] { text-align: right; }
+
+
+
+      /* Forms - improve input contrast */
+      input.form-control, select.form-select, textarea.form-control{
+        background:#fff; color:#212529; border-color:#ced4da;
+      }
+      body.dark input.form-control, body.dark select.form-select, body.dark textarea.form-control{
+        background:#1E1E1E; color:#ECECEC; border-color:#3a3a3a;
+      }
+
+      /* Navbar */
+      .navbar{ background:#fff !important; border-bottom:1px solid #eee; }
+      .navbar .navbar-brand{ color:var(--primary); font-weight:700; }
+
+      /* Buttons */
+      .btn{ border-radius:8px; font-weight:600; padding:10px 16px; transition: all .2s ease-in-out; }
+      .btn:hover{ transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+      .btn:focus{ box-shadow: 0 0 0 .2rem rgba(230,126,34,.25); }
+      .btn-primary{ background-color:var(--primary); border-color:var(--primary); }
+      .btn-primary:hover{ background-color:#E67E22; border-color:#E67E22; }
+      .btn-success{ background-color:var(--success); border-color:var(--success); }
+      .btn-success:hover{ background-color:#2ECC71; border-color:#2ECC71; }
+      .btn-danger{ background-color:var(--danger); border-color:var(--danger); }
+      .btn-danger:hover{ background-color:#C0392B; border-color:#C0392B; }
+
+      /* Cards */
+      .card { background:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
+      .card .card-header{ font-size:18px; font-weight:700; border-bottom:2px solid #f1f1f1; background:#fff; }
+
+      /* Tables */
+      .table-responsive{ max-height:70vh; }
+      table{ width:100%; border-collapse:collapse; }
+      table thead{ position: sticky; top: 0; z-index: 2; background-color:var(--primary); color:#fff; }
+      table th, table td{ padding:12px; border-bottom:1px solid #ddd; vertical-align: middle; }
+      table tbody tr:hover{ background:#f5f5f5; }
+
+      /* Form focus */
+      .form-control:focus, .form-select:focus{ border-color:#E67E22; box-shadow:0 0 0 .2rem rgba(230,126,34,.2); }
+
+      /* Section header helper */
+      .section-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+      .section-header h3{ margin:0; }
+    </style>
+    <style>
+      /* Theme variants via body classes */
+      body.dark{
+        --bg:#121212;
+        --secondary:#E0E0E0;
+        color:#ECECEC;
+        background:#121212;
+      }
+      body.dark .navbar{ background:#1E1E1E !important; border-color:#2a2a2a !important; }
+      body.dark .card{ background:#1E1E1E; box-shadow:none; border:1px solid #2a2a2a; }
+      body.dark table thead{ background-color:#E67E22; }
+      body.dark table tbody tr:hover{ background:#1a1a1a; }
+      body.dark .btn-outline-primary{ color:#E67E22; border-color:#E67E22; }
+      body.dark .btn-outline-primary:hover{ background:#E67E22; color:#fff; }
+      body.dark .btn-outline-danger{ color:#E74C3C; border-color:#E74C3C; }
+      body.dark .btn-outline-danger:hover{ background:#E74C3C; color:#fff; }
+    </style>
+
+      <meta name="csrf-token" content="ImIyOGRjYzg1ZjcyOGUzZGQzZThmYmNkYmRmNDQwNjIwMzUwOWM0MmMi.aNgkUA.C4DEI6slQwYxTNGXaPJojO29UOc">
+
+    
+
+  </head>
+  <body class="light">
+    
+    <nav class="navbar navbar-expand-lg" style="background: var(--bg); border-bottom:1px solid #eee;">
+      <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+          <img src="/static/logo.svg" alt="logo" style="width:32px;height:32px;"/>
+          <span>Company</span>
+        </a>
+        <div class="d-flex align-items-center gap-2">
+          
+            <span class="me-3 text-muted">Welcome admin</span>
+          
+          <a class="btn btn-outline-secondary" href="?lang=en">English</a>
+
+          
+          <form method="post" action="#" class="d-inline">
+            <button class="btn btn-sm btn-outline-dark" type="button">
+              <i class="fa fa-moon"></i> Dark
+            </button>
+          </form>
+          
+          
+            <a class="btn btn-outline-danger" href="/logout">Logout</a>
+          
+        </div>
+      </div>
+    </nav>
+    
+
+    
+    <div class="container mt-5">
+      
+        
+      
+
+      <!-- Back button -->
+
+      <!-- Generic back button with unsaved-changes protection -->
+      
+      <div class="mb-3 d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-secondary" id="global-back-button" data-back-url="/">⬅️ Back</button>
+      </div>
+      
+
+      
+      <div class="mb-3"></div>
+      
+    </div>
+    
+
+    
+<div id="tables-root" class="container py-4" data-branch="china_town">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h4 class="mb-0">China Town &bull; Tables</h4>
+      <small class="text-muted">Select a table to open the POS</small>
+    </div>
+    <div>
+      <a class="btn btn-outline-secondary" href="/sales">&larr; Back to Branches</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="1" href="/pos/china_town/table/1">
+          Table 1
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="2" href="/pos/china_town/table/2">
+          Table 2
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="3" href="/pos/china_town/table/3">
+          Table 3
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="4" href="/pos/china_town/table/4">
+          Table 4
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="5" href="/pos/china_town/table/5">
+          Table 5
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="6" href="/pos/china_town/table/6">
+          Table 6
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="7" href="/pos/china_town/table/7">
+          Table 7
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="8" href="/pos/china_town/table/8">
+          Table 8
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="9" href="/pos/china_town/table/9">
+          Table 9
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="10" href="/pos/china_town/table/10">
+          Table 10
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="11" href="/pos/china_town/table/11">
+          Table 11
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="12" href="/pos/china_town/table/12">
+          Table 12
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="13" href="/pos/china_town/table/13">
+          Table 13
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="14" href="/pos/china_town/table/14">
+          Table 14
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="15" href="/pos/china_town/table/15">
+          Table 15
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="16" href="/pos/china_town/table/16">
+          Table 16
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="17" href="/pos/china_town/table/17">
+          Table 17
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="18" href="/pos/china_town/table/18">
+          Table 18
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="19" href="/pos/china_town/table/19">
+          Table 19
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+      <div class="col-6 col-md-3 col-lg-2">
+        <a class="btn w-100 btn-success" data-table="20" href="/pos/china_town/table/20">
+          Table 20
+          <span class="badge ms-2 status-label bg-success">Available</span>
+        </a>
+      </div>
+      
+    
+  </div>
+</div>
+
+  
+  <script src="/static/js/tables.js?v="></script>
+
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/main.js?v="></script>
+    <script src="/static/js/modal-system.js?v="></script>
+    <script src="/static/js/printInvoice.js?v="></script>
+    <script src="/static/js/base-behavior.js?v="></script>
+
+    
+  
+  <script src="/static/js/tables.js?v="></script>
+
+  </body>
+</html>

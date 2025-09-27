@@ -129,6 +129,8 @@ def create_app(config_class=None):
     migrate.init_app(app, db)
     babel.init_app(app)
     csrf.init_app(app)
+    # Exempt API routes from CSRF
+    csrf.exempt('main.api_table_layout')
     # Flask-Login setup: login view and user loader
     login_manager.login_view = 'main.login'
     from app.models import User

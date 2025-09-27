@@ -289,20 +289,38 @@
       if (response.ok) {
         const data = await response.json();
         layout = data || { sections: [] };
+        renderLayout();
+      } else {
+        console.error('Failed to load layout:', response.status, response.statusText);
+        if (response.status === 401 || response.status === 403) {
+          console.warn('Authentication required for table layout');
+        }
+        // Still render with empty layout to allow user to work
+        layout = { sections: [] };
+        renderLayout();
       }
-      
-      renderLayout();
     } catch (e) {
       console.error('Failed to load layout:', e);
+      // Still render with empty layout to allow user to work
+      layout = { sections: [] };
+      renderLayout();
     }
   }
 
   async function saveLayout() {
     try {
       const root = qs('#manager-root');
-      if (!root) return;
+      if (!root) {
+        console.error('Manager root element not found');
+        return;
+      }
       const branch = root.getAttribute('data-branch');
-      if (!branch) return;
+      if (!branch) {
+        console.error('Branch attribute not found');
+        return;
+      }
+      
+      console.log('Saving layout for branch:', branch);
 
       const payload = {
         sections: (layout.sections || []).map(section => ({
@@ -319,23 +337,39 @@
         }))
       };
 
+      // Get CSRF token if available
+      const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+      console.log('CSRF token found:', !!csrfToken);
+      
       const response = await fetch(`/api/table-layout/${branch}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(csrfToken && { 'X-CSRFToken': csrfToken })
         },
         credentials: 'same-origin',
         body: JSON.stringify(payload)
       });
       
+      console.log('Response status:', response.status, response.statusText);
+      
       if (response.ok) {
         alert('Layout saved successfully!');
       } else {
-        alert('Failed to save layout');
+        // Provide more specific error information
+        if (response.status === 401 || response.status === 403) {
+          alert('Authentication required. Please log in again.');
+        } else if (response.status >= 400 && response.status < 500) {
+          alert(`Failed to save layout: Client error (${response.status})`);
+        } else if (response.status >= 500) {
+          alert(`Failed to save layout: Server error (${response.status})`);
+        } else {
+          alert(`Failed to save layout: ${response.status} ${response.statusText}`);
+        }
       }
     } catch (e) {
       console.error('Failed to save layout:', e);
-      alert('Failed to save layout');
+      alert('Failed to save layout: Network error or server unavailable');
     }
   }
 

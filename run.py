@@ -13,7 +13,8 @@ def main():
         os.environ['FLASK_ENV'] = 'development'
         
         # Import app
-        from app import app
+        from app import create_app
+        app = create_app()
         
         print("✅ App imported successfully")
         print("🚀 Server starting on http://127.0.0.1:5000")
