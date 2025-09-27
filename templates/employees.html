@@ -7,13 +7,14 @@
     <div class="d-flex flex-wrap gap-2">
       <a href="{{ url_for('main.salaries_pay') }}" class="btn btn-success">💵 {{ _('Pay Salaries / سداد الرواتب') }}</a>
       <a href="{{ url_for('main.salaries_statements') }}" class="btn btn-outline-success">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</a>
-      <a href="#employees-form" class="btn btn-outline-secondary">📝 {{ _('Add Employee / إضافة موظف') }}</a>
+      <button type="button" class="btn btn-outline-secondary" onclick="clearEmployeeForm(); document.getElementById('employees-form').scrollIntoView({ behavior: 'smooth' });">📝 {{ _('Add New / إضافة جديد') }}</button>
       <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
     </div>
   </div>
 
   <div class="card mb-4" id="employees-form">
     <div class="card-body">
+      <h5 class="mb-3" id="form-title">📝 {{ _('Add New Employee / إضافة موظف جديد') }}</h5>
       <form method="POST">
         {{ form.hidden_tag() }}
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -40,7 +41,6 @@
           <div class="col-md-3">{{ form.phone.label(class_='form-label') }}{{ form.phone(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.email.label(class_='form-label') }}{{ form.email(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.hire_date.label(class_='form-label') }}{{ form.hire_date(class_='form-control') }}</div>
-          <div class="col-md-3"><label class='form-label'>{{ _('Work Hours / عدد ساعات العمل') }}</label><input type="number" step="0.1" name="work_hours" class="form-control" placeholder="0"></div>
 
         </div>
         <hr/>
@@ -50,6 +50,7 @@
           <div class="col-md-3">{{ form.deductions.label(class_='form-label') }}{{ form.deductions(class_='form-control') }}</div>
         </div>
         <div class="text-end mt-3">
+          <button type="button" class="btn btn-outline-secondary me-2" onclick="clearEmployeeForm()">{{ _('Clear / مسح') }}</button>
           {{ form.submit(class_='btn btn-success') }}
         </div>
       </form>
@@ -227,12 +228,12 @@
               <td>{{ e.hire_date or '-' }}</td>
               <td>{% if e.status=='active' %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}</td>
               <td>
-                <div class="d-flex flex-wrap gap-1">
-                  <a href="#" class="btn btn-sm btn-outline-primary">{{ _('Edit / تعديل') }}</a>
-                  <a href="#" class="btn btn-sm btn-outline-success">{{ _('Defaults / الافتراضات') }}</a>
-                  <form method="POST" action="{{ url_for('main.employee_delete', eid=e.id) }}" onsubmit="return handleDeleteEmployee(event, '{{ e.full_name }}')">
+                <div class="btn-group" role="group">
+                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="editEmployee({{ e.id }}, '{{ e.full_name|e }}', '{{ e.employee_code|e }}', '{{ e.national_id|e }}', '{{ e.department|e }}', '{{ e.position|e }}', '{{ e.phone|e }}', '{{ e.email|e }}', '{{ e.hire_date|e }}', '{{ e.status|e }}')" title="{{ _('Edit / تعديل') }}">✏️</button>
+                  <button type="button" class="btn btn-sm btn-outline-success" onclick="alert('زر الراتب يعمل! الموظف: {{ e.full_name|e }} (ID: {{ e.id }})')" title="{{ _('Salary / الراتب') }}">💰</button>
+                  <form method="post" action="{{ url_for('main.employee_delete', eid=e.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this employee? / حذف هذا الموظف؟') }}')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete / حذف') }}">🗑️</button>
                   </form>
                 </div>
               </td>
@@ -247,13 +248,115 @@
 </div>
 
 <script>
-window.handleDeleteEmployee = async function(event, name){
-  event.preventDefault();
-  const confirmed = await showConfirm("{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}\n" + name);
-  if (confirmed) {
-    event.target.submit();
+// WORKING FUNCTIONS - STEP BY STEP
+console.log('JavaScript loaded successfully!');
+
+// Edit employee function
+function editEmployee(id, name, code, nationalId, dept, position, phone, email, hireDate, status) {
+  console.log('Edit employee clicked:', name);
+  
+  // Fill the form with employee data
+  const codeInput = document.querySelector('input[name="employee_code"]');
+  const nameInput = document.querySelector('input[name="full_name"]');
+  const nationalIdInput = document.querySelector('input[name="national_id"]');
+  const deptInput = document.querySelector('input[name="department"]');
+  const positionInput = document.querySelector('input[name="position"]');
+  const phoneInput = document.querySelector('input[name="phone"]');
+  const emailInput = document.querySelector('input[name="email"]');
+  const hireDateInput = document.querySelector('input[name="hire_date"]');
+  const statusSelect = document.querySelector('select[name="status"]');
+  
+  if (codeInput) codeInput.value = code || '';
+  if (nameInput) nameInput.value = name || '';
+  if (nationalIdInput) nationalIdInput.value = nationalId || '';
+  if (deptInput) deptInput.value = dept || '';
+  if (positionInput) positionInput.value = position || '';
+  if (phoneInput) phoneInput.value = phone || '';
+  if (emailInput) emailInput.value = email || '';
+  if (hireDateInput) hireDateInput.value = hireDate || '';
+  if (statusSelect) statusSelect.value = status || 'active';
+  
+  // Change form action to edit route
+  const form = document.querySelector('#employees-form form');
+  if (form) {
+    form.action = `/employees/${id}/edit`;
+    // Change submit button text
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.textContent = '{{ _("Update Employee / تحديث الموظف") }}';
+      submitBtn.className = 'btn btn-warning';
+    }
+    // Change form title
+    const formTitle = document.getElementById('form-title');
+    if (formTitle) {
+      formTitle.textContent = `✏️ {{ _('Edit Employee / تعديل الموظف') }}: ${name}`;
+    }
+  }
+  
+  // Scroll to form
+  const formElement = document.getElementById('employees-form');
+  if (formElement) {
+    formElement.scrollIntoView({ behavior: 'smooth' });
+  }
+  
+  alert('تم ملء النموذج بالبيانات! يمكنك الآن تعديلها وحفظها.');
+}
+
+// Make function globally accessible
+window.editEmployee = editEmployee;
+
+console.log('Edit function assigned to window object');
+
+// Delete employee function - NEW
+async function deleteEmployeeNew(id, name) {
+  console.log('Delete employee clicked:', name);
+  
+  try {
+    const confirmed = await window.showConfirm(`{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}\n${name}`);
+    if (confirmed) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = `/employees/${id}/delete`;
+      
+      const csrfInput = document.createElement('input');
+      csrfInput.type = 'hidden';
+      csrfInput.name = 'csrf_token';
+      csrfInput.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
+      
+      form.appendChild(csrfInput);
+      document.body.appendChild(form);
+      form.submit();
+    }
+  } catch (error) {
+    console.error('Error in deleteEmployeeNew:', error);
+    alert('خطأ في حذف الموظف');
   }
 }
+
+// Clear form function
+function clearEmployeeForm() {
+  console.log('Clear form clicked');
+  
+  const form = document.querySelector('#employees-form form');
+  if (form) {
+    form.reset();
+    form.action = '/employees'; // Reset to create route
+    // Reset submit button
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.textContent = '{{ _("Add Employee / إضافة موظف") }}';
+      submitBtn.className = 'btn btn-success';
+    }
+    // Reset form title
+    const formTitle = document.getElementById('form-title');
+    if (formTitle) {
+      formTitle.textContent = '📝 {{ _("Add New Employee / إضافة موظف جديد") }}';
+    }
+  }
+}
+
+// Make function globally accessible
+window.clearEmployeeForm = clearEmployeeForm;
 
 // Live search in employees table
 (document.getElementById('empSearch')||{}).addEventListener?.('input', function(){

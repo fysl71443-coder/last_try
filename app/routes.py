@@ -5,6 +5,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
+from types import SimpleNamespace
 
 
 from app import db, csrf
@@ -961,6 +962,53 @@ def employees():
     return render_template('employees.html', form=form, employees=emps)
 
 
+@main.route('/employees/<int:eid>/edit', methods=['POST'], endpoint='employee_edit')
+@login_required
+def employee_edit(eid):
+    try:
+        emp = Employee.query.get_or_404(eid)
+        form = EmployeeForm()
+        
+        if form.validate_on_submit():
+            # Update employee data
+            emp.employee_code = form.employee_code.data
+            emp.full_name = form.full_name.data
+            emp.national_id = form.national_id.data
+            emp.department = form.department.data
+            emp.position = form.position.data
+            emp.phone = form.phone.data
+            emp.email = form.email.data
+            emp.hire_date = form.hire_date.data
+            emp.status = form.status.data
+            
+            db.session.commit()
+            
+            # Update salary defaults if provided
+            try:
+                from models import EmployeeSalaryDefault
+                base = form.base_salary.data or 0
+                allow = form.allowances.data or 0
+                ded = form.deductions.data or 0
+                if (base or allow or ded):
+                    d = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
+                    if not d:
+                        d = EmployeeSalaryDefault(employee_id=emp.id)
+                        db.session.add(d)
+                    d.base_salary = base
+                    d.allowances = allow
+                    d.deductions = ded
+                    db.session.commit()
+            except Exception:
+                pass
+                
+            flash('Employee updated successfully', 'success')
+        else:
+            flash('Error updating employee', 'danger')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating employee: {e}', 'danger')
+    return redirect(url_for('main.employees'))
+
 @main.route('/employees/<int:eid>/delete', methods=['POST'], endpoint='employee_delete')
 @login_required
 def employee_delete(eid):
@@ -986,6 +1034,28 @@ def employee_delete(eid):
         db.session.rollback()
         flash(f'Error deleting employee: {e}', 'danger')
     return redirect(url_for('main.employees'))
+
+@main.route('/expenses/<int:eid>/delete', methods=['POST'], endpoint='expense_delete')
+@login_required
+def expense_delete(eid):
+    try:
+        inv = ExpenseInvoice.query.get_or_404(eid)
+        # Delete related items and payments, then invoice
+        try:
+            ExpenseInvoiceItem.query.filter_by(invoice_id=inv.id).delete(synchronize_session=False)
+        except Exception:
+            pass
+        try:
+            Payment.query.filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'expense').delete(synchronize_session=False)
+        except Exception:
+            pass
+        db.session.delete(inv)
+        db.session.commit()
+        flash('Expense invoice and all related records deleted successfully', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting expense invoice: {e}', 'danger')
+    return redirect(url_for('main.expenses'))
 
 @main.route('/employees/create-salary', methods=['POST'], endpoint='employees_create_salary')
 @login_required
@@ -1348,7 +1418,27 @@ def sales_tables(branch_code):
         flash('لا تملك صلاحية الوصول لفرع المبيعات هذا', 'warning')
         return redirect(url_for('main.sales'))
     branch_label = BRANCH_LABELS.get(branch_code, branch_code)
-    # Try to load grouped layout from saved sections; otherwise simple 1..20
+
+    layout = kv_get(f'layout:{branch_code}', {}) or {}
+    sections = layout.get('sections') or []
+    grouped_tables = []
+    if sections:
+        for sec in sections:
+            sec_name = sec.get('name') or 'Section'
+            rows = []
+            for row in sec.get('rows') or []:
+                row_tables = []
+                for tbl in row.get('tables') or []:
+                    num = tbl.get('number') or ''
+                    # Skip only empty tables, but keep the row if it has other tables
+                    if num:  # Only add tables with valid numbers
+                        row_tables.append({'number': num, 'status': 'available'})
+                if row_tables:
+                    rows.append(row_tables)
+            grouped_tables.append({'section': sec_name, 'rows': rows})
+    if grouped_tables:
+        return render_template('sales_tables.html', branch_code=branch_code, branch_label=branch_label, grouped_tables=grouped_tables, tables=None)
+
     settings = kv_get('table_settings', {}) or {}
     default_count = 20
     if branch_code == 'china_town':
@@ -1382,7 +1472,7 @@ def pos_home(branch_code):
     return redirect(url_for('main.sales_tables', branch_code=branch_code))
 
 
-@main.route('/pos/<branch_code>/table/<int:table_number>', endpoint='pos_table')
+@main.route('/pos/<branch_code>/table/<table_number>', endpoint='pos_table')
 @login_required
 def pos_table(branch_code, table_number):
     if not user_can('sales','view', branch_code):
@@ -1973,26 +2063,34 @@ def print_receipt(invoice_number):
     branch_name = BRANCH_LABELS.get(getattr(inv, 'branch', None) or '', getattr(inv, 'branch', ''))
     dt_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     # Prepare embedded logo as data URL for more reliable thermal printing
+    # First try to get branch-specific logo, then fall back to general logo
     logo_data_url = None
     try:
-        if s and getattr(s, 'receipt_show_logo', False) and (s.logo_url or '').strip():
-            url = s.logo_url.strip()
-            import base64, mimetypes, os
-            fpath = None
-            # Static folder
-            if url.startswith('/static/'):
-                rel = url.split('/static/', 1)[1]
-                fpath = os.path.join(current_app.static_folder, rel)
-            # Persistent uploads folder
-            elif url.startswith('/uploads/'):
-                upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
-                rel = url.split('/uploads/', 1)[1]
-                fpath = os.path.join(upload_dir, rel)
-            if fpath and os.path.exists(fpath):
-                with open(fpath, 'rb') as f:
-                    b = f.read()
-                mime = mimetypes.guess_type(fpath)[0] or 'image/png'
-                logo_data_url = f'data:{mime};base64,' + base64.b64encode(b).decode('ascii')
+        if s and getattr(s, 'receipt_show_logo', False):
+            # Try branch-specific logo first
+            branch_logo_url = _resolve_branch_logo(s, getattr(inv, 'branch', getattr(inv, 'branch_code', None)))
+            if branch_logo_url:
+                url = branch_logo_url.strip()
+            else:
+                url = (s.logo_url or '').strip()
+            
+            if url:
+                import base64, mimetypes, os
+                fpath = None
+                # Static folder
+                if url.startswith('/static/'):
+                    rel = url.split('/static/', 1)[1]
+                    fpath = os.path.join(current_app.static_folder, rel)
+                # Persistent uploads folder
+                elif url.startswith('/uploads/'):
+                    upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
+                    rel = url.split('/uploads/', 1)[1]
+                    fpath = os.path.join(upload_dir, rel)
+                if fpath and os.path.exists(fpath):
+                    with open(fpath, 'rb') as f:
+                        b = f.read()
+                    mime = mimetypes.guess_type(fpath)[0] or 'image/png'
+                    logo_data_url = f'data:{mime};base64,' + base64.b64encode(b).decode('ascii')
     except Exception:
         logo_data_url = None
     # Generate ZATCA-compliant QR (server-side) if possible
@@ -2004,15 +2102,27 @@ def print_receipt(invoice_number):
             qr_data_url = 'data:image/png;base64,' + b64
     except Exception:
         qr_data_url = None
+    branch_settings = None
+    if s:
+        branch_logo_url = _resolve_branch_logo(s, getattr(inv, 'branch', getattr(inv, 'branch_code', None)))
+        branch_data_url = _load_logo_data_url(branch_logo_url)
+        branch_settings = SimpleNamespace(
+            logo_url=branch_logo_url,
+            receipt_show_logo=s.receipt_show_logo,
+            receipt_logo_height=s.receipt_logo_height,
+            receipt_footer_text=s.receipt_footer_text,
+            branch_data_url=branch_data_url,
+        )
     return render_template('print/receipt.html', inv=inv_ctx, items=items_ctx,
                            settings=s, branch_name=branch_name, date_time=dt_str,
                            display_invoice_number=inv.invoice_number,
                            qr_data_url=qr_data_url,
                            logo_data_url=logo_data_url,
-                           paid=True)
+                           paid=True,
+                           branch_settings=branch_settings)
 
 
-@main.route('/print/order-preview/<branch>/<int:table>', methods=['GET'], endpoint='print_order_preview')
+@main.route('/print/order-preview/<branch>/<table>', methods=['GET'], endpoint='print_order_preview')
 @login_required
 def print_order_preview(branch, table):
     # Read draft
@@ -2059,10 +2169,56 @@ def print_order_preview(branch, table):
     branch_name = BRANCH_LABELS.get(branch, branch)
     dt_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     order_no = f"ORD-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
+    
+    # Prepare embedded logo as data URL for more reliable thermal printing
+    # First try to get branch-specific logo, then fall back to general logo
+    logo_data_url = None
+    try:
+        if s and getattr(s, 'receipt_show_logo', False):
+            # Try branch-specific logo first
+            branch_logo_url = _resolve_branch_logo(s, branch)
+            if branch_logo_url:
+                url = branch_logo_url.strip()
+            else:
+                url = (s.logo_url or '').strip()
+            
+            if url:
+                import base64, mimetypes, os
+                fpath = None
+                # Static folder
+                if url.startswith('/static/'):
+                    rel = url.split('/static/', 1)[1]
+                    fpath = os.path.join(current_app.static_folder, rel)
+                # Persistent uploads folder
+                elif url.startswith('/uploads/'):
+                    upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
+                    rel = url.split('/uploads/', 1)[1]
+                    fpath = os.path.join(upload_dir, rel)
+                if fpath and os.path.exists(fpath):
+                    with open(fpath, 'rb') as f:
+                        b = f.read()
+                    mime = mimetypes.guess_type(fpath)[0] or 'image/png'
+                    logo_data_url = f'data:{mime};base64,' + base64.b64encode(b).decode('ascii')
+    except Exception:
+        logo_data_url = None
+    
+    branch_settings = None
+    if s:
+        branch_logo_url = _resolve_branch_logo(s, branch)
+        branch_data_url = _load_logo_data_url(branch_logo_url)
+        branch_settings = SimpleNamespace(
+            logo_url=branch_logo_url,
+            receipt_show_logo=s.receipt_show_logo,
+            receipt_logo_height=s.receipt_logo_height,
+            receipt_footer_text=s.receipt_footer_text,
+            branch_data_url=branch_data_url,
+        )
     return render_template('print/receipt.html', inv=inv_ctx, items=items_ctx,
                            settings=s, branch_name=branch_name, date_time=dt_str,
                            display_invoice_number=order_no,
-                           paid=False)
+                           logo_data_url=logo_data_url,
+                           paid=False,
+                           branch_settings=branch_settings)
 
 
 
@@ -2639,6 +2795,7 @@ def api_users_permissions_set(uid):
 
 @main.route('/settings', methods=['GET', 'POST'], endpoint='settings')
 @login_required
+@csrf.exempt
 def settings():
     # Load first (and only) settings row
     s = None
@@ -2648,9 +2805,11 @@ def settings():
         s = None
     if request.method == 'POST':
         try:
+            print(f"Settings POST request received. Form data: {request.form}")
             if not s:
                 s = Settings()
                 (ext_db.session.add(s) if ext_db is not None else db.session.add(s))
+                print("Created new Settings record")
 
             form_data = request.form if request.form else (request.get_json(silent=True) or {})
 
@@ -2669,10 +2828,15 @@ def settings():
                     return default
 
             # Strings (do not overwrite with empty string)
-            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text']:
+            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text','china_town_logo_url','place_india_logo_url']:
                 if hasattr(s, fld) and fld in form_data:
-                    val = (form_data.get(fld) or '').strip()
-                    if val != '':
+                    val = form_data.get(fld)
+                    if val is None:
+                        continue
+                    val = val.strip()
+                    if fld in ['china_town_logo_url','place_india_logo_url'] and val == '':
+                        setattr(s, fld, None)
+                    elif val != '':
                         setattr(s, fld, val)
 
             # Booleans (explicitly set False when absent)
@@ -2685,7 +2849,7 @@ def settings():
             if hasattr(s, 'receipt_font_size'):
                 s.receipt_font_size = as_int(form_data.get('receipt_font_size'), s.receipt_font_size if s.receipt_font_size is not None else 12)
             if hasattr(s, 'receipt_logo_height'):
-                s.receipt_logo_height = as_int(form_data.get('receipt_logo_height'), s.receipt_logo_height if s.receipt_logo_height is not None else 40)
+                s.receipt_logo_height = as_int(form_data.get('receipt_logo_height'), s.receipt_logo_height if s.receipt_logo_height is not None else 72)
             if hasattr(s, 'receipt_extra_bottom_mm'):
                 s.receipt_extra_bottom_mm = as_int(form_data.get('receipt_extra_bottom_mm'), s.receipt_extra_bottom_mm if s.receipt_extra_bottom_mm is not None else 15)
 
@@ -2737,11 +2901,22 @@ def settings():
                         fpath = os.path.join(upload_dir, fname)
                         logo_file.save(fpath)
                         s.logo_url = f"{path_prefix}{fname}"
+                # Branch-specific logos
+                for branch_key, field_name, file_field in [
+                    ('china_town', 'china_town_logo_url', 'china_logo_file'),
+                    ('place_india', 'place_india_logo_url', 'india_logo_file'),
+                ]:
+                    branch_file = request.files.get(file_field)
+                    if branch_file and getattr(branch_file, 'filename', ''):
+                        ext = os.path.splitext(branch_file.filename)[1].lower()
+                        if ext in ['.png', '.jpg', '.jpeg', '.svg', '.gif']:
+                            fname = f"{branch_key}_logo_{int(datetime.utcnow().timestamp())}{ext}"
+                            fpath = os.path.join(upload_dir, fname)
+                            branch_file.save(fpath)
+                            setattr(s, field_name, f"{path_prefix}{fname}")
                 # Currency PNG
                 cur_file = request.files.get('currency_file')
                 if cur_file and getattr(cur_file, 'filename', ''):
-
-
                     ext = os.path.splitext(cur_file.filename)[1].lower()
                     if ext == '.png':
                         fname = f"currency_{int(datetime.utcnow().timestamp())}{ext}"
@@ -2754,17 +2929,59 @@ def settings():
                 pass
 
             (ext_db.session.commit() if ext_db is not None else db.session.commit())
-            flash('Settings saved', 'success')
+            print("Settings saved successfully")
+            flash('Settings saved successfully!', 'success')
         except Exception as e:
+            print(f"Error saving settings: {e}")
             (ext_db.session.rollback() if ext_db is not None else db.session.rollback())
-            flash(f'Could not save settings: {e}', 'danger')
+            flash(f'Could not save settings: {str(e)}', 'danger')
         return redirect(url_for('main.settings'))
     return render_template('settings.html', s=s)
 
 @main.route('/table-settings', endpoint='table_settings')
 @login_required
 def table_settings():
-    return render_template('table_settings.html')
+    """Redirect to branch selection for table management"""
+    return render_template('table_settings.html', branches=BRANCH_LABELS)
+
+@main.route('/api/branch-settings/<branch_code>', methods=['GET'], endpoint='api_branch_settings')
+@login_required
+@csrf.exempt
+def api_branch_settings(branch_code):
+    """Get branch-specific settings like void password"""
+    try:
+        # Import Settings from the correct location
+        from models import Settings
+        
+        s = None
+        try:
+            s = Settings.query.first()
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+            pass
+        
+        # Default values if no settings found
+        if branch_code == 'china_town':
+            void_password = getattr(s, 'china_town_void_password', None) or '1991'
+            vat_rate = getattr(s, 'china_town_vat_rate', None) or 15.0
+            discount_rate = getattr(s, 'china_town_discount_rate', None) or 0.0
+        elif branch_code == 'place_india':
+            void_password = getattr(s, 'place_india_void_password', None) or '1991'
+            vat_rate = getattr(s, 'place_india_vat_rate', None) or 15.0
+            discount_rate = getattr(s, 'place_india_discount_rate', None) or 0.0
+        else:
+            return jsonify({'error': 'Invalid branch code'}), 400
+        
+        print(f"Branch {branch_code} password: {void_password}")
+        
+        return jsonify({
+            'void_password': void_password,
+            'vat_rate': vat_rate,
+            'discount_rate': discount_rate
+        })
+    except Exception as e:
+        print(f"API Error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # Serve uploaded files from a persistent directory when UPLOAD_DIR is set
@@ -3778,3 +3995,74 @@ def reports_print_all_invoices_expenses():
                            payment_method=meta['payment_method'], branch=meta['branch'],
                            columns=columns, data=rows, totals=totals, totals_columns=totals_columns,
                            totals_colspan=totals_colspan, payment_totals=payment_totals)
+
+
+@main.route('/table-manager/<branch_code>', methods=['GET'], endpoint='table_manager')
+@login_required
+def table_manager(branch_code):
+    """New dedicated table management screen"""
+    branch_label = BRANCH_LABELS.get(branch_code, branch_code.title())
+    return render_template('table_manager.html', 
+                         branch_code=branch_code, 
+                         branch_label=branch_label)
+
+
+@csrf.exempt
+@main.route('/api/table-layout/<branch_code>', methods=['GET', 'POST'], endpoint='api_table_layout')
+@login_required
+def api_table_layout(branch_code):
+    """API for advanced table layout management"""
+    if request.method == 'GET':
+        try:
+            layout_data = kv_get(f'layout:{branch_code}')
+            if layout_data:
+                return jsonify(layout_data)
+            else:
+                return jsonify({'sections': []})
+        except Exception as e:
+            current_app.logger.error(f"Error loading layout for {branch_code}: {e}")
+            return jsonify({'sections': []})
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        kv_set(f'layout:{branch_code}', data)
+        return jsonify({'success': True})
+
+    except Exception as e:
+        current_app.logger.error(f"Error saving layout for {branch_code}: {e}")
+        return jsonify({'error': 'Failed to save layout'}), 500
+
+def _resolve_branch_logo(settings_obj, branch_code=None):
+    if not settings_obj:
+        return None
+    code = (branch_code or '').strip() if branch_code else ''
+    if code == 'china_town' and getattr(settings_obj, 'china_town_logo_url', None):
+        return settings_obj.china_town_logo_url
+    if code == 'place_india' and getattr(settings_obj, 'place_india_logo_url', None):
+        return settings_obj.place_india_logo_url
+    return getattr(settings_obj, 'logo_url', None)
+
+def _load_logo_data_url(url_path):
+    if not url_path:
+        return None
+    try:
+        import base64, mimetypes
+        fpath = None
+        if url_path.startswith('/static/'):
+            rel = url_path.split('/static/', 1)[1]
+            fpath = os.path.join(current_app.static_folder, rel)
+        elif url_path.startswith('/uploads/'):
+            upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
+            rel = url_path.split('/uploads/', 1)[1]
+            fpath = os.path.join(upload_dir, rel)
+        if fpath and os.path.exists(fpath):
+            with open(fpath, 'rb') as f:
+                data = f.read()
+            mime = mimetypes.guess_type(fpath)[0] or 'image/png'
+            return f'data:{mime};base64,' + base64.b64encode(data).decode('ascii')
+    except Exception:
+        return None
+    return None
