@@ -45,16 +45,7 @@ function showLoading(show = true) {
     }
 }
 
-// Confirmation dialog
-async function showConfirm(message) {
-    return new Promise((resolve) => {
-        if (confirm(message)) {
-            resolve(true);
-        } else {
-            resolve(false);
-        }
-    });
-}
+// Confirmation dialog - removed to avoid conflict with modal-system.js
 
 // API helper functions
 async function apiCall(url, options = {}) {
@@ -230,8 +221,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Export functions for global use
-window.showAlert = showAlert;
-window.showConfirm = showConfirm;
 window.apiCall = apiCall;
 window.addToCart = addToCart;
 window.removeFromCart = removeFromCart;

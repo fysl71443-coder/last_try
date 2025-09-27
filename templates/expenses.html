@@ -6,47 +6,128 @@
 
 <style>
 body {
-  background: #f4f6f9;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
 }
+
 .expenses-card {
   background: white;
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.expenses-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+  transition: all 0.3s ease;
+}
+
+.status-badge {
+  padding: 0.4rem 0.8rem;
+  border-radius: 25px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-paid { 
+  background: linear-gradient(45deg, #00b894, #00a085); 
+  color: white; 
+  box-shadow: 0 2px 8px rgba(0,184,148,0.3);
+}
+
+.status-pending { 
+  background: linear-gradient(45deg, #ffeaa7, #fdcb6e); 
+  color: #2d3436; 
+  box-shadow: 0 2px 8px rgba(253,203,110,0.3);
+}
+
+.item-row {
+  border: 2px solid #e9ecef;
   border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
   padding: 1.5rem;
   margin-bottom: 1rem;
+  background: white;
+  transition: all 0.3s ease;
 }
-.status-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: bold;
+
+.item-row:hover {
+  border-color: #007bff;
+  box-shadow: 0 4px 15px rgba(0,123,255,0.1);
 }
-.status-paid { background: #00b894; color: white; }
-.status-pending { background: #ffeaa7; color: #2d3436; }
-.item-row {
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 0.5rem;
-  background: #f8f9fa;
-}
+
 .expense-highlight {
   font-weight: bold;
   color: #e74c3c;
 }
+
+/* Enhanced form controls */
+.form-control:focus, .form-select:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+}
+
+/* Button enhancements */
+.btn {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Table enhancements */
+.table {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.table thead th {
+  border: none;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.85rem;
+}
+
+.table tbody tr:hover {
+  background-color: rgba(0,123,255,0.05);
+  transform: scale(1.01);
+  transition: all 0.2s ease;
+}
+
+/* Card stats */
+.card {
+  border-radius: 12px;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
 </style>
 
 <div class="container py-4">
-    <!-- شريط التنقل السريع -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <h3 class="mb-0">💸 {{ _('Expenses / المصروفات') }}</h3>
+    <!-- Header with navigation -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">💸 {{ _('Expenses Management / إدارة المصروفات') }}</h2>
+            <p class="text-muted mb-0">{{ _('Track and manage business expenses / تتبع وإدارة مصروفات العمل') }}</p>
         </div>
-        <div class="col-md-6 text-end">
-            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning me-2">
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning">
                 🛒 {{ _('Purchases / المشتريات') }}
             </a>
-            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info me-2">
+            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-success">
                 💰 {{ _('Sales / المبيعات') }}
             </a>
             <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
@@ -55,13 +136,65 @@ body {
         </div>
     </div>
 
+    <!-- Quick Stats -->
+    {% if invoices %}
+    <div class="row mb-4">
+        {% set total_expenses = invoices|sum(attribute='total_after_tax_discount') %}
+        {% set paid_expenses = invoices|selectattr('status','equalto','paid')|sum(attribute='total_after_tax_discount') %}
+        {% set pending_expenses = total_expenses - paid_expenses %}
+        
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h4 class="mb-1">${{ "%.2f"|format(total_expenses) }}</h4>
+                    <small>{{ _('Total Expenses / إجمالي المصروفات') }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h4 class="mb-1">${{ "%.2f"|format(paid_expenses) }}</h4>
+                    <small>{{ _('Paid / مدفوع') }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                    <h4 class="mb-1">${{ "%.2f"|format(pending_expenses) }}</h4>
+                    <small>{{ _('Pending / معلق') }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h4 class="mb-1">{{ invoices|length }}</h4>
+                    <small>{{ _('Total Invoices / إجمالي الفواتير') }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- نموذج إنشاء فاتورة مصروفات جديدة -->
     <div class="expenses-card">
-        <h5 class="mb-3">{{ _('Create New Expense Invoice / إنشاء فاتورة مصروفات جديدة') }}</h5>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">📝 {{ _('Create New Expense Invoice / إنشاء فاتورة مصروفات جديدة') }}</h5>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearExpenseForm()">
+                🗑️ {{ _('Clear Form / مسح النموذج') }}
+            </button>
+        </div>
 
-        <div class="alert alert-info">
-            <strong>💡 {{ _('Note / ملاحظة') }}:</strong>
-            {{ _('Record all business expenses including utilities, rent, supplies, and other operational costs / سجل جميع مصروفات العمل بما في ذلك المرافق والإيجار واللوازم والتكاليف التشغيلية الأخرى') }}
+        <div class="alert alert-info border-0">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-info-circle me-2"></i>
+                <div>
+                    <strong>💡 {{ _('Tip / نصيحة') }}:</strong>
+                    {{ _('Record all business expenses including utilities, rent, supplies, and other operational costs / سجل جميع مصروفات العمل بما في ذلك المرافق والإيجار واللوازم والتكاليف التشغيلية الأخرى') }}
+                </div>
+            </div>
         </div>
 
         <form method="POST" id="expense-form">
@@ -70,102 +203,138 @@ body {
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
             <!-- معلومات الفاتورة الأساسية -->
-            <div class="row mb-3">
-                {% if form.csrf_token %}{{ form.csrf_token }}{% endif %}
-                <div class="col-md-6">
-                    {{ form.date.label(class_='form-label') }}
-                    {{ form.date(class_='form-control') }}
+            <div class="card border-0 bg-light mb-4">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">📋 {{ _('Invoice Information / معلومات الفاتورة') }}</h6>
+                    <div class="row g-3">
+                        {% if form.csrf_token %}{{ form.csrf_token }}{% endif %}
+                        <div class="col-md-4">
+                            {{ form.date.label(class_='form-label fw-bold') }}
+                            {{ form.date(class_='form-control') }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.payment_method.label(class_='form-label fw-bold') }}
+                            {{ form.payment_method(class_='form-select') }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">{{ _('Payment Status / حالة الدفع') }}</label>
+                            <select name="status" id="expense-status" class="form-select">
+                                <option value="paid">✅ {{ _('Paid / مدفوع') }}</option>
+                                <option value="partial">⚠️ {{ _('Partial / مدفوع جزئياً') }}</option>
+                                <option value="unpaid">❌ {{ _('Unpaid / غير مدفوع') }}</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6" id="expense-partial-box" style="display:none;">
+                            <label class="form-label fw-bold">{{ _('Paid Amount (Partial) / المبلغ المدفوع (جزئي)') }}</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input name="partial_paid_amount" id="expense-partial-amount" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
+                            </div>
+                            <div class="form-text">{{ _('Max is Final Total / الحد الأقصى هو الإجمالي النهائي') }}: <span id="expense-partial-max" class="fw-bold text-danger"></span></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    {{ form.payment_method.label(class_='form-label') }}
-                    {{ form.payment_method(class_='form-select') }}
-                </div>
-            </div>
-            <div class="row mb-3">
-              <div class="col-md-4">
-                <label class="form-label">{{ _('Payment Status / \u062d\u0627\u0644\u0629 \u0627\u0644\u062f\u0641\u0639') }}</label>
-                <select name="status" id="expense-status" class="form-select">
-                  <option value="paid">{{ _('Paid / \u0645\u062f\u0641\u0648\u0639') }}</option>
-                  <option value="partial">{{ _('Partial / \u0645\u062f\u0641\u0648\u0639 \u062c\u0632\u0626\u064a\u0627\u064b') }}</option>
-                  <option value="unpaid">{{ _('Unpaid / \u063a\u064a\u0631 \u0645\u062f\u0641\u0648\u0639') }}</option>
-                </select>
-              </div>
-              <div class="col-md-4" id="expense-partial-box" style="display:none;">
-                <label class="form-label">{{ _('Paid Amount (Partial) / \u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0645\u062f\u0641\u0648\u0639 (\u062c\u0632\u0626\u064a)') }}</label>
-                <input name="partial_paid_amount" id="expense-partial-amount" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
-                <div class="form-text">{{ _('Max is Final Total / \u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 \u0647\u0648 \u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0646\u0647\u0627\u0626\u064a') }}: <span id="expense-partial-max"></span></div>
-              </div>
             </div>
 
 
             <!-- عناصر الفاتورة -->
-            <h6 class="mb-3">{{ _('Expense Items / بنود المصروفات') }}</h6>
-            <div id="items-container">
-                {% for item_form in form.items %}
-                <div class="item-row">
-                    <div class="row">
-                        <div class="col-md-4">
-                            {{ item_form.form.description.label(class_='form-label') }}
-                            {{ item_form.form.description(class_='form-control', placeholder=_('e.g., Office rent, Electricity bill / مثل: إيجار المكتب، فاتورة الكهرباء')) }}
+            <div class="card border-0 bg-light mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="card-title mb-0">🧾 {{ _('Expense Items / بنود المصروفات') }}</h6>
+                        <button type="button" class="btn btn-success btn-sm" id="add-item">
+                            ➕ {{ _('Add Item / إضافة بند') }}
+                        </button>
+                    </div>
+                    
+                    <div id="items-container">
+                        {% for item_form in form.items %}
+                        <div class="item-row border rounded p-3 mb-3 bg-white">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    {{ item_form.form.description.label(class_='form-label fw-bold') }}
+                                    {{ item_form.form.description(class_='form-control', placeholder=_('e.g., Office rent, Electricity bill / مثل: إيجار المكتب، فاتورة الكهرباء')) }}
+                                </div>
+                                <div class="col-md-2">
+                                    {{ item_form.quantity.label(class_='form-label fw-bold') }}
+                                    <div class="input-group">
+                                        {{ item_form.quantity(class_='form-control', step='0.01', value='1') }}
+                                        <span class="input-group-text">{{ _('unit / وحدة') }}</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    {{ item_form.price_before_tax.label(class_='form-label fw-bold') }}
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        {{ item_form.price_before_tax(class_='form-control', step='0.01') }}
+                                    </div>
+                                </div>
+                                <div class="col-md-1">
+                                    {{ item_form.tax.label(class_='form-label fw-bold') }}
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        {{ item_form.tax(class_='form-control', step='0.01', value='0') }}
+                                    </div>
+                                </div>
+                                <div class="col-md-1">
+                                    {{ item_form.discount.label(class_='form-label fw-bold') }}
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        {{ item_form.discount(class_='form-control', step='0.01', value='0') }}
+                                    </div>
+                                </div>
+                                <div class="col-md-1">
+                                    <label class="form-label fw-bold">{{ _('Total / الإجمالي') }}</label>
+                                    <div class="form-control bg-success text-white fw-bold item-total">$0.00</div>
+                                </div>
+                                <div class="col-md-1 d-flex align-items-end">
+                                    <button type="button" class="btn btn-outline-danger btn-sm remove-item-btn w-100">🗑️</button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-2">
-                            {{ item_form.quantity.label(class_='form-label') }}
-                            {{ item_form.quantity(class_='form-control', step='0.01') }}
-                        </div>
-                        <div class="col-md-2">
-                            {{ item_form.price_before_tax.label(class_='form-label') }}
-                            {{ item_form.price_before_tax(class_='form-control', step='0.01') }}
-                        </div>
-                        <div class="col-md-1">
-                            {{ item_form.tax.label(class_='form-label') }}
-                            {{ item_form.tax(class_='form-control', step='0.01') }}
-                        </div>
-                        <div class="col-md-1">
-                            {{ item_form.discount.label(class_='form-label') }}
-                            {{ item_form.discount(class_='form-control', step='0.01') }}
-                        </div>
-                        <div class="col-md-1">
-                            <label class="form-label">{{ _('Total / الإجمالي') }}</label>
-                            <div class="form-control bg-light item-total">$0.00</div>
-                        </div>
-                        <div class="col-md-1 d-flex align-items-end">
-                            <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
-                        </div>
+                        {% endfor %}
                     </div>
                 </div>
-                {% endfor %}
             </div>
 
             <!-- ملخص التكاليف -->
-            <div class="row mb-3">
-                <div class="col-md-3">
-                    <label class="form-label">{{ _('Total Before Tax / الإجمالي قبل الضريبة') }}</label>
-                    <div class="form-control bg-light" id="total-before-tax">$0.00</div>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">{{ _('Total Tax / إجمالي الضريبة') }}</label>
-                    <div class="form-control bg-light" id="tax-amount">$0.00</div>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">{{ _('Total Discount / إجمالي الخصم') }}</label>
-                    <div class="form-control bg-light" id="total-discount">$0.00</div>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">{{ _('Final Total / الإجمالي النهائي') }}</label>
-                    <div class="form-control bg-danger text-white fw-bold expense-highlight" id="final-total">$0.00</div>
+            <div class="card border-0 bg-light mb-4">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">💰 {{ _('Cost Summary / ملخص التكاليف') }}</h6>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">{{ _('Subtotal / المجموع الفرعي') }}</label>
+                            <div class="form-control bg-info text-white fw-bold" id="total-before-tax">$0.00</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">{{ _('Tax / الضريبة') }}</label>
+                            <div class="form-control bg-warning text-dark fw-bold" id="tax-amount">$0.00</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">{{ _('Discount / الخصم') }}</label>
+                            <div class="form-control bg-secondary text-white fw-bold" id="total-discount">$0.00</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">{{ _('Final Total / الإجمالي النهائي') }}</label>
+                            <div class="form-control bg-danger text-white fw-bold fs-5" id="final-total">$0.00</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="row">
-                <div class="col-md-6">
-                    <button type="button" class="btn btn-secondary" id="add-item">
-                        ➕ {{ _('Add Expense Item / إضافة بند مصروف') }}
+            <!-- Action Buttons -->
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <button type="button" class="btn btn-outline-secondary me-2" onclick="clearExpenseForm()">
+                        🗑️ {{ _('Clear Form / مسح النموذج') }}
+                    </button>
+                    <button type="button" class="btn btn-outline-info" onclick="calculateTotals()">
+                        🔄 {{ _('Recalculate / إعادة حساب') }}
                     </button>
                 </div>
-                <div class="col-md-6 text-end">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-
-                    {{ form.submit(class_='btn btn-danger btn-lg') }}
+                <div>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    {{ form.submit(class_='btn btn-danger btn-lg px-4') }}
                 </div>
             </div>
         </form>
@@ -174,57 +343,79 @@ body {
     <!-- قائمة الفواتير السابقة -->
     {% if invoices %}
     <div class="expenses-card">
-        <h5 class="mb-3">{{ _('Previous Expense Invoices / فواتير المصروفات السابقة') }}</h5>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">📋 {{ _('Previous Expense Invoices / فواتير المصروفات السابقة') }}</h5>
+            <div class="d-flex gap-2">
+                <input type="text" class="form-control form-control-sm" id="invoiceSearch" placeholder="{{ _('Search invoices... / بحث في الفواتير...') }}" style="width: 200px;">
+                <button class="btn btn-outline-primary btn-sm" onclick="window.exportExpenses()">
+                    📊 {{ _('Export / تصدير') }}
+                </button>
+            </div>
+        </div>
 
         <div class="table-responsive">
-            <table class="table table-striped">
+            <table class="table table-hover align-middle">
                 <thead class="table-dark">
                     <tr>
+                        <th class="text-center">#</th>
                         <th>{{ _('Invoice No / رقم الفاتورة') }}</th>
                         <th>{{ _('Date / التاريخ') }}</th>
-                        <th>{{ _('Payment Method / طريقة الدفع') }}</th>
-                        <th>{{ _('Total / الإجمالي') }}</th>
-                        <th>{{ _('Status / الحالة') }}</th>
-                        <th>{{ _('Items / العناصر') }}</th>
-                        <th>{{ _('Actions / الإجراءات') }}</th>
+                        <th>{{ _('Payment / الدفع') }}</th>
+                        <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+                        <th class="text-center">{{ _('Status / الحالة') }}</th>
+                        <th class="text-center">{{ _('Items / العناصر') }}</th>
+                        <th class="text-center">{{ _('Actions / الإجراءات') }}</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="invoicesTableBody">
                     {% for invoice in invoices %}
                     <tr>
-                        <td><strong>{{ invoice.invoice_number }}</strong></td>
-                        <td>{{ invoice.date.strftime('%Y-%m-%d') }}</td>
+                        <td class="text-center"><span class="badge bg-secondary">{{ loop.index }}</span></td>
+                        <td><strong class="text-primary">{{ invoice.invoice_number }}</strong></td>
+                        <td>
+                            <span class="badge bg-light text-dark">{{ invoice.date.strftime('%Y-%m-%d') }}</span>
+                        </td>
                         <td>
                             {% if invoice.payment_method == 'cash' %}
-                                💰 {{ _('Cash / نقداً') }}
+                                <span class="badge bg-success">💰 {{ _('Cash / نقداً') }}</span>
                             {% elif invoice.payment_method == 'bank' %}
-                                🏦 {{ _('Bank / بنك') }}
+                                <span class="badge bg-primary">🏦 {{ _('Bank / بنك') }}</span>
                             {% elif invoice.payment_method == 'visa' %}
-                                💳 {{ _('Visa / فيزا') }}
+                                <span class="badge bg-info">💳 {{ _('Visa / فيزا') }}</span>
                             {% elif invoice.payment_method == 'mada' %}
-                                💳 {{ _('Mada / مدى') }}
+                                <span class="badge bg-warning">💳 {{ _('Mada / مدى') }}</span>
                             {% else %}
-                                {{ invoice.payment_method }}
+                                <span class="badge bg-secondary">{{ invoice.payment_method }}</span>
                             {% endif %}
                         </td>
-                        <td class="expense-highlight">${{ "%.2f"|format(invoice.total_after_tax_discount) }}</td>
-                        <td>
-                            <span class="status-badge status-{{ invoice.status }}">
-                                {% if invoice.status == 'paid' %}
-                                    {{ _('Paid / مدفوع') }}
-                                {% else %}
-                                    {{ _('Pending / معلق') }}
-                                {% endif %}
-                            </span>
+                        <td class="text-end">
+                            <span class="fw-bold text-danger fs-6">${{ "%.2f"|format(invoice.total_after_tax_discount) }}</span>
                         </td>
-                        <td>{{ invoice.items|length }} {{ _('items / عناصر') }}</td>
-                        <td>
-                            <button class="btn btn-sm btn-info me-1" onclick="viewInvoice({{ invoice.id }})">
-                                👁 {{ _('View / عرض') }}
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteExpenseInvoice({{ invoice.id }}, '{{ invoice.invoice_number }}')">
-                                🗑️ {{ _('Delete / حذف') }}
-                            </button>
+                        <td class="text-center">
+                            {% if invoice.status == 'paid' %}
+                                <span class="badge bg-success">✅ {{ _('Paid / مدفوع') }}</span>
+                            {% elif invoice.status == 'partial' %}
+                                <span class="badge bg-warning">⚠️ {{ _('Partial / جزئي') }}</span>
+                            {% else %}
+                                <span class="badge bg-danger">❌ {{ _('Unpaid / غير مدفوع') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-info">{{ invoice.items|length }} {{ _('items / عناصر') }}</span>
+                        </td>
+                        <td class="text-center">
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-info" onclick="window.viewInvoice({{ invoice.id }})" title="{{ _('View Details / عرض التفاصيل') }}">
+                                    👁️
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="window.editInvoice({{ invoice.id }})" title="{{ _('Edit / تعديل') }}">
+                                    ✏️
+                                </button>
+                                <form method="post" action="{{ url_for('main.expense_delete', eid=invoice.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this expense invoice? / حذف فاتورة المصروفات هذه؟') }}')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete / حذف') }}">🗑️</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -244,6 +435,16 @@ body {
         console.log('Expense updated:', data);
         alert('New expense invoice created: ' + data.invoice_number + ' - $' + data.total);
         location.reload();
+    });
+
+    // Payment status handling
+    document.getElementById('expense-status')?.addEventListener('change', function() {
+        const partialBox = document.getElementById('expense-partial-box');
+        if (this.value === 'partial') {
+            partialBox.style.display = 'block';
+        } else {
+            partialBox.style.display = 'none';
+        }
     });
 
     // Auto-calculation functionality
@@ -297,33 +498,45 @@ body {
         const newItem = document.createElement('div');
         newItem.className = 'item-row';
         newItem.innerHTML = `
-            <div class="row">
+            <div class="row g-3">
                 <div class="col-md-4">
-                    <label class="form-label">{{ _('Description / الوصف') }}</label>
+                    <label class="form-label fw-bold">{{ _('Description / الوصف') }}</label>
                     <input class="form-control" name="items-${itemIndex}-description" type="text" placeholder="{{ _('e.g., Office rent, Electricity bill / مثل: إيجار المكتب، فاتورة الكهرباء') }}">
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">{{ _('Quantity / الكمية') }}</label>
-                    <input class="form-control" name="items-${itemIndex}-quantity" step="0.01" type="number" value="1">
+                    <label class="form-label fw-bold">{{ _('Quantity / الكمية') }}</label>
+                    <div class="input-group">
+                        <input class="form-control" name="items-${itemIndex}-quantity" step="0.01" type="number" value="1">
+                        <span class="input-group-text">{{ _('unit / وحدة') }}</span>
+                    </div>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">{{ _('Unit Price / سعر الوحدة') }}</label>
-                    <input class="form-control" name="items-${itemIndex}-price_before_tax" step="0.01" type="number">
+                    <label class="form-label fw-bold">{{ _('Unit Price / سعر الوحدة') }}</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input class="form-control" name="items-${itemIndex}-price_before_tax" step="0.01" type="number">
+                    </div>
                 </div>
                 <div class="col-md-1">
-                    <label class="form-label">{{ _('Tax / الضريبة') }}</label>
-                    <input class="form-control" name="items-${itemIndex}-tax" step="0.01" type="number" value="0">
+                    <label class="form-label fw-bold">{{ _('Tax / الضريبة') }}</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input class="form-control" name="items-${itemIndex}-tax" step="0.01" type="number" value="0">
+                    </div>
                 </div>
                 <div class="col-md-1">
-                    <label class="form-label">{{ _('Discount / الخصم') }}</label>
-                    <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" value="0">
+                    <label class="form-label fw-bold">{{ _('Discount / الخصم') }}</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" value="0">
+                    </div>
                 </div>
                 <div class="col-md-1">
-                    <label class="form-label">{{ _('Total / الإجمالي') }}</label>
-                    <div class="form-control bg-light item-total">$0.00</div>
+                    <label class="form-label fw-bold">{{ _('Total / الإجمالي') }}</label>
+                    <div class="form-control bg-success text-white fw-bold item-total">$0.00</div>
                 </div>
                 <div class="col-md-1 d-flex align-items-end">
-                    <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-item-btn w-100">🗑️</button>
                 </div>
             </div>
         `;
@@ -339,17 +552,86 @@ body {
         }
     });
 
-    // View invoice details
-    function viewInvoice(invoiceId) {
-        alert('Invoice details for ID: ' + invoiceId + ' (Feature coming soon)');
+    // Clear expense form
+    function clearExpenseForm() {
+        document.getElementById('expense-form').reset();
+        document.getElementById('items-container').innerHTML = '';
+        calculateTotals();
+        // Add one default item
+        document.getElementById('add-item').click();
     }
 
-    function deleteExpenseInvoice(invoiceId, invoiceNumber) {
-        if (confirm('{{ _("Are you sure you want to delete expense invoice") }} "' + invoiceNumber + '"?\n\n{{ _("This action cannot be undone.") }}')) {
+    // Search functionality
+    document.getElementById('invoiceSearch')?.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const rows = document.querySelectorAll('#invoicesTableBody tr');
+        
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchTerm) ? '' : 'none';
+        });
+    });
+
+    // Export expenses
+    window.exportExpenses = function() {
+        // Get all invoice data
+        const rows = [];
+        const tableRows = document.querySelectorAll('#invoicesTableBody tr');
+        
+        // Add header
+        rows.push(['Invoice No', 'Date', 'Payment Method', 'Total', 'Status', 'Items']);
+        
+        // Add data rows
+        tableRows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 7) {
+                const invoiceNo = cells[1].textContent.trim();
+                const date = cells[2].textContent.trim();
+                const payment = cells[3].textContent.trim();
+                const total = cells[4].textContent.trim();
+                const status = cells[5].textContent.trim();
+                const items = cells[6].textContent.trim();
+                
+                rows.push([invoiceNo, date, payment, total, status, items]);
+            }
+        });
+        
+        // Convert to CSV
+        const csvContent = rows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        
+        // Download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'expenses_export.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // View invoice details
+    window.viewInvoice = function(invoiceId) {
+        // Open in new tab
+        window.open(`/expenses/${invoiceId}/view`, '_blank');
+    }
+
+    // Edit invoice
+    window.editInvoice = async function(invoiceId) {
+        // Redirect to edit page
+        if (await window.showConfirm('{{ _("Edit this expense invoice? / تعديل فاتورة المصروفات هذه؟") }}')) {
+            window.location.href = '/expenses/' + invoiceId + '/edit';
+        }
+    }
+
+    // Delete expense invoice
+    window.deleteExpenseInvoice = async function(invoiceId, invoiceNumber) {
+        if (await window.showConfirm('{{ _("Are you sure you want to delete expense invoice") }} "' + invoiceNumber + '"?\n\n{{ _("This action cannot be undone.") }}')) {
             // Create a form and submit it
             const form = document.createElement('form');
             form.method = 'POST';
-            form.action = '/delete_expense_invoice/' + invoiceId;
+            form.action = '/expenses/' + invoiceId + '/delete';
 
             // Add CSRF token if available
             const csrfToken = document.querySelector('input[name="csrf_token"]');

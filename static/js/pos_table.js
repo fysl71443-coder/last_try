@@ -5,6 +5,7 @@
   let BRANCH = '';
   let TABLE_NO = '';
   let VAT_RATE = 0;
+  let VOID_PASSWORD = '1991'; // Default, will be loaded from settings
   let CURRENT_DRAFT_ID = null;
   let items = [];
   let CAT_MAP = {};
@@ -18,6 +19,24 @@
     return Promise.resolve();
   }
 
+  // Load branch settings (void password, etc.)
+  async function loadBranchSettings() {
+    if (!BRANCH) return;
+    try {
+      const response = await fetch(`/api/branch-settings/${BRANCH}`);
+      if (response.ok) {
+        const settings = await response.json();
+        VOID_PASSWORD = settings.void_password || '1991';
+        console.log(`Loaded void password for ${BRANCH}: ${VOID_PASSWORD}`);
+      }
+    } catch (error) {
+      console.error('Failed to load branch settings:', error);
+    }
+  }
+
+  // Expose function to reload settings (called when settings are updated)
+  window.reloadBranchSettings = loadBranchSettings;
+
   // --- DOM Helpers ---
   function qs(sel, ctx=document){ return ctx.querySelector(sel); }
   function qsa(sel, ctx=document){ return Array.from(ctx.querySelectorAll(sel)); }
@@ -29,10 +48,13 @@
     const discountPct = number(qs('#discountPct')?.value || 0);
     let subtotal = 0, tax = 0;
     items.forEach(it=>{ const sub=it.unit*it.qty; subtotal+=sub; tax += sub*(taxPct/100); });
-    const discountVal = (subtotal+tax) * (discountPct/100);
-    const grand = (subtotal+tax) - discountVal;
+    // Apply discount to subtotal only, then calculate tax on discounted amount
+    const discountVal = subtotal * (discountPct/100);
+    const discountedSubtotal = subtotal - discountVal;
+    const taxOnDiscounted = discountedSubtotal * (taxPct/100);
+    const grand = discountedSubtotal + taxOnDiscounted;
     if(qs('#subtotal')) qs('#subtotal').textContent = subtotal.toFixed(2);
-    if(qs('#tax')) qs('#tax').textContent = tax.toFixed(2);
+    if(qs('#tax')) qs('#tax').textContent = taxOnDiscounted.toFixed(2);
     if(qs('#discount')) qs('#discount').textContent = discountVal.toFixed(2);
     if(qs('#grand')) qs('#grand').textContent = grand.toFixed(2);
   }
@@ -49,8 +71,8 @@
       const qtyText = document.createElement('input'); qtyText.type='text'; qtyText.readOnly = true; qtyText.value = String(it.qty); qtyText.className = 'form-control form-control-sm text-center'; qtyText.style.width = '50px';
       const plusBtn = document.createElement('button'); plusBtn.type='button'; plusBtn.className='btn btn-sm btn-outline-secondary'; plusBtn.textContent='+';
       minusBtn.addEventListener('click', async ()=>{
-        const pwd = await (window.showPrompt ? window.showPrompt('Enter supervisor password') : Promise.resolve(prompt('Enter supervisor password')));
-        if(pwd===null) return; if(String(pwd).trim() !== '1991'){ if(window.showAlert) await window.showAlert('Incorrect password'); else alert('Incorrect password'); return; }
+        const pwd = await (window.showPasswordPrompt ? window.showPasswordPrompt('أدخل كلمة سر المشرف / Enter supervisor password') : Promise.resolve(prompt('Enter supervisor password')));
+        if(pwd===null) return; if(String(pwd).trim() !== VOID_PASSWORD){ if(window.showAlert) await window.showAlert('Incorrect password'); else alert('Incorrect password'); return; }
         if((it.qty||1) <= 1){
           items.splice(idx,1);
         } else {
@@ -65,13 +87,16 @@
       qtyTd.appendChild(controls); tr.appendChild(qtyTd);
       const unitTd = document.createElement('td'); unitTd.className = 'text-end'; unitTd.textContent = it.unit.toFixed(2); tr.appendChild(unitTd);
       const lineTd = document.createElement('td'); lineTd.className = 'text-end';
-      const lineSub = it.unit * it.qty; const tax = lineSub * (number(qs('#taxPct')?.value || VAT_RATE)/100);
-      lineTd.textContent = (lineSub + tax).toFixed(2); tr.appendChild(lineTd);
+      const lineSub = it.unit * it.qty; 
+      const discountPct = number(qs('#discountPct')?.value || 0);
+      const discountedLineSub = lineSub * (1 - discountPct/100);
+      const tax = discountedLineSub * (number(qs('#taxPct')?.value || VAT_RATE)/100);
+      lineTd.textContent = (discountedLineSub + tax).toFixed(2); tr.appendChild(lineTd);
       const rmTd = document.createElement('td');
       const rmBtn = document.createElement('button'); rmBtn.className='btn btn-sm btn-outline-danger'; rmBtn.textContent = '×';
       rmBtn.addEventListener('click', async ()=>{
-        const pwd = await window.showPrompt('Enter supervisor password');
-        if(pwd===null) return; if(String(pwd).trim() !== '1991'){ await window.showAlert('Incorrect password'); return; }
+        const pwd = await window.showPasswordPrompt('أدخل كلمة سر المشرف / Enter supervisor password');
+        if(pwd===null) return; if(String(pwd).trim() !== VOID_PASSWORD){ await window.showAlert('Incorrect password'); return; }
         items.splice(idx,1); renderItems(); scheduleSave({ supervisor_password: pwd });
       });
       rmTd.appendChild(rmBtn); tr.appendChild(rmTd);
@@ -238,7 +263,13 @@
           if(w.closed){
             clearInterval(timer);
             try{ await decisionPromise; }catch(_e){}
-            if(userDecision){ await doFinalize(); }
+            // Only finalize if user confirmed
+            if(userDecision === true){ 
+              await doFinalize(); 
+            } else {
+              // User didn't confirm - keep invoice as draft
+              await window.showAlert('تم حفظ الفاتورة كمسودة. يمكنك إكمالها لاحقاً.');
+            }
           }
         }, 400);
         // Safety auto-close after 30s and then proceed
@@ -250,18 +281,26 @@
       } else {
         // Popup blocked: proceed with decision immediately
         try{ await decisionPromise; }catch(_e){}
-        if(userDecision){ await doFinalize(); }
+        if(userDecision === true){ 
+          await doFinalize(); 
+        } else {
+          await window.showAlert('تم حفظ الفاتورة كمسودة. يمكنك إكمالها لاحقاً.');
+        }
       }
     } else {
       // No print URL: just ask and act
       try{ await decisionPromise; }catch(_e){}
-      if(userDecision){ await doFinalize(); }
+      if(userDecision === true){ 
+        await doFinalize(); 
+      } else {
+        await window.showAlert('تم حفظ الفاتورة كمسودة. يمكنك إكمالها لاحقاً.');
+      }
     }
   }
 
   async function voidInvoice(){
     if(items.length === 0){ await window.showAlert('Invoice is already empty'); return; }
-    const pwd = await window.showPrompt('Enter void password'); if(pwd===null) return; if(String(pwd).trim()===''){ await window.showAlert('Password required'); return; }
+    const pwd = await window.showPasswordPrompt('أدخل كلمة سر الإلغاء / Enter void password'); if(pwd===null) return; if(String(pwd).trim() !== VOID_PASSWORD){ await window.showAlert('Incorrect password'); return; }
     try{
       const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
       const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
@@ -287,6 +326,9 @@
     BRANCH = init?.getAttribute('data-branch') || document.body.dataset.branch || '';
     TABLE_NO = init?.getAttribute('data-table') || document.body.dataset.table || '';
     VAT_RATE = number(init?.getAttribute('data-vat') || 0);
+    
+    // Load branch-specific settings
+    loadBranchSettings();
     const draftRaw = init?.getAttribute('data-draft') || '[]';
     try{
       const draft = JSON.parse(draftRaw);
