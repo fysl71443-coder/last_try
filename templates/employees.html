@@ -15,12 +15,14 @@
   <div class="card mb-4" id="employees-form">
     <div class="card-body">
       <h5 class="mb-3" id="form-title">📝 {{ _('Add New Employee / إضافة موظف جديد') }}</h5>
+      <input type="hidden" id="__salaries_pay_url" value="{{ url_for('main.salaries_pay') }}">
+      <input type="hidden" id="__confirm_delete_msg" value="{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}">
       <form method="POST">
         {{ form.hidden_tag() }}
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
         <div class="row g-3">
-          <div class="col-md-3">{{ form.employee_code.label(class_='form-label') }}{{ form.employee_code(class_='form-control') }}</div>
+          <div class="col-md-3">{{ form.employee_code.label(class_='form-label') }}{{ form.employee_code(class_='form-control', value=(form.employee_code.data or next_code or '')) }}</div>
           <div class="col-md-3">{{ form.full_name.label(class_='form-label') }}{{ form.full_name(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.national_id.label(class_='form-label') }}{{ form.national_id(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.status.label(class_='form-label') }}{{ form.status(class_='form-select') }}</div>
@@ -62,119 +64,7 @@
       </form>
     </div>
   </div>
-  <div class="card mb-4" id="pay-salaries-section">
-    <div class="card-body">
-      <h5 class="mb-3">💵 {{ _('Pay Salaries / سداد الرواتب') }}</h5>
-      <form id="paySalaryForm" onsubmit="return handleCreateSalary(event)">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-        <div class="row g-3 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label">{{ _('Month / الشهر') }}</label>
-            <input type="month" class="form-control" id="pay_month" required>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">{{ _('Employee / الموظف') }}</label>
-            <select class="form-select" id="pay_employee" required>
-              <option value="">-- {{ _('Select') }} --</option>
-              {% for e in employees or [] %}
-              <option value="{{ e.id }}">{{ e.full_name }}{% if e.department %} — {{ e.department }}{% endif %}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">{{ _('Paid Amount / المبلغ المدفوع') }}</label>
-            <input type="number" step="0.01" class="form-control" id="paid_amount" placeholder="0.00">
-          </div>
-          <div class="col-md-3 text-end">
-            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#monthAdjust">{{ _('Edit Allowances/Deductions / تعديل البدلات والاستقطاعات') }}</button>
-          </div>
-        </div>
-        <div class="collapse mt-3" id="monthAdjust">
-          <div class="row g-3">
-            <div class="col-md-3">
-              <label class="form-label">{{ _('Basic Salary / الراتب الأساسي') }}</label>
-              <input type="number" step="0.01" class="form-control" id="basic_salary" placeholder="0.00">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">{{ _('Allowances / البدلات') }}</label>
-              <input type="number" step="0.01" class="form-control" id="allowances" placeholder="0.00">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">{{ _('Deductions / الاستقطاعات') }}</label>
-              <input type="number" step="0.01" class="form-control" id="deductions" placeholder="0.00">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">{{ _('Previous Due / مستحقات سابقة') }}</label>
-              <input type="number" step="0.01" class="form-control" id="previous_due" placeholder="0.00">
-            </div>
-          </div>
-          <div class="row g-3 mt-2">
-            <div class="col-md-3">
-              <label class="form-label">{{ _('Work Hours / عدد ساعات العمل') }}</label>
-              <input type="number" step="0.1" class="form-control" id="work_hours" placeholder="0">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">{{ _('Net Salary / الصافي') }}</label>
-              <input type="text" class="form-control" id="net_salary" readonly>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">{{ _('Remaining / المتبقي') }}</label>
-              <input type="text" class="form-control" id="remaining_salary" readonly>
-            </div>
-            <div class="col-md-3 text-end d-flex align-items-end justify-content-end">
-              <button type="submit" class="btn btn-success">{{ _('Create/Update Salary / إنشاء/تحديث الراتب') }}</button>
-            </div>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div class="card mb-4" id="statements-section">
-    <div class="card-body">
-      <h5 class="mb-3">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</h5>
-      <div class="row g-3 mb-3">
-        <div class="col-md-3">
-          <label class="form-label">{{ _('Month / الشهر') }}</label>
-          <input type="month" class="form-control" id="stmt_month">
-        </div>
-        <div class="col-md-3 d-flex align-items-end">
-          <button class="btn btn-outline-primary" id="btnLoadStatements">{{ _('Load / تحميل') }}</button>
-        </div>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-bordered table-sm align-middle" id="tblStatements">
-          <thead class="table-light">
-            <tr>
-              <th>{{ _('Employee / الموظف') }}</th>
-              <th>{{ _('Department / القسم') }}</th>
-              <th>{{ _('Basic / الأساسي') }}</th>
-              <th>{{ _('Allowances / البدلات') }}</th>
-              <th>{{ _('Deductions / الاستقطاعات') }}</th>
-              <th>{{ _('Net / الصافي') }}</th>
-              <th>{{ _('Paid / المدفوع') }}</th>
-              <th>{{ _('Remaining / المتبقي') }}</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="row g-3 mt-2" id="stmtTotals">
-        <div class="col">
-          <div class="small text-muted">{{ _('Totals (All Employees) / الإجماليات (كل الموظفين)') }}</div>
-          <div class="d-flex flex-wrap gap-3">
-            <div>{{ _('Employees') }}: <strong id="t_emps">0</strong></div>
-            <div>{{ _('Basic') }}: <strong id="t_basic">0.00</strong></div>
-            <div>{{ _('Allowances') }}: <strong id="t_allow">0.00</strong></div>
-            <div>{{ _('Deductions') }}: <strong id="t_ded">0.00</strong></div>
-            <div>{{ _('Paid') }}: <strong id="t_paid">0.00</strong></div>
-            <div>{{ _('Net') }}: <strong id="t_net">0.00</strong></div>
-            <div>{{ _('Remaining') }}: <strong id="t_remain">0.00</strong></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Simplified: Payroll actions moved to dedicated screens. Use the top buttons above. -->
 
 
   {% if employees %}
@@ -235,9 +125,9 @@
               <td>{% if e.status=='active' %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}</td>
               <td>
                 <div class="btn-group" role="group">
-                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="editEmployeeFromRow(this, {{ e.id }})" title="{{ _('Edit / تعديل') }}">✏️</button>
-                  <button type="button" class="btn btn-sm btn-outline-success" onclick="openPaySalary({{ e.id }})" title="{{ _('Salary / الراتب') }}">💰</button>
-                  <form method="post" action="{{ url_for('main.employee_delete', eid=e.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this employee? / حذف هذا الموظف؟') }}')">
+                  <button type="button" class="btn btn-sm btn-outline-primary btn-edit" data-emp-id="{{ e.id }}" title="{{ _('Edit / تعديل') }}">✏️</button>
+                  <button type="button" class="btn btn-sm btn-outline-success btn-salary" data-emp-id="{{ e.id }}" title="{{ _('Salary / الراتب') }}">💰</button>
+                  <form method="post" action="{{ url_for('main.employee_delete', eid=e.id) }}" class="d-inline form-delete-emp" data-emp-name="{{ e.full_name }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete / حذف') }}">🗑️</button>
                   </form>
@@ -259,14 +149,14 @@ console.log('JavaScript loaded successfully!');
 
 // i18n strings
 var I18N = {
-  editEmployee: "{{ _('Edit Employee / تعديل الموظف') }}",
-  addEmployee: "{{ _('Add New Employee / إضافة موظف جديد') }}",
-  addEmployeeBtn: "{{ _('Add Employee / إضافة موظف') }}",
-  salarySaved: "{{ _('Salary saved successfully / تم حفظ الراتب بنجاح') }}",
-  net: "{{ _('Net') }}",
-  chooseMonth: "{{ _('Please choose month') }}",
-  chooseEmployee: "{{ _('Please choose employee') }}",
-  confirmDelete: "{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}"
+  editEmployee: "Edit Employee / تعديل الموظف",
+  addEmployee: "Add New Employee / إضافة موظف جديد",
+  addEmployeeBtn: "Add Employee / إضافة موظف",
+  salarySaved: "Salary saved successfully / تم حفظ الراتب بنجاح",
+  net: "Net",
+  chooseMonth: "Please choose month",
+  chooseEmployee: "Please choose employee",
+  confirmDelete: "Are you sure to delete / هل أنت متأكد من الحذف؟"
 };
 
 // Edit employee function
@@ -318,7 +208,7 @@ function editEmployeeFromRow(button, empId){
   // Change form action to edit route
   const form = document.querySelector('#employees-form form');
   if (form) {
-    form.action = `/employees/edit/${emp.id}`;
+    form.action = '/employees/edit/' + emp.id;
     // Change submit text for both button and input submit
     const btn = form.querySelector('button[type="submit"]');
     const inp = form.querySelector('input[type="submit"]');
@@ -353,18 +243,27 @@ async function deleteEmployeeNew(id, name) {
   console.log('Delete employee clicked:', name);
   
   try {
-    const confirmed = await window.showConfirm(`{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}\n${name}`);
+    var msgEl = document.getElementById('__confirm_delete_msg');
+    var baseMsg = msgEl ? msgEl.value : 'Are you sure?';
+    const confirmed = await window.showConfirm(baseMsg + '\n' + name);
     if (confirmed) {
+      // If there is an existing delete form in the row, submit it to keep CSRF intact
+      var btn = document.querySelector('.btn-edit[data-emp-id="' + id + '"]');
+      var row = btn ? btn.closest('tr') : null;
+      var existingForm = row ? row.querySelector('form.form-delete-emp') : null;
+      if (existingForm) {
+        existingForm.submit();
+        return;
+      }
+      // fallback manual form
       const form = document.createElement('form');
       form.method = 'POST';
-      form.action = `/employees/${id}/delete`;
-      
+      form.action = '/employees/' + id + '/delete';
       const csrfInput = document.createElement('input');
       csrfInput.type = 'hidden';
       csrfInput.name = 'csrf_token';
       var mt = document.querySelector('meta[name="csrf-token"]');
       csrfInput.value = mt ? mt.content : '';
-      
       form.appendChild(csrfInput);
       document.body.appendChild(form);
       form.submit();
@@ -394,6 +293,12 @@ function clearEmployeeForm() {
     if (formTitle) {
       formTitle.textContent = '📝 {{ _("Add New Employee / إضافة موظف جديد") }}';
     }
+    // Refill employee_code with next_code from server if available
+    var codeInput = document.querySelector('input[name="employee_code"]');
+    if (codeInput) {
+      var serverNext = '{{ next_code or "" }}';
+      if (serverNext) { codeInput.value = serverNext; }
+    }
   }
 }
 
@@ -403,12 +308,10 @@ window.clearEmployeeForm = clearEmployeeForm;
 // Quick open Pay Salary section and preselect employee
 function openPaySalary(empId, name){
   try{
-    const sel = document.getElementById('pay_employee');
-    if (sel){ sel.value = String(empId); sel.dispatchEvent(new Event('change')); }
-    const paySec = document.getElementById('pay-salaries-section');
-    if (paySec) paySec.scrollIntoView({behavior:'smooth'});
-    // Auto-open adjustment area so المستخدم يرى الحقول
-    try{ new bootstrap.Collapse(document.getElementById('monthAdjust'), {toggle:true}); }catch(e){}
+    // Redirect to salaries page filtered by employee if available, else open salaries main
+    var url = (document.getElementById('__salaries_pay_url')||{}).value || '/salaries/pay';
+    if (empId){ url = url + '?employee=' + encodeURIComponent(empId); }
+    window.location.href = url;
   }catch(e){ console.warn(e); }
 }
 window.openPaySalary = openPaySalary;
@@ -428,6 +331,41 @@ window.openPaySalary = openPaySalary;
   }
 })();
 
+// Delegated actions for table buttons
+(function(){
+  var tbody = document.getElementById('empTableBody');
+  if (!tbody) return;
+  tbody.addEventListener('click', function(e){
+    var t = e.target;
+    // If the click is on the icon inside a button, bubble to the button
+    if (t && t.closest) t = t.closest('button, form');
+    if (!t) return;
+    if (t.classList.contains('btn-edit')){
+      // pass the button and employee id
+      var empId = t.getAttribute('data-emp-id');
+      editEmployeeFromRow(t, empId);
+      return;
+    }
+    if (t.classList.contains('btn-salary')){
+      var empId2 = t.getAttribute('data-emp-id');
+      openPaySalary(empId2);
+      return;
+    }
+    if (t.classList.contains('form-delete-emp')){
+      // prevent default and show confirm
+      e.preventDefault();
+      var name = t.getAttribute('data-emp-name') || '';
+      deleteEmployeeNew((function(){
+        var rowBtn = t.parentElement && t.parentElement.querySelector('.btn-edit');
+        return rowBtn ? rowBtn.getAttribute('data-emp-id') : '';
+      })(), name).then(function(){
+        // no-op; actual submit happens in deleteEmployeeNew
+      });
+      return;
+    }
+  });
+})();
+
 // Quick Department selector fills the input
 (function(){
   const sel = document.getElementById('deptQuickSelect');
@@ -438,101 +376,7 @@ window.openPaySalary = openPaySalary;
   });
 })();
 
-// ===== Payroll helpers (UI only) =====
-function toNum(v){ var n = parseFloat(v); return isNaN(n)?0:n; }
-function updateNet(){
-  var base = toNum((document.getElementById('basic_salary')||{}).value);
-  var allow = toNum((document.getElementById('allowances')||{}).value);
-  var ded = toNum((document.getElementById('deductions')||{}).value);
-  var prev = toNum((document.getElementById('previous_due')||{}).value);
-  var paid = toNum((document.getElementById('paid_amount')||{}).value);
-  var net = Math.max(0, base + allow - ded + prev);
-  var remaining = Math.max(0, net - paid);
-  var netEl = document.getElementById('net_salary');
-  var remEl = document.getElementById('remaining_salary');
-  if (netEl) netEl.value = net.toFixed(2);
-  if (remEl) remEl.value = remaining.toFixed(2);
-}
-['basic_salary','allowances','deductions','previous_due','paid_amount'].forEach(function(id){
-  var el = document.getElementById(id);
-  if (el && el.addEventListener) el.addEventListener('input', updateNet);
-});
-
-async function handleCreateSalary(ev){
-  ev.preventDefault();
-  var monthInput = document.getElementById('pay_month');
-  var monthVal = (monthInput && monthInput.value) ? monthInput.value : '';
-  if (!monthVal){ alert('{{ _('Please choose month') }}'); return false; }
-  var parts = monthVal.split('-');
-  var year = parts[0];
-  var month = parts[1];
-  var empSel = document.getElementById('pay_employee');
-  var employee_id = (empSel && empSel.value) ? empSel.value : '';
-  if (!employee_id){ alert('{{ _('Please choose employee') }}'); return false; }
-  var base = toNum((document.getElementById('basic_salary')||{}).value);
-  var allow = toNum((document.getElementById('allowances')||{}).value);
-  var ded = toNum((document.getElementById('deductions')||{}).value);
-  var prev = toNum((document.getElementById('previous_due')||{}).value);
-  updateNet();
-  var fd = new FormData();
-  var csrfEl = document.querySelector('#paySalaryForm [name=csrf_token]');
-  fd.append('csrf_token', csrfEl ? csrfEl.value : '');
-  fd.append('employee_id', employee_id);
-  fd.append('year', year);
-  fd.append('month', month);
-  fd.append('basic_salary', base);
-  fd.append('allowances', allow);
-  fd.append('deductions', ded);
-  fd.append('previous_salary_due', prev);
-  try{
-    var resp = await fetch('{{ url_for('main.employees_create_salary') }}', { method:'POST', body: fd });
-    var data;
-    try { data = await resp.json(); } catch(_){ data = {ok:false,error:'parse_error'} }
-    if (resp.ok && data.ok){
-      var netTxt = '';
-      if (data && typeof data.total === 'number') {
-        netTxt = data.total.toFixed(2);
-      } else if (data && data.total != null) {
-        netTxt = String(data.total);
-      }
-      alert('{{ _('Salary saved successfully / تم حفظ الراتب بنجاح') }}' + '\n' + '{{ _('Net') }}' + ': ' + netTxt);
-    } else {
-      alert('{{ _('Error') }}: ' + (data.error || resp.status));
-    }
-  }catch(err){
-    alert('{{ _('Network error') }}');
-  }
-  return false;
-}
-
-// Stub: load statements (UI only placeholder for now)
-(function(){
-  var tbody = document.querySelector('#tblStatements tbody');
-  if (!tbody) return;
-})();
-(function(){
-  var tbody = document.querySelector('#tblStatements tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  let tEmps=0, tBasic=0, tAllow=0, tDed=0, tPaid=0, tNet=0, tRemain=0;
-  {% for e in employees or [] %}
-    // Defaults unknown at UI layer; render zeroed row with employee + department only
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td>{{ e.full_name|e }}</td>' +
-                   '<td>{{ (e.department or '-')|e }}</td>' +
-                   '<td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td>';
-    tbody.appendChild(tr);
-    tEmps += 1;
-  {% endfor %}
-  var el;
-  el = document.getElementById('t_emps'); if (el) el.innerText = tEmps;
-  el = document.getElementById('t_basic'); if (el) el.innerText = tBasic.toFixed(2);
-  el = document.getElementById('t_allow'); if (el) el.innerText = tAllow.toFixed(2);
-  el = document.getElementById('t_ded'); if (el) el.innerText = tDed.toFixed(2);
-  el = document.getElementById('t_paid'); if (el) el.innerText = tPaid.toFixed(2);
-  el = document.getElementById('t_net'); if (el) el.innerText = tNet.toFixed(2);
-  el = document.getElementById('t_remain'); if (el) el.innerText = tRemain.toFixed(2);
-});
+// Employees page no longer embeds payroll logic. Use Salaries screens.
 </script>
 
 {% endblock %}

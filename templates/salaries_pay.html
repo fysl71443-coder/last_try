@@ -12,39 +12,59 @@
     </div>
   </div>
 
+  
+
   <div class="card mb-4">
     <div class="card-body">
-      <form method="POST" action="{{ url_for('main.salaries_pay') }}">
+      <form method="POST" action="{{ url_for('main.salaries_pay') }}" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-        <div class="row g-3 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label">{{ _('Month / الشهر') }}</label>
-            <input type="month" class="form-control" name="month" value="{{ month }}" required>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">{{ _('Employee / الموظف') }}</label>
-            <select class="form-select" name="employee_id" required>
-              <option value="">-- {{ _('Select') }} --</option>
-              {% for e in employees or [] %}
-              <option value="{{ e.id }}">{{ e.full_name }}{% if e.department %} — {{ e.department }}{% endif %}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">{{ _('Paid Amount / المبلغ المدفوع') }}</label>
-            <input type="number" step="0.01" class="form-control" name="paid_amount" placeholder="0.00">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">{{ _('Payment Method / طريقة الدفع') }}</label>
-            <select class="form-select" name="payment_method">
-              <option value="cash">{{ _('Cash') }}</option>
-              <option value="bank">{{ _('Bank') }}</option>
-              <option value="visa">{{ _('Visa/Mada') }}</option>
-            </select>
-          </div>
-          <div class="col-md-1 text-end">
-            <button type="submit" class="btn btn-success">{{ _('Save / حفظ') }}</button>
-          </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Month / الشهر') }}</label>
+          <input type="month" class="form-control" name="month" value="{{ month }}" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ _('Employee / الموظف') }}</label>
+          <select class="form-select" name="employee_id" required>
+            <option value="">-- {{ _('Select') }} --</option>
+            {% for e in employees or [] %}
+            <option value="{{ e.id }}" {% if selected_employee and selected_employee==e.id %}selected{% endif %}>{{ e.full_name }}{% if e.department %} — {{ e.department }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Basic Salary / الراتب الأساسي') }}</label>
+          <input type="number" step="0.01" class="form-control" name="basic_salary" placeholder="0.00"
+                 value="{% if selected_employee and defaults_map.get(selected_employee) %}{{ '%.2f'|format(defaults_map[selected_employee]['basic_salary']) }}{% else %}{% endif %}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Allowances / البدلات') }}</label>
+          <input type="number" step="0.01" class="form-control" name="allowances" placeholder="0.00"
+                 value="{% if selected_employee and defaults_map.get(selected_employee) %}{{ '%.2f'|format(defaults_map[selected_employee]['allowances']) }}{% else %}{% endif %}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Deductions / الاستقطاعات') }}</label>
+          <input type="number" step="0.01" class="form-control" name="deductions" placeholder="0.00"
+                 value="{% if selected_employee and defaults_map.get(selected_employee) %}{{ '%.2f'|format(defaults_map[selected_employee]['deductions']) }}{% else %}{% endif %}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Previous Due / مستحقات سابقة') }}</label>
+          <input type="number" step="0.01" class="form-control" name="previous_salary_due" placeholder="0.00"
+                 value="{% if selected_employee and prev_due_map.get(selected_employee) %}{{ '%.2f'|format(prev_due_map[selected_employee]) }}{% else %}{% endif %}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Paid Amount / المبلغ المدفوع') }}</label>
+          <input type="number" step="0.01" class="form-control" name="paid_amount" placeholder="0.00">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Payment Method / طريقة الدفع') }}</label>
+          <select class="form-select" name="payment_method">
+            <option value="cash">{{ _('Cash') }}</option>
+            <option value="bank">{{ _('Bank') }}</option>
+            <option value="visa">{{ _('Visa/Mada') }}</option>
+          </select>
+        </div>
+        <div class="col-12 text-end">
+          <button type="submit" class="btn btn-success">{{ _('Save / حفظ') }}</button>
         </div>
       </form>
     </div>

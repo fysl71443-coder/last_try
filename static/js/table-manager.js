@@ -121,7 +121,7 @@
       btn.addEventListener('click', () => {
         const sectionEl = btn.closest('[data-section-id]');
         const sectionId = sectionEl.getAttribute('data-section-id');
-        layout.sections = layout.sections.filter(s => s.id !== sectionId);
+        layout.sections = (layout.sections || []).filter(s => String(s.id) !== String(sectionId));
         renderLayout();
       });
     });
@@ -131,7 +131,7 @@
       btn.addEventListener('click', () => {
         const sectionEl = btn.closest('[data-section-id]');
         const sectionId = sectionEl.getAttribute('data-section-id');
-        const section = layout.sections.find(s => s.id === sectionId);
+        const section = (layout.sections || []).find(s => String(s.id) === String(sectionId));
         
         const row = {
           id: generateId('row'),
@@ -150,9 +150,9 @@
         const rowId = rowEl.getAttribute('data-row-id');
         const sectionEl = rowEl.closest('[data-section-id]');
         const sectionId = sectionEl.getAttribute('data-section-id');
-        const section = layout.sections.find(s => s.id === sectionId);
+        const section = (layout.sections || []).find(s => String(s.id) === String(sectionId));
         
-        section.rows = section.rows.filter(r => r.id !== rowId);
+        section.rows = (section.rows || []).filter(r => String(r.id) !== String(rowId));
         renderLayout();
       });
     });
@@ -164,8 +164,8 @@
         const rowId = rowEl.getAttribute('data-row-id');
         const sectionEl = rowEl.closest('[data-section-id]');
         const sectionId = sectionEl.getAttribute('data-section-id');
-        const section = layout.sections.find(s => s.id === sectionId);
-        const row = section.rows.find(r => r.id === rowId);
+        const section = (layout.sections || []).find(s => String(s.id) === String(sectionId));
+        const row = (section.rows || []).find(r => String(r.id) === String(rowId));
         
         const table = {
           id: generateId('table'),
@@ -187,10 +187,10 @@
         const rowId = rowEl.getAttribute('data-row-id');
         const sectionEl = rowEl.closest('[data-section-id]');
         const sectionId = sectionEl.getAttribute('data-section-id');
-        const section = layout.sections.find(s => s.id === sectionId);
-        const row = section.rows.find(r => r.id === rowId);
+        const section = (layout.sections || []).find(s => String(s.id) === String(sectionId));
+        const row = (section.rows || []).find(r => String(r.id) === String(rowId));
         
-        row.tables = row.tables.filter(t => t.id !== tableId);
+        row.tables = (row.tables || []).filter(t => String(t.id) !== String(tableId));
         renderLayout();
       });
     });
@@ -200,7 +200,7 @@
       input.addEventListener('blur', () => {
         const sectionEl = input.closest('[data-section-id]');
         const sectionId = sectionEl.getAttribute('data-section-id');
-        const section = layout.sections.find(s => s.id === sectionId);
+        const section = (layout.sections || []).find(s => String(s.id) === String(sectionId));
         section.name = input.value;
       });
     });
@@ -214,9 +214,9 @@
         const rowId = rowEl.getAttribute('data-row-id');
         const sectionEl = rowEl.closest('[data-section-id]');
         const sectionId = sectionEl.getAttribute('data-section-id');
-        const section = layout.sections.find(s => s.id === sectionId);
-        const row = section.rows.find(r => r.id === rowId);
-        const table = row.tables.find(t => t.id === tableId);
+        const section = (layout.sections || []).find(s => String(s.id) === String(sectionId));
+        const row = (section.rows || []).find(r => String(r.id) === String(rowId));
+        const table = (row.tables || []).find(t => String(t.id) === String(tableId));
         
         table.number = input.value;
       });
@@ -252,9 +252,9 @@
           let oldSection = null;
           let oldRow = null;
           
-          layout.sections.forEach(section => {
-            section.rows.forEach(row => {
-              const tableIndex = row.tables.findIndex(t => t.id === tableId);
+          (layout.sections || []).forEach(section => {
+            (section.rows || []).forEach(row => {
+              const tableIndex = (row.tables || []).findIndex(t => String(t.id) === String(tableId));
               if (tableIndex !== -1) {
                 tableData = row.tables[tableIndex];
                 oldSection = section;
@@ -265,9 +265,9 @@
           });
           
           if (tableData && oldSection && oldRow) {
-            const newSection = layout.sections.find(s => s.id === newSectionId);
-            const newRow = newSection.rows.find(r => r.id === newRowId);
-            newRow.tables.push(tableData);
+            const newSection = (layout.sections || []).find(s => String(s.id) === String(newSectionId));
+            const newRow = (newSection.rows || []).find(r => String(r.id) === String(newRowId));
+            (newRow.tables || newRow.tables).push(tableData);
           }
         }
       });

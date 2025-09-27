@@ -66,6 +66,21 @@
       });
       
       modal.show();
+      // If requested to keep confirmation behind a print window, re-focus the print window after showing
+      setTimeout(function(){
+        try{
+          if (window.KEEP_CONFIRM_BEHIND && window.__PRINT_WINDOW && !window.__PRINT_WINDOW.closed) {
+            window.__PRINT_WINDOW.focus();
+          }
+        }catch(_e){}
+      }, 50);
+      setTimeout(function(){
+        try{
+          if (window.KEEP_CONFIRM_BEHIND && window.__PRINT_WINDOW && !window.__PRINT_WINDOW.closed) {
+            window.__PRINT_WINDOW.focus();
+          }
+        }catch(_e){}
+      }, 250);
     });
   }
 
@@ -91,6 +106,17 @@
       <button type="button" class="btn btn-primary" data-result="true" data-bs-dismiss="modal">
         موافق / OK
       </button>
+    `;
+    const modalHtml = createModal(id, title, `<p>${message}</p>`, buttons);
+    return showModal(modalHtml).then(result => result === 'true');
+  };
+
+  // Custom Confirm with custom buttons (non-blocking friendly)
+  window.showConfirmChoice = function(message, okText = 'OK', cancelText = 'Cancel', title = 'تأكيد / Confirm') {
+    const id = generateModalId();
+    const buttons = `
+      <button type="button" class="btn btn-secondary" data-result="false" data-bs-dismiss="modal">${cancelText}</button>
+      <button type="button" class="btn btn-primary" data-result="true" data-bs-dismiss="modal">${okText}</button>
     `;
     const modalHtml = createModal(id, title, `<p>${message}</p>`, buttons);
     return showModal(modalHtml).then(result => result === 'true');
@@ -283,17 +309,20 @@
     modal.show();
   };
 
-  // Override window.open for print URLs
+  // Override window.open for print URLs (allow bypass via DISABLE_PRINT_MODAL flag)
   const originalWindowOpen = window.open;
   window.open = function(url, target, features) {
-    // Check if it's a print/PDF URL
-    if (url && (url.includes('/print') || url.includes('.pdf') || url.includes('receipt'))) {
+    const isPrintUrl = url && (url.includes('/print') || url.includes('.pdf') || url.includes('receipt'));
+    const disablePrintModal = !!window.DISABLE_PRINT_MODAL;
+    if (isPrintUrl && !disablePrintModal) {
       showPrintModal(url);
       return null;
     }
-    // For other URLs, use original behavior
     return originalWindowOpen.call(this, url, target, features);
   };
+
+  // Expose helper to toggle print modal behavior if needed
+  window.enablePrintModal = function(enable){ window.DISABLE_PRINT_MODAL = !enable; };
 
   // Uncomment to replace native functions globally
   // window.alert = window.showAlert;

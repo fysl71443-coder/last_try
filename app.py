@@ -2632,13 +2632,15 @@ def api_table_layout(branch_code):
                 for row in rows:
                     for table in row.get('tables', []):
                         table_number = table.get('number')
-                        if table_number:
-                            assignment = TableSectionAssignment(
-                                branch_code=branch_code,
-                                table_number=str(table_number),
-                                section_id=new_section.id
-                            )
-                            db.session.add(assignment)
+                        if table_number is None:
+                            continue
+                        # Preserve custom numbering (string) including letters; store as-is
+                        assignment = TableSectionAssignment(
+                            branch_code=branch_code,
+                            table_number=str(table_number).strip(),
+                            section_id=new_section.id
+                        )
+                        db.session.add(assignment)
             
             db.session.commit()
             return jsonify({'success': True, 'message': 'Layout saved successfully'})
