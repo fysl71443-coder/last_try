@@ -24,6 +24,12 @@
           <div class="col-md-3">{{ form.full_name.label(class_='form-label') }}{{ form.full_name(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.national_id.label(class_='form-label') }}{{ form.national_id(class_='form-control') }}</div>
           <div class="col-md-3">{{ form.status.label(class_='form-label') }}{{ form.status(class_='form-select') }}</div>
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="emp_active" name="active" checked>
+              <label class="form-check-label" for="emp_active">{{ _('Active / نشط') }}</label>
+            </div>
+          </div>
           <div class="col-md-3">{{ form.department.label(class_='form-label') }}
             <div class="input-group">
               {{ form.department(class_='form-control', placeholder=_('e.g. Kitchen / Admin / Cashier')) }}
@@ -229,8 +235,8 @@
               <td>{% if e.status=='active' %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}</td>
               <td>
                 <div class="btn-group" role="group">
-                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="editEmployee({{ e.id }}, '{{ e.full_name|e }}', '{{ e.employee_code|e }}', '{{ e.national_id|e }}', '{{ e.department|e }}', '{{ e.position|e }}', '{{ e.phone|e }}', '{{ e.email|e }}', '{{ e.hire_date|e }}', '{{ e.status|e }}')" title="{{ _('Edit / تعديل') }}">✏️</button>
-                  <button type="button" class="btn btn-sm btn-outline-success" onclick="alert('زر الراتب يعمل! الموظف: {{ e.full_name|e }} (ID: {{ e.id }})')" title="{{ _('Salary / الراتب') }}">💰</button>
+                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="editEmployeeFromRow(this, {{ e.id }})" title="{{ _('Edit / تعديل') }}">✏️</button>
+                  <button type="button" class="btn btn-sm btn-outline-success" onclick="openPaySalary({{ e.id }})" title="{{ _('Salary / الراتب') }}">💰</button>
                   <form method="post" action="{{ url_for('main.employee_delete', eid=e.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this employee? / حذف هذا الموظف؟') }}')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete / حذف') }}">🗑️</button>
@@ -251,9 +257,40 @@
 // WORKING FUNCTIONS - STEP BY STEP
 console.log('JavaScript loaded successfully!');
 
+// i18n strings
+var I18N = {
+  editEmployee: "{{ _('Edit Employee / تعديل الموظف') }}",
+  addEmployee: "{{ _('Add New Employee / إضافة موظف جديد') }}",
+  addEmployeeBtn: "{{ _('Add Employee / إضافة موظف') }}",
+  salarySaved: "{{ _('Salary saved successfully / تم حفظ الراتب بنجاح') }}",
+  net: "{{ _('Net') }}",
+  chooseMonth: "{{ _('Please choose month') }}",
+  chooseEmployee: "{{ _('Please choose employee') }}",
+  confirmDelete: "{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}"
+};
+
 // Edit employee function
-function editEmployee(id, name, code, nationalId, dept, position, phone, email, hireDate, status) {
-  console.log('Edit employee clicked:', name);
+function editEmployeeFromRow(button, empId){
+  // Read values from the current row cells to avoid complex escaping in attributes
+  var tr = button.closest('tr');
+  if (!tr) return;
+  function cellText(idx){
+    var td = tr.children[idx];
+    return td ? (td.textContent||'').trim() : '';
+  }
+  var emp = {
+    id: empId,
+    employee_code: cellText(1),
+    full_name: cellText(2),
+    national_id: cellText(3),
+    department: cellText(4) === '-' ? '' : cellText(4),
+    position: cellText(5) === '-' ? '' : cellText(5),
+    phone: cellText(6) === '-' ? '' : cellText(6),
+    email: cellText(7) === '-' ? '' : cellText(7),
+    hire_date: cellText(8) === '-' ? '' : cellText(8),
+    status: (function(){ var b = tr.querySelector('.badge'); return (b && b.classList.contains('bg-success')) ? 'active' : 'inactive'; })()
+  };
+  console.log('Edit employee clicked:', emp.full_name);
   
   // Fill the form with employee data
   const codeInput = document.querySelector('input[name="employee_code"]');
@@ -266,30 +303,32 @@ function editEmployee(id, name, code, nationalId, dept, position, phone, email, 
   const hireDateInput = document.querySelector('input[name="hire_date"]');
   const statusSelect = document.querySelector('select[name="status"]');
   
-  if (codeInput) codeInput.value = code || '';
-  if (nameInput) nameInput.value = name || '';
-  if (nationalIdInput) nationalIdInput.value = nationalId || '';
-  if (deptInput) deptInput.value = dept || '';
-  if (positionInput) positionInput.value = position || '';
-  if (phoneInput) phoneInput.value = phone || '';
-  if (emailInput) emailInput.value = email || '';
-  if (hireDateInput) hireDateInput.value = hireDate || '';
-  if (statusSelect) statusSelect.value = status || 'active';
+  if (codeInput) codeInput.value = emp.employee_code || '';
+  if (nameInput) nameInput.value = emp.full_name || '';
+  if (nationalIdInput) nationalIdInput.value = emp.national_id || '';
+  if (deptInput) deptInput.value = emp.department || '';
+  if (positionInput) positionInput.value = emp.position || '';
+  if (phoneInput) phoneInput.value = emp.phone || '';
+  if (emailInput) emailInput.value = emp.email || '';
+  if (hireDateInput) hireDateInput.value = emp.hire_date || '';
+  if (statusSelect) statusSelect.value = emp.status || 'active';
+  const activeChk = document.getElementById('emp_active');
+  if (activeChk) activeChk.checked = (emp.status||'active') === 'active';
   
   // Change form action to edit route
   const form = document.querySelector('#employees-form form');
   if (form) {
-    form.action = `/employees/${id}/edit`;
-    // Change submit button text
-    const submitBtn = form.querySelector('button[type="submit"]');
-    if (submitBtn) {
-      submitBtn.textContent = '{{ _("Update Employee / تحديث الموظف") }}';
-      submitBtn.className = 'btn btn-warning';
-    }
+    form.action = `/employees/edit/${emp.id}`;
+    // Change submit text for both button and input submit
+    const btn = form.querySelector('button[type="submit"]');
+    const inp = form.querySelector('input[type="submit"]');
+    const newText = I18N.editEmployee;
+    if (btn) { btn.textContent = newText; btn.className = 'btn btn-warning'; }
+    if (inp) { inp.value = newText; inp.className = 'btn btn-warning'; }
     // Change form title
     const formTitle = document.getElementById('form-title');
     if (formTitle) {
-      formTitle.textContent = `✏️ {{ _('Edit Employee / تعديل الموظف') }}: ${name}`;
+      formTitle.textContent = '✏️ ' + I18N.editEmployee + ': ' + (emp.full_name || '');
     }
   }
   
@@ -299,11 +338,13 @@ function editEmployee(id, name, code, nationalId, dept, position, phone, email, 
     formElement.scrollIntoView({ behavior: 'smooth' });
   }
   
-  alert('تم ملء النموذج بالبيانات! يمكنك الآن تعديلها وحفظها.');
+  // Focus first field for faster edits
+  var f = document.querySelector('input[name="full_name"]');
+  if (f && typeof f.focus === 'function') { f.focus(); }
 }
 
 // Make function globally accessible
-window.editEmployee = editEmployee;
+window.editEmployeeFromRow = editEmployeeFromRow;
 
 console.log('Edit function assigned to window object');
 
@@ -321,7 +362,8 @@ async function deleteEmployeeNew(id, name) {
       const csrfInput = document.createElement('input');
       csrfInput.type = 'hidden';
       csrfInput.name = 'csrf_token';
-      csrfInput.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
+      var mt = document.querySelector('meta[name="csrf-token"]');
+      csrfInput.value = mt ? mt.content : '';
       
       form.appendChild(csrfInput);
       document.body.appendChild(form);
@@ -341,12 +383,12 @@ function clearEmployeeForm() {
   if (form) {
     form.reset();
     form.action = '/employees'; // Reset to create route
-    // Reset submit button
-    const submitBtn = form.querySelector('button[type="submit"]');
-    if (submitBtn) {
-      submitBtn.textContent = '{{ _("Add Employee / إضافة موظف") }}';
-      submitBtn.className = 'btn btn-success';
-    }
+    // Reset submit text for both button and input submit
+    const btn = form.querySelector('button[type="submit"]');
+    const inp = form.querySelector('input[type="submit"]');
+    const addText = '{{ _("Add Employee / إضافة موظف") }}';
+    if (btn) { btn.textContent = addText; btn.className = 'btn btn-success'; }
+    if (inp) { inp.value = addText; inp.className = 'btn btn-success'; }
     // Reset form title
     const formTitle = document.getElementById('form-title');
     if (formTitle) {
@@ -358,14 +400,33 @@ function clearEmployeeForm() {
 // Make function globally accessible
 window.clearEmployeeForm = clearEmployeeForm;
 
+// Quick open Pay Salary section and preselect employee
+function openPaySalary(empId, name){
+  try{
+    const sel = document.getElementById('pay_employee');
+    if (sel){ sel.value = String(empId); sel.dispatchEvent(new Event('change')); }
+    const paySec = document.getElementById('pay-salaries-section');
+    if (paySec) paySec.scrollIntoView({behavior:'smooth'});
+    // Auto-open adjustment area so المستخدم يرى الحقول
+    try{ new bootstrap.Collapse(document.getElementById('monthAdjust'), {toggle:true}); }catch(e){}
+  }catch(e){ console.warn(e); }
+}
+window.openPaySalary = openPaySalary;
+
 // Live search in employees table
-(document.getElementById('empSearch')||{}).addEventListener?.('input', function(){
-  const q = this.value.toLowerCase();
-  document.querySelectorAll('#empTableBody tr').forEach(tr => {
-    const txt = tr.textContent.toLowerCase();
-    tr.style.display = txt.includes(q) ? '' : 'none';
-  });
-});
+(function(){
+  var empSearch = document.getElementById('empSearch');
+  if (empSearch && empSearch.addEventListener){
+    empSearch.addEventListener('input', function(){
+      var q = (this.value||'').toLowerCase();
+      var rows = document.querySelectorAll('#empTableBody tr');
+      Array.prototype.forEach.call(rows, function(tr){
+        var txt = (tr.textContent||'').toLowerCase();
+        tr.style.display = (txt.indexOf(q) !== -1) ? '' : 'none';
+      });
+    });
+  }
+})();
 
 // Quick Department selector fills the input
 (function(){
@@ -378,39 +439,44 @@ window.clearEmployeeForm = clearEmployeeForm;
 })();
 
 // ===== Payroll helpers (UI only) =====
-function toNum(v){ const n = parseFloat(v); return isNaN(n)?0:n; }
+function toNum(v){ var n = parseFloat(v); return isNaN(n)?0:n; }
 function updateNet(){
-  const base = toNum(document.getElementById('basic_salary')?.value);
-  const allow = toNum(document.getElementById('allowances')?.value);
-  const ded = toNum(document.getElementById('deductions')?.value);
-  const prev = toNum(document.getElementById('previous_due')?.value);
-  const paid = toNum(document.getElementById('paid_amount')?.value);
-  const net = Math.max(0, base + allow - ded + prev);
-  const remaining = Math.max(0, net - paid);
-  const netEl = document.getElementById('net_salary');
-  const remEl = document.getElementById('remaining_salary');
+  var base = toNum((document.getElementById('basic_salary')||{}).value);
+  var allow = toNum((document.getElementById('allowances')||{}).value);
+  var ded = toNum((document.getElementById('deductions')||{}).value);
+  var prev = toNum((document.getElementById('previous_due')||{}).value);
+  var paid = toNum((document.getElementById('paid_amount')||{}).value);
+  var net = Math.max(0, base + allow - ded + prev);
+  var remaining = Math.max(0, net - paid);
+  var netEl = document.getElementById('net_salary');
+  var remEl = document.getElementById('remaining_salary');
   if (netEl) netEl.value = net.toFixed(2);
   if (remEl) remEl.value = remaining.toFixed(2);
 }
-['basic_salary','allowances','deductions','previous_due','paid_amount'].forEach(id=>{
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('input', updateNet);
+['basic_salary','allowances','deductions','previous_due','paid_amount'].forEach(function(id){
+  var el = document.getElementById(id);
+  if (el && el.addEventListener) el.addEventListener('input', updateNet);
 });
 
 async function handleCreateSalary(ev){
   ev.preventDefault();
-  const monthVal = document.getElementById('pay_month')?.value || '';
+  var monthInput = document.getElementById('pay_month');
+  var monthVal = (monthInput && monthInput.value) ? monthInput.value : '';
   if (!monthVal){ alert('{{ _('Please choose month') }}'); return false; }
-  const [year, month] = monthVal.split('-');
-  const employee_id = document.getElementById('pay_employee')?.value || '';
+  var parts = monthVal.split('-');
+  var year = parts[0];
+  var month = parts[1];
+  var empSel = document.getElementById('pay_employee');
+  var employee_id = (empSel && empSel.value) ? empSel.value : '';
   if (!employee_id){ alert('{{ _('Please choose employee') }}'); return false; }
-  const base = toNum(document.getElementById('basic_salary')?.value);
-  const allow = toNum(document.getElementById('allowances')?.value);
-  const ded = toNum(document.getElementById('deductions')?.value);
-  const prev = toNum(document.getElementById('previous_due')?.value);
+  var base = toNum((document.getElementById('basic_salary')||{}).value);
+  var allow = toNum((document.getElementById('allowances')||{}).value);
+  var ded = toNum((document.getElementById('deductions')||{}).value);
+  var prev = toNum((document.getElementById('previous_due')||{}).value);
   updateNet();
-  const fd = new FormData();
-  fd.append('csrf_token', document.querySelector('#paySalaryForm [name=csrf_token]')?.value || '');
+  var fd = new FormData();
+  var csrfEl = document.querySelector('#paySalaryForm [name=csrf_token]');
+  fd.append('csrf_token', csrfEl ? csrfEl.value : '');
   fd.append('employee_id', employee_id);
   fd.append('year', year);
   fd.append('month', month);
@@ -419,10 +485,17 @@ async function handleCreateSalary(ev){
   fd.append('deductions', ded);
   fd.append('previous_salary_due', prev);
   try{
-    const resp = await fetch('{{ url_for('main.employees_create_salary') }}', { method:'POST', body: fd });
-    const data = await resp.json().catch(()=>({ok:false,error:'parse_error'}));
+    var resp = await fetch('{{ url_for('main.employees_create_salary') }}', { method:'POST', body: fd });
+    var data;
+    try { data = await resp.json(); } catch(_){ data = {ok:false,error:'parse_error'} }
     if (resp.ok && data.ok){
-      alert('{{ _('Salary saved successfully / تم حفظ الراتب بنجاح') }}\n{{ _('Net') }}: ' + (data.total?.toFixed?data.total.toFixed(2):data.total));
+      var netTxt = '';
+      if (data && typeof data.total === 'number') {
+        netTxt = data.total.toFixed(2);
+      } else if (data && data.total != null) {
+        netTxt = String(data.total);
+      }
+      alert('{{ _('Salary saved successfully / تم حفظ الراتب بنجاح') }}' + '\n' + '{{ _('Net') }}' + ': ' + netTxt);
     } else {
       alert('{{ _('Error') }}: ' + (data.error || resp.status));
     }
@@ -433,26 +506,32 @@ async function handleCreateSalary(ev){
 }
 
 // Stub: load statements (UI only placeholder for now)
-(document.getElementById('btnLoadStatements')||{}).addEventListener?.('click', function(e){
-  e.preventDefault();
-  const tbody = document.querySelector('#tblStatements tbody');
+(function(){
+  var tbody = document.querySelector('#tblStatements tbody');
+  if (!tbody) return;
+})();
+(function(){
+  var tbody = document.querySelector('#tblStatements tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
   let tEmps=0, tBasic=0, tAllow=0, tDed=0, tPaid=0, tNet=0, tRemain=0;
   {% for e in employees or [] %}
     // Defaults unknown at UI layer; render zeroed row with employee + department only
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>{{ e.full_name|e }}</td><td>{{ (e.department or '-')|e }}</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td>`;
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>{{ e.full_name|e }}</td>' +
+                   '<td>{{ (e.department or '-')|e }}</td>' +
+                   '<td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td>';
     tbody.appendChild(tr);
     tEmps += 1;
   {% endfor %}
-  document.getElementById('t_emps')?.innerText = tEmps;
-  document.getElementById('t_basic')?.innerText = tBasic.toFixed(2);
-  document.getElementById('t_allow')?.innerText = tAllow.toFixed(2);
-  document.getElementById('t_ded')?.innerText = tDed.toFixed(2);
-  document.getElementById('t_paid')?.innerText = tPaid.toFixed(2);
-  document.getElementById('t_net')?.innerText = tNet.toFixed(2);
-  document.getElementById('t_remain')?.innerText = tRemain.toFixed(2);
+  var el;
+  el = document.getElementById('t_emps'); if (el) el.innerText = tEmps;
+  el = document.getElementById('t_basic'); if (el) el.innerText = tBasic.toFixed(2);
+  el = document.getElementById('t_allow'); if (el) el.innerText = tAllow.toFixed(2);
+  el = document.getElementById('t_ded'); if (el) el.innerText = tDed.toFixed(2);
+  el = document.getElementById('t_paid'); if (el) el.innerText = tPaid.toFixed(2);
+  el = document.getElementById('t_net'); if (el) el.innerText = tNet.toFixed(2);
+  el = document.getElementById('t_remain'); if (el) el.innerText = tRemain.toFixed(2);
 });
 </script>
 

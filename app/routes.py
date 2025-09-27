@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app import db, csrf
 ext_db = None
-from app.models import User, AppKV
+from app.models import User, AppKV, TableLayout
 from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
@@ -42,6 +42,14 @@ BRANCH_LABELS = {
     'place_india': 'Place India',
     'china_town': 'China Town',
 }
+
+# --- Helper functions ---
+def safe_table_number(table_number) -> int:
+    """Safely convert table_number to int, default to 0 if None/invalid"""
+    try:
+        return int(table_number or 0)
+    except (ValueError, TypeError):
+        return 0
 
 # --- Permission helpers (reuse AppKV like template can()) ---
 def _normalize_scope(s: str) -> str:
@@ -1473,17 +1481,111 @@ def sales_tables(branch_code):
         flash('لا تملك صلاحية الوصول لفرع المبيعات هذا', 'warning')
         return redirect(url_for('main.sales'))
     branch_label = BRANCH_LABELS.get(branch_code, branch_code)
-    # Try to load grouped layout from saved sections; otherwise simple 1..20
-    settings = kv_get('table_settings', {}) or {}
-    default_count = 20
-    if branch_code == 'china_town':
-        count = int((settings.get('china') or {}).get('count', default_count))
-    elif branch_code == 'place_india':
-        count = int((settings.get('india') or {}).get('count', default_count))
-    else:
-        count = default_count
-    tables = [{'number': i, 'status': 'available'} for i in range(1, count+1)]
-    return render_template('sales_tables.html', branch_code=branch_code, branch_label=branch_label, tables=tables, grouped_tables=None)
+
+    grouped_tables = []
+    tables = []
+
+    try:
+        from models import TableSection, TableSectionAssignment
+
+        def decode_name(name: str):
+            name = name or ''
+            visible = name
+            layout = ''
+            if '[rows:' in name and name.endswith(']'):
+                try:
+                    before, bracket = name.rsplit('[rows:', 1)
+                    visible = before.rstrip()
+                    layout = bracket[:-1].strip()
+                except Exception:
+                    pass
+            return visible, layout
+
+        sections = TableSection.query.filter_by(branch_code=branch_code).order_by(TableSection.sort_order, TableSection.id).all()
+        assignments = TableSectionAssignment.query.filter_by(branch_code=branch_code).all()
+
+        # Build status map based on draft orders (occupied / available)
+        status_map = {}
+        for assignment in assignments:
+            number = safe_table_number(assignment.table_number)
+            if number <= 0:
+                continue
+            draft = kv_get(f'draft:{branch_code}:{number}', {}) or {}
+            status_map[number] = 'occupied' if (draft.get('items') or []) else 'available'
+
+        assignments_by_section = {}
+        for assignment in assignments:
+            assignments_by_section.setdefault(assignment.section_id, []).append(assignment)
+
+        # Build grouped tables honoring saved layout and showing empty sections as headers
+        for section in sections:
+            visible, layout = decode_name(section.name)
+
+            # Collect tables for this section (sorted by table number)
+            section_tables = []
+            section_assignments = assignments_by_section.get(section.id, [])
+            section_assignments.sort(key=lambda a: safe_table_number(a.table_number))
+            for assignment in section_assignments:
+                number = safe_table_number(assignment.table_number)
+                if number <= 0:
+                    continue
+                section_tables.append({
+                    'number': number,
+                    'status': status_map.get(number, 'available')
+                })
+
+            # Split into rows according to saved layout "1,3,4" etc.
+            rows = []
+            if layout:
+                try:
+                    counts = [int(x.strip()) for x in layout.split(',') if x.strip()]
+                except Exception:
+                    counts = []
+                i = 0
+                for cnt in counts:
+                    if cnt <= 0:
+                        continue
+                    rows.append(section_tables[i:i+cnt])
+                    i += cnt
+                if i < len(section_tables):
+                    rows.append(section_tables[i:])
+            else:
+                # If no layout saved and tables exist, place all tables in a single row
+                if section_tables:
+                    rows = [section_tables]
+                else:
+                    rows = []
+
+            section_entry = {
+                'section': visible or branch_label,
+                'rows': rows,
+                # Keep flat list for template fallback when rows is empty
+                'tables': section_tables
+            }
+
+            # Always append the section so saved sections appear even without assignments
+            grouped_tables.append(section_entry)
+
+    except Exception as e:
+        print(f"[sales_tables] Error loading grouped tables for {branch_code}: {e}")
+        grouped_tables = []
+        tables = []
+
+    if not grouped_tables:
+        settings = kv_get('table_settings', {}) or {}
+        default_count = 20
+        if branch_code == 'china_town':
+            count = int((settings.get('china') or {}).get('count', default_count))
+        elif branch_code == 'place_india':
+            count = int((settings.get('india') or {}).get('count', default_count))
+        else:
+            count = default_count
+        for i in range(1, count + 1):
+            draft = kv_get(f'draft:{branch_code}:{i}', {}) or {}
+            status = 'occupied' if (draft.get('items') or []) else 'available'
+            tables.append({'number': i, 'status': status})
+
+    return render_template('sales_tables.html', branch_code=branch_code, branch_label=branch_label, tables=tables, grouped_tables=grouped_tables or None)
 
 @main.route('/sales/china_town', endpoint='sales_china')
 @login_required
@@ -1581,23 +1683,89 @@ def api_table_settings():
 @main.route('/api/table-sections/<branch_code>', methods=['GET', 'POST'], endpoint='api_table_sections')
 @login_required
 def api_table_sections(branch_code):
-    key = f'sections:{branch_code}'
     if not user_can('sales','view', branch_code):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
+    
     if request.method == 'GET':
-        data = kv_get(key, {}) or {}
-        return jsonify({'success': True, 'sections': data.get('sections') or [], 'assignments': data.get('assignments') or []})
+        # Read from the same system as table-layout
+        try:
+            from models import TableSection, TableSectionAssignment
+            
+            def decode_name(name: str):
+                name = name or ''
+                visible = name
+                layout = ''
+                if '[rows:' in name and name.endswith(']'):
+                    try:
+                        before, bracket = name.rsplit('[rows:', 1)
+                        visible = before.rstrip()
+                        layout = bracket[:-1].strip()
+                    except Exception:
+                        pass
+                return visible, layout
+
+            sections = TableSection.query.filter_by(branch_code=branch_code).order_by(TableSection.sort_order, TableSection.id).all()
+            assignments = TableSectionAssignment.query.filter_by(branch_code=branch_code).all()
+            
+            sections_data = []
+            for s in sections:
+                visible, layout = decode_name(s.name)
+                sections_data.append({
+                    'id': s.id,
+                    'name': visible,
+                    'sort_order': s.sort_order,
+                    'layout': layout
+                })
+            
+            assignments_data = []
+            for a in assignments:
+                assignments_data.append({
+                    'table_number': a.table_number,
+                    'section_id': a.section_id
+                })
+            
+            return jsonify({'success': True, 'sections': sections_data, 'assignments': assignments_data})
+        except Exception as e:
+            return jsonify({'success': True, 'sections': [], 'assignments': []})
+    
     try:
+        # Save to the same system as table-layout
+        from models import TableSection, TableSectionAssignment
+        
         payload = request.get_json(force=True) or {}
-        # Normalize and assign IDs to new sections if missing
-        sections = payload.get('sections') or []
-        # Generate simple incremental IDs based on position
-        for idx, s in enumerate(sections, start=1):
-            if not s.get('id'):
-                s['id'] = idx
-        store = {'sections': sections, 'assignments': payload.get('assignments') or []}
-        kv_set(key, store)
-        return jsonify({'success': True, 'sections': sections})
+        sections_data = payload.get('sections') or []
+        assignments_data = payload.get('assignments') or []
+        
+        # Clear existing sections and assignments for this branch
+        TableSectionAssignment.query.filter_by(branch_code=branch_code).delete()
+        TableSection.query.filter_by(branch_code=branch_code).delete()
+        
+        # Create new sections
+        for section_idx, section in enumerate(sections_data):
+            section_name = section.get('name', '')
+            layout = section.get('layout', '')
+            encoded_name = f"{section_name} [rows:{layout}]" if layout else section_name
+            
+            new_section = TableSection(
+                branch_code=branch_code,
+                name=encoded_name,
+                sort_order=section.get('sort_order', section_idx)
+            )
+            db.session.add(new_section)
+            db.session.flush()
+            
+            # Create assignments for this section
+            for assignment in assignments_data:
+                if assignment.get('section_id') == section.get('id'):
+                    assignment_obj = TableSectionAssignment(
+                        branch_code=branch_code,
+                        table_number=str(assignment.get('table_number')),
+                        section_id=new_section.id
+                    )
+                    db.session.add(assignment_obj)
+        
+        db.session.commit()
+        return jsonify({'success': True, 'sections': sections_data})
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
@@ -1655,6 +1823,59 @@ def api_menu_items(cat_id):
 
 
     return jsonify(demo_items)
+
+# ---------- Branch Settings API used by POS ----------
+@main.route('/api/branch-settings/<branch_code>', methods=['GET'], endpoint='api_branch_settings')
+@login_required
+def api_branch_settings(branch_code):
+    try:
+        from models import Settings
+        try:
+            s = Settings.query.first()
+        except Exception:
+            s = None
+
+        # Defaults
+        void_pwd = '1991'
+        vat_rate = 15.0
+        discount_rate = 0.0
+
+        if s:
+            if branch_code == 'china_town':
+                try:
+                    void_pwd = (getattr(s, 'china_town_void_password', void_pwd) or void_pwd)
+                except Exception:
+                    pass
+                try:
+                    vat_rate = float(getattr(s, 'china_town_vat_rate', vat_rate) or vat_rate)
+                except Exception:
+                    pass
+                try:
+                    discount_rate = float(getattr(s, 'china_town_discount_rate', discount_rate) or discount_rate)
+                except Exception:
+                    pass
+            elif branch_code == 'place_india':
+                try:
+                    void_pwd = (getattr(s, 'place_india_void_password', void_pwd) or void_pwd)
+                except Exception:
+                    pass
+                try:
+                    vat_rate = float(getattr(s, 'place_india_vat_rate', vat_rate) or vat_rate)
+                except Exception:
+                    pass
+                try:
+                    discount_rate = float(getattr(s, 'place_india_discount_rate', discount_rate) or discount_rate)
+                except Exception:
+                    pass
+
+        return jsonify({
+            'branch': branch_code,
+            'void_password': str(void_pwd),
+            'vat_rate': vat_rate,
+            'discount_rate': discount_rate
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @main.route('/api/draft-order/<branch_code>/<int:table_number>', methods=['POST'], endpoint='api_draft_create_or_update')
 @login_required
@@ -2889,7 +3110,183 @@ def settings():
 @main.route('/table-settings', endpoint='table_settings')
 @login_required
 def table_settings():
-    return render_template('table_settings.html')
+    # Define branches for table management
+    branches = {
+        'china_town': 'CHINA TOWN',
+        'place_india': 'PALACE INDIA'
+    }
+    return render_template('table_settings.html', branches=branches)
+
+@main.route('/table-manager/<branch_code>', endpoint='table_manager')
+@login_required
+def table_manager(branch_code):
+    # Define branch labels
+    branch_labels = {
+        'china_town': 'CHINA TOWN',
+        'place_india': 'PALACE INDIA'
+    }
+    
+    # Check if branch exists
+    if branch_code not in branch_labels:
+        flash('Branch not found', 'error')
+        return redirect(url_for('main.table_settings'))
+    
+    branch_label = branch_labels[branch_code]
+    return render_template('table_manager.html', branch_code=branch_code, branch_label=branch_label)
+
+@csrf.exempt
+@main.route('/api/table-layout/<branch_code>', methods=['GET', 'POST'], endpoint='api_table_layout_fixed')
+@login_required
+def api_table_layout_fixed(branch_code):
+    """Table layout API that integrates with the actual POS table system"""
+    # Define branch labels
+    branch_labels = {
+        'china_town': 'CHINA TOWN',
+        'place_india': 'PALACE INDIA'
+    }
+    
+    # Check if branch exists
+    if branch_code not in branch_labels:
+        return jsonify({'error': 'Branch not found'}), 404
+    
+    if request.method == 'GET':
+        # Load layout from the actual table sections system
+        try:
+            from models import TableSection, TableSectionAssignment
+            
+            def decode_name(name: str):
+                name = name or ''
+                visible = name
+                layout = ''
+                if '[rows:' in name and name.endswith(']'):
+                    try:
+                        before, bracket = name.rsplit('[rows:', 1)
+                        visible = before.rstrip()
+                        layout = bracket[:-1].strip()  # drop trailing ]
+                    except Exception:
+                        pass
+                return visible, layout
+
+            sections = TableSection.query.filter_by(branch_code=branch_code).order_by(TableSection.sort_order, TableSection.id).all()
+            assignments = TableSectionAssignment.query.filter_by(branch_code=branch_code).all()
+            
+            # Convert to table manager format
+            layout_sections = []
+            for s in sections:
+                visible, layout = decode_name(s.name)
+                section_data = {
+                    'id': s.id,
+                    'name': visible,
+                    'rows': []
+                }
+                
+                # Parse layout to create rows
+                if layout:
+                    try:
+                        counts = [int(x.strip()) for x in layout.split(',') if x.strip()]
+                        row_start = 1
+                        for count in counts:
+                            if count <= 0:
+                                continue
+                            row = {
+                                'id': f'row_{len(section_data["rows"]) + 1}',
+                                'tables': []
+                            }
+                            for i in range(count):
+                                table_num = row_start + i
+                                # Find table number in assignments
+                                table_assignment = next((a for a in assignments if a.section_id == s.id and safe_table_number(a.table_number) == table_num), None)
+                                if table_assignment:
+                                    row['tables'].append({
+                                        'id': f'table_{table_num}',
+                                        'number': table_num,
+                                        'seats': 4  # Default seats
+                                    })
+                                else:
+                                    row['tables'].append({
+                                        'id': f'table_{table_num}',
+                                        'number': table_num,
+                                        'seats': 4  # Default seats
+                                    })
+                            section_data['rows'].append(row)
+                            row_start += count
+                    except Exception:
+                        pass
+                
+                layout_sections.append(section_data)
+            
+            return jsonify({'sections': layout_sections})
+        except Exception as e:
+            print(f"Error loading layout: {e}")
+            return jsonify({'sections': []})
+    
+    elif request.method == 'POST':
+        # Save layout to the actual table sections system
+        try:
+            from models import TableSection, TableSectionAssignment
+            
+            # Get the data from request
+            data = None
+            if request.is_json:
+                data = request.get_json()
+            else:
+                # Try to get raw data and parse it
+                raw_data = request.get_data(as_text=True)
+                if raw_data:
+                    import json
+                    data = json.loads(raw_data)
+            
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            sections_data = data.get('sections', [])
+            
+            # Clear existing sections and assignments for this branch
+            TableSectionAssignment.query.filter_by(branch_code=branch_code).delete()
+            TableSection.query.filter_by(branch_code=branch_code).delete()
+            
+            # Create new sections and assignments
+            for section_idx, section in enumerate(sections_data):
+                section_name = section.get('name', '')
+                rows = section.get('rows', [])
+                
+                # Calculate layout string from rows
+                layout_parts = []
+                for row in rows:
+                    table_count = len(row.get('tables', []))
+                    if table_count > 0:
+                        layout_parts.append(str(table_count))
+                
+                layout_string = ','.join(layout_parts) if layout_parts else ''
+                encoded_name = f"{section_name} [rows:{layout_string}]" if layout_string else section_name
+                
+                # Create section
+                new_section = TableSection(
+                    branch_code=branch_code,
+                    name=encoded_name,
+                    sort_order=section_idx
+                )
+                db.session.add(new_section)
+                db.session.flush()  # Get the ID
+                
+                # Create assignments for tables
+                for row in rows:
+                    for table in row.get('tables', []):
+                        table_number = table.get('number')
+                        if table_number:
+                            assignment = TableSectionAssignment(
+                                branch_code=branch_code,
+                                table_number=str(table_number),
+                                section_id=new_section.id
+                            )
+                            db.session.add(assignment)
+            
+            db.session.commit()
+            return jsonify({'success': True, 'message': 'Layout saved successfully'})
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error saving layout: {e}")
+            return jsonify({'error': f'Failed to save layout: {str(e)}'}), 500
 
 
 # Serve uploaded files from a persistent directory when UPLOAD_DIR is set

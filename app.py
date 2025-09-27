@@ -3,7 +3,11 @@
 
 
 # --- Bootstrap minimal Flask app early so decorators and Jinja loader work ---
+import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, current_app
+
+# Create Flask app instance
+app = Flask(__name__)
 try:
     from flask_login import LoginManager, login_required, current_user, login_user, logout_user
 except Exception:
@@ -40,6 +44,10 @@ except Exception as _db_init_err:
 app.secret_key = _app_secret
 app.config['SECRET_KEY'] = _app_secret
 app.config.setdefault('WTF_CSRF_SECRET_KEY', _app_secret)
+# Session settings - expire when browser closes
+app.config['PERMANENT_SESSION_LIFETIME'] = False
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
 login_manager = LoginManager(app) if callable(LoginManager) else None
 try:
     from extensions import csrf as _csrf
@@ -61,6 +69,7 @@ try:
     from models import User
     if login_manager:
         login_manager.login_view = 'login'
+        login_manager.session_protection = "strong"  # Stronger session protection
         @login_manager.user_loader
         def load_user(user_id):
             try:
@@ -1834,6 +1843,8 @@ def login():
                     if password_valid:
                         # تسجيل الدخول
                         login_user(user, remember=form.remember.data)
+                        # Set session to expire when browser closes
+                        session.permanent = False
 
                         # تحديث آخر تسجيل دخول
                         try:
@@ -2313,6 +2324,29 @@ def api_save_table_settings():
         }), 500
 
 
+# ========================================
+# Table Manager Routes
+# ========================================
+
+
+@app.route('/table-manager/<branch_code>')
+@login_required
+def table_manager(branch_code):
+    """Table manager for specific branch"""
+    # Define branch labels
+    branch_labels = {
+        'china_town': 'CHINA TOWN',
+        'place_india': 'PALACE INDIA'
+    }
+    
+    if branch_code not in branch_labels:
+        flash('Invalid branch', 'danger')
+        return redirect(url_for('table_settings'))
+    
+    branch_label = branch_labels[branch_code]
+    return render_template('table_manager.html', branch_code=branch_code, branch_label=branch_label)
+
+
 # API: Table Sections (per branch)
 @app.route('/api/table-sections/<branch_code>', methods=['GET'])
 @login_required
@@ -2454,6 +2488,165 @@ def api_save_table_sections(branch_code):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ========================================
+# Table Manager API - Integrated with POS
+# ========================================
+
+@app.route('/api/table-layout/<branch_code>', methods=['GET', 'POST'])
+@login_required
+def api_table_layout(branch_code):
+    """Table layout API that integrates with the actual POS table system"""
+    # Define branch labels
+    branch_labels = {
+        'china_town': 'CHINA TOWN',
+        'place_india': 'PALACE INDIA'
+    }
+    
+    # Check if branch exists
+    if branch_code not in branch_labels:
+        return jsonify({'error': 'Branch not found'}), 404
+    
+    if request.method == 'GET':
+        # Load layout from the actual table sections system
+        try:
+            from models import TableSection, TableSectionAssignment
+            
+            def decode_name(name: str):
+                name = name or ''
+                visible = name
+                layout = ''
+                if '[rows:' in name and name.endswith(']'):
+                    try:
+                        before, bracket = name.rsplit('[rows:', 1)
+                        visible = before.rstrip()
+                        layout = bracket[:-1].strip()  # drop trailing ]
+                    except Exception:
+                        pass
+                return visible, layout
+
+            sections = TableSection.query.filter_by(branch_code=branch_code).order_by(TableSection.sort_order, TableSection.id).all()
+            assignments = TableSectionAssignment.query.filter_by(branch_code=branch_code).all()
+            
+            # Convert to table manager format
+            layout_sections = []
+            for s in sections:
+                visible, layout = decode_name(s.name)
+                section_data = {
+                    'id': s.id,
+                    'name': visible,
+                    'rows': []
+                }
+                
+                # Parse layout to create rows
+                if layout:
+                    try:
+                        counts = [int(x.strip()) for x in layout.split(',') if x.strip()]
+                        row_start = 1
+                        for count in counts:
+                            if count <= 0:
+                                continue
+                            row = {
+                                'id': f'row_{len(section_data["rows"]) + 1}',
+                                'tables': []
+                            }
+                            for i in range(count):
+                                table_num = row_start + i
+                                # Find table number in assignments
+                                table_assignment = next((a for a in assignments if a.section_id == s.id and safe_table_number(a.table_number) == table_num), None)
+                                if table_assignment:
+                                    row['tables'].append({
+                                        'id': f'table_{table_num}',
+                                        'number': table_num,
+                                        'seats': 4  # Default seats
+                                    })
+                                else:
+                                    row['tables'].append({
+                                        'id': f'table_{table_num}',
+                                        'number': table_num,
+                                        'seats': 4  # Default seats
+                                    })
+                            section_data['rows'].append(row)
+                            row_start += count
+                    except Exception:
+                        pass
+                
+                layout_sections.append(section_data)
+            
+            return jsonify({'sections': layout_sections})
+        except Exception as e:
+            print(f"Error loading layout: {e}")
+            return jsonify({'sections': []})
+    
+    elif request.method == 'POST':
+        # Save layout to the actual table sections system
+        try:
+            from models import TableSection, TableSectionAssignment
+            
+            # Get the data from request
+            data = None
+            if request.is_json:
+                data = request.get_json()
+            else:
+                # Try to get raw data and parse it
+                raw_data = request.get_data(as_text=True)
+                if raw_data:
+                    import json
+                    data = json.loads(raw_data)
+            
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            sections_data = data.get('sections', [])
+            
+            # Clear existing sections and assignments for this branch
+            TableSectionAssignment.query.filter_by(branch_code=branch_code).delete()
+            TableSection.query.filter_by(branch_code=branch_code).delete()
+            
+            # Create new sections and assignments
+            for section_idx, section in enumerate(sections_data):
+                section_name = section.get('name', '')
+                rows = section.get('rows', [])
+                
+                # Calculate layout string from rows
+                layout_parts = []
+                for row in rows:
+                    table_count = len(row.get('tables', []))
+                    if table_count > 0:
+                        layout_parts.append(str(table_count))
+                
+                layout_string = ','.join(layout_parts) if layout_parts else ''
+                encoded_name = f"{section_name} [rows:{layout_string}]" if layout_string else section_name
+                
+                # Create section
+                new_section = TableSection(
+                    branch_code=branch_code,
+                    name=encoded_name,
+                    sort_order=section_idx
+                )
+                db.session.add(new_section)
+                db.session.flush()  # Get the ID
+                
+                # Create assignments for tables
+                for row in rows:
+                    for table in row.get('tables', []):
+                        table_number = table.get('number')
+                        if table_number:
+                            assignment = TableSectionAssignment(
+                                branch_code=branch_code,
+                                table_number=str(table_number),
+                                section_id=new_section.id
+                            )
+                            db.session.add(assignment)
+            
+            db.session.commit()
+            return jsonify({'success': True, 'message': 'Layout saved successfully'})
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error saving layout: {e}")
+            return jsonify({'error': f'Failed to save layout: {str(e)}'}), 500
+
 
 # CLEAN UNIFIED SALES ROUTES - ENGLISH ONLY
 
@@ -5243,10 +5436,12 @@ def cancel_draft_order(draft_id):
         logging.exception('Cancel draft order failed')
         return jsonify({'success': False, 'error': str(e)}), 500
 
+from app import create_app
 app = create_app()
 
-if __name__ == "__main__":
-    app.run(host='127.0.0.1', port=5000, debug=True)
+# NOTE: Do not run the development server from within this module to avoid
+# spawning multiple processes and lingering servers. Use dedicated launchers
+# like `run.py` or `run_app.py` instead.
 def add_item_to_draft(draft_id):
     try:
         from models import DraftOrder, DraftOrderItem, Meal, Table
@@ -9231,11 +9426,11 @@ if __name__ == '__main__':
         import os as _os
         port = int(_os.getenv('PORT', '5000'))
         print(f"🚀 Starting server on http://127.0.0.1:{port}")
-        socketio.run(app, host='0.0.0.0', port=port, debug=True)
+        socketio.run(app, host='0.0.0.0', port=port, debug=True, use_reloader=False)
 
     except Exception as e:
         print(f"⚠️ SocketIO failed: {e}")
         print("🔄 Falling back to standard Flask server...")
         import os as _os
         port = int(_os.getenv('PORT', '5000'))
-        app.run(host='127.0.0.1', port=port, debug=False)
+        app.run(host='127.0.0.1', port=port, debug=False, use_reloader=False)
