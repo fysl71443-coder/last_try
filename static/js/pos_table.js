@@ -198,104 +198,97 @@
     if(items.length === 0){ await window.showAlert('Add at least one item'); return; }
     const pm = (qs('#payMethod')?.value || '').toUpperCase();
     if(!(pm==='CASH' || pm==='CARD')){ await window.showAlert('يرجى اختيار طريقة الدفع (CASH أو CARD)'); return; }
+
+    // Ensure latest items are saved as draft and we have a draft id
     await flushPendingSave();
-    const payload = CURRENT_DRAFT_ID ? {
-      draft_id: CURRENT_DRAFT_ID,
-      customer_name: qs('#custName')?.value || '',
-      customer_phone: qs('#custPhone')?.value || '',
-      discount_pct: number(qs('#discountPct')?.value || 0),
-      tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
-      payment_method: pm
-    } : {
-      branch_code: BRANCH,
-      table_number: Number(TABLE_NO),
-      items: items.map(x=>({ meal_id:x.meal_id, qty:x.qty })),
-      customer_name: qs('#custName')?.value || '',
-      customer_phone: qs('#custPhone')?.value || '',
-      discount_pct: number(qs('#discountPct')?.value || 0),
-      tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
-      payment_method: pm
-    };
-    const endpoint = CURRENT_DRAFT_ID ? '/api/draft/checkout' : '/api/sales/checkout';
-
-    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
-
-    let data;
-    try{
-      const res = await fetch(endpoint, { method:'POST', headers, credentials:'same-origin', body: JSON.stringify(payload) });
-      if(!res.ok){ const txt = await res.text(); await window.showAlert(txt || ('HTTP '+res.status)); return; }
-      data = await res.json().catch(()=>null);
-    }catch(e){ await window.showAlert('Network error'); return; }
-    if(!data){ await window.showAlert('Error'); return; }
-
-    const tablesUrl = `/sales/${BRANCH}/tables`;
-    const doFinalize = async ()=>{
+    if(!CURRENT_DRAFT_ID){
       try{
         const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
-        const h = {'Content-Type':'application/json'}; if(token) h['X-CSRFToken']=token;
-        const res = await fetch('/api/invoice/confirm-print', {
-          method:'POST', headers:h, credentials:'same-origin',
-          body: JSON.stringify({ invoice_id: data.invoice_id, payment_method: data.payment_method, total_amount: data.total_amount, branch_code: BRANCH, table_number: Number(TABLE_NO) })
+        const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
+        const resp = await fetch(`/api/draft-order/${BRANCH}/${TABLE_NO}`, {
+          method:'POST', headers, credentials:'same-origin',
+          body: JSON.stringify({
+            items: items.map(x=>({ id:x.meal_id, name:x.name, price:x.unit, quantity:x.qty })),
+            customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' },
+            discount_pct: number(qs('#discountPct')?.value || 0),
+            tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
+            payment_method: pm
+          })
         });
-        if(res.ok){ items = []; renderItems(); window.location.href = tablesUrl; }
-      }catch(e){ console.error('finalize failed', e); }
-    };
+        const j = await resp.json().catch(()=>({}));
+        if(resp.ok && j.draft_id){ CURRENT_DRAFT_ID = j.draft_id; }
+      }catch(e){ /* ignore */ }
+    }
 
+    // Ask user to confirm printing after preview
     const askPrintedAndPaid = async ()=>{
       if(typeof window.showConfirm === 'function'){
         return await window.showConfirm('هل تم طباعة الفاتورة والدفع؟');
       }
       return window.confirm('هل تم طباعة الفاتورة والدفع؟');
     };
-
-    // Show confirmation immediately (behind print window) and finalize after close
-    let userDecision = null; // true/false
-    const decisionPromise = (async ()=>{
-      try{ userDecision = await askPrintedAndPaid(); }
-      catch(_e){ userDecision = false; }
-    })();
-
-    if(data.print_url){
-      const w = window.open(data.print_url, '_blank', 'width=800,height=600,scrollbars=yes');
-      if(w){
-        const timer = setInterval(async ()=>{
-          if(w.closed){
-            clearInterval(timer);
-            try{ await decisionPromise; }catch(_e){}
-            // Only finalize if user confirmed
-            if(userDecision === true){ 
-              await doFinalize(); 
-            } else {
-              // User didn't confirm - keep invoice as draft
-              await window.showAlert('تم حفظ الفاتورة كمسودة. يمكنك إكمالها لاحقاً.');
-            }
-          }
-        }, 400);
-        // Safety auto-close after 30s and then proceed
-        setTimeout(async ()=>{
-          try{
-            if(!w.closed){ w.close(); }
-          }catch(_e){}
-        }, 30000);
+    let userDecision = null;
+    let confirmPromiseStarted = false;
+    let confirmPromise = null;
+    function startConfirm(){
+      if(confirmPromiseStarted) return;
+      confirmPromiseStarted = true;
+      const msg = 'هل اكتملت الطباعة؟\nDid printing complete?';
+      const okText = 'Printing Completed ✅';
+      const cancelText = 'Cancel ❌';
+      if (typeof window.showConfirmChoice === 'function'){
+        confirmPromise = window.showConfirmChoice(msg, okText, cancelText, 'تأكيد الطباعة / Print Confirmation')
+          .then(function(res){ userDecision = !!res; })
+          .catch(function(){ userDecision = false; });
       } else {
-        // Popup blocked: proceed with decision immediately
-        try{ await decisionPromise; }catch(_e){}
-        if(userDecision === true){ 
-          await doFinalize(); 
-        } else {
-          await window.showAlert('تم حفظ الفاتورة كمسودة. يمكنك إكمالها لاحقاً.');
-        }
-      }
-    } else {
-      // No print URL: just ask and act
-      try{ await decisionPromise; }catch(_e){}
-      if(userDecision === true){ 
-        await doFinalize(); 
-      } else {
-        await window.showAlert('تم حفظ الفاتورة كمسودة. يمكنك إكمالها لاحقاً.');
+        confirmPromise = askPrintedAndPaid()
+          .then(function(res){ userDecision = !!res; })
+          .catch(function(){ userDecision = false; });
       }
     }
+
+    // Open preview first, then finalize upon confirmation
+    const prevBypass = !!window.DISABLE_PRINT_MODAL;
+    window.DISABLE_PRINT_MODAL = true;
+    let w = null;
+    try{
+      const url = `/print/order-preview/${BRANCH}/${TABLE_NO}`;
+      try{ w = window.open(url, '_blank', 'width=800,height=600,scrollbars=yes'); }catch(_e){ w=null; }
+      window.KEEP_CONFIRM_BEHIND = true;
+      window.__PRINT_WINDOW = w || null;
+      setTimeout(function(){ startConfirm(); try{ if(w) w.focus(); }catch(_e){} }, 150);
+      setTimeout(function(){ window.DISABLE_PRINT_MODAL = prevBypass; }, 1500);
+
+      if(!confirmPromiseStarted) startConfirm();
+      if(confirmPromise){ try{ await confirmPromise; }catch(_e){} }
+      const tablesUrl = `/sales/${BRANCH}/tables`;
+      if(userDecision === true){
+        // Finalize and redirect preview to final receipt
+        const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
+        const res = await fetch('/api/draft/checkout', { method:'POST', headers, credentials:'same-origin', body: JSON.stringify({
+          draft_id: CURRENT_DRAFT_ID,
+          customer_name: qs('#custName')?.value || '',
+          customer_phone: qs('#custPhone')?.value || '',
+          discount_pct: number(qs('#discountPct')?.value || 0),
+          tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
+          payment_method: pm
+        })});
+        if(!res.ok){ const txt = await res.text(); await window.showAlert(txt || ('HTTP '+res.status)); return; }
+        const data = await res.json().catch(()=>null);
+        try{
+          const h = {'Content-Type':'application/json'}; if(token) h['X-CSRFToken']=token;
+          await fetch('/api/invoice/confirm-print', { method:'POST', headers:h, credentials:'same-origin', body: JSON.stringify({
+            invoice_id: data?.invoice_id, payment_method: data?.payment_method, total_amount: data?.total_amount, branch_code: BRANCH, table_number: Number(TABLE_NO)
+          })});
+        }catch(_e){}
+        try{ if(w && !w.closed && data && data.print_url){ w.location = data.print_url; w.focus(); } }catch(_e){}
+        items = []; renderItems(); window.KEEP_CONFIRM_BEHIND=false; window.__PRINT_WINDOW=null; window.location.href = tablesUrl;
+      } else {
+        try{ if(w && !w.closed) w.close(); }catch(_e){}
+        window.KEEP_CONFIRM_BEHIND=false; window.__PRINT_WINDOW=null;
+      }
+    }catch(e){ window.DISABLE_PRINT_MODAL = prevBypass; window.KEEP_CONFIRM_BEHIND=false; window.__PRINT_WINDOW=null; await window.showAlert('Network error'); }
   }
 
   async function voidInvoice(){

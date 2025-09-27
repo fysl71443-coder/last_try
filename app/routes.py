@@ -989,7 +989,14 @@ def employees():
         emps = Employee.query.order_by(Employee.full_name.asc()).all()
     except Exception:
         emps = []
-    return render_template('employees.html', form=form, employees=emps)
+    # Prefill next employee code for convenience
+    try:
+        next_code = Employee.generate_code()
+        if not form.employee_code.data:
+            form.employee_code.data = next_code
+    except Exception:
+        next_code = ''
+    return render_template('employees.html', form=form, employees=emps, next_code=next_code)
 
 
 @main.route('/employees/edit/<int:emp_id>', methods=['GET', 'POST'], endpoint='edit_employee')
@@ -1130,6 +1137,11 @@ def salaries_pay():
             year = int(y); month = int(m)
             amount = float(request.form.get('paid_amount') or 0)
             method = (request.form.get('payment_method') or 'cash').strip().lower()
+            # Optional edited fields
+            basic_override = request.form.get('basic_salary')
+            allow_override = request.form.get('allowances')
+            ded_override   = request.form.get('deductions')
+            prev_override  = request.form.get('previous_salary_due')
 
             # Ensure salary exists for this period
             sal = Salary.query.filter_by(employee_id=emp_id, year=year, month=month).first()
@@ -1144,12 +1156,39 @@ def salaries_pay():
                         ded = float(d.deductions or 0)
                 except Exception:
                     pass
+                # Previous due: sum of remaining from past salaries
+                try:
+                    rem_q = db.session.query(
+                        func.coalesce(func.sum(Salary.total_salary), 0),
+                        func.coalesce(func.sum(Payment.amount_paid), 0)
+                    ).outerjoin(Payment, (Payment.invoice_type=='salary') & (Payment.invoice_id==Salary.id)) \
+                     .filter(Salary.employee_id==emp_id) \
+                     .filter((Salary.year < year) | ((Salary.year==year) & (Salary.month < month)))
+                    tot_sum, paid_sum = rem_q.first()
+                    prev = max(0.0, float(tot_sum or 0) - float(paid_sum or 0))
+                except Exception:
+                    prev = 0.0
                 total = max(0.0, base + allow - ded + prev)
                 sal = Salary(employee_id=emp_id, year=year, month=month,
                              basic_salary=base, allowances=allow, deductions=ded,
                              previous_salary_due=prev, total_salary=total, status='due')
                 db.session.add(sal)
                 db.session.flush()
+            # Apply overrides (user edits)
+            try:
+                changed = False
+                if basic_override is not None and basic_override != '':
+                    sal.basic_salary = float(basic_override or 0); changed = True
+                if allow_override is not None and allow_override != '':
+                    sal.allowances = float(allow_override or 0); changed = True
+                if ded_override is not None and ded_override != '':
+                    sal.deductions = float(ded_override or 0); changed = True
+                if prev_override is not None and prev_override != '':
+                    sal.previous_salary_due = float(prev_override or 0); changed = True
+                if changed:
+                    sal.total_salary = max(0.0, float(sal.basic_salary or 0) + float(sal.allowances or 0) - float(sal.deductions or 0) + float(sal.previous_salary_due or 0))
+            except Exception:
+                pass
 
             # Record payment if provided
             if amount > 0:
@@ -1181,6 +1220,33 @@ def salaries_pay():
     except Exception:
         employees = []
     selected_month = request.args.get('month') or datetime.utcnow().strftime('%Y-%m')
+    selected_employee = request.args.get('employee', type=int)
+    # Build defaults map and previous due per employee for the selected month
+    defaults_map = {}
+    prev_due_map = {}
+    try:
+        from models import EmployeeSalaryDefault
+        for d in EmployeeSalaryDefault.query.all():
+            defaults_map[int(d.employee_id)] = {
+                'basic_salary': float(d.base_salary or 0.0),
+                'allowances': float(d.allowances or 0.0),
+                'deductions': float(d.deductions or 0.0)
+            }
+    except Exception:
+        defaults_map = {}
+    try:
+        y, m = selected_month.split('-'); sy, sm = int(y), int(m)
+        sub = db.session.query(
+            Salary.employee_id.label('eid'),
+            func.coalesce(func.sum(Salary.total_salary), 0).label('total_sum'),
+            func.coalesce(func.sum(Payment.amount_paid), 0).label('paid_sum')
+        ).outerjoin(Payment, (Payment.invoice_type=='salary') & (Payment.invoice_id==Salary.id)) \
+         .filter( (Salary.year < sy) | ((Salary.year == sy) & (Salary.month < sm)) ) \
+         .group_by(Salary.employee_id).all()
+        for row in sub:
+            prev_due_map[int(row.eid)] = max(0.0, float(row.total_sum or 0) - float(row.paid_sum or 0))
+    except Exception:
+        prev_due_map = {}
 
     # Optional: list current month salaries
     try:
@@ -1188,7 +1254,7 @@ def salaries_pay():
         current_salaries = Salary.query.filter_by(year=year, month=month).all()
     except Exception:
         current_salaries = []
-    return render_template('salaries_pay.html', employees=employees, month=selected_month, salaries=current_salaries)
+    return render_template('salaries_pay.html', employees=employees, month=selected_month, salaries=current_salaries, selected_employee=selected_employee, defaults_map=defaults_map, prev_due_map=prev_due_map)
 
 
 @main.route('/salaries/statements', methods=['GET'], endpoint='salaries_statements')
@@ -1214,6 +1280,12 @@ def salaries_statements():
         end_month = int(month)
 
         employees = Employee.query.order_by(Employee.full_name).all()
+        # Preload defaults to use as fallback when existing Salary rows have zero allowances/deductions
+        try:
+            from models import EmployeeSalaryDefault
+            defaults_map = {d.employee_id: d for d in EmployeeSalaryDefault.query.all()}
+        except Exception:
+            defaults_map = {}
 
         def month_iter(start_y, start_m, end_y, end_m):
             y, m = start_y, start_m
@@ -1240,6 +1312,16 @@ def salaries_statements():
                     basic = float(s.basic_salary or 0)
                     allow = float(s.allowances or 0)
                     ded = float(s.deductions or 0)
+                    # Fallback to defaults if stored values are zero but defaults exist
+                    try:
+                        d = defaults_map.get(emp.id)
+                        if d:
+                            if (allow is None or allow == 0.0) and float(d.allowances or 0) > 0:
+                                allow = float(d.allowances or 0)
+                            if (ded is None or ded == 0.0) and float(d.deductions or 0) > 0:
+                                ded = float(d.deductions or 0)
+                    except Exception:
+                        pass
                     prev = float(s.previous_salary_due or 0)
                     total = max(0.0, basic + allow - ded + prev)
                     paid = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).\
@@ -1301,6 +1383,12 @@ def reports_print_salaries():
     totals = {'basic': 0.0, 'allow': 0.0, 'ded': 0.0, 'prev': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0}
     try:
         sal_list = Salary.query.filter_by(year=year, month=month).all()
+        # Preload defaults
+        try:
+            from models import EmployeeSalaryDefault
+            defaults_map = {d.employee_id: d for d in EmployeeSalaryDefault.query.all()}
+        except Exception:
+            defaults_map = {}
         for s in sal_list:
             paid = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)). \
                 filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0
@@ -1308,6 +1396,16 @@ def reports_print_salaries():
             basic = float(s.basic_salary or 0)
             allow = float(s.allowances or 0)
             ded = float(s.deductions or 0)
+            # Fallback to defaults if zeros
+            try:
+                d = defaults_map.get(s.employee_id)
+                if d:
+                    if (allow is None or allow == 0.0) and float(d.allowances or 0) > 0:
+                        allow = float(d.allowances or 0)
+                    if (ded is None or ded == 0.0) and float(d.deductions or 0) > 0:
+                        ded = float(d.deductions or 0)
+            except Exception:
+                pass
             prev = float(s.previous_salary_due or 0)
             total = max(0.0, basic + allow - ded + prev)
             remaining = max(0.0, total - paid)
@@ -2043,7 +2141,10 @@ def api_draft_checkout():
     payment_method = (payload.get('payment_method') or '').strip().upper()
     if payment_method not in ['CASH','CARD']:
         return jsonify({'success': False, 'error': 'اختر طريقة الدفع (CASH أو CARD)'}), 400
-    invoice_number = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
+    # Reuse preview invoice number if present to keep display number consistent
+    draft_data = kv_get(f'draft:{branch}:{table}', {}) or {}
+    preview_no = (draft_data.get('preview_invoice_number') or '').strip()
+    invoice_number = preview_no if preview_no else f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
     try:
         inv = SalesInvoice(
             invoice_number=invoice_number,
@@ -2404,7 +2505,14 @@ def print_order_preview(branch, table):
         s = None
     branch_name = BRANCH_LABELS.get(branch, branch)
     dt_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    order_no = f"ORD-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
+    # Keep preview number generation as before, but with INV prefix to match final
+    order_no = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
+    # Persist this preview number so checkout reuses exactly the same value
+    try:
+        rec['preview_invoice_number'] = order_no
+        kv_set(f'draft:{branch}:{table}', rec)
+    except Exception:
+        pass
     return render_template('print/receipt.html', inv=inv_ctx, items=items_ctx,
                            settings=s, branch_name=branch_name, date_time=dt_str,
                            display_invoice_number=order_no,
@@ -3153,7 +3261,7 @@ def api_table_layout_fixed(branch_code):
         # Load layout from the actual table sections system
         try:
             from models import TableSection, TableSectionAssignment
-            
+
             def decode_name(name: str):
                 name = name or ''
                 visible = name
@@ -3169,8 +3277,8 @@ def api_table_layout_fixed(branch_code):
 
             sections = TableSection.query.filter_by(branch_code=branch_code).order_by(TableSection.sort_order, TableSection.id).all()
             assignments = TableSectionAssignment.query.filter_by(branch_code=branch_code).all()
-            
-            # Convert to table manager format
+
+            # Convert to table manager format (preserve actual table numbers; do not synthesize placeholders)
             layout_sections = []
             for s in sections:
                 visible, layout = decode_name(s.name)
@@ -3179,42 +3287,39 @@ def api_table_layout_fixed(branch_code):
                     'name': visible,
                     'rows': []
                 }
-                
-                # Parse layout to create rows
+
+                # Collect actual tables assigned to this section (preserve string numbers)
+                assigned = [a for a in assignments if a.section_id == s.id]
+                # Sort by natural order: numeric if possible, else lexicographic
+                def _key(a):
+                    try:
+                        return (0, int(str(a.table_number).strip()))
+                    except Exception:
+                        return (1, str(a.table_number) or '')
+                assigned.sort(key=_key)
+
+                # Map to table objects
+                tables = [{ 'id': f'table_{idx+1}', 'number': a.table_number, 'seats': 4 } for idx, a in enumerate(assigned)]
+
                 if layout:
                     try:
                         counts = [int(x.strip()) for x in layout.split(',') if x.strip()]
-                        row_start = 1
-                        for count in counts:
-                            if count <= 0:
-                                continue
-                            row = {
-                                'id': f'row_{len(section_data["rows"]) + 1}',
-                                'tables': []
-                            }
-                            for i in range(count):
-                                table_num = row_start + i
-                                # Find table number in assignments
-                                table_assignment = next((a for a in assignments if a.section_id == s.id and safe_table_number(a.table_number) == table_num), None)
-                                if table_assignment:
-                                    row['tables'].append({
-                                        'id': f'table_{table_num}',
-                                        'number': table_num,
-                                        'seats': 4  # Default seats
-                                    })
-                                else:
-                                    row['tables'].append({
-                                        'id': f'table_{table_num}',
-                                        'number': table_num,
-                                        'seats': 4  # Default seats
-                                    })
-                            section_data['rows'].append(row)
-                            row_start += count
                     except Exception:
-                        pass
-                
+                        counts = []
+                    i = 0
+                    for cnt in counts:
+                        if cnt <= 0: continue
+                        row_tables = tables[i:i+cnt]
+                        section_data['rows'].append({ 'id': f'row_{len(section_data["rows"])+1}', 'tables': row_tables })
+                        i += cnt
+                    if i < len(tables):
+                        section_data['rows'].append({ 'id': f'row_{len(section_data["rows"])+1}', 'tables': tables[i:] })
+                else:
+                    # Single row with all assigned tables
+                    section_data['rows'].append({ 'id': 'row_1', 'tables': tables })
+
                 layout_sections.append(section_data)
-            
+
             return jsonify({'sections': layout_sections})
         except Exception as e:
             print(f"Error loading layout: {e}")
@@ -4092,6 +4197,17 @@ def reports_print_all_invoices_sales():
         pm = (r.get('payment_method') or '').upper()
         payment_totals[pm] = payment_totals.get(pm, 0.0) + float(r.get('total') or 0.0)
 
+    # Aggregate item totals (by quantity) for display
+    item_totals = {}
+    try:
+        for r in rows:
+            name = (r.get('item_name') or '').strip()
+            qty = float(r.get('quantity') or 0.0)
+            if name:
+                item_totals[name] = item_totals.get(name, 0.0) + qty
+    except Exception:
+        item_totals = {}
+
     meta = {
         'title': 'Sales Invoices (All) — Print',
         'payment_method': payment_method or 'all',
@@ -4128,7 +4244,8 @@ def reports_print_all_invoices_sales():
                            generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
                            payment_method=meta['payment_method'], branch=meta['branch'],
                            columns=columns, data=data, totals=totals, totals_columns=totals_columns,
-                           totals_colspan=totals_colspan, payment_totals=payment_totals)
+                           totals_colspan=totals_colspan, payment_totals=payment_totals,
+                           item_totals=item_totals)
 
 
 @main.route('/reports/print/all-invoices/purchases', methods=['GET'], endpoint='reports_print_all_invoices_purchases')
