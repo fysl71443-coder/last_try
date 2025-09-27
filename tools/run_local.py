@@ -1,7 +1,14 @@
 import os, sys, importlib
 
+import pathlib
+
 # Force local SQLite DB to avoid touching remote production DB
-os.environ.setdefault('DATABASE_URL', 'sqlite:///local.db')
+# Use instance/local.db for a clearer, created directory
+instance_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), '..', 'instance')).resolve()
+instance_dir.mkdir(parents=True, exist_ok=True)
+db_file = instance_dir.joinpath('local.db').resolve()
+# Use POSIX style path for SQLAlchemy sqlite URI to avoid backslash escaping issues on Windows
+os.environ.setdefault('DATABASE_URL', f"sqlite:///{db_file.as_posix()}")
 os.environ.setdefault('SECRET_KEY', 'dev')
 
 # Ensure repository root is on sys.path and import the real package 'app'

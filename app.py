@@ -1,62 +1,5 @@
-import os
-
-from flask import Flask, render_template, request, redirect, url_for
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-
-app = Flask(__name__, template_folder='templates')
-app.secret_key = "secret_key_here"
-
-login_manager = LoginManager()
-login_manager.init_app(app)
-
-# قائمة المستخدمين الثابتة
-USERS = {
-    "admin": "admin123",
-    "china_town": "ch0368",
-    "palace_india": "pi8307"
-}
-
-class User(UserMixin):
-    def __init__(self, username):
-        self.id = username
-
-@login_manager.user_loader
-def load_user(user_id):
-    if user_id in USERS:
-        return User(user_id)
-    return None
-
-@app.route("/")
-@login_required
-def home():
-    return render_template("index.html", username=current_user.id)
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-        if username in USERS and USERS[username] == password:
-            user = User(username)
-            login_user(user)
-            return redirect(url_for("home"))
-        return "Invalid credentials", 401
-    return """
-        <form method='POST'>
-            Username: <input name='username'>
-            Password: <input name='password' type='password'>
-            <input type='submit'>
-        </form>
-    """
-
-@app.route("/logout")
-@login_required
-def logout():
-    logout_user()
-    return "Logged out"
-
-if __name__ == "__main__":
-    app.run(debug=True)
+# This file has been cleaned up - the main app is now in app/__init__.py
+# Run the application using: python -m app
 
 
 # --- Bootstrap minimal Flask app early so decorators and Jinja loader work ---
@@ -759,7 +702,6 @@ def api_all_purchases():
         except Exception:
             pass
         return jsonify({'invoices': [], 'summary': {'amount':0,'discount':0,'vat':0,'total':0}, 'error': str(e)}), 500
-
 @app.route('/api/reports/payroll')
 def api_payroll_report():
     try:
@@ -1493,7 +1435,6 @@ def serve_temp_receipt(filename):
     except Exception as e:
         print(f"Error serving temp receipt: {e}")
         return "Error loading receipt", 500
-
 @app.route('/api/pay-and-print', methods=['POST'])
 @csrf_exempt
 def api_pay_and_print():
@@ -2272,7 +2213,6 @@ def api_load_draft_order(branch_code, table_number):
 def table_settings():
     """Table settings management page"""
     return render_template('table_settings.html')
-
 # API: Get table settings
 @app.route('/api/table-settings')
 @login_required
@@ -3044,7 +2984,6 @@ def save_cart_session():
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
 # ========================================
 # Original POS API Routes (MenuCategory/MenuItem)
 # ========================================
@@ -3075,7 +3014,6 @@ def get_pos_categories(branch):
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
 # API: Get menu items for a specific category
 @app.route('/api/pos/<branch>/categories/<int:category_id>/items')
 @login_required
@@ -3760,7 +3698,6 @@ def table_management(branch_code):
                          branch_code=branch_code,
                          branch_label=BRANCH_CODES[branch_code],
                          branch_icon=branch_icons.get(branch_code, '🍽️'))
-
 # POS SCREEN ROUTES - Direct access to POS with table number
 @app.route('/sales/<branch_code>/table/<int:table_number>')
 @login_required
@@ -4478,23 +4415,6 @@ def menu_item_delete(item_id):
     safe_db_commit()
     flash(_('Menu item deleted / تم حذف عنصر القائمة'), 'success')
     return redirect(url_for('menu'))
-# API: sales void password check
-@csrf_exempt
-@app.route('/api/sales/void-check', methods=['POST'])
-@login_required
-def api_sales_void_check():
-    try:
-        data = request.get_json(silent=True) or {}
-        pwd = (data.get('password') or '').strip()
-        # Fixed password for cancellation: 1991
-        expected = '1991'
-        if pwd == expected:
-            return jsonify({'ok': True})
-        return jsonify({'ok': False, 'error': _('Incorrect password / كلمة السر غير صحيحة')}), 400
-    except Exception as e:
-        current_app.logger.error("=== Void Check Error Traceback ===\n" + traceback.format_exc())
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
 
 @app.route('/menu/<int:cat_id>/toggle', methods=['POST'])
 @login_required
@@ -4505,9 +4425,7 @@ def menu_toggle(cat_id):
     safe_db_commit()
     flash(_('Category status updated / تم تحديث حالة القسم'), 'success')
     return redirect(url_for('menu'))
-
 # Checkout API: create invoice + items + payment, then return receipt URL
-
 @csrf_exempt
 @app.route('/api/sales/checkout', methods=['POST'])
 @login_required
@@ -5069,6 +4987,77 @@ def expenses():
     return render_template('expenses.html', form=form, invoices=pag.items, pagination=pag)
 
 
+@app.route('/expenses/<int:invoice_id>/view')
+@login_required
+def view_expense_invoice(invoice_id):
+    """View expense invoice details"""
+    from models import ExpenseInvoice, ExpenseInvoiceItem
+    
+    invoice = ExpenseInvoice.query.get_or_404(invoice_id)
+    items = ExpenseInvoiceItem.query.filter_by(invoice_id=invoice_id).all()
+    
+    return render_template('expenses_view.html', invoice=invoice, items=items)
+
+@app.route('/expenses/<int:invoice_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_expense_invoice(invoice_id):
+    """Edit expense invoice"""
+    from models import ExpenseInvoice, ExpenseInvoiceItem
+    from forms import ExpenseInvoiceForm
+    
+    invoice = ExpenseInvoice.query.get_or_404(invoice_id)
+    
+    if request.method == 'POST':
+        try:
+            # Update invoice basic info
+            invoice.date = request.form.get('date', invoice.date)
+            invoice.payment_method = request.form.get('payment_method', invoice.payment_method)
+            invoice.status = request.form.get('status', invoice.status)
+            
+            # Recalculate totals if items were updated
+            # For now, just update the basic info
+            # TODO: Add full item editing functionality
+            
+            if safe_db_commit("expense invoice update"):
+                flash(_('Expense invoice updated successfully / تم تحديث فاتورة المصروفات بنجاح'), 'success')
+                return redirect(url_for('expenses'))
+            else:
+                flash(_('Error updating expense invoice / خطأ في تحديث فاتورة المصروفات'), 'danger')
+                
+        except Exception as e:
+            db.session.rollback()
+            flash(_('Error updating expense invoice / خطأ في تحديث فاتورة المصروفات') + f': {str(e)}', 'danger')
+    
+    # GET request - show edit form
+    items = ExpenseInvoiceItem.query.filter_by(invoice_id=invoice_id).all()
+    return render_template('expenses_edit.html', invoice=invoice, items=items)
+
+@app.route('/delete_expense_invoice/<int:invoice_id>', methods=['POST'])
+@login_required
+def delete_expense_invoice(invoice_id):
+    """Delete expense invoice"""
+    from models import ExpenseInvoice, ExpenseInvoiceItem
+    
+    try:
+        invoice = ExpenseInvoice.query.get_or_404(invoice_id)
+        
+        # Delete associated items first
+        ExpenseInvoiceItem.query.filter_by(invoice_id=invoice_id).delete()
+        
+        # Delete the invoice
+        db.session.delete(invoice)
+        
+        if safe_db_commit("expense invoice deletion"):
+            flash(_('Expense invoice deleted successfully / تم حذف فاتورة المصروفات بنجاح'), 'success')
+        else:
+            flash(_('Error deleting expense invoice / خطأ في حذف فاتورة المصروفات'), 'danger')
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(_('Error deleting expense invoice / خطأ في حذف فاتورة المصروفات') + f': {str(e)}', 'danger')
+    
+    return redirect(url_for('expenses'))
+
 @app.route('/import_meals', methods=['POST'])
 @login_required
 def import_meals():
@@ -5184,6 +5173,7 @@ def import_meals():
         flash(_('Import failed / فشل الاستيراد: %(error)s', error=str(e)), 'danger')
 
     return redirect(url_for('meals'))
+
 # API: Cancel draft order
 @csrf_exempt
 @app.route('/api/draft_orders/<int:draft_id>/cancel', methods=['POST'])
@@ -5253,9 +5243,10 @@ def cancel_draft_order(draft_id):
         logging.exception('Cancel draft order failed')
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# API: Add item to draft order
-@app.route('/api/draft_orders/<int:draft_id>/add_item', methods=['POST'])
-@login_required
+app = create_app()
+
+if __name__ == "__main__":
+    app.run(host='127.0.0.1', port=5000, debug=True)
 def add_item_to_draft(draft_id):
     try:
         from models import DraftOrder, DraftOrderItem, Meal, Table
@@ -5735,7 +5726,7 @@ def fix_database_route():
                     ("place_india_discount_rate", "FLOAT DEFAULT 0.0"),
                     ("receipt_paper_width", "VARCHAR(10) DEFAULT '80'"),
                     ("receipt_font_size", "INTEGER DEFAULT 12"),
-                    ("receipt_logo_height", "INTEGER DEFAULT 40"),
+                    ("receipt_logo_height", "INTEGER DEFAULT 72"),
                     ("receipt_extra_bottom_mm", "INTEGER DEFAULT 15"),
                     ("receipt_show_tax_number", "BOOLEAN DEFAULT TRUE"),
                     ("receipt_footer_text", "TEXT DEFAULT 'شكراً لزيارتكم'")
@@ -5893,9 +5884,6 @@ def admin_seed_branch_users():
         db.session.rollback()
         logging.exception('admin_seed_branch_users failed')
         return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/invoices')
-@login_required
 def invoices():
     try:
         from sqlalchemy import func, text
@@ -6405,8 +6393,10 @@ def payments():
         flash(_('Error loading payments / خطأ في تحميل المدفوعات'), 'danger')
         return render_template('payments.html', invoices=all_invoices, status_filter=status_filter, type_filter=type_filter)
 
-@app.route('/reports', methods=['GET'])
-@login_required
+app = create_app()
+
+if __name__ == "__main__":
+    app.run(host='127.0.0.1', port=5000, debug=True)
 def reports():
     try:
         from sqlalchemy import func, cast, Date, text
@@ -7157,179 +7147,6 @@ def salaries_statements():
         totals['remaining'] += remaining
 
     return render_template('salaries_statements.html', year=year, month=month, rows=rows, totals=totals)
-
-@app.route('/salaries/statements/print', methods=['GET'])
-@login_required
-def salaries_statements_print():
-    # Permission: print
-    try:
-        if not (getattr(current_user,'role','')=='admin' or can_perm('salaries','print')):
-            flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
-            return redirect(url_for('salaries_statements'))
-    except Exception:
-        pass
-    try:
-        year = int(request.args.get('year'))
-        month = int(request.args.get('month'))
-    except Exception:
-        flash(_('Select year and month / اختر السنة والشهر'), 'danger')
-        return redirect(url_for('salaries_statements'))
-
-    from sqlalchemy import func
-    recs = Salary.query.filter_by(year=year, month=month).join(Employee).order_by(Employee.full_name.asc()).all()
-    pays = db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).\
-        filter(Payment.invoice_type=='salary', Payment.invoice_id.in_([r.id for r in recs])).\
-        group_by(Payment.invoice_id).all()
-    paid_map = {pid: float(total or 0) for (pid,total) in pays}
-
-    # Collect company name
-    s = get_settings_safe()
-    company_name = (s.company_name or '').strip() if s and s.company_name else 'Company'
-
-    # HTML print (professional header) unless mode=pdf explicitly
-    if request.args.get('mode') != 'pdf':
-        # Prepare rows and totals for template
-        rows = []
-        totals = {
-            'basic': 0.0, 'allow': 0.0, 'ded': 0.0, 'prev': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0
-        }
-        for s_row in recs:
-            paid = paid_map.get(s_row.id, 0.0)
-            total = float(s_row.total_salary or 0)
-            remaining = max(total - paid, 0.0)
-            rows.append({
-                'employee_name': s_row.employee.full_name if s_row.employee else str(s_row.employee_id),
-                'basic': float(s_row.basic_salary or 0),
-                'allow': float(s_row.allowances or 0),
-                'ded': float(s_row.deductions or 0),
-                'prev': float(s_row.previous_salary_due or 0),
-                'total': total,
-                'paid': paid,
-                'remaining': remaining,
-                'status': s_row.status,
-            })
-            totals['basic'] += float(s_row.basic_salary or 0)
-            totals['allow'] += float(s_row.allowances or 0)
-            totals['ded'] += float(s_row.deductions or 0)
-            totals['prev'] += float(s_row.previous_salary_due or 0)
-            totals['total'] += total
-            totals['paid'] += paid
-            totals['remaining'] += remaining
-        # Header data
-        s = get_settings_safe()
-        company_name = (s.company_name or '').strip() if s and s.company_name else 'Company'
-        logo_url = url_for('static', filename='logo.svg', _external=False)
-        title = _("Payroll Statements / كشوفات الرواتب")
-        meta = _("Month / الشهر") + f": {year}-{month:02d}"
-        header_note = _("Generated by System / تم التوليد بواسطة النظام")
-        return render_template('print/payroll.html',
-            title=title, company_name=company_name, logo_url=logo_url, header_note=header_note,
-            meta=meta, rows=rows, totals=totals)
-
-    # Try PDF via reportlab
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.units import mm
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
-        import io, os as _os
-
-        def register_ar_font():
-            candidates = [
-                r"C:\\Windows\\Fonts\\trado.ttf",
-                r"C:\\Windows\\Fonts\\Tahoma.ttf",
-                r"C:\\Windows\\Fonts\\arial.ttf",
-                "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            ]
-            for fp in candidates:
-                if _os.path.exists(fp):
-                    pdfmetrics.registerFont(TTFont('Arabic', fp))
-                    return 'Arabic'
-            return None
-        def shape_ar(t):
-            try:
-                import arabic_reshaper
-                from bidi.algorithm import get_display
-                return get_display(arabic_reshaper.reshape(t))
-            except Exception:
-                return t
-
-        buf = io.BytesIO()
-        p = canvas.Canvas(buf, pagesize=A4)
-        w, h = A4
-        ar = register_ar_font()
-        # Header
-        if ar:
-            p.setFont(ar, 14)
-            p.drawString(20*mm, h-20*mm, shape_ar(company_name))
-            p.setFont(ar, 11)
-            p.drawString(20*mm, h-28*mm, shape_ar(f"كشف الرواتب لشهر {year}-{month:02d}"))
-        else:
-            p.setFont("Helvetica-Bold", 14)
-            p.drawString(20*mm, h-20*mm, company_name)
-            p.setFont("Helvetica", 11)
-            p.drawString(20*mm, h-28*mm, f"Payroll Statement {year}-{month:02d}")
-
-        # Table header
-        y = h - 40*mm
-        if ar:
-            p.setFont(ar, 10)
-            headers = ["الموظف","الأساسي","البدلات","الاستقطاعات","سابقة","الإجمالي","المدفوع","المتبقي","الحالة"]
-            xcols = [20, 70, 95, 120, 145, 170, 195, 220, 245]
-            for i, txt in enumerate(headers):
-                p.drawString(xcols[i]*mm, y, shape_ar(txt))
-        else:
-            p.setFont("Helvetica", 10)
-            headers = ["Employee","Basic","Allow","Deduct","Prev","Total","Paid","Remain","Status"]
-            xcols = [20, 70, 95, 120, 145, 170, 195, 220, 245]
-            for i, txt in enumerate(headers):
-                p.drawString(xcols[i]*mm, y, txt)
-        y -= 8*mm
-
-        # Rows
-        for s_row in recs:
-            paid = paid_map.get(s_row.id, 0.0)
-            total = float(s_row.total_salary or 0)
-            remaining = max(total - paid, 0.0)
-            vals = [
-                s_row.employee.full_name if s_row.employee else str(s_row.employee_id),
-                f"{float(s_row.basic_salary or 0):.2f}",
-                f"{float(s_row.allowances or 0):.2f}",
-                f"{float(s_row.deductions or 0):.2f}",
-                f"{float(s_row.previous_salary_due or 0):.2f}",
-                f"{total:.2f}", f"{paid:.2f}", f"{remaining:.2f}", s_row.status
-            ]
-            if ar:
-                vals[0] = shape_ar(vals[0])
-                vals[-1] = shape_ar(vals[-1])
-            for i, v in enumerate(vals):
-                p.drawString(xcols[i]*mm, y, v)
-            y -= 7*mm
-            if y < 20*mm:
-                p.showPage(); y = h - 20*mm
-                if ar: p.setFont(ar, 10)
-                else: p.setFont("Helvetica", 10)
-
-        p.showPage(); p.save(); buf.seek(0)
-        return send_file(buf, as_attachment=False, download_name=f"Payroll_{year}-{month:02d}.pdf", mimetype='application/pdf')
-    except Exception:
-        # Fallback to HTML template for print
-        return render_template('salaries_statements.html', year=year, month=month, rows=[{
-            'id': r.id,
-            'employee_name': r.employee.full_name if r.employee else str(r.employee_id),
-            'basic': float(r.basic_salary or 0),
-            'allow': float(r.allowances or 0),
-            'ded': float(r.deductions or 0),
-            'prev': float(r.previous_salary_due or 0),
-            'total': float(r.total_salary or 0),
-            'paid': paid_map.get(r.id, 0.0),
-            'remaining': max(float(r.total_salary or 0) - paid_map.get(r.id, 0.0), 0.0),
-            'status': r.status,
-        } for r in recs], totals=None)
-
-
 @app.route('/salaries/<int:salary_id>/delete', methods=['POST'])
 @login_required
 def delete_salary(salary_id):
@@ -7342,9 +7159,6 @@ def delete_salary(salary_id):
         db.session.rollback()
         flash(_('تعذر حذف الراتب / Could not delete salary'), 'danger')
     return redirect(url_for('salaries'))
-
-
-
 # Salaries monthly management
 @app.route('/salaries/monthly', methods=['GET', 'POST'])
 @login_required
@@ -7556,7 +7370,7 @@ def settings():
             pass
         # New configurable fields
         try:
-            s.receipt_logo_height = int(request.form.get('receipt_logo_height') or (s.receipt_logo_height or 40))
+            s.receipt_logo_height = int(request.form.get('receipt_logo_height') or (s.receipt_logo_height or 72))
         except Exception:
             pass
         try:
@@ -7954,8 +7768,6 @@ def debug_effective_permissions():
         except Exception:
             pass
         return jsonify({'error': 'internal', 'detail': str(e)}), 500
-
-
 # Retention: 12 months with PDF export
 @app.route('/invoices/retention', methods=['GET'], endpoint='invoices_retention')
 @login_required
@@ -8032,7 +7844,6 @@ def invoices_retention_export_view():
 def users():
     us = User.query.order_by(User.username.asc()).all()
     return render_template('users.html', users=us)
-
 # Invoice management routes
 @app.route('/invoices/print/<string:section>')
 @login_required
@@ -8715,7 +8526,6 @@ def api_delete_all_meals():
     except Exception as e:
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
-
 # =========================
 # Print and Payment API Routes
 # =========================
@@ -8805,7 +8615,6 @@ def print_invoice(invoice_id: int):
         display_invoice_number=display_invoice_number,
         qr_data_url=qr_data_url
     )
-
 @app.route('/invoices/<int:invoice_id>/print-preview')
 @login_required
 def print_unpaid_invoice(invoice_id):
@@ -8887,9 +8696,6 @@ def print_unpaid_invoice(invoice_id):
         flash(_('Error loading invoice / خطأ في تحميل الفاتورة'), 'danger')
         return redirect(url_for('invoices'))
 
-    # Local import to avoid NameError
-
-
 @app.route('/invoices/<int:invoice_id>/pay-and-print', methods=['POST'])
 @login_required
 def pay_and_print_invoice(invoice_id):
@@ -8912,8 +8718,6 @@ def pay_and_print_invoice(invoice_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
-
-
 
 @app.route('/admin/fix-db-complete')
 def fix_database_complete():
@@ -8940,7 +8744,9 @@ def fix_database_complete():
             ("receipt_show_tax_number", "BOOLEAN DEFAULT TRUE"),
             ("receipt_footer_text", "TEXT DEFAULT 'شكراً لزيارتكم'"),
             ("logo_url", "VARCHAR(255)"),
-            ("receipt_logo_height", "INTEGER DEFAULT 40"),
+                    ("china_town_logo_url", "VARCHAR(255)"),
+                    ("place_india_logo_url", "VARCHAR(255)"),
+            ("receipt_logo_height", "INTEGER DEFAULT 72"),
             ("receipt_extra_bottom_mm", "INTEGER DEFAULT 15")
         ]
 
@@ -8973,12 +8779,11 @@ def fix_database_complete():
                 ) VALUES (
                     'مطعم الصين وقصر الهند', '123456789', 'الرياض، المملكة العربية السعودية',
                     '0112345678', 'info@restaurant.com', 15.0, 'SAR',
-                    'China Town', 'Palace India', 'light',
-                    '1991', '1991',
-                    15.0, 15.0,
-                    0.0, 0.0,
-                    '80', 12, TRUE, TRUE,
-                    'شكراً لزيارتكم - Thank you for visiting', 40, 15
+                    'CHINA TOWN', 'PLACE INDIA', 'light',
+                    'thermal', '/static/currency.png', 'THANK YOU FOR VISIT',
+                    '1991', 15.0, 0.0,
+                    '1991', 15.0, 0.0,
+                    '80', 5, 5, 3, 3, 12, TRUE, TRUE, 'THANK YOU FOR VISIT', 72, 15
                 )
                 """
                 db.session.execute(text(insert_sql))
@@ -9007,7 +8812,7 @@ def fix_database_complete():
 def create_sample_data_route():
     """Route to create sample data for testing - No login required for testing"""
     try:
-        from models import Settings, Employee, RawMaterial, Meal
+        from models import Settings, Employee, RawMaterial, User
         create_sample_data()
         return jsonify({
             'success': True,
@@ -9049,7 +8854,7 @@ def create_sample_data():
                 place_india_discount_rate=0.0,
                 receipt_paper_width='80',
                 receipt_font_size=12,
-                receipt_logo_height=40,
+                receipt_logo_height=72,
                 receipt_extra_bottom_mm=15,
                 receipt_show_tax_number=True,
                 receipt_footer_text='شكراً لزيارتكم - Thank you for visiting',
@@ -9229,7 +9034,6 @@ def create_sample_data():
         print(f"❌ Error creating sample data: {e}")
         db.session.rollback()
         raise e
-
 
 # Monthly PDF report for all branches
 @app.route('/reports/invoices/monthly/pdf', endpoint='all_branches_invoices_pdf_monthly')
@@ -9435,5 +9239,3 @@ if __name__ == '__main__':
         import os as _os
         port = int(_os.getenv('PORT', '5000'))
         app.run(host='127.0.0.1', port=port, debug=False)
-
-

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "p76iedeJBeI=",
+  "dgSpecHash": "xzfhv6DZTQA=",
   "success": true,
-  "projectFilePath": "c:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj",
+  "projectFilePath": "C:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\DELL\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.18\\microsoft.netcore.app.ref.8.0.18.nupkg.sha512",
     "C:\\Users\\DELL\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.18\\microsoft.windowsdesktop.app.ref.8.0.18.nupkg.sha512",

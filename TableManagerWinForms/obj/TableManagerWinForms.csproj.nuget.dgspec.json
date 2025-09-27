@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj": {}
+    "C:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj": {}
   },
   "projects": {
-    "c:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj": {
+    "C:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj",
+        "projectUniqueName": "C:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj",
         "projectName": "TableManagerWinForms",
-        "projectPath": "c:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj",
+        "projectPath": "C:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj",
         "packagesPath": "C:\\Users\\DELL\\.nuget\\packages\\",
-        "outputPath": "c:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\obj\\",
+        "outputPath": "C:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\DELL\\AppData\\Roaming\\NuGet\\NuGet.Config"

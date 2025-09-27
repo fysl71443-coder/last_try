@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}{{ _('Expense Invoice Details / تفاصيل فاتورة المصروفات') }} - {{ invoice.invoice_number }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-0">📋 {{ _('Expense Invoice Details / تفاصيل فاتورة المصروفات') }}</h2>
+                    <p class="text-muted mb-0">{{ invoice.invoice_number }}</p>
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary me-2" onclick="window.close()">
+                        ✖️ {{ _('Close / إغلاق') }}
+                    </button>
+                    <button class="btn btn-primary" onclick="window.print()">
+                        🖨️ {{ _('Print / طباعة') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice Information -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">📄 {{ _('Invoice Information / معلومات الفاتورة') }}</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <td><strong>{{ _('Invoice Number / رقم الفاتورة') }}:</strong></td>
+                            <td>{{ invoice.invoice_number }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>{{ _('Date / التاريخ') }}:</strong></td>
+                            <td>{{ invoice.date.strftime('%Y-%m-%d') }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>{{ _('Payment Method / طريقة الدفع') }}:</strong></td>
+                            <td>
+                                {% if invoice.payment_method == 'cash' %}
+                                    💰 {{ _('Cash / نقداً') }}
+                                {% elif invoice.payment_method == 'bank' %}
+                                    🏦 {{ _('Bank / بنك') }}
+                                {% elif invoice.payment_method == 'visa' %}
+                                    💳 {{ _('Visa / فيزا') }}
+                                {% elif invoice.payment_method == 'mada' %}
+                                    💳 {{ _('Mada / مدى') }}
+                                {% else %}
+                                    {{ invoice.payment_method }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>{{ _('Status / الحالة') }}:</strong></td>
+                            <td>
+                                {% if invoice.status == 'paid' %}
+                                    <span class="badge bg-success">✅ {{ _('Paid / مدفوع') }}</span>
+                                {% elif invoice.status == 'partial' %}
+                                    <span class="badge bg-warning">⚠️ {{ _('Partial / جزئي') }}</span>
+                                {% else %}
+                                    <span class="badge bg-danger">❌ {{ _('Unpaid / غير مدفوع') }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">💰 {{ _('Financial Summary / الملخص المالي') }}</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <td><strong>{{ _('Subtotal / المجموع الفرعي') }}:</strong></td>
+                            <td class="text-end">${{ "%.2f"|format(invoice.total_before_tax) }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>{{ _('Tax / الضريبة') }}:</strong></td>
+                            <td class="text-end">${{ "%.2f"|format(invoice.tax_amount) }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>{{ _('Discount / الخصم') }}:</strong></td>
+                            <td class="text-end text-danger">-${{ "%.2f"|format(invoice.discount_amount) }}</td>
+                        </tr>
+                        <tr class="border-top">
+                            <td><strong class="fs-5">{{ _('Total / الإجمالي') }}:</strong></td>
+                            <td class="text-end"><strong class="fs-5 text-danger">${{ "%.2f"|format(invoice.total_after_tax_discount) }}</strong></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Items Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">🧾 {{ _('Invoice Items / بنود الفاتورة') }}</h5>
+                </div>
+                <div class="card-body">
+                    {% if items %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>{{ _('Description / الوصف') }}</th>
+                                    <th class="text-center">{{ _('Quantity / الكمية') }}</th>
+                                    <th class="text-end">{{ _('Unit Price / سعر الوحدة') }}</th>
+                                    <th class="text-end">{{ _('Tax / الضريبة') }}</th>
+                                    <th class="text-end">{{ _('Discount / الخصم') }}</th>
+                                    <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items %}
+                                <tr>
+                                    <td><strong>{{ item.description }}</strong></td>
+                                    <td class="text-center">{{ item.quantity }}</td>
+                                    <td class="text-end">${{ "%.2f"|format(item.price_before_tax) }}</td>
+                                    <td class="text-end">${{ "%.2f"|format(item.tax) }}</td>
+                                    <td class="text-end text-danger">-${{ "%.2f"|format(item.discount) }}</td>
+                                    <td class="text-end"><strong>${{ "%.2f"|format(item.total_price) }}</strong></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted">{{ _('No items found / لم يتم العثور على عناصر') }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="text-center">
+                <small class="text-muted">
+                    {{ _('Generated on / تم الإنشاء في') }}: {{ moment().format('YYYY-MM-DD HH:mm:ss') }}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .btn {
+        display: none !important;
+    }
+    .card {
+        border: 1px solid #000 !important;
+    }
+    .card-header {
+        background-color: #f8f9fa !important;
+        color: #000 !important;
+    }
+}
+</style>
+{% endblock %}
+
