@@ -50,3 +50,4 @@ def fix_table_names():
 if __name__ == "__main__":
     fix_table_names()
 
+
