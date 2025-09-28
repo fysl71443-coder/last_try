@@ -577,7 +577,6 @@ def print_all_invoices_purchases():
         logging.exception('print_all_invoices_purchases error')
         flash(_('Error generating report'), 'danger')
         return redirect(url_for('invoices'))
-
 @app.route('/reports/print/all-invoices/expenses')
 @login_required
 def print_all_invoices_expenses():
@@ -1209,8 +1208,6 @@ def generate_branch_invoice_number(branch_code: str) -> str:
             return f"{prefix}-{fallback_year}-{int(_time.time() % 1000):03d}"
         except Exception:
             return f"INV-{get_saudi_now().year}-000"
-
-
 def create_pos_tables():
     """Stub: simplified POS tables creator (disabled to avoid import-time errors).
     Use the admin route /admin/create-pos-tables to (re)create sample POS tables/data.
@@ -1804,7 +1801,6 @@ try:
     app.register_blueprint(receipt_bp)
 except Exception:
     pass
-
 @app.route('/login', methods=['GET', 'POST'])
 @csrf_exempt
 def login():
@@ -2411,8 +2407,6 @@ def api_get_table_sections(branch_code):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
-
-
 @app.route('/api/table-sections/<branch_code>', methods=['POST'])
 @login_required
 def api_save_table_sections(branch_code):
@@ -3029,7 +3023,6 @@ def create_pos_tables():
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'error': str(e)}), 500
-
 # Payment page route
 @app.route('/payment')
 @login_required
@@ -3677,7 +3670,6 @@ def create_sales_invoice(branch, data):
     except Exception as e:
         db.session.rollback()
         raise e
-
 # Legacy sales redirect page
 @app.route('/sales/legacy')
 @login_required
@@ -3746,7 +3738,7 @@ def _seed_menu_categories_once():
 
 # Helpers
 BRANCH_CODES = {'china_town': 'China Town', 'place_india': 'Place India'}
-PAYMENT_METHODS = ['CASH','MADA','VISA','MASTERCARD','BANK','AKS','GCC']
+PAYMENT_METHODS = ['CASH','BANK','TRANSFER']
 
 def is_valid_branch(code: str) -> bool:
     return code in BRANCH_CODES
@@ -4316,7 +4308,6 @@ def customers_edit(cid):
                 db.session.rollback()
                 flash(_('Failed to update customer / تعذر تحديث العميل'), 'danger')
     return render_template('customers_edit.html', c=c)
-
 @app.route('/customers/<int:cid>/delete', methods=['POST'])
 @login_required
 def customers_delete(cid):
@@ -4865,8 +4856,6 @@ def sales_receipt(invoice_id):
 
     # Use unified thermal receipt template that already shows Payment method
     return render_template('print/receipt.html', inv=invoice, items=items, settings=settings, qr_data_url=qr_data_url, paid=True)
-
-
 @app.route('/purchases', methods=['GET', 'POST'])
 @login_required
 def purchases():
@@ -7265,7 +7254,6 @@ def edit_employee(emp_id):
             db.session.rollback()
             flash(_('تعذر التعديل. تحقق من عدم تكرار الرمز/الهوية / Could not update. Ensure code/national id are unique.'), 'danger')
     return render_template('employees.html', form=form, employees=None)
-
 # Employees: Delete
 @app.route('/employees/<int:emp_id>/delete', methods=['POST'])
 @login_required
@@ -7892,7 +7880,6 @@ def inject_can():
         can=lambda screen,perm: (getattr(current_user,'role','')=='admin') or user_has_perm(current_user, screen, perm),
         can_branch=lambda screen,perm,branch_scope: can_perm(screen, perm, branch_scope)
     )
-
 # ---------------------- Permissions API ----------------------
 from models import UserPermission
 
@@ -8515,7 +8502,6 @@ def delete_meal(meal_id):
     safe_db_commit()
     flash(_('Meal deleted successfully / تم حذف الوجبة بنجاح'), 'success')
     return redirect(url_for('meals'))
-
 @app.route('/delete_purchase_invoice/<int:invoice_id>', methods=['POST'])
 @login_required
 def delete_purchase_invoice(invoice_id):
@@ -9078,7 +9064,6 @@ def create_sample_data_route():
             'success': False,
             'error': str(e)
         }), 500
-
 def create_sample_data():
     """Create comprehensive sample data for testing"""
     try:

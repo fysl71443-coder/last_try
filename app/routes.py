@@ -778,120 +778,69 @@ def inventory():
 @main.route('/expenses', methods=['GET', 'POST'], endpoint='expenses')
 @login_required
 def expenses():
-    form = ExpenseInvoiceForm()
-    try:
-        form.date.data = datetime.utcnow().date()
-    except Exception:
-        pass
-    if request.method == 'POST':
-        try:
-            date_str = request.form.get('date') or datetime.utcnow().date().isoformat()
-            pm = (request.form.get('payment_method') or 'cash').strip().lower()
-            inv = ExpenseInvoice(
-                invoice_number=f"INV-EXP-{datetime.utcnow().year}-{(ExpenseInvoice.query.count()+1):04d}",
-                date=datetime.strptime(date_str, '%Y-%m-%d').date(),
-                payment_method=pm,
-                user_id=getattr(current_user, 'id', 1)
-            )
-            # Payment status from form (paid / partial / unpaid)
-            inv.status = (request.form.get('status') or inv.status or 'paid').strip().lower()
-            if inv.status not in ('paid','partial','unpaid'):
-                inv.status = 'paid'
-            # Collect items
-            idx = 0
-            total_before = 0.0
-            total_tax = 0.0
-            total_disc = 0.0
-            while True:
-                prefix = f"items-{idx}-"
-                desc = request.form.get(prefix + 'description')
-                qty = request.form.get(prefix + 'quantity')
-                price = request.form.get(prefix + 'price_before_tax')
-                tax = request.form.get(prefix + 'tax')
-                disc = request.form.get(prefix + 'discount')
-                if desc is None and qty is None and price is None and tax is None and disc is None:
-                    break
-                if not desc and not qty and not price:
-                    idx += 1
-                    continue
-                try:
-                    q = float(qty or 0)
-                    p = float(price or 0)
-                    t = float(tax or 0)
-                    d = float(disc or 0)
-                except Exception:
-                    q = p = t = d = 0.0
-                before = q * p
-                line_total = max(0.0, before + t - d)
-                total_before += before
-                total_tax += max(0.0, t)
-                total_disc += max(0.0, d)
-                inv.items.append(ExpenseInvoiceItem(
-                    description=desc or 'Expense Item',
-                    quantity=q,
-                    price_before_tax=p,
-                    tax=t,
-                    discount=d,
-                    total_price=line_total
-                ))
-                idx += 1
-            inv.total_before_tax = total_before
-            inv.tax_amount = total_tax
-            inv.discount_amount = total_disc
-            inv.total_after_tax_discount = max(0.0, total_before + total_tax - total_disc)
-            if ext_db is not None:
-                ext_db.session.add(inv)
-                ext_db.session.commit()
-            else:
-                db.session.add(inv)
-                db.session.commit()
-            # Auto-create payment if status is 'paid' or 'partial'
-            try:
-                st = (getattr(inv, 'status', '') or '').lower()
-                total_amt = float(inv.total_after_tax_discount or 0.0)
-                if st == 'paid' and total_amt > 0:
-                    db.session.add(Payment(
-                        invoice_id=inv.id,
-                        invoice_type='expense',
-                        amount_paid=total_amt,
-                        payment_method=(pm or 'CASH').upper()
-                    ))
-                    db.session.commit()
-                elif st == 'partial':
-                    amt_raw = request.form.get('partial_paid_amount')
-                    try:
-                        amt = float(amt_raw or 0.0)
-                    except Exception:
-                        amt = 0.0
-                    if total_amt > 0 and amt > 0:
-                        if amt > total_amt:
-                            amt = total_amt
-                        db.session.add(Payment(
-                            invoice_id=inv.id,
-                            invoice_type='expense',
-                            amount_paid=amt,
-                            payment_method=(pm or 'CASH').upper()
-                        ))
-                        db.session.commit()
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-            flash('Expense saved', 'success')
-        except Exception as ex:
-            if ext_db is not None:
-                ext_db.session.rollback()
-            else:
-                db.session.rollback()
-            flash(f'Could not save expense: {ex}', 'danger')
-        return redirect(url_for('main.expenses'))
-    # Show recent invoices if possible; otherwise empty list
-    try:
-        invoices = ExpenseInvoice.query.order_by(ExpenseInvoice.id.desc()).limit(10).all()
-    except Exception:
-        invoices = []
-    return render_template('expenses.html', form=form, invoices=invoices)
+	form = ExpenseInvoiceForm()
+	try:
+		form.date.data = datetime.utcnow().date()
+	except Exception:
+		pass
+	if request.method == 'POST':
+		try:
+			date_str = request.form.get('date') or datetime.utcnow().date().isoformat()
+			pm = (request.form.get('payment_method') or 'CASH').strip().upper()
+			if pm not in ('CASH','BANK','TRANSFER'):
+				pm = 'CASH'
+			inv = ExpenseInvoice(
+				invoice_number=f"INV-EXP-{datetime.utcnow().year}-{(ExpenseInvoice.query.count()+1):04d}",
+				date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+				payment_method=pm,
+				user_id=getattr(current_user, 'id', 1)
+			)
+			# Payment status from form (paid / partial / unpaid)
+			inv.status = (request.form.get('status') or inv.status or 'paid').strip().lower()
+			if inv.status not in ('paid','partial','unpaid'):
+				inv.status = 'paid'
+			# Collect items
+			idx = 0
+			total_before = 0.0
+			total_tax = 0.0
+			total_disc = 0.0
+			while True:
+				prefix = f"items-{idx}-"
+				desc = request.form.get(prefix + 'description')
+				qty = request.form.get(prefix + 'quantity')
+				price = request.form.get(prefix + 'price_before_tax')
+				tax = request.form.get(prefix + 'tax')
+				disc = request.form.get(prefix + 'discount')
+				if desc is None and qty is None and price is None and tax is None and disc is None:
+					break
+				if not desc and not qty and not price:
+					idx += 1
+					continue
+				try:
+					qf = float(qty or 0.0); pf = float(price or 0.0); tf = float(tax or 0.0); df = float(disc or 0.0)
+				except Exception:
+					qf = 0.0; pf = 0.0; tf = 0.0; df = 0.0
+				line_total = (qf * pf) - df + tf
+				total_before += (qf * pf)
+				total_tax += tf
+				total_disc += df
+				item = ExpenseInvoiceItem(description=(desc or '').strip(), quantity=qf, price_before_tax=pf, tax=tf, discount=df, total_price=line_total)
+				db.session.add(item)
+				idx += 1
+			inv.total_before_tax = total_before
+			inv.tax_amount = total_tax
+			inv.discount_amount = total_disc
+			inv.total_after_tax_discount = max(0.0, total_before - total_disc + total_tax)
+			db.session.add(inv); db.session.flush()
+			# Link items
+			ExpenseInvoiceItem.query.filter(ExpenseInvoiceItem.invoice_id.is_(None)).update({'invoice_id': inv.id})
+			db.session.commit()
+			flash(_('Expense saved'), 'success')
+		except Exception as e:
+			db.session.rollback()
+			flash(_('Failed to save expense'), 'danger')
+		return redirect(url_for('main.expenses'))
+	return render_template('expenses.html', form=form, invoices=ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).limit(50).all())
 
 @main.route('/invoices', endpoint='invoices')
 @login_required
