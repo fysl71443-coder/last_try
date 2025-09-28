@@ -27,9 +27,15 @@ body {
 .item-row {
   border: 1px solid #e9ecef;
   border-radius: 8px;
-  padding: 1rem;
+  padding: 1rem 2.25rem 1rem 1rem; /* extra right space for close button */
   margin-bottom: 0.5rem;
   background: #f8f9fa;
+  position: relative;
+}
+.item-row .remove-row-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
 }
 .stock-info {
   font-size: 0.8rem;
@@ -59,7 +65,13 @@ body {
 
     <!-- نموذج إنشاء فاتورة شراء جديدة -->
     <div class="purchases-card">
-        <h5 class="mb-3">{{ _('Create New Purchase Invoice / إنشاء فاتورة شراء جديدة') }}</h5>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">🧾 {{ _('Create New Purchase Invoice / إنشاء فاتورة شراء جديدة') }}</h5>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="reset-form">🗑️ {{ _('Clear / مسح') }}</button>
+                <button type="button" class="btn btn-outline-info btn-sm" id="recalc">🔄 {{ _('Recalculate / إعادة حساب') }}</button>
+            </div>
+        </div>
 
         <form method="POST" id="purchase-form">
             {{ form.hidden_tag() }}
@@ -149,8 +161,9 @@ body {
                 <datalist id="materials-datalist"></datalist>
                 {% for item_form in form.items %}
                 <div class="item-row">
-                    <div class="row">
-                        <div class="col-md-3">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn remove-item-btn" title="Remove">✖</button>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
                             <label class="form-label">{{ _('Item / الصنف') }}</label>
                             <input class="form-control item-name-input" name="items-{{ loop.index0 }}-item_name" list="materials-datalist" placeholder="{{ _('Type item name / اكتب اسم المادة') }}">
                             <div class="stock-info" id="stock-info-{{ loop.index0 }}"></div>
@@ -167,7 +180,7 @@ body {
                             <label class="form-label">{{ _('Price / السعر') }}</label>
                             {{ item_form.price_before_tax(class_='form-control', step='0.0001') }}
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-1">
                             <label class="form-label">{{ _('Discount %% / نسبة الخصم %%') }}</label>
                             {{ item_form.discount(class_='form-control', step='0.01', min='0', max='100') }}
                         </div>
@@ -179,16 +192,13 @@ body {
                             <label class="form-label">{{ _('Total / الإجمالي') }}</label>
                             <div class="form-control bg-light item-total">$0.00</div>
                         </div>
-                        <div class="col-md-1 d-flex align-items-end">
-                            <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
-                        </div>
                     </div>
                 </div>
                 {% endfor %}
             </div>
 
             <!-- ملخص التكاليف -->
-            <div class="row mb-3">
+            <div class="row mb-3 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label">{{ _('Total Before Discount & Tax / الإجمالي قبل الخصم والضريبة') }}</label>
                     <div class="form-control bg-light" id="total-before-tax">$0.00</div>
@@ -203,18 +213,17 @@ body {
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ _('Final Total / الإجمالي النهائي') }}</label>
-                    <div class="form-control bg-success text-white fw-bold" id="final-total">$0.00</div>
+                    <div class="form-control bg-success text-white fw-bold fs-5" id="final-total">$0.00</div>
                 </div>
             </div>
 
-            <div class="row">
-                <div class="col-md-6">
-                    <button type="button" class="btn btn-secondary" id="add-item">
-                        ➕ {{ _('Add Item / إضافة صنف') }}
-                    </button>
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary" id="add-item">➕ {{ _('Add Item / إضافة صنف') }}</button>
+                    <button type="button" class="btn btn-outline-dark" id="add-five">➕×5</button>
                 </div>
-                <div class="col-md-6 text-end">
-                    {{ form.submit(class_='btn btn-primary btn-lg') }}
+                <div class="text-end">
+                    {{ form.submit(class_='btn btn-primary btn-lg px-4') }}
                 </div>
             </div>
         </form>
@@ -312,8 +321,9 @@ body {
         const newItem = document.createElement('div');
         newItem.className = 'item-row';
         newItem.innerHTML = `
-            <div class="row">
-                <div class="col-md-3">
+            <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn remove-item-btn" title="Remove">✖</button>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
                     <label class="form-label">{{ _('Item / الصنف') }}</label>
                     <input class="form-control item-name-input" name="items-${itemIndex}-item_name" list="materials-datalist" placeholder="{{ _('Type item name / اكتب اسم المادة') }}">
                     <div class="stock-info"></div>
@@ -331,7 +341,7 @@ body {
                     <label class="form-label">{{ _('Price / السعر') }}</label>
                     <input class="form-control" name="items-${itemIndex}-price_before_tax" step="0.0001" type="number">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <label class="form-label">{{ _('Discount %% / نسبة الخصم %%') }}</label>
                     <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" min="0" max="100" value="0">
                 </div>
@@ -343,14 +353,14 @@ body {
                     <label class="form-label">{{ _('Total / الإجمالي') }}</label>
                     <div class="form-control bg-light item-total">$0.00</div>
                 </div>
-                <div class="col-md-1 d-flex align-items-end">
-                    <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
-                </div>
             </div>
         `;
         container.appendChild(newItem);
         itemIndex++;
+        calculateTotals();
     });
+
+    document.getElementById('add-five').addEventListener('click', function(){ for(let i=0;i<5;i++){ document.getElementById('add-item').click(); } });
 
     // Remove item functionality
     document.addEventListener('click', function(e) {
