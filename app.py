@@ -6401,25 +6401,38 @@ def inventory():
     raw_materials = RawMaterial.query.filter_by(active=True).all()
     meals = Meal.query.filter_by(active=True).all()
 
-    # Summarize purchased quantities and average cost per material
+    # Summarize purchased quantities and average cost per material, with current stock
     ledger_rows = []
     try:
         q = db.session.query(
-            PurchaseInvoiceItem.raw_material_name.label('name'),
+            PurchaseInvoiceItem.raw_material_id.label('rm_id'),
+            func.max(PurchaseInvoice.date).label('last_date'),
             func.sum(PurchaseInvoiceItem.quantity).label('qty'),
             func.sum(PurchaseInvoiceItem.total_price).label('total_cost')
-        ).join(PurchaseInvoice, PurchaseInvoice.id==PurchaseInvoiceItem.invoice_id) 
-        q = q.group_by(PurchaseInvoiceItem.raw_material_name)
+        ).join(PurchaseInvoice, PurchaseInvoice.id==PurchaseInvoiceItem.invoice_id)
+        q = q.group_by(PurchaseInvoiceItem.raw_material_id)
+        rm_map = {m.id: m for m in raw_materials}
         for r in q.all():
+            rm = rm_map.get(int(r.rm_id)) if r.rm_id is not None else None
+            name = (rm.display_name if rm else '-')
+            unit = (rm.unit if rm else '-')
+            current_stock = float(rm.stock_quantity or 0) if rm else 0.0
             qty = float(r.qty or 0)
             total_cost = float(r.total_cost or 0)
             avg_cost = (total_cost/qty) if qty else 0.0
+            stock_value = current_stock * avg_cost
             ledger_rows.append({
-                'material': r.name,
+                'material': name,
+                'unit': unit,
                 'purchased_qty': qty,
                 'avg_cost': avg_cost,
-                'total_cost': total_cost
+                'total_cost': total_cost,
+                'current_stock': current_stock,
+                'stock_value': stock_value,
+                'last_date': r.last_date.strftime('%Y-%m-%d') if r.last_date else ''
             })
+        # Sort by material name
+        ledger_rows.sort(key=lambda x: (x['material'] or '').lower())
     except Exception:
         ledger_rows = []
 
