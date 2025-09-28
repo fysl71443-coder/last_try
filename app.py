@@ -4839,13 +4839,7 @@ def sales_receipt(invoice_id):
     items = SalesInvoiceItem.query.filter_by(invoice_id=invoice_id).all()
     settings = get_settings_safe()
 
-    # Mark invoice as paid upon print (posting occurs on print)
-    try:
-        if (invoice.status or '').lower() != 'paid':
-            invoice.status = 'paid'
-            safe_db_commit()
-    except Exception:
-        reset_db_session()
+    # Do NOT auto-mark as paid on print. Payment/Posting must be explicit.
 
     # Build ZATCA TLV QR on server to avoid client-side JS cost and CDN delay
     qr_data_url = None

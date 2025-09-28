@@ -58,3 +58,4 @@ def check_db_tables():
 if __name__ == "__main__":
     check_db_tables()
 
+
