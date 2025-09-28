@@ -6395,11 +6395,35 @@ def view_invoice(kind, invoice_id):
 @app.route('/inventory')
 @login_required
 def inventory():
-    # Get all raw materials and meals for display
-    from models import RawMaterial, Meal
+    # Cost ledger aggregated from purchases into inventory
+    from models import RawMaterial, Meal, PurchaseInvoiceItem, PurchaseInvoice
+    from sqlalchemy import func
     raw_materials = RawMaterial.query.filter_by(active=True).all()
     meals = Meal.query.filter_by(active=True).all()
-    return render_template('inventory.html', raw_materials=raw_materials, meals=meals)
+
+    # Summarize purchased quantities and average cost per material
+    ledger_rows = []
+    try:
+        q = db.session.query(
+            PurchaseInvoiceItem.raw_material_name.label('name'),
+            func.sum(PurchaseInvoiceItem.quantity).label('qty'),
+            func.sum(PurchaseInvoiceItem.total_price).label('total_cost')
+        ).join(PurchaseInvoice, PurchaseInvoice.id==PurchaseInvoiceItem.invoice_id) 
+        q = q.group_by(PurchaseInvoiceItem.raw_material_name)
+        for r in q.all():
+            qty = float(r.qty or 0)
+            total_cost = float(r.total_cost or 0)
+            avg_cost = (total_cost/qty) if qty else 0.0
+            ledger_rows.append({
+                'material': r.name,
+                'purchased_qty': qty,
+                'avg_cost': avg_cost,
+                'total_cost': total_cost
+            })
+    except Exception:
+        ledger_rows = []
+
+    return render_template('inventory.html', raw_materials=raw_materials, meals=meals, ledger_rows=ledger_rows)
 
 
 
