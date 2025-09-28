@@ -157,6 +157,46 @@ body {
     </div>
     {% endif %}
 
+    <!-- جدول ترصيد وتكاليف المشتريات إلى المخزون -->
+    <div class="inventory-card">
+        <h5 class="mb-3">{{ _('Inventory Cost Ledger / دفتر تكاليف المخزون') }}</h5>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>{{ _('Material / المادة') }}</th>
+                        <th>{{ _('Unit / الوحدة') }}</th>
+                        <th class="text-end">{{ _('Purchased Qty / الكمية المشتراة') }}</th>
+                        <th class="text-end">{{ _('Avg Cost / متوسط التكلفة') }}</th>
+                        <th class="text-end">{{ _('Total Cost / إجمالي التكلفة') }}</th>
+                        <th class="text-end">{{ _('Current Stock / المخزون الحالي') }}</th>
+                        <th class="text-end">{{ _('Stock Value / قيمة المخزون') }}</th>
+                        <th class="text-end">{{ _('Last Purchase / آخر شراء') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in (ledger_rows or []) %}
+                    <tr>
+                        <td>{{ r.material }}</td>
+                        <td><span class="badge bg-secondary">{{ r.unit }}</span></td>
+                        <td class="text-end">{{ '%.4f'|format(r.purchased_qty) }}</td>
+                        <td class="text-end cost-highlight">${{ '%.4f'|format(r.avg_cost) }}</td>
+                        <td class="text-end">${{ '%.2f'|format(r.total_cost) }}</td>
+                        <td class="text-end">{{ '%.4f'|format(r.current_stock) }}</td>
+                        <td class="text-end">${{ '%.2f'|format(r.stock_value) }}</td>
+                        <td class="text-end">{{ r.last_date or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not ledger_rows %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">{{ _('No purchase activity yet / لا توجد عمليات شراء بعد') }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- ملخص الوجبات -->
     {% if meals %}
     <div class="inventory-card">

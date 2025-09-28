@@ -6395,11 +6395,48 @@ def view_invoice(kind, invoice_id):
 @app.route('/inventory')
 @login_required
 def inventory():
-    # Get all raw materials and meals for display
-    from models import RawMaterial, Meal
+    # Cost ledger aggregated from purchases into inventory
+    from models import RawMaterial, Meal, PurchaseInvoiceItem, PurchaseInvoice
+    from sqlalchemy import func
     raw_materials = RawMaterial.query.filter_by(active=True).all()
     meals = Meal.query.filter_by(active=True).all()
-    return render_template('inventory.html', raw_materials=raw_materials, meals=meals)
+
+    # Summarize purchased quantities and average cost per material, with current stock
+    ledger_rows = []
+    try:
+        q = db.session.query(
+            PurchaseInvoiceItem.raw_material_id.label('rm_id'),
+            func.max(PurchaseInvoice.date).label('last_date'),
+            func.sum(PurchaseInvoiceItem.quantity).label('qty'),
+            func.sum(PurchaseInvoiceItem.total_price).label('total_cost')
+        ).join(PurchaseInvoice, PurchaseInvoice.id==PurchaseInvoiceItem.invoice_id)
+        q = q.group_by(PurchaseInvoiceItem.raw_material_id)
+        rm_map = {m.id: m for m in raw_materials}
+        for r in q.all():
+            rm = rm_map.get(int(r.rm_id)) if r.rm_id is not None else None
+            name = (rm.display_name if rm else '-')
+            unit = (rm.unit if rm else '-')
+            current_stock = float(rm.stock_quantity or 0) if rm else 0.0
+            qty = float(r.qty or 0)
+            total_cost = float(r.total_cost or 0)
+            avg_cost = (total_cost/qty) if qty else 0.0
+            stock_value = current_stock * avg_cost
+            ledger_rows.append({
+                'material': name,
+                'unit': unit,
+                'purchased_qty': qty,
+                'avg_cost': avg_cost,
+                'total_cost': total_cost,
+                'current_stock': current_stock,
+                'stock_value': stock_value,
+                'last_date': r.last_date.strftime('%Y-%m-%d') if r.last_date else ''
+            })
+        # Sort by material name
+        ledger_rows.sort(key=lambda x: (x['material'] or '').lower())
+    except Exception:
+        ledger_rows = []
+
+    return render_template('inventory.html', raw_materials=raw_materials, meals=meals, ledger_rows=ledger_rows)
 
 
 
