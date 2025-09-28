@@ -938,7 +938,7 @@ def reports_print_payments():
             pm = r.get('METHOD') or 'UNKNOWN'
             payment_totals[pm] = payment_totals.get(pm, 0.0) + float(r.get('PAID') or 0.0)
 
-        # Build a compact supplier totals string to show below table (use Item Totals block)
+        # Supplier totals: show remaining by supplier; adapt labels
         supplier_totals = { k: v['REMAINING'] for k, v in totals_by_party.items() }
 
         return render_template('print_report.html',
@@ -953,6 +953,9 @@ def reports_print_payments():
                                payment_method=request.args.get('payment_method') or 'all',
                                generated_at=_dt.now().strftime('%Y-%m-%d %H:%M'),
                                item_totals=supplier_totals,
+                               item_totals_title=('Supplier Totals' if inv_type=='purchase' else 'Expense Totals'),
+                               item_totals_name_label=('Supplier' if inv_type=='purchase' else 'Expense'),
+                               item_totals_value_label='Remaining',
                                payment_totals=payment_totals)
     except Exception:
         return redirect(url_for('payments'))
