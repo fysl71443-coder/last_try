@@ -4,7 +4,10 @@
 <div class="container py-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">💳 {{ _('Payments & Receivables / المدفوعات والمستحقات') }}</h3>
-    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+    <div class="btn-group">
+      <button type="button" id="btnPrintPayments" class="btn btn-outline-secondary">🖨️ {{ _('Print / طباعة') }}</button>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+    </div>
   </div>
 
   <!-- Filters -->
@@ -20,7 +23,7 @@
     </div>
     <div class="col-md-3">
       <label class="form-label">{{ _('Type / النوع') }}</label>
-      <select name="type" class="form-select">
+      <select name="type" id="filterType" class="form-select">
         <option value="">{{ _('All / الكل') }}</option>
         <option value="sales" {{ 'selected' if (type_f or '')=='sales' else '' }}>{{ _('Sales / مبيعات') }}</option>
         <option value="purchase" {{ 'selected' if (type_f or '')=='purchase' else '' }}>{{ _('Purchases / مشتريات') }}</option>
@@ -128,6 +131,21 @@ function openPaymentCustom(id, type, remaining){
 function viewDetails(id, type){
   alert(type + ' #' + id);
 }
+// Open print for purchases/expenses summary with totals per supplier
+document.getElementById('btnPrintPayments')?.addEventListener('click', function(){
+  const sel = document.getElementById('filterType');
+  const t = (sel && sel.value) ? sel.value : '';
+  let type = 'purchase';
+  if(t==='expense') type = 'expense';
+  // Build optional date range from current page (if present)
+  const sEl = document.querySelector('input[name="start_date"]');
+  const eEl = document.querySelector('input[name="end_date"]');
+  const qs = [];
+  if(sEl && sEl.value) qs.push('start_date='+encodeURIComponent(sEl.value));
+  if(eEl && eEl.value) qs.push('end_date='+encodeURIComponent(eEl.value));
+  const url = '/reports/print/payments?type='+encodeURIComponent(type)+(qs.length?('&'+qs.join('&')):'');
+  window.open(url, '_blank');
+});
 
 async function deleteInvoice(id, type) {
   const confirmed = await showConfirm('{{ _('Are you sure you want to delete this invoice? This action cannot be undone. / هل أنت متأكد من حذف هذه الفاتورة؟ لا يمكن التراجع عن هذا الإجراء.') }}');
