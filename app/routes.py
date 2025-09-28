@@ -1606,12 +1606,29 @@ def payments():
     PAYMENT_METHODS = ['CASH','CARD','BANK','ONLINE','MADA','VISA']
 
     try:
+        # Use decimal rounding to avoid float precision issues causing wrong statuses
+        from decimal import Decimal, ROUND_HALF_UP
+        def to_cents(value):
+            try:
+                return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            except Exception:
+                return Decimal('0.00')
+        def compute_status(total_amt, paid_amt):
+            total_c = to_cents(total_amt)
+            paid_c = to_cents(paid_amt)
+            # Treat small residuals (<= 0.01) as fully paid
+            if (total_c - paid_c) <= Decimal('0.01'):
+                return 'paid'
+            if paid_c > Decimal('0.00'):
+                return 'partial'
+            return 'unpaid'
         # Purchases
         q = PurchaseInvoice.query
         for inv in q.order_by(PurchaseInvoice.created_at.desc()).limit(1000).all():
             total = float(inv.total_after_tax_discount or 0.0)
             paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
                          .filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'purchase').scalar() or 0.0)
+            status_calc = compute_status(total, paid)
             invoices.append({
                 'id': inv.id,
                 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id,
@@ -1619,7 +1636,7 @@ def payments():
                 'party': inv.supplier_name or 'Supplier',
                 'total': total,
                 'paid': paid,
-                'status': (inv.status or 'unpaid'),
+                'status': status_calc,
                 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
             })
     except Exception:
@@ -1632,6 +1649,7 @@ def payments():
             total = float(inv.total_after_tax_discount or 0.0)
             paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
                          .filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'expense').scalar() or 0.0)
+            status_calc = compute_status(total, paid)
             invoices.append({
                 'id': inv.id,
                 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id,
@@ -1639,7 +1657,7 @@ def payments():
                 'party': 'Expense',
                 'total': total,
                 'paid': paid,
-                'status': (inv.status or 'paid'),
+                'status': status_calc,
                 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
             })
 
@@ -2435,14 +2453,24 @@ def register_payment_ajax():
         else:
             inv = ExpenseInvoice.query.get(inv_id)
             total = float(inv.total_after_tax_discount or 0.0) if inv else 0.0
+
         # Sum paid so far (including this payment)
         paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
                      .filter(Payment.invoice_id == inv_id, Payment.invoice_type == invoice_type).scalar() or 0.0)
-        # Update status
+
+        # Robust status calculation with rounding tolerance (0.01)
+        from decimal import Decimal, ROUND_HALF_UP
+        def to_cents(value):
+            try:
+                return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            except Exception:
+                return Decimal('0.00')
+        total_c = to_cents(total)
+        paid_c = to_cents(paid)
         if inv:
-            if paid >= total and total > 0:
+            if (total_c - paid_c) <= Decimal('0.01') and total_c > Decimal('0.00'):
                 inv.status = 'paid'
-            elif paid > 0:
+            elif paid_c > Decimal('0.00'):
                 inv.status = 'partial'
             else:
                 inv.status = inv.status or ('unpaid' if invoice_type=='purchase' else 'paid')
@@ -2452,6 +2480,51 @@ def register_payment_ajax():
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
+
+
+@main.route('/api/payments/pay_all', methods=['POST'], endpoint='api_payments_pay_all')
+@login_required
+def api_payments_pay_all():
+    # Bulk pay remaining for filtered invoices
+    payload = request.get_json(silent=True) or {}
+    type_f = (payload.get('type') or request.form.get('type') or '').strip().lower()
+    method = (payload.get('payment_method') or request.form.get('payment_method') or 'CASH').strip().upper()
+    # Supported: purchase, expense
+    kinds = []
+    if type_f in ('purchase','expense'):
+        kinds = [type_f]
+    else:
+        kinds = ['purchase','expense']
+
+    from decimal import Decimal, ROUND_HALF_UP
+    def to_cents(value):
+        try:
+            return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        except Exception:
+            return Decimal('0.00')
+
+    affected = []
+    try:
+        for k in kinds:
+            if k == 'purchase':
+                rows = PurchaseInvoice.query.order_by(PurchaseInvoice.created_at.desc()).all()
+            else:
+                rows = ExpenseInvoice.query.order_by(ExpenseInvoice.created_at.desc()).all()
+            for inv in rows:
+                total = to_cents(float(getattr(inv, 'total_after_tax_discount', 0) or 0))
+                paid = to_cents(float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                          .filter(Payment.invoice_id == inv.id, Payment.invoice_type == k).scalar() or 0.0))
+                remaining = total - paid
+                if remaining > Decimal('0.01'):
+                    amt = float(remaining)
+                    db.session.add(Payment(invoice_id=inv.id, invoice_type=k, amount_paid=amt, payment_method=method))
+                    inv.status = 'paid'
+                    affected.append({'id': inv.id, 'type': k, 'amount': amt})
+        db.session.commit()
+        return jsonify({'status':'success', 'count': len(affected), 'items': affected})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status':'error', 'message': str(e)}), 400
 
 
 # ---- Customers lightweight search API ----
