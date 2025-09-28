@@ -14,6 +14,6 @@ reportlab==4.0.4
 pandas==2.3.2 --only-binary :all:
 openpyxl==3.1.5
 gunicorn==21.2.0
-gevent==23.9.1
+gevent==25.4.1
 Cython==0.29.36  # تثبيت نسخة محددة من Cython لتجنب مشاكل compile
 qrcode[pil]>=7.4.2
