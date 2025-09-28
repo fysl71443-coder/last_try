@@ -989,13 +989,7 @@ def preview_receipt(branch_code, table_number):
     vat_rate = 15.0
     vat_amount = round(total * (vat_rate/100.0), 2)
     grand_total = round(total + vat_amount, 2)
-    if not inv.get('invoice_no'):
-        inv['invoice_no'] = next_invoice_no(branch_code)
-    invoice_no = inv['invoice_no']
-    timestamp_iso = datetime.now(ZoneInfo("Asia/Riyadh")).isoformat(timespec='seconds')
-    zatca_qr_b64 = zatca_tlv_base64(settings_sales.get('restaurant_name'), settings_sales.get('vat_number'), timestamp_iso, grand_total, vat_amount)
-    return render_template(
-        "receipt.html",
+   
         branch=branch,
         table=table,
         items=normalized,
@@ -1014,7 +1008,23 @@ def preview_receipt(branch_code, table_number):
         location_name=branch.get('name'),
         currency_code=settings_sales.get('currency_code'),
         currency_png_base64=settings_sales.get('currency_png_base64'),
-        zatca_qr_b64=zatca_qr_b64
+        qr_data_url=q if not inv.get('invoice_no'):
+        inv['invoice_no'] = next_invoice_no(branch_code)
+    invoice_no = inv['invoice_no']
+    # Build server-side ZATCA QR as PNG base64
+    from utils.qr import generate_zatca_qr_base64
+    dt_ksa = get_saudi_now()
+    zatca_b64 = generate_zatca_qr_base64(
+        settings_sales.get('restaurant_name') or '',
+        settings_sales.get('vat_number') or '',
+        dt_ksa,
+        grand_total,
+        vat_amount
+    )
+    qr_data_url = 'data:image/png;base64,' + zatca_b64 if zatca_b64 else None
+    return render_template(
+        "receipt.html",r_data_url,
+        zatca_b64=zatca_b64
     )
 
 # @app.route("/sales/<branch_code>/table/<int:table_number>/delete_item/<int:item_index>", methods=["POST"])
@@ -1071,8 +1081,17 @@ def pay_invoice(branch_code, table_number):
     if not inv.get('invoice_no'):
         inv['invoice_no'] = next_invoice_no(branch_code)
     invoice_no = inv['invoice_no']
-    timestamp_iso = datetime.now(ZoneInfo("Asia/Riyadh")).isoformat(timespec='seconds')
-    zatca_qr_b64 = zatca_tlv_base64(settings_sales.get('restaurant_name'), settings_sales.get('vat_number'), timestamp_iso, grand_total, vat_amount)
+    # Build server-side ZATCA QR as PNG base64
+    from utils.qr import generate_zatca_qr_base64
+    dt_ksa = get_saudi_now()
+    zatca_b64 = generate_zatca_qr_base64(
+        settings_sales.get('restaurant_name') or '',
+        settings_sales.get('vat_number') or '',
+        dt_ksa,
+        grand_total,
+        vat_amount
+    )
+    qr_data_url = 'data:image/png;base64,' + zatca_b64 if zatca_b64 else None
     return render_template(
         "receipt.html",
         branch=branch,
@@ -1093,7 +1112,8 @@ def pay_invoice(branch_code, table_number):
         location_name=branch.get('name'),
         currency_code=settings_sales.get('currency_code'),
         currency_png_base64=settings_sales.get('currency_png_base64'),
-        zatca_qr_b64=zatca_qr_b64
+        qr_data_url=qr_data_url,
+        zatca_b64=zatca_b64
     )
 
 # @app.route("/sales/<branch_code>/table/<int:table_number>/pay/confirm", methods=["POST"])

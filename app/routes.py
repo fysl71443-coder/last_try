@@ -2513,9 +2513,26 @@ def print_order_preview(branch, table):
         kv_set(f'draft:{branch}:{table}', rec)
     except Exception:
         pass
+    # Generate ZATCA QR as base64 PNG and pass to template
+    qr_data_url = None
+    try:
+        from utils.qr import generate_zatca_qr_base64
+        b64 = generate_zatca_qr_base64(
+            getattr(s, 'company_name', 'Restaurant'),
+            getattr(s, 'tax_number', '123456789012345'),
+            datetime.now(),
+            float(total_after),
+            float(vat_amount)
+        )
+        if b64:
+            qr_data_url = 'data:image/png;base64,' + b64
+    except Exception:
+        qr_data_url = None
+
     return render_template('print/receipt.html', inv=inv_ctx, items=items_ctx,
                            settings=s, branch_name=branch_name, date_time=dt_str,
                            display_invoice_number=order_no,
+                           qr_data_url=qr_data_url,
                            paid=False)
 
 
