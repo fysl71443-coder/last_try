@@ -1277,6 +1277,58 @@ def api_print_copy():
             })
         grand_total = (subtotal - discount_val) + tax_total
 
+        # Save as Order (print before payment)
+        try:
+            from models import OrderInvoice
+            # Ensure table exists in case migrations didn't run yet
+            try:
+                OrderInvoice.__table__.create(bind=db.engine, checkfirst=True)
+            except Exception:
+                pass
+
+            # Generate a unique order invoice number
+            attempt = 0
+            saved = False
+            while attempt < 3 and not saved:
+                attempt += 1
+                invoice_no = f"ORD-{get_saudi_now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+                try:
+                    # Normalize items for JSON
+                    items_json = [
+                        {
+                            'name': r['name'],
+                            'qty': float(r['qty']),
+                            'unit': float(r['unit']),
+                            'line_total': float(r['line_sub'])
+                        } for r in rows
+                    ]
+                    order = OrderInvoice(
+                        branch=branch_code,
+                        invoice_no=invoice_no,
+                        customer=(customer_name or None),
+                        items=items_json,
+                        subtotal=float(subtotal),
+                        discount=float(discount_val),
+                        vat=float(tax_total),
+                        total=float(grand_total),
+                        payment_method='PENDING'
+                    )
+                    db.session.add(order)
+                    db.session.commit()
+                    saved = True
+                except Exception as save_err:
+                    db.session.rollback()
+                    # If duplicate invoice_no or transient error, retry once with a new number
+                    if attempt >= 3:
+                        current_app.logger.error('Failed to save order invoice: %s', save_err)
+                        # Do not fail the preview; continue to render receipt
+                        break
+        except Exception as e:
+            try:
+                current_app.logger.error('Order invoice save block failed: %s', e)
+            except Exception:
+                pass
+
         # Minimal invoice-like object for template
         from types import SimpleNamespace
         inv = SimpleNamespace(
@@ -1400,9 +1452,47 @@ def serve_temp_receipt(filename):
         print(f"Error serving temp receipt: {e}")
         return "Error loading receipt", 500
 
+@app.route('/orders')
+def order_invoices_list():
+    """List Order Invoices (printed before payment) with totals and item summary."""
+    try:
+        from models import OrderInvoice
+        # Fetch orders
+        orders = OrderInvoice.query.order_by(OrderInvoice.invoice_date.desc()).limit(500).all()
+
+        # Totals
+        from sqlalchemy import func
+        totals = db.session.query(
+            func.coalesce(func.sum(OrderInvoice.subtotal), 0).label('subtotal_sum'),
+            func.coalesce(func.sum(OrderInvoice.discount), 0).label('discount_sum'),
+            func.coalesce(func.sum(OrderInvoice.vat), 0).label('vat_sum'),
+            func.coalesce(func.sum(OrderInvoice.total), 0).label('total_sum')
+        ).one()
+
+        # Items summary: iterate in Python for cross-DB compatibility
+        items_summary_map = {}
+        for o in orders:
+            try:
+                for it in (o.items or []):
+                    name = (it.get('name') if isinstance(it, dict) else None) or '-'
+                    qty_val = it.get('qty') if isinstance(it, dict) else 0
+                    try:
+                        qty = float(qty_val or 0)
+                    except Exception:
+                        qty = 0.0
+                    items_summary_map[name] = items_summary_map.get(name, 0.0) + qty
+            except Exception:
+                continue
+        items_summary = [
+            {'item_name': k, 'total_qty': v}
+            for k, v in sorted(items_summary_map.items(), key=lambda x: (-x[1], x[0]))
+        ]
+
+        return render_template('order_invoices.html', orders=orders, totals=totals, items_summary=items_summary)
     except Exception as e:
-        print(f"Error serving temp receipt: {e}")
-        return "Error loading receipt", 500
+        current_app.logger.error('Failed to load order invoices: %s', e)
+        flash('Failed to load order invoices', 'danger')
+        return render_template('order_invoices.html', orders=[], totals={'subtotal_sum':0,'discount_sum':0,'vat_sum':0,'total_sum':0}, items_summary=[])
 @app.route('/api/pay-and-print', methods=['POST'])
 @csrf_exempt
 def api_pay_and_print():
@@ -3694,7 +3784,7 @@ def safe_table_number(table_number) -> int:
 
 @app.context_processor
 def inject_globals():
-    return dict(PAYMENT_METHODS=PAYMENT_METHODS, BRANCH_CODES=BRANCH_CODES)
+    return dict(PAYMENT_METHODS=PAYMENT_METHODS, BRANCH_CODES=BRANCH_CODES, ORDER_SCREEN_KEY='orders')
 
 
 @app.context_processor

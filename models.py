@@ -97,6 +97,25 @@ class SalesInvoiceItem(db.Model):
     def __repr__(self):
         return f'<SalesInvoiceItem {self.product_name}>'
 
+
+class OrderInvoice(db.Model):
+    __tablename__ = 'order_invoices'
+    id = db.Column(db.Integer, primary_key=True)
+    branch = db.Column(db.String(100))
+    invoice_no = db.Column(db.String(50), unique=True, nullable=False)
+    invoice_date = db.Column(db.DateTime, default=get_saudi_now)
+    customer = db.Column(db.String(255))
+    # Use db.JSON for cross-DB compatibility (SQLite stores as TEXT, Postgres as JSON/JSONB)
+    items = db.Column(db.JSON, nullable=False)
+    subtotal = db.Column(db.Numeric(12, 2))
+    discount = db.Column(db.Numeric(12, 2), default=0)
+    vat = db.Column(db.Numeric(12, 2))
+    total = db.Column(db.Numeric(12, 2))
+    payment_method = db.Column(db.String(50), default='PENDING')
+
+    def __repr__(self):
+        return f"<OrderInvoice {self.invoice_no}>"
+
 class Product(db.Model):
     __tablename__ = 'product_catalog'
     id = db.Column(db.Integer, primary_key=True)
