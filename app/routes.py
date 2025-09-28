@@ -329,6 +329,11 @@ def sales():
 def purchases():
     # Prepare form and lists
     form = PurchaseInvoiceForm()
+    try:
+        if not form.date.data:
+            form.date.data = datetime.utcnow().date()
+    except Exception:
+        pass
     suppliers = []
     try:
         if 'Supplier' in globals():
