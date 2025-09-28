@@ -86,7 +86,7 @@ body {
         </div>
         <div class="col-md-4">
             <div class="stats-card">
-                <h4>${{ "%.2f"|format(meals|sum(attribute='total_cost') or 0) }}</h4>
+                <h4>ر.س {{ "%.2f"|format(meals|sum(attribute='total_cost') or 0) }}</h4>
                 <p class="mb-0">{{ _('Total Investment / إجمالي الاستثمار') }}</p>
             </div>
         </div>
@@ -134,7 +134,7 @@ body {
                     <tr>
                         <td>{{ material.display_name }}</td>
                         <td><span class="badge bg-secondary">{{ material.unit }}</span></td>
-                        <td class="cost-highlight">${{ "%.4f"|format(material.cost_per_unit) }}</td>
+                        <td class="cost-highlight">ر.س {{ "%.4f"|format(material.cost_per_unit) }}</td>
                         <td>{{ material.category or '-' }}</td>
                     </tr>
                     {% endfor %}
@@ -180,10 +180,10 @@ body {
                         <td>{{ r.material }}</td>
                         <td><span class="badge bg-secondary">{{ r.unit }}</span></td>
                         <td class="text-end">{{ '%.4f'|format(r.purchased_qty) }}</td>
-                        <td class="text-end cost-highlight">${{ '%.4f'|format(r.avg_cost) }}</td>
-                        <td class="text-end">${{ '%.2f'|format(r.total_cost) }}</td>
+                        <td class="text-end cost-highlight">ر.س {{ '%.4f'|format(r.avg_cost) }}</td>
+                        <td class="text-end">ر.س {{ '%.2f'|format(r.total_cost) }}</td>
                         <td class="text-end">{{ '%.4f'|format(r.current_stock) }}</td>
-                        <td class="text-end">${{ '%.2f'|format(r.stock_value) }}</td>
+                        <td class="text-end">ر.س {{ '%.2f'|format(r.stock_value) }}</td>
                         <td class="text-end">{{ r.last_date or '-' }}</td>
                     </tr>
                     {% endfor %}
@@ -218,9 +218,12 @@ body {
                     <tr>
                         <td><strong>{{ meal.display_name }}</strong></td>
                         <td>{{ meal.ingredients|length }} {{ _('items / عناصر') }}</td>
-                        <td class="cost-highlight">${{ "%.2f"|format(meal.total_cost) }}</td>
+                        {% set sp = (meal.selling_price or 0)|float %}
+                        {% set pct = ((meal.profit_margin_percent or 0)|float) / 100 %}
+                        {% set derived_cost = sp * (1 - pct) %}
+                        <td class="cost-highlight">ر.س {{ "%.2f"|format(derived_cost) }}</td>
                         <td>{{ "%.1f"|format(meal.profit_margin_percent) }}%</td>
-                        <td class="price-highlight">${{ "%.2f"|format(meal.selling_price) }}</td>
+                        <td class="price-highlight">ر.س {{ "%.2f"|format(meal.selling_price) }}</td>
                     </tr>
                     {% endfor %}
                     {% if meals|length > 10 %}
