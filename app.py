@@ -964,67 +964,9 @@ def new_invoice(branch_code, table_number):
         settings=settings_sales
     )
 
-# @app.route("/sales/<branch_code>/table/<int:table_number>/preview", methods=["GET"])
+# Disabled broken preview route (kept as stub)
 def preview_receipt(branch_code, table_number):
-    branch = next((b for b in branches if b["code"] == branch_code), None)
-    table = next((t for t in tables_data[branch_code] if t["number"] == table_number), None)
-    inv = get_invoice_obj(branch_code, table_number)
-    normalized = []
-    for it in inv['items']:
-        if isinstance(it, dict):
-            name = it.get('name')
-            price = float(it.get('price') or 0)
-            qty = int(it.get('qty') or 1)
-        else:
-            name = str(it)
-            price = 0.0
-            qty = 1
-        normalized.append({'name': name, 'price': price, 'qty': qty, 'line_total': round(price*qty, 2)})
-    subtotal = round(sum(i['line_total'] for i in normalized), 2)
-    cust = inv.get('customer') or {}
-    discount_rate = float((cust.get('discount') if isinstance(cust, dict) else 0) or 0)
-    discount_amount = round(subtotal * (discount_rate/100.0), 2)
-    total = round(subtotal - discount_amount, 2)
-    vat_rate = 15.0
-    vat_amount = round(total * (vat_rate/100.0), 2)
-    grand_total = round(total + vat_amount, 2)
-   
-        branch=branch,
-        table=table,
-        items=normalized,
-        customer=inv.get('customer'),
-        payment_method="",
-        subtotal=subtotal,
-        discount_rate=discount_rate,
-        discount_amount=discount_amount,
-        total=total,
-        vat_rate=vat_rate,
-        vat_amount=vat_amount,
-        grand_total=grand_total,
-        now_riyadh_str=datetime.now(ZoneInfo("Asia/Riyadh")).strftime("%Y-%m-%d %H:%M"),
-        settings=settings_sales,
-        invoice_no=invoice_no,
-        location_name=branch.get('name'),
-        currency_code=settings_sales.get('currency_code'),
-        currency_png_base64=settings_sales.get('currency_png_base64'),
-        qr_data_url=q if not inv.get('invoice_no'):
-        inv['invoice_no'] = next_invoice_no(branch_code)
-    invoice_no = inv['invoice_no']
-    # Build server-side ZATCA QR as PNG base64
-    from utils.qr import generate_zatca_qr_base64
-    dt_ksa = get_saudi_now()
-    zatca_b64 = generate_zatca_qr_base64(
-        settings_sales.get('restaurant_name') or '',
-        settings_sales.get('vat_number') or '',
-        dt_ksa,
-        grand_total,
-        vat_amount
-    )
-    qr_data_url = 'data:image/png;base64,' + zatca_b64 if zatca_b64 else None
-    return render_template(
-        "receipt.html",r_data_url,
-        zatca_b64=zatca_b64
-    )
+    return 'Preview disabled', 404
 
 # @app.route("/sales/<branch_code>/table/<int:table_number>/delete_item/<int:item_index>", methods=["POST"])
 def delete_item(branch_code, table_number, item_index):
@@ -6405,11 +6347,12 @@ def inventory():
             rm = rm_map.get(int(r.rm_id)) if r.rm_id is not None else None
             name = (rm.display_name if rm else '-')
             unit = (rm.unit if rm else '-')
-            # Current stock equals cumulative purchased quantity (sum of purchases)
-            current_stock = float(qty)
+            # Quantities and costs
             qty = float(r.qty or 0)
             total_cost = float(r.total_cost or 0)
             avg_cost = (total_cost/qty) if qty else 0.0
+            # Current stock equals cumulative purchased quantity (sum of purchases)
+            current_stock = qty
             stock_value = current_stock * avg_cost
             ledger_rows.append({
                 'material': name,
