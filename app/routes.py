@@ -863,6 +863,108 @@ def invoices():
     if t not in ('sales','purchases','expenses','all'):
         t = 'sales'
     return render_template('invoices.html', current_type=t)
+@main.route('/reports/print/payments', methods=['GET'], endpoint='reports_print_payments')
+@login_required
+def reports_print_payments():
+    try:
+        from datetime import datetime as _dt, date as _date
+        from sqlalchemy import func
+        from models import PurchaseInvoice, ExpenseInvoice, Payment, Settings
+
+        inv_type = (request.args.get('type') or 'purchase').strip().lower()
+        if inv_type not in ('purchase','expense'):
+            inv_type = 'purchase'
+
+        start_s = request.args.get('start_date') or ''
+        end_s = request.args.get('end_date') or ''
+        try:
+            start_d = _dt.strptime(start_s, '%Y-%m-%d').date() if start_s else _date.min
+        except Exception:
+            start_d = _date.min
+        try:
+            end_d = _dt.strptime(end_s, '%Y-%m-%d').date() if end_s else _date.max
+        except Exception:
+            end_d = _date.max
+
+        rows = []
+        totals_by_party = {}
+
+        if inv_type == 'purchase':
+            q = PurchaseInvoice.query.filter(PurchaseInvoice.date.between(start_d, end_d))
+            for inv in q.order_by(PurchaseInvoice.date.desc(), PurchaseInvoice.id.desc()).all():
+                total = float(inv.total_after_tax_discount or 0.0)
+                paid = float(
+                    db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                      .filter(Payment.invoice_type=='purchase', Payment.invoice_id==inv.id).scalar() or 0.0
+                )
+                remaining = max(total - paid, 0.0)
+                party = getattr(inv, 'supplier_name', '-') or '-'
+                rows.append({
+                    'BILL NO': inv.invoice_number,
+                    'DATE': inv.date.strftime('%Y-%m-%d') if inv.date else '',
+                    'SUPPLIER': party,
+                    'ITEMS/QTY/TOTAL': f"{len(getattr(inv,'items',[]) or [])} items",
+                    'PAID': paid,
+                    'REMAINING': remaining,
+                    'METHOD': (inv.payment_method or '').upper(),
+                    'STATUS': (inv.status or '').upper()
+                })
+                t = totals_by_party.setdefault(party, {'TOTAL':0.0,'PAID':0.0,'REMAINING':0.0})
+                t['TOTAL'] += total; t['PAID'] += paid; t['REMAINING'] += remaining
+        else:
+            q = ExpenseInvoice.query.filter(ExpenseInvoice.date.between(start_d, end_d))
+            for inv in q.order_by(ExpenseInvoice.date.desc(), ExpenseInvoice.id.desc()).all():
+                total = float(inv.total_after_tax_discount or 0.0)
+                paid = float(
+                    db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                      .filter(Payment.invoice_type=='expense', Payment.invoice_id==inv.id).scalar() or 0.0
+                )
+                remaining = max(total - paid, 0.0)
+                party = 'Expense'
+                rows.append({
+                    'BILL NO': inv.invoice_number,
+                    'DATE': inv.date.strftime('%Y-%m-%d') if inv.date else '',
+                    'SUPPLIER': party,
+                    'ITEMS/QTY/TOTAL': f"{len(getattr(inv,'items',[]) or [])} items",
+                    'PAID': paid,
+                    'REMAINING': remaining,
+                    'METHOD': (inv.payment_method or '').upper(),
+                    'STATUS': (inv.status or '').upper()
+                })
+                t = totals_by_party.setdefault(party, {'TOTAL':0.0,'PAID':0.0,'REMAINING':0.0})
+                t['TOTAL'] += total; t['PAID'] += paid; t['REMAINING'] += remaining
+
+        columns = ['BILL NO','DATE','SUPPLIER','ITEMS/QTY/TOTAL','PAID','REMAINING','METHOD','STATUS']
+        data = rows
+        totals = {
+            'PAID': sum(r.get('PAID',0.0) for r in rows),
+            'REMAINING': sum(r.get('REMAINING',0.0) for r in rows),
+        }
+        settings = Settings.query.first()
+        # Render with payment totals by method per the template optional block
+        payment_totals = {}
+        for r in rows:
+            pm = r.get('METHOD') or 'UNKNOWN'
+            payment_totals[pm] = payment_totals.get(pm, 0.0) + float(r.get('PAID') or 0.0)
+
+        # Build a compact supplier totals string to show below table (use Item Totals block)
+        supplier_totals = { k: v['REMAINING'] for k, v in totals_by_party.items() }
+
+        return render_template('print_report.html',
+                               report_title=("Purchases" if inv_type=='purchase' else "Expenses"),
+                               columns=columns,
+                               data=data,
+                               totals=totals,
+                               totals_columns=['PAID','REMAINING'],
+                               totals_colspan=4,
+                               settings=settings,
+                               start_date=start_s, end_date=end_s,
+                               payment_method=request.args.get('payment_method') or 'all',
+                               generated_at=_dt.now().strftime('%Y-%m-%d %H:%M'),
+                               item_totals=supplier_totals,
+                               payment_totals=payment_totals)
+    except Exception:
+        return redirect(url_for('payments'))
 
 
 @main.route('/invoices/delete', methods=['POST'], endpoint='invoices_delete')
