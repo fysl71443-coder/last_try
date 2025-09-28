@@ -157,6 +157,17 @@ body {
     </div>
     {% endif %}
 
+    {% if can('orders','view') %}
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('main.order_invoices_list') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">🧾</div>
+          <h6>فواتير الطلبات (قبل الدفع)</h6>
+        </div>
+      </a>
+    </div>
+    {% endif %}
+
     {% if can('reports','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('main.reports') }}" class="text-decoration-none text-dark">

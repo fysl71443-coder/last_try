@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% block title %}فواتير الطلبات{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="section-header">
+    <h3>فواتير الطلبات</h3>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
+        <form method="get" action="{{ url_for('main.order_invoices_list') }}" class="d-flex gap-2 align-items-center flex-wrap">
+          <label class="form-label mb-0">الفرع:</label>
+          <select name="branch" class="form-select" style="width:auto">
+            <option value="" {{ '' == (current_branch or '') and 'selected' or '' }}>جميع الفروع</option>
+            <option value="china_town" {{ (current_branch or '')=='china_town' and 'selected' or '' }}>China Town</option>
+            <option value="place_india" {{ (current_branch or '')=='place_india' and 'selected' or '' }}>Palace India</option>
+          </select>
+          <button type="submit" class="btn btn-outline-secondary">تصفية</button>
+        </form>
+
+        <form method="post" action="{{ url_for('main.order_invoices_clear_all') }}" onsubmit="return confirm('سيتم حذف جميع طلبات الفروع نهائياً، هل أنت متأكد؟');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-danger">🗑️ مسح جميع الطلبات</button>
+        </form>
+
+        <form method="get" action="{{ url_for('main.reports_print_daily_items_summary') }}" target="_blank" class="d-flex gap-2 align-items-center flex-wrap">
+          <label class="form-label mb-0">ملخص يومي للتاريخ:</label>
+          <input type="date" name="date" value="{{ (now().date() if now else None) or '' }}" class="form-control" style="width:auto">
+          <input type="hidden" name="branch" value="{{ current_branch or '' }}">
+          <button type="submit" class="btn btn-primary">🖨️ طباعة ملخص الأصناف لليوم</button>
+        </form>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Branch</th>
+              <th>Date</th>
+              <th>Invoice No.</th>
+              <th>Item</th>
+              <th>Qty</th>
+              <th>Amount</th>
+              <th>Discount</th>
+              <th>VAT</th>
+              <th>Total</th>
+              <th>Payment Method</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for order in orders %}
+            <tr>
+              <td>{{ order.branch }}</td>
+              <td>{{ order.invoice_date }}</td>
+              <td>{{ order.invoice_no }}</td>
+              <td>
+                {% set item_count = (order.items|length) if order.items else 0 %}
+                {{ item_count }} أصناف
+              </td>
+              <td>
+                {% set ns = namespace(total=0) %}
+                {% for item in (order.items or []) %}
+                  {% set ns.total = ns.total + (item.qty or 0) %}
+                {% endfor %}
+                {{ '%.2f'|format(ns.total) }}
+              </td>
+              <td>{{ '%.2f'|format(order.subtotal or 0) }}</td>
+              <td>{{ '%.2f'|format(order.discount or 0) }}</td>
+              <td>{{ '%.2f'|format(order.vat or 0) }}</td>
+              <td>{{ '%.2f'|format(order.total or 0) }}</td>
+              <td>{{ order.payment_method or 'PENDING' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan="5" class="text-end">Subtotal</th>
+              <th>{{ '%.2f'|format(totals.subtotal_sum or 0) }}</th>
+              <th>{{ '%.2f'|format(totals.discount_sum or 0) }}</th>
+              <th>{{ '%.2f'|format(totals.vat_sum or 0) }}</th>
+              <th>{{ '%.2f'|format(totals.total_sum or 0) }}</th>
+              <th></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {% if items_summary and items_summary|length > 0 %}
+      <div class="mt-4">
+        <h5>ملخص الأصناف</h5>
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>الصنف</th>
+              <th>إجمالي الكمية</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in items_summary %}
+            <tr>
+              <td>{{ row.item_name }}</td>
+              <td>{{ row.total_qty }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+

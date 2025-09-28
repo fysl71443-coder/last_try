@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from app import db, csrf
 ext_db = None
 from app.models import User, AppKV, TableLayout
+from models import OrderInvoice
 from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
@@ -311,6 +312,86 @@ def logout():
 @login_required
 def dashboard():
     return render_template('dashboard.html')
+
+# Orders Invoices screen
+@main.route('/orders', endpoint='order_invoices_list')
+@login_required
+def order_invoices_list():
+    # Enforce permission on Orders screen
+    try:
+        if not can('orders','view'):
+            flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+            return redirect(url_for('main.dashboard'))
+    except Exception:
+        pass
+    try:
+        # Optional branch filter
+        branch_f = (request.args.get('branch') or '').strip()
+        # Fetch orders (limit for safety)
+        q_orders = OrderInvoice.query
+        if branch_f:
+            q_orders = q_orders.filter(OrderInvoice.branch == branch_f)
+        orders = q_orders.order_by(OrderInvoice.invoice_date.desc()).limit(500).all()
+
+        # Totals using SQL functions
+        from sqlalchemy import func
+        q_totals = OrderInvoice.query.with_entities(
+            func.coalesce(func.sum(OrderInvoice.subtotal), 0).label('subtotal_sum'),
+            func.coalesce(func.sum(OrderInvoice.discount), 0).label('discount_sum'),
+            func.coalesce(func.sum(OrderInvoice.vat), 0).label('vat_sum'),
+            func.coalesce(func.sum(OrderInvoice.total), 0).label('total_sum'),
+        )
+        if branch_f:
+            q_totals = q_totals.filter(OrderInvoice.branch == branch_f)
+        totals_row = q_totals.first()
+        totals = {
+            'subtotal_sum': float(getattr(totals_row, 'subtotal_sum', 0) or 0),
+            'discount_sum': float(getattr(totals_row, 'discount_sum', 0) or 0),
+            'vat_sum': float(getattr(totals_row, 'vat_sum', 0) or 0),
+            'total_sum': float(getattr(totals_row, 'total_sum', 0) or 0),
+        }
+
+        # Items summary in Python (DB-agnostic)
+        items_summary_map = {}
+        for o in orders:
+            try:
+                for it in (o.items or []):
+                    name = (it.get('name') if isinstance(it, dict) else None) or '-'
+                    qty_val = it.get('qty') if isinstance(it, dict) else 0
+                    try:
+                        qty = float(qty_val or 0)
+                    except Exception:
+                        qty = 0.0
+                    items_summary_map[name] = items_summary_map.get(name, 0.0) + qty
+            except Exception:
+                continue
+        items_summary = [
+            {'item_name': k, 'total_qty': v}
+            for k, v in sorted(items_summary_map.items(), key=lambda x: (-x[1], x[0]))
+        ]
+
+        return render_template('order_invoices.html', orders=orders, totals=totals, items_summary=items_summary, current_branch=branch_f)
+    except Exception as e:
+        current_app.logger.error('order_invoices_list error: %s', e)
+        flash('Failed to load order invoices', 'danger')
+        return render_template('order_invoices.html', orders=[], totals={'subtotal_sum':0,'discount_sum':0,'vat_sum':0,'total_sum':0}, items_summary=[])
+
+@main.route('/orders/clear', methods=['POST'], endpoint='order_invoices_clear_all')
+@login_required
+def order_invoices_clear_all():
+    try:
+        from models import OrderInvoice
+        num = db.session.query(OrderInvoice).delete(synchronize_session=False)
+        db.session.commit()
+        try:
+            flash(f'تم حذف {num} من فواتير الطلبات نهائياً', 'success')
+        except Exception:
+            flash('تم حذف جميع فواتير الطلبات نهائياً', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error('order_invoices_clear_all error: %s', e)
+        flash('فشل حذف فواتير الطلبات', 'danger')
+    return redirect(url_for('main.order_invoices_list'))
 
 @main.route('/sales', endpoint='sales')
 @login_required
@@ -758,11 +839,12 @@ def inventory():
             rm = rm_map.get(int(r.rm_id)) if r.rm_id is not None else None
             name = (rm.display_name if rm else '-')
             unit = (rm.unit if rm else '-')
-            # Current stock equals cumulative purchased quantity (sum of purchases)
-            current_stock = float(qty)
+            # Quantities and costs
             qty = float(r.qty or 0)
             total_cost = float(r.total_cost or 0)
             avg_cost = (total_cost / qty) if qty else 0.0
+            # Current stock equals cumulative purchased quantity (no consumption tracking here)
+            current_stock = qty
             stock_value = current_stock * avg_cost
             ledger_rows.append({
                 'material': name,
@@ -2682,6 +2764,60 @@ def print_order_preview(branch, table):
         kv_set(f'draft:{branch}:{table}', rec)
     except Exception:
         pass
+    # Save an OrderInvoice record to track pre-payment prints
+    try:
+        from models import OrderInvoice
+        # Create table if missing (first run)
+        try:
+            OrderInvoice.__table__.create(bind=db.engine, checkfirst=True)
+        except Exception:
+            pass
+
+        # Avoid duplicates if user reopens/refreshes preview
+        existing = OrderInvoice.query.filter_by(invoice_no=order_no).first()
+        if not existing:
+            # Build items JSON with name, qty, unit, line_total
+            items_json = []
+            try:
+                for it in raw_items:
+                    name = it.get('name') or ''
+                    qty = float(it.get('qty') or it.get('quantity') or 1)
+                    price = it.get('price')
+                    if (not price):
+                        meal_id = it.get('meal_id') or it.get('id')
+                        if meal_id:
+                            m = MenuItem.query.get(int(meal_id))
+                            price = float(getattr(m, 'price', 0) or 0)
+                    unit = float(price or 0)
+                    line_total = unit * qty
+                    items_json.append({'name': name, 'qty': qty, 'unit': unit, 'line_total': line_total})
+            except Exception:
+                # Fallback from items_ctx if needed
+                for r in items_ctx:
+                    q = float(r.get('quantity') or 1)
+                    t = float(r.get('total_price') or 0)
+                    u = (t / q) if q else 0
+                    items_json.append({'name': r.get('product_name') or '-', 'qty': q, 'unit': u, 'line_total': t})
+
+            order = OrderInvoice(
+                branch=branch,
+                invoice_no=order_no,
+                customer=((rec.get('customer') or {}).get('name') or None),
+                items=items_json,
+                subtotal=float(subtotal),
+                discount=float(discount_amount),
+                vat=float(vat_amount),
+                total=float(total_after),
+                payment_method='PENDING'
+            )
+            db.session.add(order)
+            db.session.commit()
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        current_app.logger.error('Failed to save order invoice (preview): %s', e)
     # Generate ZATCA QR as base64 PNG and pass to template
     qr_data_url = None
     try:
@@ -4525,6 +4661,103 @@ def reports_print_all_invoices_purchases():
                            columns=columns, data=rows, totals=totals, totals_columns=['Amount','Discount','VAT','Total'],
                            totals_colspan=4, payment_totals=payment_totals)
 
+
+@main.route('/reports/print/daily-items-summary', methods=['GET'], endpoint='reports_print_daily_items_summary')
+@login_required
+def reports_print_daily_items_summary():
+    """Print a daily summary of items (by quantity) for a given day.
+    By default, summarizes from Order Invoices (pre-payment) so printed orders show up.
+    Optional source param: source=orders (default) or source=sales.
+    """
+    from sqlalchemy import func
+    source = (request.args.get('source') or 'orders').strip().lower()
+    branch_f = (request.args.get('branch') or '').strip()
+
+    # Determine target date (YYYY-MM-DD) - defaults to today
+    date_str = (request.args.get('date') or '').strip()
+    from datetime import date as _date, datetime as _dt, time as _time
+    try:
+        target_date = _date.fromisoformat(date_str) if date_str else _date.today()
+    except Exception:
+        target_date = _date.today()
+
+    # Compute start/end of day (00:00:00 -> 23:59:59)
+    start_dt = _dt.combine(target_date, _time.min)
+    end_dt = _dt.combine(target_date, _time.max)
+
+    data = []
+    try:
+        if source == 'orders':
+            from models import OrderInvoice
+            # Fetch orders within day window and aggregate from JSON items
+            q = OrderInvoice.query.filter(
+                OrderInvoice.invoice_date >= start_dt,
+                OrderInvoice.invoice_date <= end_dt
+            )
+            if branch_f:
+                q = q.filter(OrderInvoice.branch == branch_f)
+            orders = q.limit(5000).all()
+
+            totals_map = {}
+            for o in orders:
+                try:
+                    for it in (o.items or []):
+                        name = (it.get('name') if isinstance(it, dict) else None) or '-'
+                        qty_val = it.get('qty') if isinstance(it, dict) else 0
+                        try:
+                            qty = float(qty_val or 0)
+                        except Exception:
+                            qty = 0.0
+                        totals_map[name] = totals_map.get(name, 0.0) + qty
+                except Exception:
+                    continue
+            data = [
+                {'Item': k, 'Total Qty': float(v)}
+                for k, v in sorted(totals_map.items(), key=lambda x: (-x[1], x[0]))
+            ]
+        else:
+            from models import SalesInvoice, SalesInvoiceItem
+            # Sales invoices use date (Date) column; filter by equality if Date only
+            q = db.session.query(
+                SalesInvoiceItem.product_name.label('item_name'),
+                func.coalesce(func.sum(SalesInvoiceItem.quantity), 0).label('total_qty')
+            ).join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id)
+            q = q.filter(SalesInvoice.date == target_date)
+            if branch_f and hasattr(SalesInvoice, 'branch'):
+                q = q.filter(SalesInvoice.branch == branch_f)
+            if hasattr(SalesInvoice, 'status'):
+                q = q.filter(func.lower(SalesInvoice.status) == 'paid')
+            q = q.group_by(SalesInvoiceItem.product_name).order_by(func.sum(SalesInvoiceItem.quantity).desc())
+            rows = q.all()
+            data = [
+                {'Item': (r.item_name or '-'), 'Total Qty': float(r.total_qty or 0.0)} for r in rows
+            ]
+    except Exception:
+        data = []
+
+    # Settings & meta
+    try:
+        settings = Settings.query.first()
+    except Exception:
+        settings = None
+    meta_title = f"Daily Items Summary — {target_date.isoformat()} ({'orders' if source=='orders' else 'sales'})"
+    columns = ['Item', 'Total Qty']
+
+    return render_template(
+        'print_report.html',
+        report_title=meta_title,
+        settings=settings,
+        generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+        start_date=target_date.isoformat(),
+        end_date=target_date.isoformat(),
+        payment_method=source,
+        branch=(branch_f or 'all'),
+        columns=columns,
+        data=data,
+        totals={},
+        totals_columns=[],
+        totals_colspan=len(columns)
+    )
 
 @main.route('/reports/print/all-invoices/expenses', methods=['GET'], endpoint='reports_print_all_invoices_expenses')
 @login_required
