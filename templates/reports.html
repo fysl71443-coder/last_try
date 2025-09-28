@@ -1,43 +1,52 @@
 {% extends 'base.html' %}
-{% block title %}التقارير{% endblock %}
+{% block title %}{{ _('Reports / التقارير') }}{% endblock %}
 {% block content %}
 <div class="container py-4">
-  <h3>التقارير والطباعة</h3>
+  <h3>{{ _('Reports & Print / التقارير والطباعة') }}</h3>
   <form class="row g-2 align-items-end mb-3" onsubmit="openPrint(); return false;">
     <div class="col-auto">
-      <label class="form-label">النوع</label>
+      <label class="form-label">{{ _('Type / النوع') }}</label>
       <select id="rep-cat" class="form-select">
-        <option value="sales">مبيعات</option>
-        <option value="purchases">مشتريات</option>
-        <option value="expenses">مصروفات</option>
+        <option value="sales">{{ _('Sales / مبيعات') }}</option>
+        <option value="purchases">{{ _('Purchases / مشتريات') }}</option>
+        <option value="expenses">{{ _('Expenses / مصروفات') }}</option>
       </select>
     </div>
     <div class="col-auto">
-      <label class="form-label">من تاريخ</label>
+      <label class="form-label">{{ _('From Date / من تاريخ') }}</label>
       <input id="sd" type="date" class="form-control" value="{{ request.args.get('start_date','') }}">
     </div>
     <div class="col-auto">
-      <label class="form-label">إلى تاريخ</label>
+      <label class="form-label">{{ _('To Date / إلى تاريخ') }}</label>
       <input id="ed" type="date" class="form-control" value="{{ request.args.get('end_date','') }}">
     </div>
     <div class="col-auto">
-      <label class="form-label">طريقة الدفع</label>
-      <select id="pm" class="form-select">
-        <option value="all">الكل</option>
-        <option value="cash">نقدي</option>
-        <option value="card">بطاقة</option>
-        <option value="bank">تحويل/بنك</option>
-        <option value="pending">آجل</option>
+      <label class="form-label">{{ _('Branch / الفرع') }}</label>
+      <select id="branch" class="form-select">
+        <option value="all">{{ _('All / جميع الفروع') }}</option>
+        <option value="china_town">China Town</option>
+        <option value="place_india">Place India</option>
       </select>
     </div>
     <div class="col-auto">
-      <button type="submit" class="btn btn-primary">طباعة</button>
-      <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">رجوع</a>
+      <label class="form-label">{{ _('Payment Method / طريقة الدفع') }}</label>
+      <select id="pm" class="form-select">
+        <option value="all">{{ _('All / الكل') }}</option>
+        <option value="cash">{{ _('Cash / نقدي') }}</option>
+        <option value="card">{{ _('Card / بطاقة') }}</option>
+        <option value="bank">{{ _('Bank / بنك') }}</option>
+        <option value="pending">{{ _('Pending / آجل') }}</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-primary">{{ _('Print / طباعة') }}</button>
+      <button type="button" class="btn btn-outline-success" onclick="openCSV()">{{ _('Export CSV / تصدير CSV') }}</button>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">{{ _('Back / رجوع') }}</a>
     </div>
   </form>
 
   <div class="alert alert-info">
-    اختر النوع وحدد الفترة وطريقة الدفع ثم اضغط طباعة. سيتم فتح صفحة الطباعة في نافذة جديدة.
+    {{ _('Choose the category, date range and payment method, then click Print. A print page will open in a new tab. / اختر النوع وحدد الفترة وطريقة الدفع ثم اضغط طباعة. سيتم فتح صفحة الطباعة في نافذة جديدة.') }}
   </div>
 </div>
 
@@ -47,10 +56,24 @@ function openPrint() {
   const pm = document.getElementById('pm').value || 'all';
   const sd = document.getElementById('sd').value || '';
   const ed = document.getElementById('ed').value || '';
+  const br = document.getElementById('branch').value || 'all';
   let path = '/reports/print/all-invoices/sales';
   if (cat === 'purchases') path = '/reports/print/all-invoices/purchases';
   else if (cat === 'expenses') path = '/reports/print/all-invoices/expenses';
-  const url = `${path}?payment_method=${encodeURIComponent(pm)}&start_date=${encodeURIComponent(sd)}&end_date=${encodeURIComponent(ed)}`;
+  const url = `${path}?payment_method=${encodeURIComponent(pm)}&start_date=${encodeURIComponent(sd)}&end_date=${encodeURIComponent(ed)}&branch=${encodeURIComponent(br)}`;
+  window.open(url, '_blank');
+}
+
+function openCSV() {
+  const cat = document.getElementById('rep-cat').value;
+  const pm = document.getElementById('pm').value || 'all';
+  const sd = document.getElementById('sd').value || '';
+  const ed = document.getElementById('ed').value || '';
+  const br = document.getElementById('branch').value || 'all';
+  let path = '/reports/print/all-invoices/sales';
+  if (cat === 'purchases') path = '/reports/print/all-invoices/purchases';
+  else if (cat === 'expenses') path = '/reports/print/all-invoices/expenses';
+  const url = `${path}?payment_method=${encodeURIComponent(pm)}&start_date=${encodeURIComponent(sd)}&end_date=${encodeURIComponent(ed)}&branch=${encodeURIComponent(br)}&format=csv`;
   window.open(url, '_blank');
 }
 </script>

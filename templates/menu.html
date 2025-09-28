@@ -49,13 +49,24 @@
           </div>
           <div class="col-12 d-flex gap-2">
             <button class="btn btn-xs btn-success" style="padding:4px 8px; font-size:12px">{{ _('Add') }}</button>
-            {% if current_section %}
-              <a class="btn btn-xs btn-outline-secondary" style="padding:4px 8px; font-size:12px" href="{{ url_for('main.menu') }}">{{ _('All sections / جميع الأقسام') }}</a>
-              <form method="post" action="{{ url_for('main.menu_category_delete', cat_id=current_section.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this section? / حذف هذا القسم؟') }}')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-xs btn-outline-danger" style="padding:4px 8px; font-size:12px">{{ _('Delete section') }}</button>
-              </form>
-            {% endif %}
+            <a class="btn btn-xs btn-outline-secondary" style="padding:4px 8px; font-size:12px" href="{{ url_for('main.menu') }}">{{ _('All sections / جميع الأقسام') }}</a>
+          </div>
+        </form>
+
+        <hr class="my-3"/>
+        <h6 class="mb-2">{{ _('Delete Section / حذف قسم') }}</h6>
+        <form id="deleteSectionForm" method="post" onsubmit="return handleDeleteSection(event)" class="row g-2 align-items-end">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <div class="col-md-8">
+            <select id="deleteSectionSelect" class="form-select form-select-sm">
+              <option value="">-- {{ _('Choose section to delete / اختر قسماً للحذف') }} --</option>
+              {% for s in sections %}
+                <option value="{{ s.id }}" {% if current_section and s.id==current_section.id %}selected{% endif %}>{{ s.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4 d-grid">
+            <button class="btn btn-xs btn-outline-danger" style="padding:4px 8px; font-size:12px">{{ _('Delete section') }}</button>
           </div>
         </form>
       </div>
@@ -125,7 +136,7 @@
                 </td>
                 <td></td>
                 <td class="text-nowrap">
-                  <form method="post" action="{{ url_for('main.menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Remove item? / حذف العنصر؟') }}')">
+                  <form method="post" action="{{ url_for('main.menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return confirmDeleteItem()">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <button class="btn btn-xs btn-outline-danger" style="padding:4px 8px; font-size:12px">{{ _('Delete') }}</button>
                   </form>
@@ -174,11 +185,11 @@
   function deleteMenuItem(event, form) {
     event.preventDefault();
 
-    if (!confirm('{{ _('Remove item? / حذف العنصر؟') }}')) {
+    if (!confirm("{{ _('Remove item? / حذف العنصر؟') }}")) {
       return false;
     }
 
-    const password = prompt('أدخل كلمة المرور لحذف العنصر (1991):');
+    const password = prompt("أدخل كلمة المرور لحذف العنصر (1991):");
     if (!password) {
       return false;
     }
@@ -191,9 +202,13 @@
     return true;
   }
 
+  function confirmDeleteItem(){
+    return confirm("{{ _('Remove item? / حذف العنصر؟') }}");
+  }
+
   // Delete functions for API calls
   async function deleteOne(itemId) {
-    const password = prompt('أدخل كلمة المرور لحذف الصنف (1991):');
+    const password = prompt("أدخل كلمة المرور لحذف الصنف (1991):");
     if (!password) return;
 
     const res = await fetch(`/api/items/${itemId}/delete`, {
@@ -213,6 +228,24 @@
 
     alert('تم حذف الصنف بنجاح');
     location.reload();
+  }
+
+  function handleDeleteSection(e){
+    e.preventDefault();
+    const sel = document.getElementById('deleteSectionSelect');
+    const val = sel && sel.value ? sel.value.trim() : '';
+    if(!val){
+      alert("{{ _('Please choose a section / يرجى اختيار قسم') }}");
+      return false;
+    }
+    if(!confirm("{{ _('Delete this section? / حذف هذا القسم؟') }}")){
+      return false;
+    }
+    const form = document.getElementById('deleteSectionForm');
+    const base = "{{ url_for('main.menu_category_delete', cat_id=0) }}";
+    form.action = base.replace('/0/', `/${val}/`).replace('/0', `/${val}`);
+    form.submit();
+    return true;
   }
 
 

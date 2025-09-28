@@ -31,6 +31,7 @@
     </div>
     <div class="col-auto">
       <a href="{{ url_for('vat.vat_print') }}?year={{ data.year }}&quarter={{ data.quarter }}&branch={{ data.branch or 'all' }}" class="btn btn-success" target="_blank">طباعة الإقرار للربع</a>
+      <a href="{{ url_for('vat.vat_print') }}?year={{ data.year }}&quarter={{ data.quarter }}&branch={{ data.branch or 'all' }}&format=csv" class="btn btn-outline-success" target="_blank">تصدير CSV</a>
     </div>
   </form>
 

@@ -3931,7 +3931,7 @@ def vat_print():
     input_vat = float((purchases_total or 0) + (expenses_total or 0)) * vat_rate
     net_vat = output_vat - input_vat
 
-    # Render unified print report
+    # Render unified print report (support CSV export)
     report_title = f"VAT Report — Q{quarter} {year}"
     if branch and branch != 'all':
         report_title += f" — {branch}"
@@ -3945,6 +3945,20 @@ def vat_print():
         {'Metric': 'Net VAT', 'Amount': float(net_vat or 0.0)},
     ]
     totals = {'Amount': float(net_vat or 0.0)}
+    fmt = (request.args.get('format') or '').strip().lower()
+    if fmt == 'csv':
+        try:
+            import io, csv
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(['Metric','Amount'])
+            for r in data_rows:
+                writer.writerow([r.get('Metric',''), r.get('Amount',0.0)])
+            from flask import Response
+            return Response(output.getvalue(), mimetype='text/csv',
+                            headers={'Content-Disposition': f'attachment; filename="vat_q{quarter}_{year}.csv"'})
+        except Exception:
+            pass
     return render_template('print_report.html', report_title=report_title, settings=s,
                            generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
                            start_date=start_date.isoformat(), end_date=end_date.isoformat(),
@@ -4441,6 +4455,9 @@ def api_all_expenses():
 def reports_print_all_invoices_sales():
     # Reuse same data generation as api_all_invoices but render print template
     payment_method = (request.args.get('payment_method') or 'all').strip().lower()
+    start_date = (request.args.get('start_date') or '').strip()
+    end_date = (request.args.get('end_date') or '').strip()
+    fmt = (request.args.get('format') or '').strip().lower()
     rows = []
     branch_totals = {}
     overall = {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0}
@@ -4454,6 +4471,23 @@ def reports_print_all_invoices_sales():
         branch = (request.args.get('branch') or 'all').strip().lower()
         if branch and branch != 'all':
             q = q.filter(func.lower(SalesInvoice.branch) == branch)
+        # Optional date range filter
+        if start_date:
+            try:
+                if hasattr(SalesInvoice, 'created_at'):
+                    q = q.filter(func.date(SalesInvoice.created_at) >= start_date)
+                elif hasattr(SalesInvoice, 'date'):
+                    q = q.filter(SalesInvoice.date >= start_date)
+            except Exception:
+                pass
+        if end_date:
+            try:
+                if hasattr(SalesInvoice, 'created_at'):
+                    q = q.filter(func.date(SalesInvoice.created_at) <= end_date)
+                elif hasattr(SalesInvoice, 'date'):
+                    q = q.filter(SalesInvoice.date <= end_date)
+            except Exception:
+                pass
         if hasattr(SalesInvoice, 'created_at'):
             q = q.order_by(SalesInvoice.created_at.desc())
         elif hasattr(SalesInvoice, 'date'):
@@ -4562,6 +4596,23 @@ def reports_print_all_invoices_sales():
     }
     totals_columns = ['Amount','Discount','VAT','Total']
     totals_colspan = len(columns) - len(totals_columns)
+    # CSV export
+    if fmt == 'csv':
+        try:
+            import io, csv
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(columns)
+            for r in data:
+                writer.writerow([r.get('Branch',''), r.get('Date',''), r.get('Invoice No.',''), r.get('Item',''),
+                                 r.get('Qty',0.0), r.get('Amount',0.0), r.get('Discount',0.0), r.get('VAT',0.0),
+                                 r.get('Total',0.0), r.get('Payment','')])
+            from flask import Response
+            return Response(output.getvalue(), mimetype='text/csv',
+                            headers={'Content-Disposition': 'attachment; filename="sales_invoices.csv"'})
+        except Exception:
+            pass
+
     return render_template('print_report.html', report_title=meta['title'], settings=settings,
                            generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
                            payment_method=meta['payment_method'], branch=meta['branch'],
@@ -4574,8 +4625,10 @@ def reports_print_all_invoices_sales():
 @login_required
 def reports_print_all_invoices_purchases():
     payment_method = (request.args.get('payment_method') or 'all').strip().lower()
-    start_date = request.args.get('start_date') or ''
-    end_date = request.args.get('end_date') or ''
+    start_date = (request.args.get('start_date') or '').strip()
+    end_date = (request.args.get('end_date') or '').strip()
+    branch = (request.args.get('branch') or 'all').strip().lower()
+    fmt = (request.args.get('format') or '').strip().lower()
     rows = []
     totals = {'Amount': 0.0, 'Discount': 0.0, 'VAT': 0.0, 'Total': 0.0}
     payment_totals = {}
@@ -4596,6 +4649,8 @@ def reports_print_all_invoices_purchases():
                 q = q.filter(PurchaseInvoice.date <= end_date)
             except Exception:
                 pass
+        if branch and branch != 'all' and hasattr(PurchaseInvoice, 'branch'):
+            q = q.filter(func.lower(PurchaseInvoice.branch) == branch)
         if hasattr(PurchaseInvoice, 'created_at'):
             q = q.order_by(PurchaseInvoice.created_at.desc())
         elif hasattr(PurchaseInvoice, 'date'):
@@ -4649,12 +4704,28 @@ def reports_print_all_invoices_purchases():
     meta = {
         'title': 'Purchase Invoices — Print',
         'payment_method': payment_method or 'all',
-        'branch': 'all',
+        'branch': branch or 'all',
         'start_date': start_date,
         'end_date': end_date,
         'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
     }
     columns = ['Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment']
+    # CSV export
+    if fmt == 'csv':
+        try:
+            import io, csv
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(columns)
+            for r in rows:
+                writer.writerow([r.get('Date',''), r.get('Invoice No.',''), r.get('Item',''), r.get('Qty',0.0),
+                                 r.get('Amount',0.0), r.get('Discount',0.0), r.get('VAT',0.0), r.get('Total',0.0),
+                                 r.get('Payment','')])
+            from flask import Response
+            return Response(output.getvalue(), mimetype='text/csv',
+                            headers={'Content-Disposition': 'attachment; filename="purchase_invoices.csv"'})
+        except Exception:
+            pass
     return render_template('print_report.html', report_title=meta['title'], settings=settings,
                            generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
                            payment_method=meta['payment_method'], branch=meta['branch'],
@@ -4763,8 +4834,10 @@ def reports_print_daily_items_summary():
 @login_required
 def reports_print_all_invoices_expenses():
     payment_method = (request.args.get('payment_method') or 'all').strip().lower()
-    start_date = request.args.get('start_date') or ''
-    end_date = request.args.get('end_date') or ''
+    start_date = (request.args.get('start_date') or '').strip()
+    end_date = (request.args.get('end_date') or '').strip()
+    branch = (request.args.get('branch') or 'all').strip().lower()
+    fmt = (request.args.get('format') or '').strip().lower()
     rows = []
     totals = {'Amount': 0.0}
     payment_totals = {}
@@ -4782,6 +4855,8 @@ def reports_print_all_invoices_expenses():
                 q = q.filter(ExpenseInvoice.date <= end_date)
             except Exception:
                 pass
+        if branch and branch != 'all' and hasattr(ExpenseInvoice, 'branch'):
+            q = q.filter(func.lower(ExpenseInvoice.branch) == branch)
         q = q.order_by(ExpenseInvoice.created_at.desc()).limit(2000)
         for exp in q.all():
             d = (exp.date.strftime('%Y-%m-%d') if getattr(exp, 'date', None) else '')
@@ -4823,7 +4898,7 @@ def reports_print_all_invoices_expenses():
     meta = {
         'title': 'Expenses — Print',
         'payment_method': payment_method or 'all',
-        'branch': 'all',
+        'branch': branch or 'all',
         'start_date': start_date,
         'end_date': end_date,
         'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
@@ -4831,6 +4906,22 @@ def reports_print_all_invoices_expenses():
     columns = ['Date','Expense No.','Description','Qty','Amount','Tax','Discount','Line Total','Payment']
     totals_columns = ['Amount','Tax','Discount','Line Total']
     totals_colspan = len(columns) - len(totals_columns)
+    # CSV export
+    if fmt == 'csv':
+        try:
+            import io, csv
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(columns)
+            for r in rows:
+                writer.writerow([r.get('Date',''), r.get('Expense No.',''), r.get('Description',''), r.get('Qty',0.0),
+                                 r.get('Amount',0.0), r.get('Tax',0.0), r.get('Discount',0.0), r.get('Line Total',0.0), r.get('Payment','')])
+            from flask import Response
+            return Response(output.getvalue(), mimetype='text/csv',
+                            headers={'Content-Disposition': 'attachment; filename="expense_invoices.csv"'})
+        except Exception:
+            pass
+
     return render_template('print_report.html', report_title=meta['title'], settings=settings,
                            generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
                            payment_method=meta['payment_method'], branch=meta['branch'],
