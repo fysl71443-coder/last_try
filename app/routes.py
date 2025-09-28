@@ -753,7 +753,8 @@ def inventory():
             rm = rm_map.get(int(r.rm_id)) if r.rm_id is not None else None
             name = (rm.display_name if rm else '-')
             unit = (rm.unit if rm else '-')
-            current_stock = float(rm.stock_quantity or 0) if rm else 0.0
+            # Current stock equals cumulative purchased quantity (sum of purchases)
+            current_stock = float(qty)
             qty = float(r.qty or 0)
             total_cost = float(r.total_cost or 0)
             avg_cost = (total_cost / qty) if qty else 0.0
