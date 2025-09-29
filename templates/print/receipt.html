@@ -171,10 +171,32 @@
         <div class="small muted">{{ _('VAT No.') }}: {{ tax_number }}</div>
         {% endif %}
       {% endif %}
-      {% if settings and settings.phone %}
-      <div class="small muted">{{ _('Phone') }}: {{ settings.phone }}</div>
-      {% elif phone %}
-      <div class="small muted">{{ _('Phone') }}: {{ phone }}</div>
+      {# Branch-specific phones #}
+      {% set branch_code = (inv.branch or inv.branch_code or '')|lower %}
+      {% set is_china = branch_code[0:5] == 'china' %}
+      {% set is_india = ('place' in branch_code) or ('india' in branch_code) %}
+      {% if is_china %}
+        {% if settings and (settings.china_town_phone1 or settings.china_town_phone2) %}
+        <div class="small muted">
+          {{ _('Phone') }}: {{ (settings.china_town_phone1 or '') ~ ((' / ' ~ settings.china_town_phone2) if settings.china_town_phone2 else '') }}
+        </div>
+        {% elif settings and settings.phone %}
+        <div class="small muted">{{ _('Phone') }}: {{ settings.phone }}</div>
+        {% endif %}
+      {% elif is_india %}
+        {% if settings and (settings.place_india_phone1 or settings.place_india_phone2) %}
+        <div class="small muted">
+          {{ _('Phone') }}: {{ (settings.place_india_phone1 or '') ~ ((' / ' ~ settings.place_india_phone2) if settings.place_india_phone2 else '') }}
+        </div>
+        {% elif settings and settings.phone %}
+        <div class="small muted">{{ _('Phone') }}: {{ settings.phone }}</div>
+        {% endif %}
+      {% else %}
+        {% if settings and settings.phone %}
+        <div class="small muted">{{ _('Phone') }}: {{ settings.phone }}</div>
+        {% elif phone %}
+        <div class="small muted">{{ _('Phone') }}: {{ phone }}</div>
+        {% endif %}
       {% endif %}
       {% if settings and settings.address %}
       <div class="small muted">{{ settings.address }}</div>

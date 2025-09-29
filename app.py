@@ -791,7 +791,6 @@ def zatca_tlv_base64(seller_name: str, vat_number: str, timestamp_iso: str, tota
         tlv(5, f"{vat_amount:.2f}".encode("utf-8")),
     ])
     return base64.b64encode(payload).decode("utf-8")
-
 # ===== Templates (inline via DictLoader) =====
 branches_html = """...existing code..."""
 tables_html = """...existing code..."""
@@ -3794,7 +3793,6 @@ def inject_csrf_token():
         return dict(csrf_token=generate_csrf)
     except Exception:
         return dict(csrf_token=lambda: '')
-
 # UNIFIED TABLES SCREEN - English only
 @app.route('/sales/<branch_code>/tables', methods=['GET'])
 @login_required
@@ -4586,7 +4584,6 @@ def menu():
             except Exception:
                 items = []
     return render_template('menu_simple.html', categories=cats, selected_category=selected_category, items=items, meals=meals)
-
 # Menu items management (link meals to categories)
 @app.route('/menu/item/add', methods=['POST'])
 @login_required
@@ -5287,7 +5284,6 @@ def delete_expense_invoice(invoice_id):
         flash(_('Error deleting expense invoice / خطأ في حذف فاتورة المصروفات') + f': {str(e)}', 'danger')
     
     return redirect(url_for('expenses'))
-
 @app.route('/import_meals', methods=['POST'])
 @login_required
 def import_meals():
@@ -5961,7 +5957,11 @@ def fix_database_route():
                     ("receipt_logo_height", "INTEGER DEFAULT 72"),
                     ("receipt_extra_bottom_mm", "INTEGER DEFAULT 15"),
                     ("receipt_show_tax_number", "BOOLEAN DEFAULT TRUE"),
-                    ("receipt_footer_text", "TEXT DEFAULT 'شكراً لزيارتكم'")
+                    ("receipt_footer_text", "TEXT DEFAULT 'شكراً لزيارتكم'"),
+                    ("china_town_phone1", "VARCHAR(50)"),
+                    ("china_town_phone2", "VARCHAR(50)"),
+                    ("place_india_phone1", "VARCHAR(50)"),
+                    ("place_india_phone2", "VARCHAR(50)")
                 ]
 
                 for col_name, col_def in missing_columns:
@@ -6061,8 +6061,6 @@ def fix_database_route():
     except Exception as e:
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
-
-
 @app.route('/admin/seed_branch_users', methods=['GET'])
 @login_required
 def admin_seed_branch_users():
@@ -9015,7 +9013,11 @@ def fix_database_complete():
                     ("china_town_logo_url", "VARCHAR(255)"),
                     ("place_india_logo_url", "VARCHAR(255)"),
             ("receipt_logo_height", "INTEGER DEFAULT 72"),
-            ("receipt_extra_bottom_mm", "INTEGER DEFAULT 15")
+            ("receipt_extra_bottom_mm", "INTEGER DEFAULT 15"),
+            ("china_town_phone1", "VARCHAR(50)"),
+            ("china_town_phone2", "VARCHAR(50)"),
+            ("place_india_phone1", "VARCHAR(50)"),
+            ("place_india_phone2", "VARCHAR(50)")
         ]
 
         results = []

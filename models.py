@@ -520,11 +520,17 @@ class Settings(db.Model):
     china_town_void_password = db.Column(db.String(50), default='1991')
     china_town_vat_rate = db.Column(db.Numeric(5, 2), default=15.00)
     china_town_discount_rate = db.Column(db.Numeric(5, 2), default=0.00)
+    # China Town phones
+    china_town_phone1 = db.Column(db.String(50), nullable=True)
+    china_town_phone2 = db.Column(db.String(50), nullable=True)
 
     # Palace India settings
     place_india_void_password = db.Column(db.String(50), default='1991')
     place_india_vat_rate = db.Column(db.Numeric(5, 2), default=15.00)
     place_india_discount_rate = db.Column(db.Numeric(5, 2), default=0.00)
+    # Palace India phones
+    place_india_phone1 = db.Column(db.String(50), nullable=True)
+    place_india_phone2 = db.Column(db.String(50), nullable=True)
 
     # Receipt print settings (sales invoices only)
     receipt_paper_width = db.Column(db.String(4), default='80')  # '80' or '58'

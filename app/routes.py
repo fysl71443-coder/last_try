@@ -2789,6 +2789,8 @@ def print_order_preview(branch, table):
         'tax_amount': round(vat_amount, 2),
         'discount_amount': round(discount_amount, 2),
         'total_after_tax_discount': round(total_after, 2),
+        'branch': branch,
+        'branch_code': branch,
     }
     try:
         s = Settings.query.first()
@@ -3485,7 +3487,7 @@ def settings():
                     return default
 
             # Strings (do not overwrite with empty string)
-            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text']:
+            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text','china_town_phone1','china_town_phone2','place_india_phone1','place_india_phone2']:
                 if hasattr(s, fld) and fld in form_data:
                     val = (form_data.get(fld) or '').strip()
                     if val != '':
