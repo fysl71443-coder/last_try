@@ -523,6 +523,8 @@ class Settings(db.Model):
     # China Town phones
     china_town_phone1 = db.Column(db.String(50), nullable=True)
     china_town_phone2 = db.Column(db.String(50), nullable=True)
+    # China Town logo
+    china_town_logo_url = db.Column(db.String(300), nullable=True)
 
     # Palace India settings
     place_india_void_password = db.Column(db.String(50), default='1991')
@@ -531,6 +533,8 @@ class Settings(db.Model):
     # Palace India phones
     place_india_phone1 = db.Column(db.String(50), nullable=True)
     place_india_phone2 = db.Column(db.String(50), nullable=True)
+    # Palace India logo
+    place_india_logo_url = db.Column(db.String(300), nullable=True)
 
     # Receipt print settings (sales invoices only)
     receipt_paper_width = db.Column(db.String(4), default='80')  # '80' or '58'
