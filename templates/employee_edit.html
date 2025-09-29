@@ -57,7 +57,7 @@
     <div class="row g-3 mt-3">
       <div class="col-md-4">
         <label class="form-label">Default Basic Salary / الراتب الأساسي الافتراضي</label>
-        <input class="form-control" name="base_salary" type="number" step="0.01" value="{{ employee.salaries and (employee.salaries[0].basic_salary) or (employee.employee_salary_default and employee.employee_salary_default.base_salary) or 0 }}">
+        <input class="form-control" name="base_salary" type="number" step="0.01" value="{{ (employee.employee_salary_default and employee.employee_salary_default.base_salary) or 0 }}">
       </div>
       <div class="col-md-4">
         <label class="form-label">Default Allowances / البدلات الافتراضية</label>

@@ -1432,7 +1432,47 @@ def salaries_pay():
         current_salaries = Salary.query.filter_by(year=year, month=month).all()
     except Exception:
         current_salaries = []
-    return render_template('salaries_pay.html', employees=employees, month=selected_month, salaries=current_salaries, selected_employee=selected_employee, defaults_map=defaults_map, prev_due_map=prev_due_map)
+
+    # Selected employee's salary for this month (to prefill form with existing values)
+    selected_salary = None
+    try:
+        if selected_employee and current_salaries:
+            for s in current_salaries:
+                if int(getattr(s, 'employee_id', 0) or 0) == int(selected_employee):
+                    selected_salary = s
+                    break
+    except Exception:
+        selected_salary = None
+
+    # Compute paid sum per salary for coloring Paid/Remaining columns
+    paid_map = {}
+    try:
+        if current_salaries:
+            ids = [int(s.id) for s in current_salaries if getattr(s, 'id', None)]
+            if ids:
+                rows = db.session.query(
+                    Payment.invoice_id,
+                    func.coalesce(func.sum(Payment.amount_paid), 0)
+                ).filter(
+                    Payment.invoice_type == 'salary',
+                    Payment.invoice_id.in_(ids)
+                ).group_by(Payment.invoice_id).all()
+                for sid, paid in rows:
+                    paid_map[int(sid)] = float(paid or 0.0)
+    except Exception:
+        paid_map = {}
+
+    return render_template(
+        'salaries_pay.html',
+        employees=employees,
+        month=selected_month,
+        salaries=current_salaries,
+        selected_employee=selected_employee,
+        selected_salary=selected_salary,
+        defaults_map=defaults_map,
+        prev_due_map=prev_due_map,
+        paid_map=paid_map
+    )
 
 
 @main.route('/salaries/statements', methods=['GET'], endpoint='salaries_statements')
