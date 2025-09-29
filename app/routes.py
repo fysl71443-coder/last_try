@@ -1432,7 +1432,47 @@ def salaries_pay():
         current_salaries = Salary.query.filter_by(year=year, month=month).all()
     except Exception:
         current_salaries = []
-    return render_template('salaries_pay.html', employees=employees, month=selected_month, salaries=current_salaries, selected_employee=selected_employee, defaults_map=defaults_map, prev_due_map=prev_due_map)
+
+    # Selected employee's salary for this month (to prefill form with existing values)
+    selected_salary = None
+    try:
+        if selected_employee and current_salaries:
+            for s in current_salaries:
+                if int(getattr(s, 'employee_id', 0) or 0) == int(selected_employee):
+                    selected_salary = s
+                    break
+    except Exception:
+        selected_salary = None
+
+    # Compute paid sum per salary for coloring Paid/Remaining columns
+    paid_map = {}
+    try:
+        if current_salaries:
+            ids = [int(s.id) for s in current_salaries if getattr(s, 'id', None)]
+            if ids:
+                rows = db.session.query(
+                    Payment.invoice_id,
+                    func.coalesce(func.sum(Payment.amount_paid), 0)
+                ).filter(
+                    Payment.invoice_type == 'salary',
+                    Payment.invoice_id.in_(ids)
+                ).group_by(Payment.invoice_id).all()
+                for sid, paid in rows:
+                    paid_map[int(sid)] = float(paid or 0.0)
+    except Exception:
+        paid_map = {}
+
+    return render_template(
+        'salaries_pay.html',
+        employees=employees,
+        month=selected_month,
+        salaries=current_salaries,
+        selected_employee=selected_employee,
+        selected_salary=selected_salary,
+        defaults_map=defaults_map,
+        prev_due_map=prev_due_map,
+        paid_map=paid_map
+    )
 
 
 @main.route('/salaries/statements', methods=['GET'], endpoint='salaries_statements')
@@ -2749,6 +2789,8 @@ def print_order_preview(branch, table):
         'tax_amount': round(vat_amount, 2),
         'discount_amount': round(discount_amount, 2),
         'total_after_tax_discount': round(total_after, 2),
+        'branch': branch,
+        'branch_code': branch,
     }
     try:
         s = Settings.query.first()
@@ -3445,7 +3487,7 @@ def settings():
                     return default
 
             # Strings (do not overwrite with empty string)
-            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text']:
+            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text','china_town_phone1','china_town_phone2','place_india_phone1','place_india_phone2']:
                 if hasattr(s, fld) and fld in form_data:
                     val = (form_data.get(fld) or '').strip()
                     if val != '':

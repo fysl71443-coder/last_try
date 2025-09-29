@@ -120,6 +120,14 @@
             <h4>🏮 إعدادات China Town</h4>
             <p class="text-muted">إعدادات خاصة بفرع China Town</p>
           </div>
+          <div class="col-md-6">
+            <label class="form-label">رقم الهاتف (1)</label>
+            <input type="text" name="china_town_phone1" class="form-control" value="{{ s.china_town_phone1 if s.china_town_phone1 is not none else '' }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">رقم الهاتف (2)</label>
+            <input type="text" name="china_town_phone2" class="form-control" value="{{ s.china_town_phone2 if s.china_town_phone2 is not none else '' }}">
+          </div>
           <div class="col-md-4">
             <label class="form-label">كلمة سر حذف الأصناف</label>
             <input type="password" name="china_town_void_password" class="form-control" value="{{ s.china_town_void_password if s.china_town_void_password is not none else '1991' }}">
@@ -159,6 +167,14 @@
           <div class="col-12">
             <h4>🏛️ إعدادات Palace India</h4>
             <p class="text-muted">إعدادات خاصة بفرع Palace India</p>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">رقم الهاتف (1)</label>
+            <input type="text" name="place_india_phone1" class="form-control" value="{{ s.place_india_phone1 if s.place_india_phone1 is not none else '' }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">رقم الهاتف (2)</label>
+            <input type="text" name="place_india_phone2" class="form-control" value="{{ s.place_india_phone2 if s.place_india_phone2 is not none else '' }}">
           </div>
           <div class="col-md-4">
             <label class="form-label">كلمة سر حذف الأصناف</label>
