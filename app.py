@@ -5961,7 +5961,9 @@ def fix_database_route():
                     ("china_town_phone1", "VARCHAR(50)"),
                     ("china_town_phone2", "VARCHAR(50)"),
                     ("place_india_phone1", "VARCHAR(50)"),
-                    ("place_india_phone2", "VARCHAR(50)")
+                    ("place_india_phone2", "VARCHAR(50)"),
+                    ("china_town_logo_url", "VARCHAR(300)"),
+                    ("place_india_logo_url", "VARCHAR(300)")
                 ]
 
                 for col_name, col_def in missing_columns:

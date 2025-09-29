@@ -25,6 +25,8 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_phone1 VARCHAR(50);
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_phone2 VARCHAR(50);
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_phone1 VARCHAR(50);
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_phone2 VARCHAR(50);
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS china_town_logo_url VARCHAR(300);
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS place_india_logo_url VARCHAR(300);
 
 -- Update existing records with default values if they are NULL
 UPDATE settings SET 

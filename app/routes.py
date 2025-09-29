@@ -3487,7 +3487,7 @@ def settings():
                     return default
 
             # Strings (do not overwrite with empty string)
-            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text','china_town_phone1','china_town_phone2','place_india_phone1','place_india_phone2']:
+            for fld in ['company_name','tax_number','phone','address','email','currency','place_india_label','china_town_label','logo_url','default_theme','printer_type','footer_message','receipt_footer_text','china_town_phone1','china_town_phone2','place_india_phone1','place_india_phone2','china_town_logo_url','place_india_logo_url']:
                 if hasattr(s, fld) and fld in form_data:
                     val = (form_data.get(fld) or '').strip()
                     if val != '':
@@ -3546,7 +3546,7 @@ def settings():
                 upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
                 os.makedirs(upload_dir, exist_ok=True)
                 path_prefix = '/uploads/' if os.getenv('UPLOAD_DIR') else '/static/uploads/'
-                # Logo file
+                # Logo file (global)
                 logo_file = request.files.get('logo_file')
                 if logo_file and getattr(logo_file, 'filename', ''):
                     ext = os.path.splitext(logo_file.filename)[1].lower()
@@ -3555,6 +3555,26 @@ def settings():
                         fpath = os.path.join(upload_dir, fname)
                         logo_file.save(fpath)
                         s.logo_url = f"{path_prefix}{fname}"
+                # China Town branch logo
+                china_logo = request.files.get('china_logo_file')
+                if china_logo and getattr(china_logo, 'filename', ''):
+                    ext = os.path.splitext(china_logo.filename)[1].lower()
+                    if ext in ['.png', '.jpg', '.jpeg', '.svg', '.gif']:
+                        fname = f"china_logo_{int(datetime.utcnow().timestamp())}{ext}"
+                        fpath = os.path.join(upload_dir, fname)
+                        china_logo.save(fpath)
+                        if hasattr(s, 'china_town_logo_url'):
+                            s.china_town_logo_url = f"{path_prefix}{fname}"
+                # Palace India branch logo
+                india_logo = request.files.get('india_logo_file')
+                if india_logo and getattr(india_logo, 'filename', ''):
+                    ext = os.path.splitext(india_logo.filename)[1].lower()
+                    if ext in ['.png', '.jpg', '.jpeg', '.svg', '.gif']:
+                        fname = f"india_logo_{int(datetime.utcnow().timestamp())}{ext}"
+                        fpath = os.path.join(upload_dir, fname)
+                        india_logo.save(fpath)
+                        if hasattr(s, 'place_india_logo_url'):
+                            s.place_india_logo_url = f"{path_prefix}{fname}"
                 # Currency PNG
                 cur_file = request.files.get('currency_file')
                 if cur_file and getattr(cur_file, 'filename', ''):

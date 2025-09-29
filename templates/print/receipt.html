@@ -151,12 +151,23 @@
   {% endif %}
   <div class="wrap">
     <div class="center">
+      {% set branch_code_top = (inv.branch or inv.branch_code or '')|lower %}
+      {% set is_china_top = branch_code_top[0:5] == 'china' %}
+      {% set is_india_top = ('place' in branch_code_top) or ('india' in branch_code_top) %}
+      {% set branch_logo_url = None %}
+      {% if is_china_top and settings and settings.china_town_logo_url %}
+        {% set branch_logo_url = settings.china_town_logo_url %}
+      {% elif is_india_top and settings and settings.place_india_logo_url %}
+        {% set branch_logo_url = settings.place_india_logo_url %}
+      {% endif %}
       {% if logo_data_url %}
       <img src="{{ logo_data_url }}" alt="logo" class="logo-img"/>
       {% elif branch_settings and branch_settings.receipt_show_logo and branch_settings.branch_data_url %}
       <img src="{{ branch_settings.branch_data_url }}" alt="logo" class="logo-img"/>
       {% elif branch_settings and branch_settings.receipt_show_logo and branch_settings.logo_url %}
       <img src="{{ branch_settings.logo_url }}" alt="logo" class="logo-img"/>
+      {% elif branch_logo_url and (not settings or settings.receipt_show_logo) %}
+      <img src="{{ branch_logo_url }}" alt="logo" class="logo-img"/>
       {% elif settings and settings.receipt_show_logo and settings.logo_url %}
       <img src="{{ settings.logo_url }}" alt="logo" class="logo-img"/>
       {% elif (not settings or settings.receipt_show_logo) and logo_url %}
