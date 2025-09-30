@@ -1334,6 +1334,9 @@ def invoices_delete():
 @main.route('/employees', methods=['GET','POST'], endpoint='employees')
 @login_required
 def employees():
+    if not user_can('employees','view'):
+        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        return redirect(url_for('main.home'))
     form = EmployeeForm()
     if request.method == 'POST':
         try:
@@ -1437,6 +1440,9 @@ def employees():
 @main.route('/employees/add', methods=['GET','POST'], endpoint='add_employee')
 @login_required
 def add_employee():
+    if not user_can('employees','add'):
+        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        return redirect(url_for('main.employees'))
     if request.method == 'POST':
         try:
             code = (request.form.get('code') or '').strip()
@@ -1553,6 +1559,9 @@ def add_employee():
 @main.route('/employees/edit', methods=['GET'], endpoint='edit_employee_by_query')
 @login_required
 def edit_employee(emp_id=None):
+    if not user_can('employees','edit'):
+        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        return redirect(url_for('main.employees'))
     if emp_id is None:
         emp_id = request.args.get('id', type=int)
     emp = Employee.query.get_or_404(int(emp_id))
@@ -1620,6 +1629,9 @@ def edit_employee(emp_id=None):
 @main.route('/employees/delete', methods=['POST'], endpoint='employee_delete_by_query')
 @login_required
 def employee_delete(eid=None):
+    if not user_can('employees','delete'):
+        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        return redirect(url_for('main.employees'))
     if eid is None:
         eid = request.args.get('id', type=int)
     eid = int(eid)
@@ -1649,6 +1661,8 @@ def employee_delete(eid=None):
 @main.route('/employees/create-salary', methods=['POST'], endpoint='employees_create_salary')
 @login_required
 def employees_create_salary():
+    if not user_can('employees','add') and not user_can('salaries','add'):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
     try:
         emp_id = int(request.form.get('employee_id') or 0)
         year = int(request.form.get('year') or datetime.utcnow().year)
@@ -4740,7 +4754,7 @@ def api_users_delete():
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 # Permissions: persist to AppKV to avoid schema changes
-PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','salaries','financials','vat','reports','invoices','payments','customers','menu','settings','suppliers','table_settings','users','sample_data']
+PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','employees','salaries','financials','vat','reports','invoices','payments','customers','menu','settings','suppliers','table_settings','users','sample_data']
 
 def _perms_k(uid, scope):
     return f"user_perms:{scope or 'all'}:{int(uid)}"
