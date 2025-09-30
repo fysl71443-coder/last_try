@@ -50,7 +50,7 @@ def create_user(username: str, password: str) -> int:
 def set_branch_permissions(uid: int, branch_scope: str, sales_view: bool) -> None:
     items = []
     # screens we know about must be in sync with backend PERM_SCREENS
-    screens = ['dashboard','sales','purchases','inventory','expenses','salaries','financials','vat','reports','settings']
+    screens = ['dashboard','sales','purchases','inventory','expenses','employees','salaries','financials','vat','reports','settings']
     for s in screens:
         rec = {'screen_key': s, 'view': False, 'add': False, 'edit': False, 'delete': False, 'print': False}
         if s == 'sales' and sales_view:
