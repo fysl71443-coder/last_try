@@ -1334,6 +1334,9 @@ def invoices_delete():
 @main.route('/employees', methods=['GET','POST'], endpoint='employees')
 @login_required
 def employees():
+    if not user_can('employees','view'):
+        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        return redirect(url_for('main.home'))
     form = EmployeeForm()
     if request.method == 'POST':
         try:
@@ -1437,6 +1440,9 @@ def employees():
 @main.route('/employees/add', methods=['GET','POST'], endpoint='add_employee')
 @login_required
 def add_employee():
+    if not user_can('employees','add'):
+        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        return redirect(url_for('main.employees'))
     if request.method == 'POST':
         try:
             code = (request.form.get('code') or '').strip()
@@ -1553,6 +1559,9 @@ def add_employee():
 @main.route('/employees/edit', methods=['GET'], endpoint='edit_employee_by_query')
 @login_required
 def edit_employee(emp_id=None):
+    if not user_can('employees','edit'):
+        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        return redirect(url_for('main.employees'))
     if emp_id is None:
         emp_id = request.args.get('id', type=int)
     emp = Employee.query.get_or_404(int(emp_id))
@@ -1620,6 +1629,9 @@ def edit_employee(emp_id=None):
 @main.route('/employees/delete', methods=['POST'], endpoint='employee_delete_by_query')
 @login_required
 def employee_delete(eid=None):
+    if not user_can('employees','delete'):
+        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        return redirect(url_for('main.employees'))
     if eid is None:
         eid = request.args.get('id', type=int)
     eid = int(eid)
@@ -1649,6 +1661,8 @@ def employee_delete(eid=None):
 @main.route('/employees/create-salary', methods=['POST'], endpoint='employees_create_salary')
 @login_required
 def employees_create_salary():
+    if not user_can('employees','add') and not user_can('salaries','add'):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
     try:
         emp_id = int(request.form.get('employee_id') or 0)
         year = int(request.form.get('year') or datetime.utcnow().year)
@@ -1712,12 +1726,20 @@ def salaries_pay():
                 if not sal:
                     base = allow = ded = prev = 0.0
                     try:
-                        from models import EmployeeSalaryDefault
+                        from models import EmployeeSalaryDefault, DepartmentRate, EmployeeHours
                         d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
-                        if d:
-                            base = float(d.base_salary or 0)
-                            allow = float(d.allowances or 0)
-                            ded = float(d.deductions or 0)
+                        # defaults
+                        allow = float(getattr(d, 'allowances', 0) or 0)
+                        ded = float(getattr(d, 'deductions', 0) or 0)
+                        # prefer hour-based base when available for the period
+                        hrs_row = EmployeeHours.query.filter_by(employee_id=emp_id, year=year, month=month).first()
+                        emp_obj = Employee.query.get(emp_id)
+                        dept_name = (getattr(emp_obj, 'department', '') or '').lower()
+                        rate_row = DepartmentRate.query.filter(DepartmentRate.name == dept_name).first()
+                        hourly_rate = float(getattr(rate_row, 'hourly_rate', 0) or 0)
+                        hour_based_base = float(getattr(hrs_row, 'hours', 0) or 0) * hourly_rate if hrs_row else 0.0
+                        default_base = float(getattr(d, 'base_salary', 0) or 0)
+                        base = hour_based_base if hour_based_base > 0 else default_base
                     except Exception:
                         pass
                     # Previous due up to previous month
@@ -1792,12 +1814,19 @@ def salaries_pay():
                         if not row:
                             base = allow = ded = 0.0
                             try:
-                                from models import EmployeeSalaryDefault
+                                from models import EmployeeSalaryDefault, DepartmentRate, EmployeeHours
                                 d = EmployeeSalaryDefault.query.filter_by(employee_id=_emp_id).first()
-                                if d:
-                                    base = float(d.base_salary or 0)
-                                    allow = float(d.allowances or 0)
-                                    ded = float(d.deductions or 0)
+                                allow = float(getattr(d, 'allowances', 0) or 0)
+                                ded = float(getattr(d, 'deductions', 0) or 0)
+                                # prefer hour-based base when available for that month
+                                hrs_row = EmployeeHours.query.filter_by(employee_id=_emp_id, year=yy, month=mm).first()
+                                emp_o = Employee.query.get(_emp_id)
+                                dept_name = (getattr(emp_o, 'department', '') or '').lower()
+                                rate_row = DepartmentRate.query.filter(DepartmentRate.name == dept_name).first()
+                                hourly_rate = float(getattr(rate_row, 'hourly_rate', 0) or 0)
+                                hour_based_base = float(getattr(hrs_row, 'hours', 0) or 0) * hourly_rate if hrs_row else 0.0
+                                default_base = float(getattr(d, 'base_salary', 0) or 0)
+                                base = hour_based_base if hour_based_base > 0 else default_base
                             except Exception:
                                 pass
                             prev_component = 0.0
@@ -2514,11 +2543,25 @@ def pay_salary(emp_id):
         employees = []
 
     # Build salary summary for selected employee
-    from models import EmployeeSalaryDefault
+    # Prefer hour-based calculation for the selected period if available
+    from models import EmployeeSalaryDefault, DepartmentRate, EmployeeHours
     d = EmployeeSalaryDefault.query.filter_by(employee_id=selected_employee_id).first()
-    base = float(getattr(d, 'base_salary', 0) or 0)
-    allow = float(getattr(d, 'allowances', 0) or 0)
-    ded = float(getattr(d, 'deductions', 0) or 0)
+    # Defaults
+    default_allow = float(getattr(d, 'allowances', 0) or 0)
+    default_ded = float(getattr(d, 'deductions', 0) or 0)
+    default_base = float(getattr(d, 'base_salary', 0) or 0)
+    # Hour-based override
+    try:
+        hrs_row = EmployeeHours.query.filter_by(employee_id=selected_employee_id, year=year, month=month).first()
+        dept_name = (emp.department or '').lower()
+        rate_row = DepartmentRate.query.filter(DepartmentRate.name == dept_name).first()
+        hourly_rate = float(getattr(rate_row, 'hourly_rate', 0) or 0)
+        hour_based_base = float(getattr(hrs_row, 'hours', 0) or 0) * hourly_rate if hrs_row else 0.0
+    except Exception:
+        hour_based_base = 0.0
+    base = hour_based_base if hour_based_base > 0 else default_base
+    allow = default_allow
+    ded = default_ded
     # Previous due: sum of previous months' totals minus sum of payments (outstanding arrears)
     from sqlalchemy import func as _func
     try:
@@ -4711,7 +4754,7 @@ def api_users_delete():
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 # Permissions: persist to AppKV to avoid schema changes
-PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','salaries','financials','vat','reports','invoices','payments','customers','menu','settings','suppliers','table_settings','users','sample_data']
+PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','employees','salaries','financials','vat','reports','invoices','payments','customers','menu','settings','suppliers','table_settings','users','sample_data']
 
 def _perms_k(uid, scope):
     return f"user_perms:{scope or 'all'}:{int(uid)}"
