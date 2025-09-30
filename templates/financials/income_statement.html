@@ -2,7 +2,10 @@
 {% block title %}قائمة الدخل{% endblock %}
 {% block content %}
 <div class="container py-4">
-  <h3>قائمة الدخل (Advanced Income Statement)</h3>
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h3 class="mb-0">قائمة الدخل (Advanced Income Statement)</h3>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('main.dashboard') }}">⬅︎ رجوع للوحة التحكم</a>
+  </div>
 
   <form method="get" class="row g-2 align-items-end mb-3">
     <div class="col-auto">
@@ -49,6 +52,11 @@
     <span class="badge bg-light text-dark border">من: {{ data.start_date }}</span>
     <span class="badge bg-light text-dark border">إلى: {{ data.end_date }}</span>
   </div>
+
+  {% set _all_zero = ( (data.revenue or 0)==0 and (data.cogs or 0)==0 and (data.operating_expenses or 0)==0 and (data.other_income or 0)==0 and (data.other_expenses or 0)==0 and (data.tax or 0)==0 ) %}
+  {% if _all_zero %}
+  <div class="alert alert-warning">لا توجد بيانات ضمن الفترة المحددة.</div>
+  {% endif %}
 
   <div class="row g-3">
     <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">الإيرادات</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.revenue) }}</div></div></div>

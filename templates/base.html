@@ -96,6 +96,7 @@
           <img src="/static/logo.svg" alt="logo" style="width:32px;height:32px;"/>
           <span>{{ (settings.company_name if settings and settings.company_name else 'Company') }}</span>
         </a>
+        
         <div class="d-flex align-items-center gap-2">
           {% if current_user.is_authenticated %}
             <span class="me-3 text-muted">{{ _('Welcome') }} {{ current_user.username }}</span>
@@ -143,12 +144,50 @@
     {% endif %}
 
     {% block content %}{% endblock %}
+
+    <!-- Print Modal (iframe-based) -->
+    <div class="modal fade" id="printModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 1200px;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">🖨️ Preview / معاينة الطباعة</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-0" style="height: 80vh;">
+            <iframe id="printFrame" name="printFrame" title="Print Frame" style="border:0; width:100%; height:100%; background:#fff;"></iframe>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            <button type="button" class="btn btn-primary" onclick="try{document.getElementById('printFrame').contentWindow.print()}catch(e){}">طباعة</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}?v={{ ASSET_VERSION }}"></script>
     <script src="{{ url_for('static', filename='js/modal-system.js') }}?v={{ ASSET_VERSION }}"></script>
     <script src="{{ url_for('static', filename='js/printInvoice.js') }}?v={{ ASSET_VERSION }}"></script>
     <script src="{{ url_for('static', filename='js/base-behavior.js') }}?v={{ ASSET_VERSION }}"></script>
 
+    <script>
+      window.openPrintModal = function(url){
+        try{
+          var modal = new bootstrap.Modal(document.getElementById('printModal'));
+          if (url){ document.getElementById('printFrame').src = url; }
+          modal.show();
+        }catch(e){}
+      };
+      window.openPrintModalAndSubmit = function(form){
+        try{
+          form.setAttribute('target','printFrame');
+          document.getElementById('printFrame').src = 'about:blank';
+          var modal = new bootstrap.Modal(document.getElementById('printModal'));
+          modal.show();
+          setTimeout(function(){ form.submit(); }, 50);
+        }catch(e){ form.submit(); }
+        return false;
+      };
+    </script>
     {% block scripts %}{% endblock %}
   </body>
 </html>

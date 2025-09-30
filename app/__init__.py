@@ -131,6 +131,8 @@ def create_app(config_class=None):
     csrf.init_app(app)
     # Exempt API routes from CSRF
     csrf.exempt('main.api_table_layout')
+    # Exempt bulk salary receipt print (HTML POST not sensitive)
+    csrf.exempt('main.salary_receipt_bulk')
     # Flask-Login setup: login view and user loader
     login_manager.login_view = 'main.login'
     from app.models import User
@@ -145,14 +147,27 @@ def create_app(config_class=None):
 
     # تسجيل Blueprints
     from app.routes import main, vat, financials
+    from app.reports.payroll_reports import reports_bp
     app.register_blueprint(main)
     app.register_blueprint(vat)
     app.register_blueprint(financials)
+    app.register_blueprint(reports_bp)
 
     # Ensure tables exist on startup (useful for local SQLite runs)
     try:
         with app.app_context():
             db.create_all()
+            # Lightweight auto-migration for SQLite: add suppliers.payment_method if missing
+            try:
+                from sqlalchemy import text
+                with db.engine.connect() as conn:
+                    cols = conn.execute(text("PRAGMA table_info('suppliers')")).fetchall()
+                    col_names = {str(c[1]).lower() for c in cols}
+                    if 'payment_method' not in col_names:
+                        conn.execute(text("ALTER TABLE suppliers ADD COLUMN payment_method VARCHAR(20) DEFAULT 'CASH'"))
+                        conn.commit()
+            except Exception:
+                pass
             if ext_db is not None:
                 try:
                     ext_db.create_all()

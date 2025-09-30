@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>🧾 Detailed Payroll Report / تقرير الرواتب التفصيلي</title>
+    <style>
+        @page { size: A4; margin: 10mm; }
+        :root { --sheet-width: 210mm; }
+        html, body { height: auto; }
+        body {
+            font-family: "Tahoma", Arial, sans-serif;
+            font-size: 13px;
+            margin: 0;
+            display: grid;
+            place-items: start center;
+            background: #fff;
+        }
+        .sheet { width: var(--sheet-width); margin: 14px auto 18px; background: #fff; }
+        h1, h2, h3 { text-align: center; margin: 6px 0 10px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0 18px 0; }
+        th, td { border: 1px solid #444; padding: 6px 8px; vertical-align: middle; word-break: normal; overflow-wrap: anywhere; font-size: 12.5px; }
+        thead th { background: #f2f2f2; font-weight: 600; }
+        tbody tr:nth-child(even) { background: #fcfcfc; }
+        .totals { font-weight: bold; background: #f9f9f9; }
+        .paid { color: #2e7d32; font-weight: bold; }
+        .partial { color: #b26a00; font-weight: bold; }
+        .due { color: #c62828; font-weight: bold; }
+        .num { direction: ltr; text-align: right; font-variant-numeric: tabular-nums; }
+        .center { text-align: center; }
+        .w-idx { width: 36px; }
+        .w-name { width: 24%; text-align: center; }
+        .w-small { width: 8.5%; }
+        .no-print { width: var(--sheet-width); margin: 8px auto 0; display: flex; gap: 8px; justify-content: flex-end; }
+        .btn { padding: 6px 12px; border: 1px solid #333; background: #f0f0f0; cursor: pointer; }
+        .btn:hover { background: #ddd; }
+        @media print {
+            body { margin: 0; display: block; }
+            .sheet { width: var(--sheet-width); margin: 10mm auto; }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            tr { page-break-inside: avoid; }
+            h1, h2, h3 { page-break-after: avoid; }
+            .no-print { display: none !important; }
+        }
+    </style>
+    {% if auto_print %}
+    <script>
+      window.addEventListener('load', function(){ window.print(); });
+    </script>
+    {% endif %}
+    {% if close_after_print %}
+    <script>
+      window.addEventListener('afterprint', function(){ window.close(); });
+    </script>
+    {% endif %}
+  </head>
+<body>
+
+    <div class="no-print">
+      <button class="btn" onclick="window.print()">🖨️ طباعة</button>
+      <a class="btn" href="{{ url_for('reports.payroll_report', year_from=start_year, month_from=start_month, year_to=end_year, month_to=end_month) }}">⬅︎ رجوع</a>
+      <button class="btn" onclick="window.close()">✖︎ إغلاق</button>
+    </div>
+
+    <div class="sheet">
+    <h1>🧾 Detailed Payroll Report / تقرير الرواتب التفصيلي</h1>
+    <h2>From {{ start_year }}/{{ start_month }} to {{ end_year }}/{{ end_month }} / من {{ start_year }}/{{ start_month }} إلى {{ end_year }}/{{ end_month }}</h2>
+
+
+    {% if mode == "all" or employees|length > 1 %}
+        <!-- تقرير إجمالي -->
+        <table>
+            <thead>
+                <tr>
+                    <th class="w-idx center">#</th>
+                    <th class="w-name center">Employee / الموظف</th>
+                    <th class="w-small center">Unpaid Months / الأشهر غير المدفوعة</th>
+                    <th class="w-small center">Basic / الأساسي</th>
+                    <th class="w-small center">Allowances / البدلات</th>
+                    <th class="w-small center">Deductions / الاستقطاعات</th>
+                    <th class="w-small center">Previous Due / سابقة</th>
+                    <th class="w-small center">Total / الإجمالي</th>
+                    <th class="w-small center">Paid / المدفوع</th>
+                    <th class="w-small center">Remaining / المتبقي</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                <tr>
+                    <td class="center">{{ loop.index }}</td>
+                    <td class="center">{{ emp.name }}</td>
+                    <td class="num">{{ emp.unpaid_months }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.basic_total) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.allowances_total) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.deductions_total) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.prev_due) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.total) }}</td>
+                    <td class="num paid">{{ "%.2f"|format(emp.paid) }}</td>
+                    <td class="num {% if emp.remaining>0 %}due{% else %}paid{% endif %}">{{ "%.2f"|format(emp.remaining) }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="totals">
+                    <td colspan="3" class="center">Grand Totals / الإجماليات</td>
+                    <td class="num">{{ "%.2f"|format(grand.basic) }}</td>
+                    <td class="num">{{ "%.2f"|format(grand.allowances) }}</td>
+                    <td class="num">{{ "%.2f"|format(grand.deductions) }}</td>
+                    <td class="num">{{ "%.2f"|format(grand.prev_due) }}</td>
+                    <td class="num">{{ "%.2f"|format(grand.total) }}</td>
+                    <td class="num paid">{{ "%.2f"|format(grand.paid) }}</td>
+                    <td class="num {% if grand.remaining>0 %}due{% else %}paid{% endif %}">{{ "%.2f"|format(grand.remaining) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    {% elif employees|length == 1 %}
+        <!-- تقرير تفصيلي لموظف واحد -->
+        {% set emp = employees[0] %}
+        <h3>Employee: {{ emp.name }} / الموظف: {{ emp.name }}</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th class="w-idx center">#</th>
+                    <th class="w-name center">Employee / الموظف</th>
+                    <th class="w-small center">Unpaid Months / الأشهر غير المدفوعة</th>
+                    <th class="w-small center">Basic / الأساسي</th>
+                    <th class="w-small center">Allowances / البدلات</th>
+                    <th class="w-small center">Deductions / الاستقطاعات</th>
+                    <th class="w-small center">Previous Due / سابقة</th>
+                    <th class="w-small center">Total / الإجمالي</th>
+                    <th class="w-small center">Paid / المدفوع</th>
+                    <th class="w-small center">Remaining / المتبقي</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="center">1</td>
+                    <td class="center">{{ emp.name }}</td>
+                    <td class="num">{{ emp.unpaid_months }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.basic_total) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.allowances_total) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.deductions_total) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.prev_due) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.total) }}</td>
+                    <td class="num paid">{{ "%.2f"|format(emp.paid) }}</td>
+                    <td class="num {% if emp.remaining>0 %}due{% else %}paid{% endif %}">{{ "%.2f"|format(emp.remaining) }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>📅 Monthly Details / التفاصيل الشهرية</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th class="w-small center">Year / السنة</th>
+                    <th class="w-small center">Month / الشهر</th>
+                    <th class="w-small center">Basic / الأساسي</th>
+                    <th class="w-small center">Allowances / البدلات</th>
+                    <th class="w-small center">Deductions / الاستقطاعات</th>
+                    <th class="w-small center">Previous Due / سابقة</th>
+                    <th class="w-small center">Total / الإجمالي</th>
+                    <th class="w-small center">Paid / المدفوع</th>
+                    <th class="w-small center">Remaining / المتبقي</th>
+                    <th class="w-small center">Status / الحالة</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in emp.months %}
+                <tr>
+                    <td class="center">{{ row.year }}</td>
+                    <td class="center">{{ row.month }}</td>
+                    <td class="num">{{ "%.2f"|format(row.basic) }}</td>
+                    <td class="num">{{ "%.2f"|format(row.allowances) }}</td>
+                    <td class="num">{{ "%.2f"|format(row.deductions) }}</td>
+                    <td class="num">{{ "%.2f"|format(row.prev_due) }}</td>
+                    <td class="num">{{ "%.2f"|format(row.total) }}</td>
+                    <td class="num paid">{{ "%.2f"|format(row.paid) }}</td>
+                    <td class="num {% if row.remaining>0 %}due{% else %}paid{% endif %}">{{ "%.2f"|format(row.remaining) }}</td>
+                    <td class="center {% if row.status == 'paid' %}paid{% elif row.status == 'partial' %}partial{% else %}due{% endif %}">
+                        {% if row.status == 'paid' %}paid / مدفوع{% elif row.status == 'partial' %}partial / جزئي{% else %}due / مستحق{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                <tr class="totals">
+                    <td colspan="2" class="center">Totals / الإجماليات</td>
+                    <td class="num">{{ "%.2f"|format(emp.basic_total) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.allowances_total) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.deductions_total) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.prev_due) }}</td>
+                    <td class="num">{{ "%.2f"|format(emp.total) }}</td>
+                    <td class="num paid">{{ "%.2f"|format(emp.paid) }}</td>
+                    <td class="num {% if emp.remaining>0 %}due{% else %}paid{% endif %}">{{ "%.2f"|format(emp.remaining) }}</td>
+                    <td class="center">-</td>
+                </tr>
+            </tbody>
+        </table>
+            {% endif %}
+
+            <script>
+              function syncSelected(){
+                // build CSV into hidden input in the POST form
+                const ids = Array.from(document.querySelectorAll('.emp-check:checked')).map(i=>i.value);
+                const frm = document.querySelector('form[action$="/payroll/report/selected"]');
+                if(!frm) return;
+                let hidden = frm.querySelector('input[name="employee_ids"]');
+                if(!hidden){ hidden = document.createElement('input'); hidden.type='hidden'; hidden.name='employee_ids'; frm.appendChild(hidden); }
+                hidden.value = ids.join(',');
+              }
+            </script>
+
+    </div>
+</body>
+</html>
+

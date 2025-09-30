@@ -6,17 +6,30 @@
 
   <form method="get" class="row g-2 align-items-end mb-3">
     <div class="col-auto">
+      <label>نوع الفترة</label>
+      <select name="period" class="form-select" id="periodSelect">
+        <option value="quarterly" {% if (data.period or 'quarterly')=='quarterly' %}selected{% endif %}>ربع سنوي</option>
+        <option value="monthly" {% if data.period=='monthly' %}selected{% endif %}>شهري</option>
+      </select>
+    </div>
+    <div class="col-auto">
       <label>السنة</label>
       <input type="number" name="year" class="form-control" value="{{ data.year }}">
     </div>
     <div class="col-auto">
-      <label>الربع</label>
-      <select name="quarter" class="form-select">
-        <option value="1" {% if data.quarter==1 %}selected{% endif %}>الربع 1 (يناير - مارس)</option>
-        <option value="2" {% if data.quarter==2 %}selected{% endif %}>الربع 2 (أبريل - يونيو)</option>
-        <option value="3" {% if data.quarter==3 %}selected{% endif %}>الربع 3 (يوليو - سبتمبر)</option>
-        <option value="4" {% if data.quarter==4 %}selected{% endif %}>الربع 4 (أكتوبر - ديسمبر)</option>
-      </select>
+      <div id="quarterGroup">
+        <label>الربع</label>
+        <select name="quarter" class="form-select">
+          <option value="1" {% if data.quarter==1 %}selected{% endif %}>الربع 1 (يناير - مارس)</option>
+          <option value="2" {% if data.quarter==2 %}selected{% endif %}>الربع 2 (أبريل - يونيو)</option>
+          <option value="3" {% if data.quarter==3 %}selected{% endif %}>الربع 3 (يوليو - سبتمبر)</option>
+          <option value="4" {% if data.quarter==4 %}selected{% endif %}>الربع 4 (أكتوبر - ديسمبر)</option>
+        </select>
+      </div>
+      <div id="monthGroup" style="display:none">
+        <label>الشهر</label>
+        <input type="month" name="month" class="form-control" value="">
+      </div>
     </div>
     <div class="col-auto">
       <label>الفرع</label>
@@ -30,60 +43,127 @@
       <button class="btn btn-primary">عرض</button>
     </div>
     <div class="col-auto">
-      <a href="{{ url_for('vat.vat_print') }}?year={{ data.year }}&quarter={{ data.quarter }}&branch={{ data.branch or 'all' }}" class="btn btn-success" target="_blank">طباعة الإقرار للربع</a>
-      <a href="{{ url_for('vat.vat_print') }}?year={{ data.year }}&quarter={{ data.quarter }}&branch={{ data.branch or 'all' }}&format=csv" class="btn btn-outline-success" target="_blank">تصدير CSV</a>
+      <a id="printLink" href="#" class="btn btn-success" target="_blank">طباعة</a>
+      <a id="csvLink" href="#" class="btn btn-outline-success" target="_blank">تصدير CSV</a>
     </div>
   </form>
 
   <div class="row g-3">
-    <div class="col-md-4">
-      <div class="card p-3">
-        <h6>إجمالي المبيعات - Place India</h6>
-        <h4>{{ data.sales_place_india | round(2) }}</h4>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card p-3">
-        <h6>إجمالي المبيعات - China Town</h6>
-        <h4>{{ data.sales_china_town | round(2) }}</h4>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card p-3">
-        <h6>الإجمالي الكلي للمبيعات</h6>
-        <h4>{{ data.sales_total | round(2) }}</h4>
+    <div class="col-12">
+      <div class="card p-3 d-flex justify-content-between align-items-center">
+        <div>
+          <div class="fw-bold">{{ data.company_name or 'Company' }}</div>
+          <div class="text-muted small">VAT: {{ data.tax_number or '-' }}</div>
+        </div>
+        <div class="text-end small">
+          <div>Period: {{ data.start_date }} → {{ data.end_date }}</div>
+        </div>
       </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-12">
       <div class="card p-3">
-        <h6>إجمالي المشتريات قبل الضريبة</h6>
-        <h4>{{ data.purchases_total | round(2) }}</h4>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card p-3">
-        <h6>إجمالي المصروفات قبل الضريبة</h6>
-        <h4>{{ data.expenses_total | round(2) }}</h4>
+        <h6 class="mb-2">Sales</h6>
+        <div class="table-responsive">
+          <table class="table table-bordered table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Type</th>
+                <th class="text-end">Amount (excl. VAT)</th>
+                <th class="text-end">VAT</th>
+                <th class="text-end">Total (incl. VAT)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set rate = (data.vat_rate or 0)|float %}
+              {% set s_std_base = (data.sales_standard_base or 0)|float %}
+              {% set s_std_vat = (data.output_vat or 0)|float %}
+              {% set s_std_total = s_std_base + s_std_vat %}
+              <tr>
+                <td>Standard Rated (15%)</td>
+                <td class="text-end">{{ '%.2f'|format(s_std_base) }}</td>
+                <td class="text-end">{{ '%.2f'|format(s_std_vat) }}</td>
+                <td class="text-end">{{ '%.2f'|format(s_std_total) }}</td>
+              </tr>
+              <tr>
+                <td>Zero Rated</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_zero_base or 0)|float) }}</td>
+                <td class="text-end">0.00</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_zero_base or 0)|float) }}</td>
+              </tr>
+              <tr>
+                <td>Exempt</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_exempt_base or 0)|float) }}</td>
+                <td class="text-end">-</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_exempt_base or 0)|float) }}</td>
+              </tr>
+              <tr>
+                <td>Exports</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_exports_base or 0)|float) }}</td>
+                <td class="text-end">0.00</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_exports_base or 0)|float) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-12">
       <div class="card p-3">
-        <h6>إجمالي ضريبة المخرجات (Output VAT)</h6>
-        <h4>{{ data.output_vat | round(2) }}</h4>
+        <h6 class="mb-2">Purchases & Expenses</h6>
+        <div class="table-responsive">
+          <table class="table table-bordered table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Type</th>
+                <th class="text-end">Amount (excl. VAT)</th>
+                <th class="text-end">VAT</th>
+                <th class="text-end">Total (incl. VAT)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set p_deduct_base = (data.purchases_deductible_base or 0)|float %}
+              {% set p_non_base = (data.purchases_non_deductible_base or 0)|float %}
+              {% set input_vat = (data.input_vat or 0)|float %}
+              <tr>
+                <td>Deductible Purchases</td>
+                <td class="text-end">{{ '%.2f'|format(p_deduct_base) }}</td>
+                <td class="text-end">{{ '%.2f'|format(input_vat) }}</td>
+                <td class="text-end">{{ '%.2f'|format(p_deduct_base + input_vat) }}</td>
+              </tr>
+              <tr>
+                <td>Non-deductible Purchases</td>
+                <td class="text-end">{{ '%.2f'|format(p_non_base) }}</td>
+                <td class="text-end">-</td>
+                <td class="text-end">{{ '%.2f'|format(p_non_base) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-    <div class="col-md-4">
+
+    <div class="col-12">
       <div class="card p-3">
-        <h6>إجمالي ضريبة المدخلات (Input VAT)</h6>
-        <h4>{{ data.input_vat | round(2) }}</h4>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card p-3">
-        <h6>صافي الضريبة (Output - Input)</h6>
-        <h4>{{ data.net_vat | round(2) }}</h4>
+        <h6 class="mb-2">Summary</h6>
+        {% set out_v = (data.output_vat or 0)|float %}
+        {% set in_v  = (data.input_vat or 0)|float %}
+        {% set net_v = (out_v - in_v)|float %}
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="border rounded p-2">Output VAT: <strong>{{ '%.2f'|format(out_v) }}</strong></div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-2">Input VAT: <strong>{{ '%.2f'|format(in_v) }}</strong></div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-2">
+              Net VAT Payable: <strong>{{ '%.2f'|format(net_v) }}</strong>
+              {% if net_v < 0 %}<span class="badge bg-info ms-2">رصيد مسترد</span>{% endif %}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -92,4 +172,46 @@
     <small>الفترة: {{ data.start_date }} إلى {{ data.end_date }}</small>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const sel = document.getElementById('periodSelect');
+  const qg = document.getElementById('quarterGroup');
+  const mg = document.getElementById('monthGroup');
+  function setVisibility(){
+    const v = sel.value;
+    if(v==='monthly'){ qg.style.display='none'; mg.style.display='block'; }
+    else { qg.style.display='block'; mg.style.display='none'; }
+  }
+  function buildLinks(){
+    const v = sel.value;
+    const year = document.querySelector('input[name="year"]').value || '{{ data.year }}';
+    const quarter = document.querySelector('select[name="quarter"]').value || '{{ data.quarter }}';
+    const month = document.querySelector('input[name="month"]').value;
+    const branch = document.querySelector('select[name="branch"]').value || '{{ data.branch or "all" }}';
+    function build(base){
+      const p = new URLSearchParams();
+      p.set('period', v);
+      p.set('branch', branch);
+      if(v==='monthly'){ if(month) p.set('month', month); }
+      else { p.set('year', year); p.set('quarter', quarter); }
+      return base + '?' + p.toString();
+    }
+    const printLink = document.getElementById('printLink');
+    const csvLink = document.getElementById('csvLink');
+    if(printLink){ printLink.href = build('{{ url_for('vat.vat_print') }}'); }
+    if(csvLink){ csvLink.href = build('{{ url_for('vat.vat_print') }}') + '&format=csv'; }
+  }
+  document.addEventListener('change', function(e){
+    if(e.target && (e.target.id==='periodSelect' || e.target.name==='year' || e.target.name==='quarter' || e.target.name==='month' || e.target.name==='branch')){
+      setVisibility();
+      buildLinks();
+    }
+  });
+  setVisibility();
+  buildLinks();
+})();
+</script>
 {% endblock %}

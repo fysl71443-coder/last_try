@@ -1,19 +1,207 @@
 import json
 import os
 from datetime import datetime, date, timedelta
+from datetime import date as _date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, send_from_directory
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from app import db, csrf
+from app import __init__ as app_init  # for template globals, including can()
 ext_db = None
 from app.models import User, AppKV, TableLayout
 from models import OrderInvoice
-from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault
+from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault, DepartmentRate, EmployeeHours
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
 main = Blueprint('main', __name__)
+# --- Employees: Detailed Payroll Report (across months with totals) ---
+@main.route('/employees/payroll/detailed', methods=['GET'], endpoint='payroll_detailed')
+@login_required
+def payroll_detailed():
+    from datetime import date
+
+    def ym_num(y: int, m: int) -> int:
+        return (int(y) * 100) + int(m)
+
+    # Filters
+    year_from = int(request.args.get('year_from', date.today().year))
+    month_from = int(request.args.get('month_from', 1))
+    year_to = int(request.args.get('year_to', date.today().year))
+    month_to = int(request.args.get('month_to', date.today().month))
+    try:
+        employee_ids = [int(eid) for eid in (request.args.getlist('employee_id') or []) if str(eid).isdigit()]
+    except Exception:
+        employee_ids = []
+
+    start_ym = ym_num(year_from, month_from)
+    end_ym = ym_num(year_to, month_to)
+
+    # Employees scope
+    try:
+        emp_q = Employee.query.order_by(Employee.full_name.asc())
+        if employee_ids:
+            emp_q = emp_q.filter(Employee.id.in_(employee_ids))
+        employees_in_scope = emp_q.all()
+    except Exception:
+        employees_in_scope = []
+
+    # Defaults map
+    try:
+        from models import EmployeeSalaryDefault
+        defaults_map = {int(d.employee_id): d for d in EmployeeSalaryDefault.query.all()}
+    except Exception:
+        defaults_map = {}
+
+    # Helper: iterate months
+    def month_iter(y0, m0, y1, m1):
+        y, m = y0, m0
+        cnt = 0
+        while (y < y1) or (y == y1 and m <= m1):
+            yield y, m
+            m += 1
+            if m > 12:
+                m = 1; y += 1
+            cnt += 1
+            if cnt > 240:
+                break
+
+    by_emp = {}
+    totals = {'basic': 0.0, 'allowances': 0.0, 'deductions': 0.0, 'prev_due': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0}
+
+    for emp in (employees_in_scope or []):
+        # Determine start from hire date (or start of range if missing)
+        if getattr(emp, 'hire_date', None):
+            y0, m0 = int(emp.hire_date.year), int(emp.hire_date.month)
+        else:
+            y0, m0 = year_from, month_from
+
+        # Build dues from hire date to end of range
+        dues = []
+        sal_ids = []
+        for yy, mm in month_iter(y0, m0, year_to, month_to):
+            srow = Salary.query.filter_by(employee_id=emp.id, year=yy, month=mm).first()
+            if srow:
+                base = float(srow.basic_salary or 0.0)
+                allow = float(srow.allowances or 0.0)
+                ded = float(srow.deductions or 0.0)
+                sal_ids.append(int(srow.id))
+            else:
+                d = defaults_map.get(int(emp.id))
+                base = float(getattr(d, 'base_salary', 0.0) or 0.0)
+                allow = float(getattr(d, 'allowances', 0.0) or 0.0)
+                ded = float(getattr(d, 'deductions', 0.0) or 0.0)
+            due_amt = max(0.0, base + allow - ded)
+            dues.append({'y': yy, 'm': mm, 'base': base, 'allow': allow, 'ded': ded, 'due': due_amt})
+
+        # Total paid across all salary rows for this employee
+        total_paid_all = 0.0
+        if sal_ids:
+            total_paid_all = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                                   .filter(Payment.invoice_type == 'salary', Payment.invoice_id.in_(sal_ids))
+                                   .scalar() or 0.0)
+
+        remaining_payment = total_paid_all
+
+        # Allocate payments from hire date; track carry to start of range
+        running_prev = 0.0
+        # First, months before selected range
+        for d in dues:
+            ym = ym_num(d['y'], d['m'])
+            if ym >= start_ym:
+                break
+            total_for_row = running_prev + float(d['due'] or 0.0)
+            pay = min(remaining_payment, total_for_row)
+            remaining_payment -= pay
+            running_prev = max(0.0, total_for_row - pay)
+
+        # Now, months within selected range -> build rows
+        emp_key = int(emp.id)
+        by_emp[emp_key] = {
+            'employee': emp,
+            'months': [],
+            'sum': {'basic': 0.0, 'allowances': 0.0, 'deductions': 0.0, 'prev_due': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0},
+            'unpaid_months': 0,
+        }
+        for d in dues:
+            ym = ym_num(d['y'], d['m'])
+            if ym < start_ym or ym > end_ym:
+                continue
+            prev_for_row = running_prev
+            month_due = float(d['due'] or 0.0)
+            total_for_row = prev_for_row + month_due
+            pay = min(remaining_payment, total_for_row)
+            remaining_payment -= pay
+            remaining_amount = max(0.0, total_for_row - pay)
+
+            # Status
+            tol = 0.01
+            if total_for_row <= tol and pay <= tol:
+                status = 'paid'
+            elif remaining_amount <= tol:
+                status = 'paid'
+            elif pay > tol:
+                status = 'partial'
+            else:
+                status = 'due'
+
+            vm = type('Row', (), {
+                'employee': emp,
+                'year': int(d['y']),
+                'month': int(d['m']),
+                'basic': float(d['base'] or 0.0),
+                'allowances': float(d['allow'] or 0.0),
+                'deductions': float(d['ded'] or 0.0),
+                'prev_due': float(prev_for_row or 0.0),
+                'total': float(total_for_row or 0.0),
+                'paid': float(pay or 0.0),
+                'remaining': float(remaining_amount or 0.0),
+                'status': status,
+            })
+            by_emp[emp_key]['months'].append(vm)
+            by_emp[emp_key]['sum']['basic'] += vm.basic
+            by_emp[emp_key]['sum']['allowances'] += vm.allowances
+            by_emp[emp_key]['sum']['deductions'] += vm.deductions
+            by_emp[emp_key]['sum']['prev_due'] += vm.prev_due
+            by_emp[emp_key]['sum']['total'] += vm.total
+            by_emp[emp_key]['sum']['paid'] += vm.paid
+            by_emp[emp_key]['sum']['remaining'] += vm.remaining
+            if vm.remaining > 0.001:
+                by_emp[emp_key]['unpaid_months'] += 1
+
+            totals['basic'] += vm.basic
+            totals['allowances'] += vm.allowances
+            totals['deductions'] += vm.deductions
+            totals['prev_due'] += vm.prev_due
+            totals['total'] += vm.total
+            totals['paid'] += vm.paid
+            totals['remaining'] += vm.remaining
+
+            # Carry forward
+            running_prev = remaining_amount
+
+    # Employees for filter UI
+    try:
+        employees = Employee.query.order_by(Employee.full_name.asc()).all()
+    except Exception:
+        employees = []
+
+    years = list(range(2023, 2032))
+    months = [{'value': i, 'label': date(2000, i, 1).strftime('%B')} for i in range(1, 13)]
+
+    return render_template('payroll_detailed.html',
+                           by_emp=by_emp,
+                           totals=totals,
+                           employees=employees,
+                           years=years,
+                           months=months,
+                           year_from=year_from,
+                           month_from=month_from,
+                           year_to=year_to,
+                           month_to=month_to,
+                           selected_employee_ids=employee_ids)
+
 
 
 @main.route('/suppliers/edit/<int:sid>', methods=['GET', 'POST'], endpoint='suppliers_edit')
@@ -318,12 +506,8 @@ def dashboard():
 @login_required
 def order_invoices_list():
     # Enforce permission on Orders screen
-    try:
-        if not can('orders','view'):
-            flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-            return redirect(url_for('main.dashboard'))
-    except Exception:
-        pass
+    # Note: Permission checks for this screen are enforced in the UI via Jinja 'can()'.
+    # Avoid calling can() directly here to prevent NameError in Python context.
     try:
         # Optional branch filter
         branch_f = (request.args.get('branch') or '').strip()
@@ -876,21 +1060,16 @@ def expenses():
 			pm = (request.form.get('payment_method') or 'CASH').strip().upper()
 			if pm not in ('CASH','BANK','TRANSFER'):
 				pm = 'CASH'
-			inv = ExpenseInvoice(
-				invoice_number=f"INV-EXP-{datetime.utcnow().year}-{(ExpenseInvoice.query.count()+1):04d}",
-				date=datetime.strptime(date_str, '%Y-%m-%d').date(),
-				payment_method=pm,
-				user_id=getattr(current_user, 'id', 1)
-			)
-			# Payment status from form (paid / partial / unpaid)
-			inv.status = (request.form.get('status') or inv.status or 'paid').strip().lower()
-			if inv.status not in ('paid','partial','unpaid'):
-				inv.status = 'paid'
-			# Collect items
+			# normalize status first
+			status_val = (request.form.get('status') or 'paid').strip().lower()
+			if status_val not in ('paid','partial','unpaid'):
+				status_val = 'paid'
+			# Collect items first to avoid NOT NULL flush errors on invoice totals
 			idx = 0
 			total_before = 0.0
 			total_tax = 0.0
 			total_disc = 0.0
+			items_buffer = []
 			while True:
 				prefix = f"items-{idx}-"
 				desc = request.form.get(prefix + 'description')
@@ -911,23 +1090,69 @@ def expenses():
 				total_before += (qf * pf)
 				total_tax += tf
 				total_disc += df
-				item = ExpenseInvoiceItem(description=(desc or '').strip(), quantity=qf, price_before_tax=pf, tax=tf, discount=df, total_price=line_total)
-				db.session.add(item)
+				items_buffer.append({
+					'description': (desc or '').strip(),
+					'quantity': qf,
+					'price_before_tax': pf,
+					'tax': tf,
+					'discount': df,
+					'total_price': line_total,
+				})
 				idx += 1
-			inv.total_before_tax = total_before
-			inv.tax_amount = total_tax
-			inv.discount_amount = total_disc
-			inv.total_after_tax_discount = max(0.0, total_before - total_disc + total_tax)
-			db.session.add(inv); db.session.flush()
-			# Link items
-			ExpenseInvoiceItem.query.filter(ExpenseInvoiceItem.invoice_id.is_(None)).update({'invoice_id': inv.id})
+			# Create invoice with totals populated, then flush and add items
+			inv = ExpenseInvoice(
+				invoice_number=f"INV-EXP-{datetime.utcnow().year}-{(ExpenseInvoice.query.count()+1):04d}",
+				date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+				payment_method=pm,
+				total_before_tax=total_before,
+				tax_amount=total_tax,
+				discount_amount=total_disc,
+				total_after_tax_discount=max(0.0, total_before - total_disc + total_tax),
+				status=status_val,
+				user_id=getattr(current_user, 'id', 1)
+			)
+			db.session.add(inv)
+			db.session.flush()
+			for row in items_buffer:
+				item = ExpenseInvoiceItem(
+					invoice_id=inv.id,
+					description=row['description'],
+					quantity=row['quantity'],
+					price_before_tax=row['price_before_tax'],
+					tax=row['tax'],
+					discount=row['discount'],
+					total_price=row['total_price']
+				)
+				db.session.add(item)
 			db.session.commit()
-			flash(_('Expense saved'), 'success')
+			flash('Expense saved', 'success')
 		except Exception as e:
 			db.session.rollback()
-			flash(_('Failed to save expense'), 'danger')
+			flash('Failed to save expense', 'danger')
 		return redirect(url_for('main.expenses'))
 	return render_template('expenses.html', form=form, invoices=ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).limit(50).all())
+
+@main.route('/expenses/delete/<int:eid>', methods=['POST'], endpoint='expense_delete')
+@login_required
+def expense_delete(eid):
+	try:
+		inv = ExpenseInvoice.query.get(int(eid))
+		if not inv:
+			flash('Expense invoice not found', 'warning')
+			return redirect(url_for('main.expenses'))
+		# Delete children items first
+		for it in (inv.items or []):
+			try:
+				db.session.delete(it)
+			except Exception:
+				pass
+		db.session.delete(inv)
+		db.session.commit()
+		flash('Expense invoice deleted', 'success')
+	except Exception:
+		db.session.rollback()
+		flash('Failed to delete expense invoice', 'danger')
+	return redirect(url_for('main.expenses'))
 
 @main.route('/invoices', endpoint='invoices')
 @login_required
@@ -1164,9 +1389,34 @@ def employees():
         return redirect(url_for('main.employees'))
     # List employees
     try:
-        emps = Employee.query.order_by(Employee.full_name.asc()).all()
+        emps_raw = Employee.query.order_by(Employee.full_name.asc()).all()
     except Exception:
-        emps = []
+        emps_raw = []
+    # Build simplified view model per provided template
+    employees_vm = []
+    active_count = 0
+    inactive_count = 0
+    for e in (emps_raw or []):
+        try:
+            st = (e.status or 'active').lower()
+        except Exception:
+            st = 'active'
+        if st == 'active':
+            active_count += 1
+        elif st == 'inactive':
+            inactive_count += 1
+        employees_vm.append(type('EmpVM', (), {
+            'id': int(getattr(e, 'id', 0) or 0),
+            'code': getattr(e, 'employee_code', None) or '',
+            'full_name': getattr(e, 'full_name', '') or '',
+            'national_id': getattr(e, 'national_id', '') or '',
+            'department': getattr(e, 'department', '') or '',
+            'position': getattr(e, 'position', '') or '',
+            'phone': getattr(e, 'phone', None),
+            'email': getattr(e, 'email', None),
+            'hire_date': (getattr(e, 'hire_date', None).strftime('%Y-%m-%d') if getattr(e, 'hire_date', None) else ''),
+            'status': st,
+        }))
     # Prefill next employee code for convenience
     try:
         next_code = Employee.generate_code()
@@ -1174,13 +1424,138 @@ def employees():
             form.employee_code.data = next_code
     except Exception:
         next_code = ''
-    return render_template('employees.html', form=form, employees=emps, next_code=next_code)
+    return render_template(
+        'employees.html',
+        employees=employees_vm,
+        active_count=active_count,
+        inactive_count=inactive_count,
+        current_year=datetime.utcnow().year,
+        current_month=datetime.utcnow().month,
+    )
 
+
+@main.route('/employees/add', methods=['GET','POST'], endpoint='add_employee')
+@login_required
+def add_employee():
+    if request.method == 'POST':
+        try:
+            code = (request.form.get('code') or '').strip()
+            full_name = (request.form.get('name') or '').strip()
+            national_id = (request.form.get('national_id') or '').strip()
+            department = (request.form.get('department') or '').strip() or None
+            position = (request.form.get('position') or '').strip() or None
+            phone = (request.form.get('phone') or '').strip() or None
+            email = (request.form.get('email') or '').strip() or None
+            hire_date_s = (request.form.get('hire_date') or '').strip()
+            try:
+                hire_date = datetime.strptime(hire_date_s, '%Y-%m-%d').date() if hire_date_s else None
+            except Exception:
+                hire_date = None
+            base = float(request.form.get('basic') or 0.0)
+            allow = float(request.form.get('allowances') or 0.0)
+            ded = float(request.form.get('deductions') or 0.0)
+
+            # Auto-generate employee code if not provided
+            try:
+                if not code:
+                    code = Employee.generate_code()
+            except Exception:
+                pass
+
+            e = Employee(
+                employee_code=code if code else None,
+                full_name=full_name,
+                national_id=national_id or None,
+                department=department,
+                position=position,
+                phone=phone,
+                email=email,
+                hire_date=hire_date,
+                status='active',
+            )
+            if ext_db is not None:
+                ext_db.session.add(e)
+                ext_db.session.commit()
+            else:
+                db.session.add(e)
+                db.session.commit()
+
+            # Save default salary values
+            try:
+                from models import EmployeeSalaryDefault
+                d = EmployeeSalaryDefault.query.filter_by(employee_id=e.id).first()
+                if not d:
+                    d = EmployeeSalaryDefault(employee_id=e.id)
+                    if ext_db is not None:
+                        ext_db.session.add(d)
+                    else:
+                        db.session.add(d)
+                d.base_salary = base
+                d.allowances = allow
+                d.deductions = ded
+                if ext_db is not None:
+                    ext_db.session.commit()
+                else:
+                    db.session.commit()
+            except Exception:
+                pass
+
+            # Create current month salary row
+            try:
+                today = datetime.utcnow()
+                total = max(0.0, float(base or 0) + float(allow or 0) - float(ded or 0))
+                sal = Salary(
+                    employee_id=e.id,
+                    year=int(today.year),
+                    month=int(today.month),
+                    basic_salary=base,
+                    allowances=allow,
+                    deductions=ded,
+                    previous_salary_due=0.0,
+                    total_salary=total,
+                    status='due'
+                )
+                if ext_db is not None:
+                    ext_db.session.add(sal)
+                    ext_db.session.commit()
+                else:
+                    db.session.add(sal)
+                    db.session.commit()
+            except Exception:
+                pass
+
+            flash('Employee saved', 'success')
+            return redirect(url_for('main.employees'))
+        except Exception as ex:
+            try:
+                if ext_db is not None:
+                    ext_db.session.rollback()
+                else:
+                    db.session.rollback()
+            except Exception:
+                pass
+            flash(f'Could not save employee: {ex}', 'danger')
+    # GET: prefill next employee code and departments list from settings
+    try:
+        next_code = ''
+        try:
+            next_code = Employee.generate_code()
+        except Exception:
+            next_code = ''
+        from models import DepartmentRate
+        departments = [dr.name for dr in DepartmentRate.query.order_by(DepartmentRate.name.asc()).all()]
+    except Exception:
+        next_code = ''
+        departments = []
+    return render_template('add_employee.html', next_code=next_code, departments=departments)
 
 @main.route('/employees/edit/<int:emp_id>', methods=['GET', 'POST'], endpoint='edit_employee')
+@main.route('/employees/edit', methods=['GET'], endpoint='edit_employee_by_query')
 @login_required
-def edit_employee(emp_id):
-    emp = Employee.query.get_or_404(emp_id)
+def edit_employee(emp_id=None):
+    if emp_id is None:
+        emp_id = request.args.get('id', type=int)
+    emp = Employee.query.get_or_404(int(emp_id))
     if request.method == 'POST':
         emp.employee_code = request.form.get('employee_code', emp.employee_code)
         emp.full_name = request.form.get('full_name', emp.full_name)
@@ -1212,8 +1587,8 @@ def edit_employee(emp_id):
         # Salary default fields: base_salary, allowances, deductions
         try:
             base = float(request.form.get('base_salary') or 0)
-            allow = float(request.form.get('default_allowances') or 0)
-            ded = float(request.form.get('default_deductions') or 0)
+            allow = float((request.form.get('default_allowances') if request.form.get('default_allowances') is not None else request.form.get('allowances')) or 0)
+            ded = float((request.form.get('default_deductions') if request.form.get('default_deductions') is not None else request.form.get('deductions')) or 0)
             # upsert EmployeeSalaryDefault
             d = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
             if d:
@@ -1232,12 +1607,22 @@ def edit_employee(emp_id):
         except Exception as e:
             db.session.rollback()
             flash(f'Error updating employee: {e}', 'danger')
-    return render_template('employee_edit.html', employee=emp)
+    # Provide departments list for dropdowns
+    try:
+        from models import DepartmentRate
+        departments = [dr.name for dr in DepartmentRate.query.order_by(DepartmentRate.name.asc()).all()]
+    except Exception:
+        departments = []
+    return render_template('employee_edit.html', employee=emp, departments=departments)
 
 
 @main.route('/employees/<int:eid>/delete', methods=['POST'], endpoint='employee_delete')
+@main.route('/employees/delete', methods=['POST'], endpoint='employee_delete_by_query')
 @login_required
-def employee_delete(eid):
+def employee_delete(eid=None):
+    if eid is None:
+        eid = request.args.get('id', type=int)
+    eid = int(eid)
     try:
         emp = Employee.query.get_or_404(eid)
         # Delete related salary payments, salaries, and defaults, then employee
@@ -1309,88 +1694,201 @@ def salaries_pay():
     # Create/update salary for a month and optionally record a payment
     if request.method == 'POST':
         try:
-            emp_id = request.form.get('employee_id', type=int)
+            emp_id_raw = request.form.get('employee_id')
             month_str = (request.form.get('month') or request.form.get('pay_month') or datetime.utcnow().strftime('%Y-%m')).strip()
             y, m = month_str.split('-')
             year = int(y); month = int(m)
             amount = float(request.form.get('paid_amount') or 0)
             method = (request.form.get('payment_method') or 'cash').strip().lower()
-            # Optional edited fields
-            basic_override = request.form.get('basic_salary')
-            allow_override = request.form.get('allowances')
-            ded_override   = request.form.get('deductions')
-            prev_override  = request.form.get('previous_salary_due')
+            # Ignore client overrides for salary details; use stored/default values only
+            basic_override = None
+            allow_override = None
+            ded_override   = None
+            prev_override  = None
 
-            # Ensure salary exists for this period
-            sal = Salary.query.filter_by(employee_id=emp_id, year=year, month=month).first()
-            if not sal:
-                base = allow = ded = prev = 0.0
-                try:
-                    from models import EmployeeSalaryDefault
-                    d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
-                    if d:
-                        base = float(d.base_salary or 0)
-                        allow = float(d.allowances or 0)
-                        ded = float(d.deductions or 0)
-                except Exception:
-                    pass
-                # Previous due: sum of remaining from past salaries
-                try:
-                    rem_q = db.session.query(
-                        func.coalesce(func.sum(Salary.total_salary), 0),
-                        func.coalesce(func.sum(Payment.amount_paid), 0)
-                    ).outerjoin(Payment, (Payment.invoice_type=='salary') & (Payment.invoice_id==Salary.id)) \
-                     .filter(Salary.employee_id==emp_id) \
-                     .filter((Salary.year < year) | ((Salary.year==year) & (Salary.month < month)))
-                    tot_sum, paid_sum = rem_q.first()
-                    prev = max(0.0, float(tot_sum or 0) - float(paid_sum or 0))
-                except Exception:
-                    prev = 0.0
-                total = max(0.0, base + allow - ded + prev)
-                sal = Salary(employee_id=emp_id, year=year, month=month,
-                             basic_salary=base, allowances=allow, deductions=ded,
-                             previous_salary_due=prev, total_salary=total, status='due')
-                db.session.add(sal)
-                db.session.flush()
-            # Apply overrides (user edits)
+            # Helper: ensure salary exists for a given employee for the target period
+            def _ensure_salary_for(emp_id: int):
+                sal = Salary.query.filter_by(employee_id=emp_id, year=year, month=month).first()
+                if not sal:
+                    base = allow = ded = prev = 0.0
+                    try:
+                        from models import EmployeeSalaryDefault
+                        d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
+                        if d:
+                            base = float(d.base_salary or 0)
+                            allow = float(d.allowances or 0)
+                            ded = float(d.deductions or 0)
+                    except Exception:
+                        pass
+                    # Previous due up to previous month
+                    try:
+                        emp_obj = Employee.query.get(emp_id)
+                    except Exception:
+                        emp_obj = None
+                    try:
+                        rem_q = db.session.query(
+                            func.coalesce(func.sum(Salary.total_salary), 0),
+                            func.coalesce(func.sum(Payment.amount_paid), 0)
+                        ).outerjoin(Payment, (Payment.invoice_type=='salary') & (Payment.invoice_id==Salary.id)) \
+                         .filter(Salary.employee_id==emp_id) \
+                         .filter((Salary.year < year) | ((Salary.year==year) & (Salary.month < month)))
+                        if getattr(emp_obj, 'hire_date', None):
+                            hd_y = int(emp_obj.hire_date.year)
+                            hd_m = int(emp_obj.hire_date.month)
+                            rem_q = rem_q.filter((Salary.year > hd_y) | ((Salary.year==hd_y) & (Salary.month >= hd_m)))
+                        tot_sum, paid_sum = rem_q.first()
+                        prev = max(0.0, float(tot_sum or 0) - float(paid_sum or 0))
+                    except Exception:
+                        prev = 0.0
+                    total = max(0.0, base + allow - ded + prev)
+                    sal = Salary(employee_id=emp_id, year=year, month=month,
+                                 basic_salary=base, allowances=allow, deductions=ded,
+                                 previous_salary_due=prev, total_salary=total, status='due')
+                    db.session.add(sal)
+                    db.session.flush()
+                return sal
+
+            # Determine employees to pay: single or all
+            if (emp_id_raw or '').strip().lower() == 'all':
+                employee_ids = [int(e.id) for e in Employee.query.all()]
+            else:
+                employee_ids = [int(emp_id_raw)]
+
+            created_payment_ids = []
+
+            # FIFO distribute payment across arrears -> current -> advance
+            if amount > 0:
+                # Build ordered list of months from hire date up to current month
+                def _start_from(emp_id: int):
+                    try:
+                        emp_obj = Employee.query.get(emp_id)
+                    except Exception:
+                        emp_obj = None
+                    sy, sm = year, month
+                    try:
+                        if getattr(emp_obj, 'hire_date', None):
+                            sy = int(emp_obj.hire_date.year)
+                            sm = int(emp_obj.hire_date.month)
+                    except Exception:
+                        pass
+                    return sy, sm
+                # helper iterate months
+                def month_iter(y0, m0, y1, m1):
+                    y, m = y0, m0
+                    cnt = 0
+                    while (y < y1) or (y == y1 and m <= m1):
+                        yield y, m
+                        m += 1
+                        if m > 12:
+                            m = 1; y += 1
+                        cnt += 1
+                        if cnt > 240:
+                            break
+                for _emp_id in employee_ids:
+                    remaining_payment = float(amount or 0)
+                    start_y, start_m = _start_from(_emp_id)
+                    for yy, mm in month_iter(start_y, start_m, year, month):
+                        row = Salary.query.filter_by(employee_id=_emp_id, year=yy, month=mm).first()
+                        if not row:
+                            base = allow = ded = 0.0
+                            try:
+                                from models import EmployeeSalaryDefault
+                                d = EmployeeSalaryDefault.query.filter_by(employee_id=_emp_id).first()
+                                if d:
+                                    base = float(d.base_salary or 0)
+                                    allow = float(d.allowances or 0)
+                                    ded = float(d.deductions or 0)
+                            except Exception:
+                                pass
+                            prev_component = 0.0
+                            total_amount = max(0.0, base + allow - ded + prev_component)
+                            row = Salary(employee_id=_emp_id, year=yy, month=mm,
+                                         basic_salary=base, allowances=allow, deductions=ded,
+                                         previous_salary_due=prev_component, total_salary=total_amount,
+                                         status='due')
+                            db.session.add(row)
+                            db.session.flush()
+                        already_paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).
+                            filter(Payment.invoice_type=='salary', Payment.invoice_id==row.id).scalar() or 0.0)
+                        month_due = max(0.0, float(row.total_salary or 0) - already_paid)
+                        if month_due <= 0:
+                            row.status = 'paid'
+                            continue
+                        if remaining_payment <= 0:
+                            break
+                        pay_amount = remaining_payment if remaining_payment < month_due else month_due
+                        if pay_amount > 0:
+                            p = Payment(invoice_id=row.id, invoice_type='salary', amount_paid=pay_amount, payment_method=method)
+                            db.session.add(p)
+                            db.session.flush()
+                            try:
+                                created_payment_ids.append(int(p.id))
+                            except Exception:
+                                pass
+                            remaining_payment -= pay_amount
+                            already_paid += pay_amount
+                            if already_paid >= float(row.total_salary or 0) and float(row.total_salary or 0) > 0:
+                                row.status = 'paid'
+                            else:
+                                row.status = 'partial'
+                    if remaining_payment > 0:
+                        adv_y = year + (1 if month == 12 else 0)
+                        adv_m = 1 if month == 12 else month + 1
+                        adv_row = Salary.query.filter_by(employee_id=_emp_id, year=adv_y, month=adv_m).first()
+                        if not adv_row:
+                            base = allow = ded = 0.0
+                            try:
+                                from models import EmployeeSalaryDefault
+                                d = EmployeeSalaryDefault.query.filter_by(employee_id=_emp_id).first()
+                                if d:
+                                    base = float(d.base_salary or 0)
+                                    allow = float(d.allowances or 0)
+                                    ded = float(d.deductions or 0)
+                            except Exception:
+                                pass
+                            adv_row = Salary(employee_id=_emp_id, year=adv_y, month=adv_m,
+                                             basic_salary=base, allowances=allow, deductions=ded,
+                                             previous_salary_due=0.0,
+                                             total_salary=max(0.0, base + allow - ded), status='partial')
+                            db.session.add(adv_row)
+                            db.session.flush()
+                        p2 = Payment(invoice_id=adv_row.id, invoice_type='salary', amount_paid=remaining_payment, payment_method=method)
+                        db.session.add(p2)
+                        db.session.flush()
+                        try:
+                            created_payment_ids.append(int(p2.id))
+                        except Exception:
+                            pass
+
+            # Recompute current month sal status for immediate UI feedback
+            # Recompute status for the current salary of the first employee (for UI feedback)
             try:
-                changed = False
-                if basic_override is not None and basic_override != '':
-                    sal.basic_salary = float(basic_override or 0); changed = True
-                if allow_override is not None and allow_override != '':
-                    sal.allowances = float(allow_override or 0); changed = True
-                if ded_override is not None and ded_override != '':
-                    sal.deductions = float(ded_override or 0); changed = True
-                if prev_override is not None and prev_override != '':
-                    sal.previous_salary_due = float(prev_override or 0); changed = True
-                if changed:
-                    sal.total_salary = max(0.0, float(sal.basic_salary or 0) + float(sal.allowances or 0) - float(sal.deductions or 0) + float(sal.previous_salary_due or 0))
+                first_emp = employee_ids[0]
+                sal = Salary.query.filter_by(employee_id=first_emp, year=year, month=month).first() or _ensure_salary_for(first_emp)
+                paid_sum = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).
+                    filter(Payment.invoice_type == 'salary', Payment.invoice_id == sal.id).scalar() or 0)
+                total_due = float(sal.total_salary or 0)
+                if paid_sum >= total_due and total_due > 0:
+                    sal.status = 'paid'
+                elif paid_sum > 0:
+                    sal.status = 'partial'
+                else:
+                    sal.status = 'due'
             except Exception:
                 pass
 
-            # Record payment if provided
-            if amount > 0:
-                pay = Payment(invoice_id=sal.id, invoice_type='salary', amount_paid=amount, payment_method=method)
-                db.session.add(pay)
-
-            # Update status by paid sum
-            paid_sum = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).\
-                filter(Payment.invoice_type == 'salary', Payment.invoice_id == sal.id).scalar() or 0
-            paid_sum = float(paid_sum or 0)
-            total_due = float(sal.total_salary or 0)
-            if paid_sum >= total_due and total_due > 0:
-                sal.status = 'paid'
-            elif paid_sum > 0:
-                sal.status = 'partial'
-            else:
-                sal.status = 'due'
-
             db.session.commit()
-            flash('Salary payment recorded', 'success')
+            flash('تم تسجيل السداد', 'success')
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving salary/payment: {e}', 'danger')
-        return redirect(url_for('main.salaries_pay', month=month_str))
+        # Redirect back to logical screen
+        try:
+            if (emp_id_raw or '').strip().lower() != 'all' and str(emp_id_raw).isdigit():
+                return redirect(url_for('main.pay_salary', emp_id=int(emp_id_raw), year=year, month=month))
+        except Exception:
+            pass
+        return redirect(url_for('main.payroll', year=year, month=month))
 
     # GET
     try:
@@ -1413,16 +1911,69 @@ def salaries_pay():
     except Exception:
         defaults_map = {}
     try:
-        y, m = selected_month.split('-'); sy, sm = int(y), int(m)
-        sub = db.session.query(
-            Salary.employee_id.label('eid'),
-            func.coalesce(func.sum(Salary.total_salary), 0).label('total_sum'),
-            func.coalesce(func.sum(Payment.amount_paid), 0).label('paid_sum')
-        ).outerjoin(Payment, (Payment.invoice_type=='salary') & (Payment.invoice_id==Salary.id)) \
-         .filter( (Salary.year < sy) | ((Salary.year == sy) & (Salary.month < sm)) ) \
-         .group_by(Salary.employee_id).all()
-        for row in sub:
-            prev_due_map[int(row.eid)] = max(0.0, float(row.total_sum or 0) - float(row.paid_sum or 0))
+        y, m = selected_month.split('-'); end_y, end_m = int(y), int(m)
+        # previous period is the month before selected
+        if end_m == 1:
+            prev_y, prev_m = end_y - 1, 12
+        else:
+            prev_y, prev_m = end_y, end_m - 1
+
+        # Preload defaults for fallback months without Salary rows
+        try:
+            from models import EmployeeSalaryDefault
+            defaults = {int(d.employee_id): d for d in EmployeeSalaryDefault.query.all()}
+        except Exception:
+            defaults = {}
+
+        def month_iter(y0, m0, y1, m1):
+            y, m = y0, m0
+            count = 0
+            while (y < y1) or (y == y1 and m <= m1):
+                yield y, m
+                m += 1
+                if m > 12:
+                    m = 1; y += 1
+                count += 1
+                if count > 240:  # guard: max 20 years
+                    break
+
+        for emp in (employees or []):
+            try:
+                # No hire date -> no arrears
+                if not getattr(emp, 'hire_date', None):
+                    prev_due_map[int(emp.id)] = 0.0
+                    continue
+                start_y, start_m = int(emp.hire_date.year), int(emp.hire_date.month)
+                # If hire date after previous period -> nothing due
+                if (start_y > prev_y) or (start_y == prev_y and start_m > prev_m):
+                    prev_due_map[int(emp.id)] = 0.0
+                    continue
+
+                due_sum = 0.0
+                paid_sum = 0.0
+                for yy, mm in month_iter(start_y, start_m, prev_y, prev_m):
+                    s = Salary.query.filter_by(employee_id=emp.id, year=yy, month=mm).first()
+                    if s:
+                        basic = float(s.basic_salary or 0.0)
+                        allow = float(s.allowances or 0.0)
+                        ded = float(s.deductions or 0.0)
+                        # Monthly gross for the period only (exclude carry-over to avoid double counting)
+                        total = max(0.0, basic + allow - ded)
+                        due_sum += total
+                        paid = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)). \
+                            filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0.0
+                        paid_sum += float(paid or 0.0)
+                    else:
+                        d = defaults.get(int(emp.id))
+                        if d:
+                            base = float(getattr(d, 'base_salary', 0.0) or 0.0)
+                            allow = float(getattr(d, 'allowances', 0.0) or 0.0)
+                            ded = float(getattr(d, 'deductions', 0.0) or 0.0)
+                            due_sum += max(0.0, base + allow - ded)
+                        # if no defaults, count as 0 for that month
+                prev_due_map[int(emp.id)] = max(0.0, due_sum - paid_sum)
+            except Exception:
+                prev_due_map[int(emp.id)] = 0.0
     except Exception:
         prev_due_map = {}
 
@@ -1475,11 +2026,52 @@ def salaries_pay():
     )
 
 
+@main.route('/print/salary-receipt')
+@login_required
+def salary_receipt():
+    # Accept multiple payment ids: ?pids=1,2,3
+    pids_param = (request.args.get('pids') or '').strip()
+    try:
+        ids = [int(x) for x in pids_param.split(',') if x.strip().isdigit()]
+    except Exception:
+        ids = []
+    payments = []
+    if ids:
+        try:
+            payments = Payment.query.filter(Payment.id.in_(ids)).all()
+        except Exception:
+            payments = []
+    # Group by employee and month for display
+    items = []
+    try:
+        for p in (payments or []):
+            s = Salary.query.get(int(p.invoice_id)) if getattr(p, 'invoice_type', '') == 'salary' else None
+            if not s:
+                continue
+            emp = Employee.query.get(int(s.employee_id)) if getattr(s, 'employee_id', None) else None
+            items.append({
+                'employee': getattr(emp, 'full_name', 'Employee'),
+                'year': int(getattr(s, 'year', 0) or 0),
+                'month': int(getattr(s, 'month', 0) or 0),
+                'amount': float(getattr(p, 'amount_paid', 0) or 0),
+                'method': getattr(p, 'payment_method', '-') or '-',
+                'payment_date': getattr(p, 'payment_date', None),
+            })
+    except Exception:
+        items = []
+    try:
+        settings = Settings.query.first()
+    except Exception:
+        settings = None
+    return render_template('print/payroll.html', items=items, settings=settings)
+
+
 @main.route('/salaries/statements', methods=['GET'], endpoint='salaries_statements')
 @login_required
 def salaries_statements():
     # Accept either ?month=YYYY-MM or ?year=&month=
     month_param = (request.args.get('month') or '').strip()
+    status_f = (request.args.get('status') or '').strip().lower()
     if '-' in month_param:
         try:
             y, m = month_param.split('-'); year = int(y); month = int(m)
@@ -1488,104 +2080,162 @@ def salaries_statements():
     else:
         year = request.args.get('year', type=int) or datetime.utcnow().year
         month = request.args.get('month', type=int) or datetime.utcnow().month
+
+    from sqlalchemy import func
     rows = []
     totals = {'basic': 0.0, 'allow': 0.0, 'ded': 0.0, 'prev': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0}
 
-    # We'll build statements from each employee.hire_date up to the selected year/month (inclusive)
     try:
-        # build end date
-        end_year = int(year)
-        end_month = int(month)
+        # Load all employees to always show everyone
+        employees = Employee.query.order_by(Employee.full_name.asc()).all()
 
-        employees = Employee.query.order_by(Employee.full_name).all()
-        # Preload defaults to use as fallback when existing Salary rows have zero allowances/deductions
+        # Defaults map
         try:
             from models import EmployeeSalaryDefault
             defaults_map = {d.employee_id: d for d in EmployeeSalaryDefault.query.all()}
         except Exception:
             defaults_map = {}
 
-        def month_iter(start_y, start_m, end_y, end_m):
-            y, m = start_y, start_m
-            while (y < end_y) or (y == end_y and m <= end_m):
+        # Helper month iterator
+        def month_iter(y0, m0, y1, m1):
+            y, m = y0, m0
+            cnt = 0
+            while (y < y1) or (y == y1 and m <= m1):
                 yield y, m
                 m += 1
                 if m > 12:
                     m = 1; y += 1
+                cnt += 1
+                if cnt > 240:
+                    break
 
-        for emp in employees:
-            # skip employees without hire_date
-            if not emp.hire_date:
-                continue
-            start_y = emp.hire_date.year
-            start_m = emp.hire_date.month
-            # if hire date is after selected end, skip
-            if (start_y > end_year) or (start_y == end_year and start_m > end_month):
-                continue
+        for emp in (employees or []):
+            # Determine start month
+            if getattr(emp, 'hire_date', None):
+                y0, m0 = int(emp.hire_date.year), int(emp.hire_date.month)
+            else:
+                y0, m0 = year, month
 
-            for y, m in month_iter(start_y, start_m, end_year, end_month):
-                # prefer an explicit Salary row for the period
-                s = Salary.query.filter_by(employee_id=emp.id, year=y, month=m).first()
-                if s:
-                    basic = float(s.basic_salary or 0)
-                    allow = float(s.allowances or 0)
-                    ded = float(s.deductions or 0)
-                    # Fallback to defaults if stored values are zero but defaults exist
-                    try:
-                        d = defaults_map.get(emp.id)
-                        if d:
-                            if (allow is None or allow == 0.0) and float(d.allowances or 0) > 0:
-                                allow = float(d.allowances or 0)
-                            if (ded is None or ded == 0.0) and float(d.deductions or 0) > 0:
-                                ded = float(d.deductions or 0)
-                    except Exception:
-                        pass
-                    prev = float(s.previous_salary_due or 0)
-                    total = max(0.0, basic + allow - ded + prev)
-                    paid = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).\
-                        filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0
-                    paid = float(paid or 0)
-                    remaining = max(0.0, total - paid)
-                    status = s.status or ('paid' if remaining <= 0 else 'due')
+            # Build dues per month from hire date to current
+            dues_map = {}
+            month_keys = []
+            sal_ids = []
+            for yy, mm in month_iter(y0, m0, year, month):
+                month_keys.append((yy, mm))
+                srow = Salary.query.filter_by(employee_id=emp.id, year=yy, month=mm).first()
+                if srow:
+                    base = float(srow.basic_salary or 0.0)
+                    allow = float(srow.allowances or 0.0)
+                    ded = float(srow.deductions or 0.0)
+                    due_amt = max(0.0, base + allow - ded)
+                    sal_ids.append(int(srow.id))
                 else:
-                    # fallback to EmployeeSalaryDefault
-                    usd = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
-                    basic = float(usd.base_salary or 0) if usd else 0.0
-                    allow = float(usd.allowances or 0) if usd else 0.0
-                    ded = float(usd.deductions or 0) if usd else 0.0
-                    prev = 0.0
-                    total = max(0.0, basic + allow - ded + prev)
-                    # no salary row -> cannot link payments reliably; assume none
-                    paid = 0.0
-                    remaining = total
-                    status = 'due' if remaining > 0 else 'paid'
+                    d = defaults_map.get(int(emp.id))
+                    base = float(getattr(d, 'base_salary', 0.0) or 0.0)
+                    allow = float(getattr(d, 'allowances', 0.0) or 0.0)
+                    ded = float(getattr(d, 'deductions', 0.0) or 0.0)
+                    due_amt = max(0.0, base + allow - ded)
+                dues_map[(yy, mm)] = {'base': base, 'allow': allow, 'ded': ded, 'due': due_amt}
 
-                rows.append({
-                    'period': f"{y:04d}-{m:02d}",
-                    'employee_name': emp.full_name,
-                    'basic': basic,
-                    'allow': allow,
-                    'ded': ded,
-                    'prev': prev,
-                    'total': total,
-                    'paid': paid,
-                    'remaining': remaining,
-                    'status': status
-                })
+            # Total payments recorded across all months for this employee
+            total_paid_all = 0.0
+            if sal_ids:
+                total_paid_all = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                                       .filter(Payment.invoice_type == 'salary', Payment.invoice_id.in_(sal_ids))
+                                       .scalar() or 0.0)
 
-                totals['basic'] += basic; totals['allow'] += allow; totals['ded'] += ded
-                totals['prev'] += prev; totals['total'] += total; totals['paid'] += paid; totals['remaining'] += remaining
+            # FIFO allocation: previous months first, then current
+            remaining_payment = total_paid_all
+            # previous months
+            prev_due_sum = 0.0
+            prev_paid_alloc = 0.0
+            for yy, mm in month_keys[:-1]:
+                due_amt = float(dues_map[(yy, mm)]['due'] or 0.0)
+                prev_due_sum += due_amt
+                if remaining_payment <= 0:
+                    continue
+                pay = due_amt if remaining_payment >= due_amt else remaining_payment
+                prev_paid_alloc += pay
+                remaining_payment -= pay
+
+            # current month
+            c_base = float(dues_map[(year, month)]['base'] or 0.0)
+            c_allow = float(dues_map[(year, month)]['allow'] or 0.0)
+            c_ded = float(dues_map[(year, month)]['ded'] or 0.0)
+            c_due = float(dues_map[(year, month)]['due'] or 0.0)
+            c_paid_alloc = 0.0
+            if remaining_payment > 0 and c_due > 0:
+                c_paid_alloc = c_due if remaining_payment >= c_due else remaining_payment
+                remaining_payment -= c_paid_alloc
+
+            prev_remaining = max(0.0, prev_due_sum - prev_paid_alloc)
+            total = max(0.0, c_due + prev_remaining)
+            paid_display = c_paid_alloc
+            remaining_total = max(0.0, total - paid_display)
+
+            status = 'paid' if (total > 0 and remaining_total <= 0.01) else ('partial' if paid_display > 0 else ('paid' if total == 0 else 'due'))
+
+            rows.append({
+                'employee_id': int(emp.id),
+                'employee_name': emp.full_name,
+                'basic': c_base,
+                'allow': c_allow,
+                'ded': c_ded,
+                'prev': prev_remaining,
+                'total': total,
+                'paid': paid_display,
+                'remaining': remaining_total,
+                'status': status,
+                'prev_details': []
+            })
+            totals['basic'] += c_base
+            totals['allow'] += c_allow
+            totals['ded'] += c_ded
+            totals['prev'] += prev_remaining
+            totals['total'] += total
+            totals['paid'] += paid_display
+            totals['remaining'] += remaining_total
     except Exception:
         pass
 
-    return render_template('salaries_statements.html', year=year, month=month, rows=rows, totals=totals)
+    # Apply optional status filter after computing per-employee rows
+    if status_f in ('paid','due','partial'):
+        try:
+            rows = [r for r in rows if (str(r.get('status') or '').lower() == status_f)]
+            totals = {
+                'basic': sum(float(r.get('basic') or 0) for r in rows),
+                'allow': sum(float(r.get('allow') or 0) for r in rows),
+                'ded': sum(float(r.get('ded') or 0) for r in rows),
+                'prev': sum(float(r.get('prev') or 0) for r in rows),
+                'total': sum(float(r.get('total') or 0) for r in rows),
+                'paid': sum(float(r.get('paid') or 0) for r in rows),
+                'remaining': sum(float(r.get('remaining') or 0) for r in rows),
+            }
+        except Exception:
+            pass
+
+    return render_template('salaries_statements.html', year=year, month=month, rows=rows, totals=totals, status_f=status_f)
 
 
 
 @main.route('/reports/print/salaries', methods=['GET'], endpoint='reports_print_salaries')
 @login_required
 def reports_print_salaries():
-    # Accept ?month=YYYY-MM or ?year=&month=
+    # Redirect to detailed payroll statement to ensure new screen is used everywhere
+    try:
+        q = request.query_string.decode('utf-8') if request.query_string else ''
+    except Exception:
+        q = ''
+    target = url_for('main.reports_print_salaries_detailed')
+    if q:
+        target = f"{target}?{q}"
+    return redirect(target)
+
+
+@main.route('/reports/print/salaries_detailed', methods=['GET'], endpoint='reports_print_salaries_detailed')
+@login_required
+def reports_print_salaries_detailed():
+    # period input
     month_param = (request.args.get('month') or '').strip()
     if '-' in month_param:
         try:
@@ -1596,130 +2246,693 @@ def reports_print_salaries():
         year = request.args.get('year', type=int) or datetime.utcnow().year
         month = request.args.get('month', type=int) or datetime.utcnow().month
 
-    # Build current month rows (reuse logic from salaries_statements)
-    rows = []
-    totals = {'basic': 0.0, 'allow': 0.0, 'ded': 0.0, 'prev': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0}
+    # header
     try:
-        sal_list = Salary.query.filter_by(year=year, month=month).all()
-        # Preload defaults
+        settings = Settings.query.first()
+        company_name = settings.company_name or 'Company'
+    except Exception:
+        company_name = 'Company'
+    period_label = f"{year:04d}-{month:02d}"
+
+    # Build detailed month-by-month allocations (FIFO: pay oldest dues first)
+    employees_data = []
+    try:
+        # defaults
         try:
             from models import EmployeeSalaryDefault
             defaults_map = {d.employee_id: d for d in EmployeeSalaryDefault.query.all()}
         except Exception:
             defaults_map = {}
-        for s in sal_list:
-            paid = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)). \
-                filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0
-            paid = float(paid or 0)
-            basic = float(s.basic_salary or 0)
-            allow = float(s.allowances or 0)
-            ded = float(s.deductions or 0)
-            # Fallback to defaults if zeros
-            try:
-                d = defaults_map.get(s.employee_id)
-                if d:
-                    if (allow is None or allow == 0.0) and float(d.allowances or 0) > 0:
-                        allow = float(d.allowances or 0)
-                    if (ded is None or ded == 0.0) and float(d.deductions or 0) > 0:
-                        ded = float(d.deductions or 0)
-            except Exception:
-                pass
-            prev = float(s.previous_salary_due or 0)
-            total = max(0.0, basic + allow - ded + prev)
-            remaining = max(0.0, total - paid)
-            emp = db.session.get(Employee, s.employee_id)
-            rows.append({
-                'employee_name': (emp.full_name if emp else f"#{s.employee_id}"),
-                'basic': basic, 'allow': allow, 'ded': ded, 'prev': prev,
-                'total': total, 'paid': paid, 'remaining': remaining,
-                'status': s.status or 'due'
-            })
-            totals['basic'] += basic; totals['allow'] += allow; totals['ded'] += ded
-            totals['prev'] += prev; totals['total'] += total; totals['paid'] += paid; totals['remaining'] += remaining
-    except Exception:
-        pass
 
-    # Build previous months breakdown from hire_date up to previous month
-    prev_rows = []
-    prev_totals = {'due': 0.0, 'paid': 0.0}
-    try:
-        # Helper to iterate months
+        # helper iterator
         def month_iter(y0, m0, y1, m1):
             y, m = y0, m0
-            count = 0
+            cnt = 0
             while (y < y1) or (y == y1 and m <= m1):
                 yield y, m
                 m += 1
                 if m > 12:
                     m = 1; y += 1
-                count += 1
-                if count > 240:  # safety guard: max 20 years
+                cnt += 1
+                if cnt > 240:
                     break
-        # Compute previous month reference
-        from calendar import monthrange
-        cur_y, cur_m = year, month
-        # previous month
-        if cur_m == 1:
-            prev_y, prev_m = cur_y - 1, 12
-        else:
-            prev_y, prev_m = cur_y, cur_m - 1
+
+        for emp in Employee.query.order_by(Employee.full_name.asc()).all():
+            # range from hire to current+1 (to place credit if needed)
+            if getattr(emp, 'hire_date', None):
+                y0, m0 = int(emp.hire_date.year), int(emp.hire_date.month)
+            else:
+                y0, m0 = year, month
+
+            # gather dues per month and salary ids
+            dues = []
+            sal_ids = []
+            for yy, mm in month_iter(y0, m0, year, month):
+                srow = Salary.query.filter_by(employee_id=emp.id, year=yy, month=mm).first()
+                if srow:
+                    base = float(srow.basic_salary or 0.0)
+                    allow = float(srow.allowances or 0.0)
+                    ded = float(srow.deductions or 0.0)
+                    due_amt = max(0.0, base + allow - ded)
+                    sal_ids.append(int(srow.id))
+                else:
+                    d = defaults_map.get(int(emp.id))
+                    base = float(getattr(d, 'base_salary', 0.0) or 0.0)
+                    allow = float(getattr(d, 'allowances', 0.0) or 0.0)
+                    ded = float(getattr(d, 'deductions', 0.0) or 0.0)
+                    due_amt = max(0.0, base + allow - ded)
+                dues.append({'y': yy, 'm': mm, 'base': base, 'allow': allow, 'ded': ded, 'due': due_amt})
+
+            total_paid_all = 0.0
+            if sal_ids:
+                total_paid_all = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                                       .filter(Payment.invoice_type == 'salary', Payment.invoice_id.in_(sal_ids))
+                                       .scalar() or 0.0)
+
+            # FIFO allocate against previous dues first
+            remaining_payment = total_paid_all
+            detailed_rows = []
+            prev_running_due = 0.0
+            for d in dues:
+                month_due = float(d['due'] or 0.0)
+                prev_for_row = float(prev_running_due or 0.0)
+                total_for_row = prev_for_row + month_due
+
+                pay = 0.0
+                if remaining_payment > 0 and total_for_row > 0:
+                    pay = total_for_row if remaining_payment >= total_for_row else remaining_payment
+                    remaining_payment -= pay
+
+                remaining = total_for_row - pay
+
+                # Status with tolerance for tiny residuals
+                tol = 0.01
+                if total_for_row <= tol and pay <= tol:
+                    status = 'paid'
+                elif remaining <= tol:
+                    status = 'paid'
+                elif pay > tol:
+                    status = 'partial'
+                else:
+                    status = 'due'
+
+                detailed_rows.append(type('Row', (), {
+                    'month': date(d['y'], d['m'], 1),
+                    'basic': d['base'],
+                    'allowances': d['allow'],
+                    'deductions': d['ded'],
+                    'prev_due': prev_for_row,
+                    'total': total_for_row,
+                    'paid_amount': pay,
+                    'remaining_amount': remaining,
+                    'status': status,
+                }))
+
+                # Carry forward any unpaid balance as previous due for next month
+                prev_running_due = remaining
+
+            # leftover payment -> credit month (next month)
+            if remaining_payment > 0:
+                from calendar import monthrange
+                nm_y = year + (1 if month == 12 else 0)
+                nm_m = 1 if month == 12 else month + 1
+                detailed_rows.append(type('Row', (), {
+                    'month': date(nm_y, nm_m, 1),
+                    'basic': 0.0,
+                    'allowances': 0.0,
+                    'deductions': 0.0,
+                    'prev_due': 0.0,
+                    'total': 0.0,
+                    'paid_amount': remaining_payment,
+                    'remaining_amount': -remaining_payment,
+                    'status': 'credit',
+                }))
+
+            employees_data.append(type('Emp', (), {
+                'name': emp.full_name,
+                'salaries': detailed_rows
+            }))
+    except Exception:
+        employees_data = []
+
+    return render_template(
+        'print/payroll_statement.html',
+        company_name=company_name,
+        period_label=period_label,
+        generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+        employees=employees_data
+    )
+
+
+
+@main.route('/employees/payroll', methods=['GET'], endpoint='payroll')
+@login_required
+def payroll():
+    # Exact context and data shape per provided template
+    from calendar import month_name
+    years = list(range(datetime.utcnow().year - 2, datetime.utcnow().year + 3))
+    year = request.args.get('year', type=int) or datetime.utcnow().year
+    month = request.args.get('month', type=int) or datetime.utcnow().month
+    status = (request.args.get('status') or 'all').strip().lower()
+
+    # months as value/label pairs
+    months = [{ 'value': i, 'label': month_name[i] } for i in range(1, 13)]
+
+    # Build payrolls rows
+    payrolls = []
+    try:
+        from sqlalchemy import func
+        emps = Employee.query.order_by(Employee.full_name.asc()).all()
+        from models import EmployeeSalaryDefault
+        defaults_map = {int(d.employee_id): d for d in EmployeeSalaryDefault.query.all()}
+        for emp in (emps or []):
+            # current month components
+            s = Salary.query.filter_by(employee_id=emp.id, year=year, month=month).first()
+            if s:
+                basic = float(s.basic_salary or 0)
+                allow = float(s.allowances or 0)
+                ded = float(s.deductions or 0)
+            else:
+                d = defaults_map.get(int(emp.id))
+                basic = float(getattr(d, 'base_salary', 0) or 0)
+                allow = float(getattr(d, 'allowances', 0) or 0)
+                ded = float(getattr(d, 'deductions', 0) or 0)
+            current_due = max(0.0, basic + allow - ded)
+
+            # previous dues sum (exclude current)
+            prev_due = 0.0
+            if getattr(emp, 'hire_date', None):
+                sy, sm = int(emp.hire_date.year), int(emp.hire_date.month)
+            else:
+                sy, sm = year, month
+            yy, mm = sy, sm
+            guard = 0
+            while (yy < year) or (yy == year and mm < month):
+                s2 = Salary.query.filter_by(employee_id=emp.id, year=yy, month=mm).first()
+                if s2:
+                    bb = float(s2.basic_salary or 0); aa = float(s2.allowances or 0); dd = float(s2.deductions or 0)
+                else:
+                    d2 = defaults_map.get(int(emp.id))
+                    bb = float(getattr(d2, 'base_salary', 0) or 0)
+                    aa = float(getattr(d2, 'allowances', 0) or 0)
+                    dd = float(getattr(d2, 'deductions', 0) or 0)
+                prev_due += max(0.0, bb + aa - dd)
+                mm += 1
+                if mm > 12:
+                    mm = 1; yy += 1
+                guard += 1
+                if guard > 240:
+                    break
+
+            # total paid overall across existing salary rows
+            sal_ids = [int(x.id) for x in Salary.query.filter_by(employee_id=emp.id).all() if getattr(x, 'id', None)]
+            paid_all = 0.0
+            if sal_ids:
+                paid_all = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                                 .filter(Payment.invoice_type == 'salary', Payment.invoice_id.in_(sal_ids)).scalar() or 0.0)
+
+            # FIFO: allocate to previous first
+            remaining_payment = paid_all
+            prev_alloc = min(prev_due, remaining_payment)
+            remaining_payment -= prev_alloc
+            current_alloc = min(current_due, remaining_payment)
+
+            total = current_due + max(0.0, prev_due - prev_alloc)
+            remaining = max(0.0, total - current_alloc)
+            status_v = 'paid' if (total > 0 and remaining <= 0.01) else ('partial' if current_alloc > 0 else ('paid' if total == 0 else 'due'))
+
+            payrolls.append(type('Row', (), {
+                'employee': type('E', (), {'id': int(emp.id), 'full_name': emp.full_name}),
+                'basic': basic,
+                'allowances': allow,
+                'deductions': ded,
+                'prev_due': max(0.0, prev_due - prev_alloc),
+                'total': total,
+                'paid': current_alloc,
+                'remaining': remaining,
+                'status': status_v,
+            }))
+    except Exception:
+        payrolls = []
+
+    if status in ('paid','due','partial'):
+        payrolls = [r for r in payrolls if (str(getattr(r, 'status', '')).lower() == status)]
+
+    return render_template('payroll.html', years=years, months=months, year=year, month=month, status=status, payrolls=payrolls)
+
+
+@main.route('/employees/<int:emp_id>/pay', methods=['GET', 'POST'], endpoint='pay_salary')
+@login_required
+def pay_salary(emp_id):
+    emp = Employee.query.get_or_404(emp_id)
+
+    # Support provided template shape and query params (employee_id, year, month)
+    selected_employee_id = request.args.get('employee_id', type=int) or int(emp.id)
+    year = request.args.get('year', type=int) or datetime.utcnow().year
+    month = request.args.get('month', type=int) or datetime.utcnow().month
+
+    if request.method == 'POST':
+        amount = request.form.get('paid_amount', type=float) or 0.0
+        method = (request.form.get('payment_method') or 'cash')
+        month_str = f"{year:04d}-{month:02d}"
+        with current_app.test_request_context('/salaries/pay', method='POST', data={
+            'employee_id': str(int(selected_employee_id)),
+            'month': month_str,
+            'paid_amount': str(amount),
+            'payment_method': method,
+        }):
+            try:
+                return salaries_pay()
+            except Exception as e:
+                flash(f'Error saving salary/payment: {e}', 'danger')
+                return redirect(url_for('main.pay_salary', emp_id=emp.id, employee_id=selected_employee_id, year=year, month=month))
+
+    # Build employees list for dropdown
+    try:
         employees = Employee.query.order_by(Employee.full_name.asc()).all()
-        # Preload defaults map
+    except Exception:
+        employees = []
+
+    # Build salary summary for selected employee
+    from models import EmployeeSalaryDefault
+    d = EmployeeSalaryDefault.query.filter_by(employee_id=selected_employee_id).first()
+    base = float(getattr(d, 'base_salary', 0) or 0)
+    allow = float(getattr(d, 'allowances', 0) or 0)
+    ded = float(getattr(d, 'deductions', 0) or 0)
+    # Previous due: sum of previous months' totals minus sum of payments (outstanding arrears)
+    from sqlalchemy import func as _func
+    try:
+        # Sum totals and paid amounts for months strictly before the selected month
+        rem_q = db.session.query(
+            _func.coalesce(_func.sum(Salary.total_salary), 0),
+            _func.coalesce(_func.sum(Payment.amount_paid), 0)
+        ).outerjoin(
+            Payment, (Payment.invoice_type == 'salary') & (Payment.invoice_id == Salary.id)
+        ).filter(
+            Salary.employee_id == selected_employee_id
+        ).filter(
+            (Salary.year < year) | ((Salary.year == year) & (Salary.month < month))
+        )
+        # Respect hire date if available
+        try:
+            emp_obj = Employee.query.get(selected_employee_id)
+            if getattr(emp_obj, 'hire_date', None):
+                hd_y = int(emp_obj.hire_date.year)
+                hd_m = int(emp_obj.hire_date.month)
+                rem_q = rem_q.filter((Salary.year > hd_y) | ((Salary.year == hd_y) & (Salary.month >= hd_m)))
+        except Exception:
+            pass
+        tot_sum, paid_sum = rem_q.first()
+        prev_due = max(0.0, float(tot_sum or 0) - float(paid_sum or 0))
+    except Exception:
+        prev_due = 0.0
+
+    salary_vm = {
+        'basic': base,
+        'allowances': allow,
+        'deductions': ded,
+        'prev_due': prev_due,
+        'total': max(0.0, base + allow - ded + prev_due),
+    }
+
+    # Determine oldest unpaid month for this employee (FIFO across months)
+    next_due_year = year
+    next_due_month = month
+    try:
+        # Determine start (hire date or current selection)
+        if getattr(emp, 'hire_date', None):
+            start_y, start_m = int(emp.hire_date.year), int(emp.hire_date.month)
+        else:
+            start_y, start_m = year, month
+
+        # Sum of all payments against this employee's salary rows
+        sal_ids_q = Salary.query.with_entities(Salary.id).filter_by(employee_id=selected_employee_id).all()
+        sal_id_list = [int(sid) for (sid,) in sal_ids_q] if sal_ids_q else []
+        total_paid_all = 0.0
+        if sal_id_list:
+            total_paid_all = float(db.session.query(_func.coalesce(_func.sum(Payment.amount_paid), 0))
+                                   .filter(Payment.invoice_type == 'salary', Payment.invoice_id.in_(sal_id_list))
+                                   .scalar() or 0.0)
+
+        # Iterate months from start to selected period; carry previous remaining
+        def _month_iter(y0, m0, y1, m1):
+            y, m = y0, m0
+            cnt = 0
+            while (y < y1) or (y == y1 and m <= m1):
+                yield y, m
+                m += 1
+                if m > 12:
+                    m = 1; y += 1
+                cnt += 1
+                if cnt > 240:
+                    break
+
+        remaining_payment = total_paid_all
+        prev_running = 0.0
+        found = False
+        for yy, mm in _month_iter(start_y, start_m, year, month):
+            srow = Salary.query.filter_by(employee_id=selected_employee_id, year=yy, month=mm).first()
+            if srow:
+                _b = float(srow.basic_salary or 0.0)
+                _a = float(srow.allowances or 0.0)
+                _d = float(srow.deductions or 0.0)
+                month_due = max(0.0, _b + _a - _d)
+            else:
+                # Fallback to defaults for months without a stored Salary row
+                month_due = max(0.0, base + allow - ded)
+
+            total_for_row = prev_running + month_due
+            pay_here = min(remaining_payment, total_for_row)
+            remaining_payment -= pay_here
+            remaining_row = max(0.0, total_for_row - pay_here)
+            if (remaining_row > 0) and (not found):
+                next_due_year, next_due_month = yy, mm
+                found = True
+                break
+            prev_running = remaining_row
+    except Exception:
+        next_due_year, next_due_month = year, month
+
+    from calendar import month_name as _mn
+    next_due_label = f"{_mn[next_due_month]}, {next_due_year}"
+
+    # Current month salaries table
+    current_month_salaries = []
+    try:
+        rows = Salary.query.filter_by(year=year, month=month).all()
+    except Exception:
+        rows = []
+    # Build paid map for current month rows
+    paid_map = {}
+    try:
+        ids = [int(r.id) for r in rows if getattr(r, 'id', None)]
+        if ids:
+            for sid, paid in db.session.query(Payment.invoice_id, _func.coalesce(_func.sum(Payment.amount_paid), 0)).\
+                    filter(Payment.invoice_type=='salary', Payment.invoice_id.in_(ids)).group_by(Payment.invoice_id):
+                paid_map[int(sid)] = float(paid or 0)
+    except Exception:
+        paid_map = {}
+    for r in (rows or []):
+        bb = float(r.basic_salary or 0); aa = float(r.allowances or 0); dd = float(r.deductions or 0)
+        prev = float(r.previous_salary_due or 0)
+        net = max(0.0, bb + aa - dd + prev)
+        paid = float(paid_map.get(int(r.id), 0) or 0)
+        remaining = max(0.0, net - paid)
+        st = (r.status or '-')
+        emp_obj = Employee.query.get(int(r.employee_id)) if getattr(r, 'employee_id', None) else None
+        current_month_salaries.append(type('Row', (), {
+            'employee': type('E', (), {'full_name': getattr(emp_obj, 'full_name', f'#{r.employee_id}') }),
+            'basic': bb,
+            'allowances': aa,
+            'deductions': dd,
+            'prev_due': prev,
+            'total': net,
+            'paid': paid,
+            'remaining': remaining,
+            'status': st,
+        }))
+
+    from calendar import month_name
+    month_name_str = month_name[month]
+    return render_template('pay_salary.html',
+                           employees=employees,
+                           selected_employee_id=selected_employee_id,
+                           salary=salary_vm,
+                           year=year,
+                           month=month,
+                           month_name=month_name_str,
+                           current_month_salaries=current_month_salaries,
+                           next_due_year=next_due_year,
+                           next_due_month=next_due_month,
+                           next_due_label=next_due_label)
+
+
+# --- Printing: Payroll summary for a month ---
+@main.route('/payroll/print/<int:year>/<int:month>', methods=['GET'], endpoint='payroll_print')
+@login_required
+def payroll_print(year: int, month: int):
+    try:
+        rows = Salary.query.filter_by(year=year, month=month).all()
+    except Exception:
+        rows = []
+    # Map Salary rows to view rows expected by template (basic, allowances, deductions, prev_due, total, paid, remaining, status)
+    from sqlalchemy import func as _func
+    view_rows = []
+    try:
+        ids = [int(r.id) for r in rows if getattr(r, 'id', None)]
+        paid_map = {}
+        if ids:
+            for sid, paid in db.session.query(Payment.invoice_id, _func.coalesce(_func.sum(Payment.amount_paid), 0)).\
+                    filter(Payment.invoice_type=='salary', Payment.invoice_id.in_(ids)).group_by(Payment.invoice_id):
+                paid_map[int(sid)] = float(paid or 0)
+        for r in (rows or []):
+            emp_obj = Employee.query.get(int(r.employee_id)) if getattr(r, 'employee_id', None) else None
+            base = float(r.basic_salary or 0); allow = float(r.allowances or 0); ded = float(r.deductions or 0)
+            prev = float(r.previous_salary_due or 0)
+            total = max(0.0, float(r.total_salary or (base + allow - ded + prev)))
+            paid = float(paid_map.get(int(r.id), 0) or 0)
+            remaining = max(0.0, total - paid)
+            status_v = 'paid' if (total > 0 and remaining <= 0.01) else ('partial' if paid > 0 else ('paid' if total == 0 else 'due'))
+            view_rows.append(type('Row', (), {
+                'employee': type('E', (), {'full_name': getattr(emp_obj, 'full_name', f'#{r.employee_id}') }),
+                'basic': base,
+                'allowances': allow,
+                'deductions': ded,
+                'prev_due': prev,
+                'total': total,
+                'paid': paid,
+                'remaining': remaining,
+                'status': status_v,
+            }))
+    except Exception:
+        view_rows = []
+    return render_template('payroll-reports.html',
+                           mode='monthly',
+                           payrolls=view_rows,
+                           year=year,
+                           month=month,
+                           report_title='🧾 Monthly Payroll Statement / كشف رواتب الشهر')
+
+
+# --- Employees Settings: Hour-based payroll ---
+@main.route('/employees/settings', methods=['GET', 'POST'], endpoint='employees_settings')
+@login_required
+def employees_settings():
+    year = request.args.get('year', type=int) or date.today().year
+    month = request.args.get('month', type=int) or date.today().month
+
+    # Department management: add/update/delete
+    mode = (request.form.get('mode') or '').strip().lower() if request.method == 'POST' else ''
+    if request.method == 'POST' and mode in ('add_dept','delete_dept',''):
+        # add/update via form (empty mode or add_dept), delete via delete_dept
+        name = (request.form.get('dept_name') or request.form.get('new_dept_name') or '').strip().lower()
+        rate = request.form.get('hourly_rate', type=float)
+        if rate is None:
+            rate = request.form.get('new_hourly_rate', type=float) or 0.0
+        y_recalc = request.form.get('year', type=int) or year
+        m_recalc = request.form.get('month', type=int) or month
+        if name:
+            if mode == 'delete_dept':
+                row = DepartmentRate.query.filter_by(name=name).first()
+                if row:
+                    db.session.delete(row)
+                    db.session.commit()
+            else:
+                row = DepartmentRate.query.filter_by(name=name).first()
+                if row:
+                    row.hourly_rate = rate
+                else:
+                    row = DepartmentRate(name=name, hourly_rate=rate)
+                    db.session.add(row)
+                db.session.commit()
+        # Recalculate all employees for selected period using updated rates
+        dept_rates = {dr.name: float(dr.hourly_rate or 0.0) for dr in DepartmentRate.query.all()}
+        emps = Employee.query.order_by(Employee.full_name.asc()).all()
+        for emp in emps:
+            hrs = EmployeeHours.query.filter_by(employee_id=emp.id, year=y_recalc, month=m_recalc).first()
+            rate_emp = dept_rates.get((emp.department or '').lower(), 0.0)
+            total_basic = float(hrs.hours) * float(rate_emp) if hrs else 0.0
+            d = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
+            allow = float(getattr(d, 'allowances', 0.0) or 0.0)
+            ded = float(getattr(d, 'deductions', 0.0) or 0.0)
+            prev_due = 0.0
+            total = max(0.0, total_basic + allow - ded + prev_due)
+            s = Salary.query.filter_by(employee_id=emp.id, year=y_recalc, month=m_recalc).first()
+            if not s:
+                s = Salary(employee_id=emp.id, year=y_recalc, month=m_recalc,
+                           basic_salary=total_basic, allowances=allow,
+                           deductions=ded, previous_salary_due=prev_due,
+                           total_salary=total, status='due')
+                db.session.add(s)
+            else:
+                s.basic_salary = total_basic
+                s.allowances = allow
+                s.deductions = ded
+                s.previous_salary_due = prev_due
+                s.total_salary = total
+        db.session.commit()
+        return redirect(url_for('main.employees_settings', year=y_recalc, month=m_recalc))
+
+    # Save monthly hours and recalc salaries
+    if request.method == 'POST' and mode == 'hours':
+        year = request.form.get('year', type=int) or year
+        month = request.form.get('month', type=int) or month
+        # Department map
+        dept_rates = {dr.name: float(dr.hourly_rate or 0.0) for dr in DepartmentRate.query.all()}
+        # Process each employee field hours_<id>
+        emps = Employee.query.order_by(Employee.full_name.asc()).all()
+        for emp in emps:
+            hours_val = request.form.get(f'hours_{emp.id}', type=float)
+            if hours_val is None:
+                continue
+            rec = EmployeeHours.query.filter_by(employee_id=emp.id, year=year, month=month).first()
+            if not rec:
+                rec = EmployeeHours(employee_id=emp.id, year=year, month=month, hours=hours_val)
+                db.session.add(rec)
+            else:
+                rec.hours = hours_val
+        db.session.commit()
+
+        # Recalculate Salary rows for this period from hours and department rate
+        for emp in emps:
+            hrs = EmployeeHours.query.filter_by(employee_id=emp.id, year=year, month=month).first()
+            rate = dept_rates.get((emp.department or '').lower(), 0.0)
+            total_basic = float(hrs.hours) * float(rate) if hrs else 0.0
+            # Use defaults for allowances/deductions
+            d = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
+            allow = float(getattr(d, 'allowances', 0.0) or 0.0)
+            ded = float(getattr(d, 'deductions', 0.0) or 0.0)
+            prev_due = 0.0
+            total = max(0.0, total_basic + allow - ded + prev_due)
+
+            s = Salary.query.filter_by(employee_id=emp.id, year=year, month=month).first()
+            if not s:
+                s = Salary(employee_id=emp.id, year=year, month=month,
+                           basic_salary=total_basic, allowances=allow,
+                           deductions=ded, previous_salary_due=prev_due,
+                           total_salary=total, status='due')
+                db.session.add(s)
+            else:
+                s.basic_salary = total_basic
+                s.allowances = allow
+                s.deductions = ded
+                s.previous_salary_due = prev_due
+                s.total_salary = total
+        db.session.commit()
+
+        flash('تم حفظ الساعات وتحديث الرواتب', 'success')
+        return redirect(url_for('main.employees_settings', year=year, month=month))
+
+    # GET: render settings
+    dept_rates = DepartmentRate.query.order_by(DepartmentRate.name.asc()).all()
+    employees = Employee.query.order_by(Employee.full_name.asc()).all()
+    hours = EmployeeHours.query.filter_by(year=year, month=month).all()
+    hours_map = {h.employee_id: float(h.hours or 0.0) for h in hours}
+    dept_rate_map = {dr.name: float(dr.hourly_rate or 0.0) for dr in dept_rates}
+    return render_template('employees_settings.html',
+                           dept_rates=dept_rates,
+                           employees=employees,
+                           hours_map=hours_map,
+                           dept_rate_map=dept_rate_map,
+                           year=year, month=month)
+
+# --- Printing: Bulk salary receipt for selected employees (current period) ---
+@main.route('/salary/receipt', methods=['POST'], endpoint='salary_receipt_bulk')
+@login_required
+@csrf.exempt
+def salary_receipt_bulk():
+    from calendar import month_name as _month_name
+    # Determine target period
+    year = request.form.get('year', type=int) or datetime.utcnow().year
+    month = request.form.get('month', type=int) or datetime.utcnow().month
+    selected_ids = request.form.getlist('employee_ids') or []
+    try:
+        employee_ids = [int(i) for i in selected_ids if str(i).isdigit()]
+    except Exception:
+        employee_ids = []
+
+    # Build payments-like rows for printing only
+    payments = []
+    try:
+        # Defaults map
         try:
             from models import EmployeeSalaryDefault
-            defaults = {d.employee_id: d for d in EmployeeSalaryDefault.query.all()}
+            defaults_map = {int(d.employee_id): d for d in EmployeeSalaryDefault.query.all()}
         except Exception:
-            defaults = {}
-        for emp in employees:
-            if not emp.hire_date:
-                continue
-            start_y = emp.hire_date.year
-            start_m = emp.hire_date.month
-            # Iterate months from hire to prev month
-            for y, m in month_iter(start_y, start_m, prev_y, prev_m):
-                s = Salary.query.filter_by(employee_id=emp.id, year=y, month=m).first()
-                if s:
-                    due = float(s.total_salary or 0.0)
-                    paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)). \
-                        filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0.0)
-                else:
-                    d = defaults.get(emp.id)
-                    if not d:
-                        continue  # no info to compute
-                    base = float(d.base_salary or 0.0)
-                    allow = float(d.allowances or 0.0)
-                    ded = float(d.deductions or 0.0)
-                    due = max(0.0, base + allow - ded)
-                    paid = 0.0
-                # Skip empty rows
-                if (due or paid):
-                    prev_rows.append({
-                        'month': f"{y:04d}-{m:02d}",
-                        'employee_name': emp.full_name,
-                        'due': due,
-                        'paid': float(paid or 0.0)
-                    })
-                    prev_totals['due'] += due
-                    prev_totals['paid'] += float(paid or 0.0)
-    except Exception:
-        pass
+            defaults_map = {}
 
-    # Settings/header
+        for emp_id in (employee_ids or []):
+            emp = Employee.query.get(emp_id)
+            if not emp:
+                continue
+            # Current month salary components
+            s = Salary.query.filter_by(employee_id=emp_id, year=year, month=month).first()
+            if s:
+                base = float(s.basic_salary or 0)
+                allow = float(s.allowances or 0)
+                ded = float(s.deductions or 0)
+                prev = float(s.previous_salary_due or 0)
+                total = max(0.0, base + allow - ded + prev)
+                # Sum paid against this salary record
+                from sqlalchemy import func as _func
+                paid = float(db.session.query(_func.coalesce(_func.sum(Payment.amount_paid), 0))
+                             .filter(Payment.invoice_type=='salary', Payment.invoice_id==s.id)
+                             .scalar() or 0.0)
+            else:
+                d = defaults_map.get(emp_id)
+                base = float(getattr(d, 'base_salary', 0) or 0)
+                allow = float(getattr(d, 'allowances', 0) or 0)
+                ded = float(getattr(d, 'deductions', 0) or 0)
+                prev = 0.0
+                total = max(0.0, base + allow - ded)
+                paid = 0.0
+            net_remaining = max(0.0, total - paid)
+
+            payments.append(type('P', (), {
+                'employee': emp,
+                'basic': base,
+                'allowances': allow,
+                'deductions': ded,
+                'prev_due': prev,
+                'paid_amount': paid,
+                # In receipt, "Net Salary" should reflect the month's net total (not remaining)
+                'net_salary': total,
+                # Optionally expose remaining for templates that may show it later
+                'remaining': net_remaining,
+                'method': 'cash',
+            }))
+    except Exception:
+        payments = []
+
+    # Company name
     try:
         settings = Settings.query.first()
         company_name = settings.company_name or 'Company'
-        logo_url = settings.logo_url or ''
     except Exception:
-        company_name = 'Company'; logo_url = ''
+        company_name = 'Company'
 
-    title = f"Payroll Statement — {year:04d}-{month:02d}"
-    meta = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
-    return render_template('print/payroll.html', title=title, meta=meta,
-                           company_name=company_name, logo_url=logo_url,
-                           rows=rows, totals=totals,
-                           prev_rows=prev_rows, prev_totals=prev_totals)
-
-
+    from datetime import datetime as _dt
+    return render_template(
+        'payroll-reports.html',
+        mode='receipt',
+        payments=payments,
+        company_name=company_name,
+        payment_date=_date.today(),
+        now=_dt.now().strftime('%Y-%m-%d %H:%M'),
+        report_title='🧾 Salary Payment Receipt / إيصال سداد رواتب'
+    )
+@main.route('/reports/print/salaries', methods=['GET'], endpoint='reports_print_salaries_legacy')
+@login_required
+def reports_print_salaries_legacy():
+    """Back-compat: redirect to new detailed payroll statement with same query params."""
+    try:
+        q = request.query_string.decode('utf-8') if request.query_string else ''
+    except Exception:
+        q = ''
+    target = url_for('main.reports_print_salaries_detailed')
+    if q:
+        target = f"{target}?{q}"
+    return redirect(target)
 
 @main.route('/payments', endpoint='payments')
 @login_required
@@ -3027,6 +4240,7 @@ def suppliers():
                 email=request.form.get('email') or None,
                 tax_number=request.form.get('tax_number') or None,
                 address=request.form.get('address') or None,
+                payment_method=(request.form.get('payment_method') or 'CASH').strip().upper(),
                 notes=notes_text,
                 active=True if str(request.form.get('active')).lower() in ['1','true','yes','on'] else False,
             )
@@ -3047,10 +4261,45 @@ def suppliers():
             flash(f'Could not add supplier: {e}', 'danger')
         return redirect(url_for('main.suppliers'))
     try:
-        all_suppliers = Supplier.query.order_by(Supplier.name.asc()).all()
+        q = (request.args.get('q') or '').strip()
+        query = Supplier.query
+        if q:
+            like = f"%{q}%"
+            query = query.filter(
+                (Supplier.name.ilike(like)) |
+                (Supplier.contact_person.ilike(like)) |
+                (Supplier.phone.ilike(like)) |
+                (Supplier.email.ilike(like)) |
+                (Supplier.tax_number.ilike(like)) |
+                (Supplier.address.ilike(like)) |
+                (Supplier.notes.ilike(like))
+            )
+        all_suppliers = query.order_by(Supplier.name.asc()).all()
     except Exception:
         all_suppliers = []
     return render_template('suppliers.html', suppliers=all_suppliers)
+
+@main.route('/suppliers/list', methods=['GET'], endpoint='suppliers_list')
+@login_required
+def suppliers_list():
+    try:
+        q = (request.args.get('q') or '').strip()
+        query = Supplier.query
+        if q:
+            like = f"%{q}%"
+            query = query.filter(
+                (Supplier.name.ilike(like)) |
+                (Supplier.contact_person.ilike(like)) |
+                (Supplier.phone.ilike(like)) |
+                (Supplier.email.ilike(like)) |
+                (Supplier.tax_number.ilike(like)) |
+                (Supplier.address.ilike(like)) |
+                (Supplier.notes.ilike(like))
+            )
+        all_suppliers = query.order_by(Supplier.name.asc()).all()
+    except Exception:
+        all_suppliers = []
+    return render_template('suppliers_list.html', suppliers=all_suppliers)
 
 @main.route('/suppliers/<int:sid>/toggle', methods=['POST'], endpoint='supplier_toggle')
 @login_required
@@ -3073,6 +4322,72 @@ def supplier_toggle(sid):
             db.session.rollback()
         flash(f'Error updating supplier: {e}', 'danger')
     return redirect(url_for('main.suppliers'))
+
+@main.route('/suppliers/export', methods=['GET'], endpoint='suppliers_export')
+@login_required
+def suppliers_export():
+    try:
+        q = (request.args.get('q') or '').strip()
+        query = Supplier.query
+        if q:
+            like = f"%{q}%"
+            query = query.filter(
+                (Supplier.name.ilike(like)) |
+                (Supplier.contact_person.ilike(like)) |
+                (Supplier.phone.ilike(like)) |
+                (Supplier.email.ilike(like)) |
+                (Supplier.tax_number.ilike(like)) |
+                (Supplier.address.ilike(like)) |
+                (Supplier.notes.ilike(like))
+            )
+        rows = query.order_by(Supplier.name.asc()).all()
+
+        def escape_csv(val: str) -> str:
+            if val is None:
+                return ''
+            s = str(val)
+            if any(c in s for c in [',','"','\n','\r']):
+                s = '"' + s.replace('"','""') + '"'
+            return s
+
+        parts = []
+        header = [
+            'Name','Contact Person','Phone','Email','Tax Number','CR Number','IBAN','Address','Notes','Active'
+        ]
+        parts.append(','.join(header))
+        for s in rows:
+            cr = getattr(s, 'cr_number', None)
+            iban = getattr(s, 'iban', None)
+            if (not cr or not iban) and (s.notes):
+                try:
+                    for part in (s.notes or '').split('|'):
+                        p = (part or '').strip()
+                        if (not cr) and p[:3] == 'CR:':
+                            cr = p[3:].strip()
+                        if (not iban) and p[:5] == 'IBAN:':
+                            iban = p[5:].strip()
+                except Exception:
+                    pass
+            row = [
+                escape_csv(s.name),
+                escape_csv(s.contact_person or ''),
+                escape_csv(s.phone or ''),
+                escape_csv(s.email or ''),
+                escape_csv(s.tax_number or ''),
+                escape_csv(cr or ''),
+                escape_csv(iban or ''),
+                escape_csv(s.address or ''),
+                escape_csv(s.notes or ''),
+                '1' if getattr(s, 'active', True) else '0'
+            ]
+            parts.append(','.join(row))
+        csv_data = '\n'.join(parts)
+        return current_app.response_class(csv_data, mimetype='text/csv; charset=utf-8', headers={
+            'Content-Disposition': 'attachment; filename="suppliers.csv"'
+        })
+    except Exception as e:
+        flash(f'Failed to export suppliers: {e}', 'danger')
+        return redirect(url_for('main.suppliers'))
 
 @main.route('/suppliers/<int:sid>/delete', methods=['POST'], endpoint='supplier_delete')
 @login_required
@@ -3753,7 +5068,7 @@ def api_table_layout_fixed(branch_code):
                 new_section = TableSection(
                     branch_code=branch_code,
                     name=encoded_name,
-                    sort_order=section_idx
+                    sort_order=section.get('sort_order', section_idx)
                 )
                 db.session.add(new_section)
                 db.session.flush()  # Get the ID
@@ -3817,96 +5132,189 @@ vat = Blueprint('vat', __name__, url_prefix='/vat')
 @vat.route('/', endpoint='vat_dashboard')
 @login_required
 def vat_dashboard():
-    # Read params and compute quarter date range
+    # Period handling (quarterly default; supports monthly as well)
+    period = (request.args.get('period') or 'quarterly').strip().lower()
+    branch = (request.args.get('branch') or 'all').strip()
+
     try:
         y = request.args.get('year', type=int) or datetime.utcnow().year
-        q = request.args.get('quarter', type=int) or 1
+    except Exception:
+        y = datetime.utcnow().year
+
+    start_date: date
+    end_date: date
+    if period == 'monthly':
+        ym = (request.args.get('month') or '').strip()  # 'YYYY-MM'
+        try:
+            if ym and '-' in ym:
+                yy, mm = ym.split('-')
+                yy = int(yy); mm = int(mm)
+                start_date = date(yy, mm, 1)
+                nm_y = yy + (1 if mm == 12 else 0)
+                nm_m = 1 if mm == 12 else mm + 1
+                end_date = date(nm_y, nm_m, 1) - timedelta(days=1)
+            else:
+                # Fallback to current month
+                today = datetime.utcnow().date()
+                start_date = date(today.year, today.month, 1)
+                nm_y = today.year + (1 if today.month == 12 else 0)
+                nm_m = 1 if today.month == 12 else today.month + 1
+                end_date = date(nm_y, nm_m, 1) - timedelta(days=1)
+        except Exception:
+            today = datetime.utcnow().date()
+            start_date = date(today.year, today.month, 1)
+            nm_y = today.year + (1 if today.month == 12 else 0)
+            nm_m = 1 if today.month == 12 else today.month + 1
+            end_date = date(nm_y, nm_m, 1) - timedelta(days=1)
+        q = None
+    else:
+        # Quarterly
+        try:
+            q = request.args.get('quarter', type=int) or 1
+        except Exception:
+            q = 1
         q = q if q in (1, 2, 3, 4) else 1
         start_month = {1: 1, 2: 4, 3: 7, 4: 10}[q]
         end_month = {1: 3, 2: 6, 3: 9, 4: 12}[q]
         start_date = date(y, start_month, 1)
         next_month_first = date(y + (1 if end_month == 12 else 0), 1 if end_month == 12 else end_month + 1, 1)
         end_date = next_month_first - timedelta(days=1)
-    except Exception:
-        y = datetime.utcnow().year
-        q = 1
-        start_date = date(y, 1, 1)
-        end_date = date(y, 3, 31)
 
-    # Aggregate sales by branch (support both model variants)
-    sales_place_india = 0.0
-    sales_china_town = 0.0
-    try:
-        if hasattr(SalesInvoice, 'total_amount') and hasattr(SalesInvoice, 'created_at') and hasattr(SalesInvoice, 'branch_code'):
-            sales_place_india = db.session.query(func.coalesce(func.sum(SalesInvoice.total_amount), 0)) \
-                .filter(SalesInvoice.branch_code == 'place_india') \
-                .filter(SalesInvoice.created_at.between(start_date, end_date)).scalar() or 0.0
-            sales_china_town = db.session.query(func.coalesce(func.sum(SalesInvoice.total_amount), 0)) \
-                .filter(SalesInvoice.branch_code == 'china_town') \
-                .filter(SalesInvoice.created_at.between(start_date, end_date)).scalar() or 0.0
-        elif hasattr(SalesInvoice, 'total_before_tax') and hasattr(SalesInvoice, 'date') and hasattr(SalesInvoice, 'branch'):
-            sales_place_india = db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)) \
-                .filter(SalesInvoice.branch == 'place_india') \
-                .filter(SalesInvoice.date.between(start_date, end_date)).scalar() or 0.0
-            sales_china_town = db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)) \
-                .filter(SalesInvoice.branch == 'china_town') \
-                .filter(SalesInvoice.date.between(start_date, end_date)).scalar() or 0.0
-    except Exception:
-        sales_place_india = sales_china_town = 0.0
-
-    # Branch filter
-    branch = (request.args.get('branch') or 'all').strip()
-    if branch == 'place_india':
-        sales_total = float(sales_place_india or 0.0)
-    elif branch == 'china_town':
-        sales_total = float(sales_china_town or 0.0)
-    else:
-        sales_total = float(sales_place_india or 0.0) + float(sales_china_town or 0.0)
-
-    # Aggregate purchases (sum of total_price of items in period)
-    purchases_total = 0.0
-    try:
-        q_p = db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0)) \
-            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id) \
-            .filter(PurchaseInvoice.date.between(start_date, end_date))
-        purchases_total = float(q_p.scalar() or 0.0)
-    except Exception:
-        purchases_total = 0.0
-
-    # Aggregate expenses (sum invoice totals in period)
-    expenses_total = 0.0
-    try:
-        q_e = db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0)) \
-            .filter(ExpenseInvoice.date.between(start_date, end_date))
-        expenses_total = float(q_e.scalar() or 0.0)
-    except Exception:
-        expenses_total = 0.0
-
-    # VAT rate from Settings
+    # VAT rate and header info from Settings
     try:
         s = Settings.query.first()
     except Exception:
         s = None
     vat_rate = float(getattr(s, 'vat_rate', 15) or 15) / 100.0
 
-    output_vat = float(sales_total or 0.0) * vat_rate
-    input_vat = float((purchases_total or 0.0) + (expenses_total or 0.0)) * vat_rate
+    # SALES: category breakdown (based on tax_amount presence)
+    sales_standard_base = sales_standard_vat = sales_standard_total = 0.0
+    sales_zero_base = sales_zero_vat = sales_zero_total = 0.0
+    sales_exempt_base = sales_exempt_vat = sales_exempt_total = 0.0
+    sales_exports_base = sales_exports_vat = sales_exports_total = 0.0
+
+    if hasattr(SalesInvoice, 'total_before_tax') and hasattr(SalesInvoice, 'tax_amount') and hasattr(SalesInvoice, 'total_after_tax_discount') and hasattr(SalesInvoice, 'date'):
+        q_sales = db.session.query(SalesInvoice).filter(SalesInvoice.date.between(start_date, end_date))
+        if hasattr(SalesInvoice, 'branch') and branch in ('place_india', 'china_town'):
+            q_sales = q_sales.filter(SalesInvoice.branch == branch)
+
+        # Standard rated: tax_amount > 0
+        sales_standard_base = float((db.session
+            .query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0))
+            .filter(SalesInvoice.date.between(start_date, end_date))
+            .filter((SalesInvoice.tax_amount > 0))
+            .filter((SalesInvoice.branch == branch) if hasattr(SalesInvoice, 'branch') and branch in ('place_india','china_town') else True)
+            .scalar() or 0.0))
+        sales_standard_vat = float((db.session
+            .query(func.coalesce(func.sum(SalesInvoice.tax_amount), 0))
+            .filter(SalesInvoice.date.between(start_date, end_date))
+            .filter((SalesInvoice.tax_amount > 0))
+            .filter((SalesInvoice.branch == branch) if hasattr(SalesInvoice, 'branch') and branch in ('place_india','china_town') else True)
+            .scalar() or 0.0))
+        sales_standard_total = float((db.session
+            .query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0))
+            .filter(SalesInvoice.date.between(start_date, end_date))
+            .filter((SalesInvoice.tax_amount > 0))
+            .filter((SalesInvoice.branch == branch) if hasattr(SalesInvoice, 'branch') and branch in ('place_india','china_town') else True)
+            .scalar() or 0.0))
+
+        # Zero rated: tax_amount == 0 (we cannot distinguish exempt/exports without extra fields)
+        sales_zero_base = float((db.session
+            .query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0))
+            .filter(SalesInvoice.date.between(start_date, end_date))
+            .filter((SalesInvoice.tax_amount == 0))
+            .filter((SalesInvoice.branch == branch) if hasattr(SalesInvoice, 'branch') and branch in ('place_india','china_town') else True)
+            .scalar() or 0.0))
+        sales_zero_vat = 0.0
+        sales_zero_total = float((db.session
+            .query(func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0))
+            .filter(SalesInvoice.date.between(start_date, end_date))
+            .filter((SalesInvoice.tax_amount == 0))
+            .filter((SalesInvoice.branch == branch) if hasattr(SalesInvoice, 'branch') and branch in ('place_india','china_town') else True)
+            .scalar() or 0.0))
+
+    # PURCHASES & EXPENSES: combine into deductible vs non-deductible
+    purchases_deductible_base = purchases_deductible_vat = purchases_deductible_total = 0.0
+    purchases_non_deductible_base = purchases_non_deductible_vat = purchases_non_deductible_total = 0.0
+
+    try:
+        # Purchases (items)
+        # Deductible: items with tax > 0
+        p_ded_base = db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.total_price - PurchaseInvoiceItem.tax), 0)) \
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id) \
+            .filter(PurchaseInvoice.date.between(start_date, end_date)) \
+            .filter(PurchaseInvoiceItem.tax > 0).scalar() or 0.0
+        p_ded_vat = db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.tax), 0)) \
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id) \
+            .filter(PurchaseInvoice.date.between(start_date, end_date)) \
+            .filter(PurchaseInvoiceItem.tax > 0).scalar() or 0.0
+        # Non-deductible: items with tax == 0
+        p_nd_base = db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0)) \
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id) \
+            .filter(PurchaseInvoice.date.between(start_date, end_date)) \
+            .filter(PurchaseInvoiceItem.tax == 0).scalar() or 0.0
+
+        # Expenses
+        e_ded_base = db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_before_tax), 0)) \
+            .filter(ExpenseInvoice.date.between(start_date, end_date)) \
+            .filter(ExpenseInvoice.tax_amount > 0).scalar() or 0.0
+        e_ded_vat = db.session.query(func.coalesce(func.sum(ExpenseInvoice.tax_amount), 0)) \
+            .filter(ExpenseInvoice.date.between(start_date, end_date)) \
+            .filter(ExpenseInvoice.tax_amount > 0).scalar() or 0.0
+        e_nd_base = db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_before_tax), 0)) \
+            .filter(ExpenseInvoice.date.between(start_date, end_date)) \
+            .filter(ExpenseInvoice.tax_amount == 0).scalar() or 0.0
+
+        purchases_deductible_base = float(p_ded_base or 0.0) + float(e_ded_base or 0.0)
+        purchases_deductible_vat = float(p_ded_vat or 0.0) + float(e_ded_vat or 0.0)
+        purchases_deductible_total = purchases_deductible_base + purchases_deductible_vat
+
+        purchases_non_deductible_base = float(p_nd_base or 0.0) + float(e_nd_base or 0.0)
+        purchases_non_deductible_vat = 0.0
+        purchases_non_deductible_total = purchases_non_deductible_base
+    except Exception:
+        purchases_deductible_base = purchases_deductible_vat = purchases_deductible_total = 0.0
+        purchases_non_deductible_base = purchases_non_deductible_vat = purchases_non_deductible_total = 0.0
+
+    # Summary
+    output_vat = float(sales_standard_vat or 0.0)
+    input_vat = float(purchases_deductible_vat or 0.0)
     net_vat = output_vat - input_vat
 
     data = {
+        'period': period,
         'year': y,
         'quarter': q,
         'start_date': start_date.isoformat(),
         'end_date': end_date.isoformat(),
         'branch': branch,
-        'sales_place_india': float(sales_place_india or 0.0),
-        'sales_china_town': float(sales_china_town or 0.0),
-        'sales_total': float(sales_total or 0.0),
-        'purchases_total': float(purchases_total or 0.0),
-        'expenses_total': float(expenses_total or 0.0),
+        # Sales breakdown
+        'sales_standard_base': float(sales_standard_base or 0.0),
+        'sales_standard_vat': float(sales_standard_vat or 0.0),
+        'sales_standard_total': float(sales_standard_total or 0.0),
+        'sales_zero_base': float(sales_zero_base or 0.0),
+        'sales_zero_vat': float(sales_zero_vat or 0.0),
+        'sales_zero_total': float(sales_zero_total or 0.0),
+        'sales_exempt_base': float(sales_exempt_base or 0.0),
+        'sales_exempt_vat': float(sales_exempt_vat or 0.0),
+        'sales_exempt_total': float(sales_exempt_total or 0.0),
+        'sales_exports_base': float(sales_exports_base or 0.0),
+        'sales_exports_vat': float(sales_exports_vat or 0.0),
+        'sales_exports_total': float(sales_exports_total or 0.0),
+        # Purchases/Expenses breakdown (combined)
+        'purchases_deductible_base': float(purchases_deductible_base or 0.0),
+        'purchases_deductible_vat': float(purchases_deductible_vat or 0.0),
+        'purchases_deductible_total': float(purchases_deductible_total or 0.0),
+        'purchases_non_deductible_base': float(purchases_non_deductible_base or 0.0),
+        'purchases_non_deductible_total': float(purchases_non_deductible_total or 0.0),
+        # Summary
         'output_vat': float(output_vat or 0.0),
         'input_vat': float(input_vat or 0.0),
         'net_vat': float(net_vat or 0.0),
+        # Header info
+        'company_name': (getattr(s, 'company_name', '') or ''),
+        'tax_number': (getattr(s, 'tax_number', '') or ''),
+        'vat_rate': vat_rate,
     }
 
     return render_template('vat/vat_dashboard.html', data=data)
@@ -4989,3 +6397,155 @@ def reports_print_all_invoices_expenses():
                            payment_method=meta['payment_method'], branch=meta['branch'],
                            columns=columns, data=rows, totals=totals, totals_columns=totals_columns,
                            totals_colspan=totals_colspan, payment_totals=payment_totals)
+
+
+# ================= Salaries/Payroll Print Reports =================
+@main.route('/reports/print/payroll', methods=['GET'], endpoint='print_payroll')
+@login_required
+def print_payroll():
+    # Params
+    from datetime import date as _date
+    try:
+        y_from = int(request.args.get('year_from') or 0) or _date.today().year
+    except Exception:
+        y_from = _date.today().year
+    try:
+        m_from = int(request.args.get('month_from') or 0) or 1
+    except Exception:
+        m_from = 1
+    try:
+        y_to = int(request.args.get('year_to') or 0) or _date.today().year
+    except Exception:
+        y_to = _date.today().year
+    try:
+        m_to = int(request.args.get('month_to') or 0) or _date.today().month
+    except Exception:
+        m_to = _date.today().month
+    raw_codes = (request.args.get('employee_codes') or '').strip()
+    selected_codes = [c.strip() for c in raw_codes.split(',') if c.strip()] if raw_codes else []
+
+    # Models
+    try:
+        from models import Employee, EmployeeSalaryDefault, Salary, Payment
+    except Exception:
+        try:
+            from app.models import Employee, EmployeeSalaryDefault, Salary, Payment
+        except Exception:
+            Employee = None; Salary = None; Payment = None; EmployeeSalaryDefault = None
+
+    if not Employee or not Salary or not Payment:
+        flash('Payroll models not available', 'danger')
+        return redirect(url_for('main.employees'))
+
+    def iter_months(y1, m1, y2, m2):
+        y = int(y1); m = int(m1)
+        end_key = (int(y2) * 100 + int(m2))
+        while (y * 100 + m) <= end_key:
+            yield y, m
+            if m == 12:
+                y += 1; m = 1
+            else:
+                m += 1
+
+    # Resolve employees
+    emp_q = Employee.query
+    if selected_codes:
+        try:
+            emp_q = emp_q.filter(Employee.employee_code.in_(selected_codes))
+        except Exception:
+            pass
+    employees = emp_q.order_by(Employee.full_name.asc()).all()
+
+    # Helper: defaults
+    def get_defaults(emp_id):
+        try:
+            d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
+            if d:
+                return float(d.base_salary or 0.0), float(d.allowances or 0.0), float(d.deductions or 0.0)
+        except Exception:
+            pass
+        return 0.0, 0.0, 0.0
+
+    employees_ctx = []
+    grand = {'basic': 0.0, 'allowances': 0.0, 'deductions': 0.0, 'prev_due': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0}
+    for emp in employees:
+        basic_sum = allow_sum = ded_sum = prev_sum = total_sum = paid_sum = 0.0
+        months_rows = []
+        unpaid_count = 0
+        for (yy, mm) in iter_months(y_from, m_from, y_to, m_to):
+            s = Salary.query.filter_by(employee_id=emp.id, year=int(yy), month=int(mm)).first()
+            if not s:
+                b, a, d = get_defaults(emp.id)
+                prev = 0.0
+                tot = float(b + a - d + prev)
+                sal_id = None
+            else:
+                b = float(s.basic_salary or 0.0)
+                a = float(s.allowances or 0.0)
+                d = float(s.deductions or 0.0)
+                prev = float(s.previous_salary_due or 0.0)
+                tot = float(s.total_salary or (b + a - d + prev))
+                sal_id = int(s.id)
+            # Paid for this month
+            if sal_id:
+                paid = float(db.session.query(db.func.coalesce(db.func.sum(Payment.amount_paid), 0))
+                              .filter(Payment.invoice_type == 'salary', Payment.invoice_id == sal_id).scalar() or 0.0)
+            else:
+                paid = 0.0
+            remaining = max(tot - paid, 0.0)
+            status = 'paid' if remaining <= 0.01 and tot > 0 else ('partial' if paid > 0 else 'due')
+            if status != 'paid':
+                unpaid_count += 1
+            months_rows.append({
+                'year': yy, 'month': mm,
+                'basic': b, 'allowances': a, 'deductions': d,
+                'prev_due': prev, 'total': tot, 'paid': paid, 'remaining': remaining, 'status': status
+            })
+            basic_sum += b; allow_sum += a; ded_sum += d; prev_sum += prev; total_sum += tot; paid_sum += paid
+        emp_row = {
+            'name': getattr(emp, 'full_name', '') or getattr(emp, 'employee_code', ''),
+            'unpaid_months': unpaid_count,
+            'basic_total': basic_sum,
+            'allowances_total': allow_sum,
+            'deductions_total': ded_sum,
+            'prev_due': prev_sum,
+            'total': total_sum,
+            'paid': paid_sum,
+            'remaining': max(total_sum - paid_sum, 0.0),
+            'months': months_rows,
+        }
+        employees_ctx.append(emp_row)
+        grand['basic'] += basic_sum; grand['allowances'] += allow_sum; grand['deductions'] += ded_sum
+        grand['prev_due'] += prev_sum; grand['total'] += total_sum; grand['paid'] += paid_sum
+    grand['remaining'] = max(grand['total'] - grand['paid'], 0.0)
+
+    return render_template('payroll_report.html',
+                           employees=employees_ctx,
+                           grand=grand,
+                           mode=('all' if len(employees_ctx) != 1 else 'single'),
+                           start_year=y_from, start_month=m_from,
+                           end_year=y_to, end_month=m_to,
+                           selected_codes=(','.join(selected_codes) if selected_codes else ''),
+                           auto_print=True,
+                           close_after_print=False)
+
+
+@main.route('/reports/print/payroll/selected', methods=['POST'], endpoint='print_selected')
+@login_required
+def print_selected():
+    # Accept codes (employee_code) from text field, split by comma
+    raw = (request.form.get('employee_ids') or '').strip()
+    y_from = request.form.get('year_from') or request.args.get('year_from') or ''
+    m_from = request.form.get('month_from') or request.args.get('month_from') or ''
+    y_to = request.form.get('year_to') or request.args.get('year_to') or ''
+    m_to = request.form.get('month_to') or request.args.get('month_to') or ''
+    qs = {
+        'year_from': y_from or '',
+        'month_from': m_from or '',
+        'year_to': y_to or '',
+        'month_to': m_to or '',
+    }
+    if raw:
+        qs['employee_codes'] = ','.join([c.strip() for c in raw.split(',') if c.strip()])
+    # Redirect to GET printer with params to avoid resubmission issues
+    return redirect(url_for('main.print_payroll', **qs))

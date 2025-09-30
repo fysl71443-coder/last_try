@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">🧾 اختيار الموظفين لطباعة التقرير</h3>
+    <a href="{{ url_for('main.employees') }}" class="btn btn-outline-primary btn-sm">⬅︎ رجوع للموظفين</a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('reports.payroll_report') }}" class="row g-2 align-items-end" onsubmit="event.preventDefault(); const u=new URL(this.action, window.location.origin); const p=new URLSearchParams(new FormData(this)); window.openPrintModal(u+'?'+p.toString()); return false;">
+        <div class="col-auto">
+          <label class="form-label mb-0">من سنة</label>
+          <input type="number" name="year_from" value="{{ start_year }}" class="form-control form-control-sm" style="width:110px">
+        </div>
+        <div class="col-auto">
+          <label class="form-label mb-0">من شهر</label>
+          <input type="number" name="month_from" value="{{ start_month }}" min="1" max="12" class="form-control form-control-sm" style="width:90px">
+        </div>
+        <div class="col-auto">
+          <label class="form-label mb-0">إلى سنة</label>
+          <input type="number" name="year_to" value="{{ end_year }}" class="form-control form-control-sm" style="width:110px">
+        </div>
+        <div class="col-auto">
+          <label class="form-label mb-0">إلى شهر</label>
+          <input type="number" name="month_to" value="{{ end_month }}" min="1" max="12" class="form-control form-control-sm" style="width:90px">
+        </div>
+        <input type="hidden" name="print" value="1">
+        <div class="col-auto">
+          <button type="submit" class="btn btn-secondary btn-sm">📄 عرض تقرير الجميع</button>
+        </div>
+        <div class="col ms-auto">
+          <input type="text" id="q" class="form-control form-control-sm" placeholder="🔍 بحث بالاسم/الرمز/القسم" oninput="filterRows()">
+        </div>
+      </form>
+      <div class="small text-muted mt-2">
+        المعروض: <span id="shownCount">{{ employees|length }}</span> من <span id="totalCount">{{ employees|length }}</span>
+      </div>
+      <div class="small text-muted mt-1">استخدم مربع الاختيار العلوي لتحديد/إلغاء تحديد المعروض فقط.</div>
+    </div>
+  </div>
+
+  <form method="POST" action="{{ url_for('reports.payroll_report_selected') }}" id="selectForm" onsubmit="return openPrintModalAndSubmit(this)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="year_from" value="{{ start_year }}">
+    <input type="hidden" name="month_from" value="{{ start_month }}">
+    <input type="hidden" name="year_to" value="{{ end_year }}">
+    <input type="hidden" name="month_to" value="{{ end_month }}">
+    <input type="hidden" name="employee_ids" id="employee_ids">
+
+    <div class="d-flex justify-content-between align-items-center mb-2 small">
+      <div>
+        المحدد: <span id="selCount">0</span>
+        <span class="text-muted">| استخدم المربع لتحديد الكل (حسب التصفية)</span>
+      </div>
+      <div>
+        <a href="#" onclick="clearSelection(); return false;" class="text-decoration-none">مسح التحديد</a>
+      </div>
+    </div>
+
+    <div class="table-responsive" style="max-height: 420px;">
+      <table id="empTable" class="table table-sm table-bordered table-hover align-middle">
+        <thead class="table-light position-sticky top-0" style="z-index: 1;">
+          <tr>
+            <th style="width:46px"><input class="form-check-input" type="checkbox" id="check_all"></th>
+            <th style="width:56px">#</th>
+            <th class="d-none d-md-table-cell">الرمز</th>
+            <th>الموظف</th>
+            <th class="d-none d-md-table-cell">القسم</th>
+            <th class="d-none d-md-table-cell">الحالة</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in employees %}
+          <tr>
+            <td><input type="checkbox" class="form-check-input emp" value="{{ e.id }}" onchange="updateSel()"></td>
+            <td class="text-nowrap">{{ loop.index }}</td>
+            <td class="d-none d-md-table-cell">{{ e.code or e.employee_code or '-' }}</td>
+            <td class="text-start">{{ e.full_name }}</td>
+            <td class="d-none d-md-table-cell">{{ e.department or '-' }}</td>
+            <td class="d-none d-md-table-cell">
+              {% if e.status == 'active' %}
+                <span class="badge bg-success">نشط</span>
+              {% else %}
+                <span class="badge bg-secondary">غير نشط</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center gap-2 mt-3">
+      <a href="{{ url_for('main.employees') }}" class="btn btn-outline-primary btn-sm">⬅︎ رجوع</a>
+      <button type="button" class="btn btn-primary" onclick="submitSelected()" id="printBtn" disabled>🖨️ طباعة المحددين</button>
+    </div>
+  </form>
+</div>
+
+<style>
+  @media print {
+    .btn, .card, .table-responsive, input, select { display: none !important; }
+  }
+</style>
+
+<script>
+  const checkAll = document.getElementById('check_all');
+  const table = document.getElementById('empTable');
+  const q = document.getElementById('q');
+  const selCount = document.getElementById('selCount');
+  const shownCount = document.getElementById('shownCount');
+  const totalCount = document.getElementById('totalCount');
+  const printBtn = document.getElementById('printBtn');
+
+  function visibleRows(){
+    return Array.from(table.tBodies[0].rows).filter(r => r.style.display !== 'none');
+  }
+  function updateSel(){
+    const c = table.querySelectorAll('input.emp:checked').length;
+    selCount.textContent = c;
+    printBtn.disabled = c === 0;
+  }
+  function clearSelection(){
+    table.querySelectorAll('input.emp:checked').forEach(ch => ch.checked = false);
+    updateSel();
+    checkAll.checked = false;
+  }
+  checkAll.addEventListener('change', function(e){
+    visibleRows().forEach(r => { const ch = r.querySelector('input.emp'); if (ch) ch.checked = e.target.checked; });
+    updateSel();
+  });
+  function filterRows(){
+    const term = (q.value || '').toLowerCase().trim();
+    let shown = 0;
+    Array.from(table.tBodies[0].rows).forEach(r => {
+      const txt = r.innerText.toLowerCase();
+      const vis = term === '' || txt.includes(term);
+      r.style.display = vis ? '' : 'none';
+      if (vis) shown++;
+    });
+    shownCount.textContent = shown;
+  }
+  function submitSelected(){
+    const ids = Array.from(table.querySelectorAll('input.emp:checked')).map(x=>x.value);
+    if(ids.length === 0){ alert('اختر موظفًا واحدًا على الأقل'); return; }
+    document.getElementById('employee_ids').value = ids.join(',');
+    document.getElementById('selectForm').submit();
+  }
+  // init counts
+  totalCount.textContent = table.tBodies[0].rows.length;
+  updateSel();
+</script>
+{% endblock %}
