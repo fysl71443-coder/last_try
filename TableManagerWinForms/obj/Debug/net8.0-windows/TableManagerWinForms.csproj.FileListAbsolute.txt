@@ -13,3 +13,18 @@ C:\Users\DELL\Documents\augment-projects\CHINA TOWN-PLACE INDIA\TableManagerWinF
 C:\Users\DELL\Documents\augment-projects\CHINA TOWN-PLACE INDIA\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.pdb
 C:\Users\DELL\Documents\augment-projects\CHINA TOWN-PLACE INDIA\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.genruntimeconfig.cache
 C:\Users\DELL\Documents\augment-projects\CHINA TOWN-PLACE INDIA\TableManagerWinForms\obj\Debug\net8.0-windows\ref\TableManagerWinForms.dll
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\bin\Debug\net8.0-windows\TableManagerWinForms.exe
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\bin\Debug\net8.0-windows\TableManagerWinForms.deps.json
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\bin\Debug\net8.0-windows\TableManagerWinForms.runtimeconfig.json
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\bin\Debug\net8.0-windows\TableManagerWinForms.dll
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\bin\Debug\net8.0-windows\TableManagerWinForms.pdb
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.AssemblyInfoInputs.cache
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.AssemblyInfo.cs
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.csproj.CoreCompileInputs.cache
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.sourcelink.json
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.dll
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\refint\TableManagerWinForms.dll
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.pdb
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\TableManagerWinForms.genruntimeconfig.cache
+C:\Users\DELL\Documents\augment-projects\CHINA_TOWN_MASTER\TableManagerWinForms\obj\Debug\net8.0-windows\ref\TableManagerWinForms.dll

@@ -1,6 +1,6 @@
-from flask import Blueprint, render_template, request, send_file, url_for, redirect, flash
+from flask import Blueprint, render_template, request, send_file, url_for, redirect, flash, Response
 from sqlalchemy import func
-from datetime import date
+from datetime import date, datetime
 import io
 
 # Import db and models without circular imports
@@ -22,65 +22,115 @@ def quarter_start_end(year: int, quarter: int):
     raise ValueError("quarter must be 1..4")
 
 
-@bp.route('/', methods=['GET', 'POST'])
+@bp.route('/', methods=['GET'])
 def vat_dashboard():
     today = date.today()
     default_year = today.year
     default_quarter = (today.month - 1) // 3 + 1
+    period = (request.args.get('period') or 'quarterly').strip().lower()
+    branch = (request.args.get('branch') or 'all').strip()
 
-    try:
-        year = int(request.values.get('year', default_year))
-    except Exception:
-        year = default_year
-    try:
-        quarter = int(request.values.get('quarter', default_quarter))
-    except Exception:
-        quarter = default_quarter
+    # Resolve period to start/end
+    start_date: date
+    end_date: date
+    year = request.args.get('year', type=int) or default_year
+    quarter = request.args.get('quarter', type=int) or default_quarter
+    if period == 'monthly':
+        ym = (request.args.get('month') or '').strip()  # 'YYYY-MM'
+        if ym and '-' in ym:
+            try:
+                y, m = ym.split('-'); yy = int(y); mm = int(m)
+                if mm == 12:
+                    start_date = date(yy, mm, 1)
+                    end_date = date(yy, 12, 31)
+                else:
+                    start_date = date(yy, mm, 1)
+                    end_date = date(yy + (1 if mm == 12 else 0), (1 if mm == 12 else mm + 1), 1) - (date(yy, mm, 1) - date(yy, mm, 1).replace(day=0))
+            except Exception:
+                # Fallback to current month
+                start_date = date(today.year, today.month, 1)
+                end_date = today
+        else:
+            start_date = date(today.year, today.month, 1)
+            end_date = today
+    else:
+        # quarterly default
+        year = int(year or default_year)
+        quarter = int(quarter or default_quarter)
+        start_date, end_date = quarter_start_end(year, quarter)
 
-    start_date, end_date = quarter_start_end(year, quarter)
-
-    # Sales by branch (before VAT)
-    sales_place_india = db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)) \
-        .filter(SalesInvoice.branch == 'place_india') \
-        .filter(SalesInvoice.date.between(start_date, end_date)).scalar()
-    sales_china_town = db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)) \
-        .filter(SalesInvoice.branch == 'china_town') \
-        .filter(SalesInvoice.date.between(start_date, end_date)).scalar()
-    sales_total = (sales_place_india or 0) + (sales_china_town or 0)
-
-    # Purchases and Expenses (before VAT)
-    purchases_total = db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_before_tax), 0)) \
-        .filter(PurchaseInvoice.date.between(start_date, end_date)).scalar()
-    expenses_total = db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_before_tax), 0)) \
-        .filter(ExpenseInvoice.date.between(start_date, end_date)).scalar()
-
+    # Settings
     s = Settings.query.first()
-    VAT_RATE = float(s.vat_rate)/100.0 if s and s.vat_rate is not None else 0.15
-    output_vat = float(sales_total or 0) * VAT_RATE
-    input_vat = float((purchases_total or 0) + (expenses_total or 0)) * VAT_RATE
-    net_vat = output_vat - input_vat
-
-    # company/labels from settings if available
+    vat_rate = float(s.vat_rate)/100.0 if s and s.vat_rate is not None else 0.15
     company_name = s.company_name if s and s.company_name else ''
     tax_number = s.tax_number if s and s.tax_number else ''
-    place_lbl = s.place_india_label if s and s.place_india_label else 'Place India'
-    china_lbl = s.china_town_label if s and s.china_town_label else 'China Town'
     currency = s.currency if s and s.currency else 'SAR'
 
+    # Helper to optionally filter branch
+    def branch_filter_sales(q):
+        if branch and branch != 'all' and hasattr(SalesInvoice, 'branch'):
+            return q.filter(SalesInvoice.branch == branch)
+        return q
+    def branch_filter_purchases(q):
+        return q  # purchases/expenses not per-branch in current schema
+
+    # Sales breakdown (bases)
+    sales_standard_base = float(branch_filter_sales(db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0))
+        .filter(SalesInvoice.date.between(start_date, end_date))
+        .filter((SalesInvoice.tax_amount > 0))).scalar() or 0.0)
+    sales_zero_base = float(branch_filter_sales(db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0))
+        .filter(SalesInvoice.date.between(start_date, end_date))
+        .filter((SalesInvoice.tax_amount == 0))).scalar() or 0.0)
+    # Exempt/Exports not tracked separately in schema → default to 0
+    sales_exempt_base = 0.0
+    sales_exports_base = 0.0
+
+    # Purchases breakdown (bases)
+    purchases_deductible_base = float(branch_filter_purchases(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_before_tax), 0))
+        .filter(PurchaseInvoice.date.between(start_date, end_date))
+        .filter((PurchaseInvoice.tax_amount > 0))).scalar() or 0.0)
+    purchases_non_deductible_base = float(branch_filter_purchases(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_before_tax), 0))
+        .filter(PurchaseInvoice.date.between(start_date, end_date))
+        .filter((PurchaseInvoice.tax_amount == 0))).scalar() or 0.0)
+
+    # Expenses breakdown (include into purchases buckets)
+    expenses_deductible_base = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_before_tax), 0))
+        .filter(ExpenseInvoice.date.between(start_date, end_date))
+        .filter((ExpenseInvoice.tax_amount > 0)).scalar() or 0.0)
+    expenses_non_deductible_base = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_before_tax), 0))
+        .filter(ExpenseInvoice.date.between(start_date, end_date))
+        .filter((ExpenseInvoice.tax_amount == 0)).scalar() or 0.0)
+
+    purchases_deductible_base += expenses_deductible_base
+    purchases_non_deductible_base += expenses_non_deductible_base
+
+    # VAT amounts from invoices
+    output_vat = float(branch_filter_sales(db.session.query(func.coalesce(func.sum(SalesInvoice.tax_amount), 0))
+        .filter(SalesInvoice.date.between(start_date, end_date)).scalar() or 0.0))
+    input_vat = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.tax_amount), 0)).filter(PurchaseInvoice.date.between(start_date, end_date)).scalar() or 0.0) \
+               + float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.tax_amount), 0)).filter(ExpenseInvoice.date.between(start_date, end_date)).scalar() or 0.0)
+    net_vat = output_vat - input_vat
+
     data = {
+        'period': period,
         'year': year,
         'quarter': quarter,
         'start_date': start_date,
         'end_date': end_date,
-        'sales_place_india': float(sales_place_india or 0),
-        'sales_china_town': float(sales_china_town or 0),
-        'sales_total': float(sales_total or 0),
-        'purchases_total': float(purchases_total or 0),
-        'expenses_total': float(expenses_total or 0),
+        'branch': branch,
+        'company_name': company_name,
+        'tax_number': tax_number,
+        'currency': currency,
+        'sales_standard_base': sales_standard_base,
+        'sales_zero_base': sales_zero_base,
+        'sales_exempt_base': sales_exempt_base,
+        'sales_exports_base': sales_exports_base,
+        'purchases_deductible_base': purchases_deductible_base,
+        'purchases_non_deductible_base': purchases_non_deductible_base,
         'output_vat': output_vat,
         'input_vat': input_vat,
         'net_vat': net_vat,
-        'vat_rate': VAT_RATE, 'company_name': company_name, 'tax_number': tax_number, 'place_lbl': place_lbl, 'china_lbl': china_lbl, 'currency': currency,
+        'vat_rate': vat_rate,
     }
 
     return render_template('vat/vat_dashboard.html', data=data)
@@ -88,14 +138,36 @@ def vat_dashboard():
 
 @bp.route('/print', methods=['GET'])
 def vat_print():
-    try:
-        year = int(request.args.get('year'))
-        quarter = int(request.args.get('quarter'))
-    except Exception:
-        flash("حدد السنة والربع للطباعة", "danger")
-        return redirect(url_for('vat.vat_dashboard'))
+    # Support quarterly, monthly, or explicit date range
+    period = (request.args.get('period') or 'quarterly').strip().lower()
+    branch = (request.args.get('branch') or 'all').strip()
+    year = request.args.get('year', type=int)
+    quarter = request.args.get('quarter', type=int)
+    fmt = (request.args.get('format') or '').strip().lower()
 
-    start_date, end_date = quarter_start_end(year, quarter)
+    if period == 'monthly':
+        ym = request.args.get('month')
+        if not ym:
+            flash("حدد الشهر للطباعة", "danger")
+            return redirect(url_for('vat.vat_dashboard'))
+        try:
+            y, m = ym.split('-'); yy = int(y); mm = int(m)
+            start_date = date(yy, mm, 1)
+            if mm == 12:
+                end_date = date(yy, 12, 31)
+            else:
+                end_date = date(yy + (1 if mm == 12 else 0), (1 if mm == 12 else mm + 1), 1) - (date(yy, mm, 1) - date(yy, mm, 1).replace(day=0))
+        except Exception:
+            flash("صيغة الشهر غير صحيحة", "danger")
+            return redirect(url_for('vat.vat_dashboard'))
+    else:
+        try:
+            year = int(year or date.today().year)
+            quarter = int(quarter or ((date.today().month - 1)//3 + 1))
+        except Exception:
+            flash("حدد السنة والربع للطباعة", "danger")
+            return redirect(url_for('vat.vat_dashboard'))
+        start_date, end_date = quarter_start_end(year, quarter)
 
     sales_place_india = db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)) \
         .filter(SalesInvoice.branch == 'place_india') \
@@ -112,8 +184,13 @@ def vat_print():
 
     s = Settings.query.first()
     VAT_RATE = float(s.vat_rate)/100.0 if s and s.vat_rate is not None else 0.15
-    output_vat = float(sales_total or 0) * VAT_RATE
-    input_vat = float((purchases_total or 0) + (expenses_total or 0)) * VAT_RATE
+    # Prefer summing invoice tax amounts
+    output_vat = float(db.session.query(func.coalesce(func.sum(SalesInvoice.tax_amount), 0))
+        .filter(SalesInvoice.date.between(start_date, end_date)).scalar() or 0.0)
+    input_vat = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.tax_amount), 0))
+        .filter(PurchaseInvoice.date.between(start_date, end_date)).scalar() or 0.0) + \
+               float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.tax_amount), 0))
+        .filter(ExpenseInvoice.date.between(start_date, end_date)).scalar() or 0.0)
     net_vat = output_vat - input_vat
 
     # company/labels from settings if available
@@ -123,6 +200,27 @@ def vat_print():
     china_lbl = s.china_town_label if s and getattr(s, 'china_town_label', None) else 'China Town'
     currency = s.currency if s and getattr(s, 'currency', None) else 'SAR'
 
+
+    # CSV export (Excel-compatible)
+    if fmt == 'csv' or fmt == 'excel':
+        try:
+            import io, csv
+            out = io.StringIO()
+            w = csv.writer(out)
+            w.writerow(['Period', 'Start', 'End'])
+            w.writerow([period, start_date.isoformat(), end_date.isoformat()])
+            w.writerow([])
+            w.writerow(['Metric','Amount'])
+            w.writerow(['Sales (Net Base)', float(sales_total or 0)])
+            w.writerow(['Purchases (Before VAT)', float(purchases_total or 0)])
+            w.writerow(['Expenses (Before VAT)', float(expenses_total or 0)])
+            w.writerow(['Output VAT', float(output_vat or 0)])
+            w.writerow(['Input VAT', float(input_vat or 0)])
+            w.writerow(['Net VAT', float(net_vat or 0)])
+            return Response(out.getvalue(), mimetype='text/csv; charset=utf-8',
+                            headers={'Content-Disposition': f'attachment; filename="vat_{period}_{start_date}_{end_date}.csv"'})
+        except Exception:
+            pass
 
     # Try to generate PDF with reportlab; fallback to HTML if not installed
     try:

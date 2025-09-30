@@ -1,3 +1,9 @@
+/* Global fixes for render: enforce readable colors */
+html, body, * { color: #212529; }
+table thead th { background: #f8f9fa !important; color: #212529 !important; }
+.totals-row th, .totals-row td { background: #f8f9fa !important; color: #212529 !important; }
+.table thead th { position: sticky; top: 0; z-index: 1; }
+.badge { font-weight: 600; }
 body {
   font-family: "Tahoma", sans-serif;
   direction: rtl;

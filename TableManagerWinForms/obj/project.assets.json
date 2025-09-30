@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "c:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj",
+      "projectUniqueName": "C:\\Users\\DELL\\Documents\\augment-projects\\CHINA_TOWN_MASTER\\TableManagerWinForms\\TableManagerWinForms.csproj",
       "projectName": "TableManagerWinForms",
-      "projectPath": "c:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\TableManagerWinForms.csproj",
+      "projectPath": "C:\\Users\\DELL\\Documents\\augment-projects\\CHINA_TOWN_MASTER\\TableManagerWinForms\\TableManagerWinForms.csproj",
       "packagesPath": "C:\\Users\\DELL\\.nuget\\packages\\",
-      "outputPath": "c:\\Users\\DELL\\Documents\\augment-projects\\CHINA TOWN-PLACE INDIA\\TableManagerWinForms\\obj\\",
+      "outputPath": "C:\\Users\\DELL\\Documents\\augment-projects\\CHINA_TOWN_MASTER\\TableManagerWinForms\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\DELL\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -63,19 +63,19 @@
         "downloadDependencies": [
           {
             "name": "Microsoft.AspNetCore.App.Ref",
-            "version": "[8.0.18, 8.0.18]"
+            "version": "[8.0.20, 8.0.20]"
           },
           {
             "name": "Microsoft.NETCore.App.Host.win-x64",
-            "version": "[8.0.18, 8.0.18]"
+            "version": "[8.0.20, 8.0.20]"
           },
           {
             "name": "Microsoft.NETCore.App.Ref",
-            "version": "[8.0.18, 8.0.18]"
+            "version": "[8.0.20, 8.0.20]"
           },
           {
             "name": "Microsoft.WindowsDesktop.App.Ref",
-            "version": "[8.0.18, 8.0.18]"
+            "version": "[8.0.20, 8.0.20]"
           }
         ],
         "frameworkReferences": {
@@ -86,7 +86,7 @@
             "privateAssets": "none"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.303/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.305/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

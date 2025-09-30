@@ -8,7 +8,7 @@
 
   <div class="card mb-3">
     <div class="card-body">
-      <form method="GET" action="{{ url_for('reports.payroll_report') }}" class="row g-2 align-items-end" onsubmit="event.preventDefault(); const u=new URL(this.action, window.location.origin); const p=new URLSearchParams(new FormData(this)); window.openPrintModal(u+'?'+p.toString()); return false;">
+      <form id="allForm" method="GET" action="{{ url_for('reports.payroll_report') }}" class="row g-2 align-items-end">
         <div class="col-auto">
           <label class="form-label mb-0">من سنة</label>
           <input type="number" name="year_from" value="{{ start_year }}" class="form-control form-control-sm" style="width:110px">
@@ -27,7 +27,7 @@
         </div>
         <input type="hidden" name="print" value="1">
         <div class="col-auto">
-          <button type="submit" class="btn btn-secondary btn-sm">📄 عرض تقرير الجميع</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="openAllReportModal()">📄 عرض تقرير الجميع</button>
         </div>
         <div class="col ms-auto">
           <input type="text" id="q" class="form-control form-control-sm" placeholder="🔍 بحث بالاسم/الرمز/القسم" oninput="filterRows()">
@@ -140,6 +140,12 @@
       if (vis) shown++;
     });
     shownCount.textContent = shown;
+  }
+  function openAllReportModal(){
+    const form = document.getElementById('allForm');
+    const u = new URL(form.action, window.location.origin);
+    const p = new URLSearchParams(new FormData(form));
+    window.openPrintModal(u.toString() + '?' + p.toString());
   }
   function submitSelected(){
     const ids = Array.from(table.querySelectorAll('input.emp:checked')).map(x=>x.value);
