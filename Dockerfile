@@ -21,12 +21,7 @@ ENV PYTHONUNBUFFERED=1
 # Render provides PORT env var
 EXPOSE 8000
 
-<<<<<<< HEAD
-# Use start script to apply migrations then start server
-COPY scripts/start.sh /app/scripts/start.sh
-RUN chmod +x /app/scripts/start.sh
-CMD ["/app/scripts/start.sh"]
-=======
-# run migrations then start gunicorn with eventlet worker and dynamic port
-CMD sh -c "flask db upgrade && gunicorn -k eventlet -w 1 -b 0.0.0.0:${PORT:-8000} app:app"
->>>>>>> 4b7ff02 (chore(render): configure eventlet/gunicorn, dynamic PORT, db migrations; update render.yaml)
+# Use Render start script to apply migrations and start Gunicorn safely
+COPY scripts/start_render.sh /app/scripts/start_render.sh
+RUN chmod +x /app/scripts/start_render.sh
+CMD ["/app/scripts/start_render.sh"]
