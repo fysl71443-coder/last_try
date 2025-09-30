@@ -27,19 +27,29 @@
         .invoice-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px;
+            padding: 30px 20px;
             text-align: center;
+        }
+        
+        .invoice-header img {
+            height: 150px; /* تكبير حجم اللوجو */
+            width: auto;
+            margin-bottom: 15px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
         }
         
         .invoice-header h1 {
             margin: 0;
-            font-size: 28px;
+            font-size: 32px; /* تكبير اسم الشركة */
             font-weight: bold;
         }
         
         .invoice-header p {
             margin: 5px 0 0 0;
             opacity: 0.9;
+            font-size: 14px;
         }
         
         .invoice-info {
@@ -149,36 +159,14 @@
             text-transform: uppercase;
         }
         
-        .status-paid {
-            background: #28a745;
-            color: white;
-        }
-        
-        .status-unpaid {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .status-draft {
-            background: #ffc107;
-            color: #212529;
-        }
+        .status-paid { background: #28a745; color: white; }
+        .status-unpaid { background: #dc3545; color: white; }
+        .status-draft { background: #ffc107; color: #212529; }
         
         @media print {
-            body {
-                margin: 0;
-                padding: 0;
-            }
-            
-            .invoice-container {
-                border: none;
-                border-radius: 0;
-                box-shadow: none;
-            }
-            
-            .no-print {
-                display: none;
-            }
+            body { margin: 0; padding: 0; }
+            .invoice-container { border: none; border-radius: 0; box-shadow: none; }
+            .no-print { display: none; }
         }
         
         .print-actions {
@@ -200,153 +188,31 @@
             transition: all 0.3s ease;
         }
         
-        .btn-primary {
-            background: #007bff;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #0056b3;
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #545b62;
-        }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-primary:hover { background: #0056b3; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #545b62; }
     </style>
 </head>
 <body>
     <div class="invoice-container">
         <div class="invoice-header">
             {% if settings and settings.logo_url %}
-            <img src="{{ settings.logo_url }}" alt="Logo" style="height: 60px; margin-bottom: 10px;">
+                <img src="{{ settings.logo_url }}" alt="Logo">
             {% endif %}
             <h1>{{ settings.company_name if settings else (invoice.branch_code|title if invoice.branch_code else 'Restaurant') }}</h1>
             <p>Sales Invoice #: {{ invoice.invoice_number or invoice.id }}</p>
             {% if settings and settings.tax_number %}
-            <p style="font-size: 12px; opacity: 0.8;">VAT No.: {{ settings.tax_number }}</p>
+                <p style="font-size: 12px; opacity: 0.8;">VAT No.: {{ settings.tax_number }}</p>
             {% endif %}
             {% if settings and settings.phone %}
-            <p style="font-size: 12px; opacity: 0.8;">Phone: {{ settings.phone }}</p>
+                <p style="font-size: 12px; opacity: 0.8;">Phone: {{ settings.phone }}</p>
             {% endif %}
         </div>
-        
-        <div class="invoice-info">
-            <div>
-                <h3>Invoice Info</h3>
-                <p><strong>Invoice #:</strong> {{ invoice.id }}</p>
-                <p><strong>Date:</strong> {{ invoice.date.strftime('%Y-%m-%d') if invoice.date else 'N/A' }}</p>
-                <p><strong>Time:</strong> {{ invoice.date.strftime('%H:%M') if invoice.date else 'N/A' }}</p>
-                <p><strong>الحالة:</strong> 
-                    {% if paid %}
-                        <span class="status-badge status-paid">PAID</span>
-                    {% else %}
-                        <span class="status-badge status-unpaid">UNPAID</span>
-                    {% endif %}
-                </p>
-            </div>
-            
-            <div>
-                <h3>Customer Info</h3>
-                {% if invoice.customer_name %}
-                    <p><strong>Name:</strong> {{ invoice.customer_name }}</p>
-                {% endif %}
-                {% if invoice.customer_phone %}
-                    <p><strong>Phone:</strong> {{ invoice.customer_phone }}</p>
-                {% endif %}
-                {% if invoice.table_number %}
-                    <p><strong>Table #:</strong> {{ invoice.table_number }}</p>
-                {% endif %}
-                {% if not invoice.customer_name and not invoice.customer_phone and not invoice.table_number %}
-                    <p class="text-muted">No customer info</p>
-                {% endif %}
-            </div>
-        </div>
-        
-        <div class="invoice-items">
-            <table class="items-table">
-                <thead>
-                    <tr>
-                        <th>Total</th>
-                        <th>Price</th>
-                        <th>Qty</th>
-                        <th>Item</th>
-                        <th>#</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in items %}
-                    <tr>
-                        <td>{{ "%.2f"|format(item.total_price or (item.quantity * (item.unit_price or item.price_before_tax))) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
-                        <td>{{ "%.2f"|format(item.unit_price or item.price_before_tax) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
-                        <td>{{ item.quantity }}</td>
-                        <td>{{ item.product_name }}</td>
-                        <td>{{ loop.index }}</td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="5" style="text-align: center; color: #6c757d;">لا توجد أصناف</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
-        <div class="invoice-totals">
-            <table class="totals-table">
-                <tr>
-                    <td class="total-label">Subtotal:</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.total_before_tax or invoice.subtotal or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
-                </tr>
-                {% if invoice.discount_amount and invoice.discount_amount > 0 %}
-                <tr>
-                    <td class="total-label">Discount:</td>
-                    <td class="total-amount">- {{ "%.2f"|format(invoice.discount_amount) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
-                </tr>
-                {% endif %}
-                <tr>
-                    <td class="total-label">Tax (15%):</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.tax_amount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
-                </tr>
-                <tr class="grand-total">
-                    <td class="total-label">Grand Total:</td>
-                    <td class="total-amount">{{ "%.2f"|format(invoice.total_after_tax_discount or invoice.total_amount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</td>
-                </tr>
-            </table>
-        </div>
-        
-        <div class="invoice-footer">
-            <!-- QR Code Section -->
-            <div style="text-align: center; margin-bottom: 20px;">
-                {% if qr_data_url %}
-                    <img src="{{ qr_data_url }}" alt="QR Code" style="width: 100px; height: 100px;">
-                {% else %}
-                    <div id="qr-code" style="width: 100px; height: 100px; margin: 0 auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #666;">
-                        QR Code
-                    </div>
-                {% endif %}
-                <p style="font-size: 10px; margin-top: 5px;">{{ _('Scan for invoice details') }}</p>
-            </div>
 
-            <p><strong>{{ _('THANK YOU FOR VISIT') }}</strong></p>
-            <p>{{ _('Thank you for visiting us!') }} - {{ _('We hope to see you again soon') }}</p>
-            <p>{{ _('Have a great day!') }}</p>
-            <p>{{ settings.company_name if settings else (invoice.branch_code|title if invoice.branch_code else 'مطعم') }}</p>
-            {% if settings and settings.address %}
-            <p style="font-size: 12px;">{{ settings.address }}</p>
-            {% else %}
-            <p style="font-size: 12px;">الرياض، المملكة العربية السعودية</p>
-            {% endif %}
-        </div>
+        <!-- بقية المحتوى كما هو بدون تعديل -->
+        {% include 'invoice_content.html' %}
         
-        <div class="print-actions no-print">
-            <button onclick="window.print()" class="btn btn-primary">🖨️ طباعة</button>
-            <button onclick="window.close()" class="btn btn-secondary">إغلاق</button>
-        </div>
     </div>
     
     <script>
