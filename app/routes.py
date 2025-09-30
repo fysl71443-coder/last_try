@@ -1712,12 +1712,20 @@ def salaries_pay():
                 if not sal:
                     base = allow = ded = prev = 0.0
                     try:
-                        from models import EmployeeSalaryDefault
+                        from models import EmployeeSalaryDefault, DepartmentRate, EmployeeHours
                         d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
-                        if d:
-                            base = float(d.base_salary or 0)
-                            allow = float(d.allowances or 0)
-                            ded = float(d.deductions or 0)
+                        # defaults
+                        allow = float(getattr(d, 'allowances', 0) or 0)
+                        ded = float(getattr(d, 'deductions', 0) or 0)
+                        # prefer hour-based base when available for the period
+                        hrs_row = EmployeeHours.query.filter_by(employee_id=emp_id, year=year, month=month).first()
+                        emp_obj = Employee.query.get(emp_id)
+                        dept_name = (getattr(emp_obj, 'department', '') or '').lower()
+                        rate_row = DepartmentRate.query.filter(DepartmentRate.name == dept_name).first()
+                        hourly_rate = float(getattr(rate_row, 'hourly_rate', 0) or 0)
+                        hour_based_base = float(getattr(hrs_row, 'hours', 0) or 0) * hourly_rate if hrs_row else 0.0
+                        default_base = float(getattr(d, 'base_salary', 0) or 0)
+                        base = hour_based_base if hour_based_base > 0 else default_base
                     except Exception:
                         pass
                     # Previous due up to previous month
@@ -1792,12 +1800,19 @@ def salaries_pay():
                         if not row:
                             base = allow = ded = 0.0
                             try:
-                                from models import EmployeeSalaryDefault
+                                from models import EmployeeSalaryDefault, DepartmentRate, EmployeeHours
                                 d = EmployeeSalaryDefault.query.filter_by(employee_id=_emp_id).first()
-                                if d:
-                                    base = float(d.base_salary or 0)
-                                    allow = float(d.allowances or 0)
-                                    ded = float(d.deductions or 0)
+                                allow = float(getattr(d, 'allowances', 0) or 0)
+                                ded = float(getattr(d, 'deductions', 0) or 0)
+                                # prefer hour-based base when available for that month
+                                hrs_row = EmployeeHours.query.filter_by(employee_id=_emp_id, year=yy, month=mm).first()
+                                emp_o = Employee.query.get(_emp_id)
+                                dept_name = (getattr(emp_o, 'department', '') or '').lower()
+                                rate_row = DepartmentRate.query.filter(DepartmentRate.name == dept_name).first()
+                                hourly_rate = float(getattr(rate_row, 'hourly_rate', 0) or 0)
+                                hour_based_base = float(getattr(hrs_row, 'hours', 0) or 0) * hourly_rate if hrs_row else 0.0
+                                default_base = float(getattr(d, 'base_salary', 0) or 0)
+                                base = hour_based_base if hour_based_base > 0 else default_base
                             except Exception:
                                 pass
                             prev_component = 0.0
@@ -2514,11 +2529,25 @@ def pay_salary(emp_id):
         employees = []
 
     # Build salary summary for selected employee
-    from models import EmployeeSalaryDefault
+    # Prefer hour-based calculation for the selected period if available
+    from models import EmployeeSalaryDefault, DepartmentRate, EmployeeHours
     d = EmployeeSalaryDefault.query.filter_by(employee_id=selected_employee_id).first()
-    base = float(getattr(d, 'base_salary', 0) or 0)
-    allow = float(getattr(d, 'allowances', 0) or 0)
-    ded = float(getattr(d, 'deductions', 0) or 0)
+    # Defaults
+    default_allow = float(getattr(d, 'allowances', 0) or 0)
+    default_ded = float(getattr(d, 'deductions', 0) or 0)
+    default_base = float(getattr(d, 'base_salary', 0) or 0)
+    # Hour-based override
+    try:
+        hrs_row = EmployeeHours.query.filter_by(employee_id=selected_employee_id, year=year, month=month).first()
+        dept_name = (emp.department or '').lower()
+        rate_row = DepartmentRate.query.filter(DepartmentRate.name == dept_name).first()
+        hourly_rate = float(getattr(rate_row, 'hourly_rate', 0) or 0)
+        hour_based_base = float(getattr(hrs_row, 'hours', 0) or 0) * hourly_rate if hrs_row else 0.0
+    except Exception:
+        hour_based_base = 0.0
+    base = hour_based_base if hour_based_base > 0 else default_base
+    allow = default_allow
+    ded = default_ded
     # Previous due: sum of previous months' totals minus sum of payments (outstanding arrears)
     from sqlalchemy import func as _func
     try:
