@@ -98,6 +98,7 @@ body {
     </div>
     {% endif %}
 
+    {% if can('employees','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('main.employees') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
@@ -106,6 +107,7 @@ body {
         </div>
       </a>
     </div>
+    {% endif %}
 
     
 
