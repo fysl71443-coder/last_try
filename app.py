@@ -1752,7 +1752,7 @@ def inject_conf_vars():
     }
 
 # Asset version for cache busting of static files
-ASSET_VERSION = os.getenv('ASSET_VERSION', '20250909')
+ASSET_VERSION = os.getenv('ASSET_VERSION', '20250930')
 
 @app.context_processor
 def inject_asset_version():
@@ -6465,63 +6465,8 @@ def inventory():
 
 @app.route('/employees', methods=['GET', 'POST'])
 @login_required
-
-
 def employees():
-    from models import Employee
-
-    form = EmployeeForm()
-    if form.validate_on_submit():
-        try:
-            emp = Employee(
-                employee_code=form.employee_code.data.strip(),
-                full_name=form.full_name.data.strip(),
-                national_id=form.national_id.data.strip(),
-                department=form.department.data.strip() if form.department.data else None,
-                position=form.position.data.strip() if form.position.data else None,
-                phone=form.phone.data.strip() if form.phone.data else None,
-                email=form.email.data.strip() if form.email.data else None,
-                hire_date=form.hire_date.data,
-                status=form.status.data
-            )
-            db.session.add(emp)
-            safe_db_commit()
-            # Create default salary row
-            try:
-                from models import EmployeeSalaryDefault
-                d = EmployeeSalaryDefault(
-                    employee_id=emp.id,
-                    base_salary=form.base_salary.data or 0,
-                    allowances=form.allowances.data or 0,
-                    deductions=form.deductions.data or 0,
-                )
-                db.session.add(d)
-                safe_db_commit()
-            except Exception:
-                db.session.rollback()
-            flash(_('تم إضافة الموظف بنجاح / Employee added successfully'), 'success')
-            return redirect(url_for('employees'))
-        except Exception as e:
-            db.session.rollback()
-            flash(_('تعذرت إضافة الموظف. تحقق من أن رقم الموظف والهوية غير مكررين. / Could not add employee. Ensure code and national id are unique.'), 'danger')
-
-    # Pre-fill from defaults when employee selected
-    if request.method == 'POST' and not form.errors:
-        from models import EmployeeSalaryDefault
-        try:
-            d = EmployeeSalaryDefault.query.filter_by(employee_id=form.employee_id.data).first()
-            if d:
-                if not form.basic_salary.data: form.basic_salary.data = float(d.base_salary or 0)
-                if not form.allowances.data: form.allowances.data = float(d.allowances or 0)
-                if not form.deductions.data: form.deductions.data = float(d.deductions or 0)
-                # Recompute total
-                total = (float(form.basic_salary.data or 0) + float(form.allowances.data or 0) - float(form.deductions.data or 0) + float(form.previous_salary_due.data or 0))
-                form.total_salary.data = total
-        except Exception:
-            pass
-
-    employees_list = Employee.query.order_by(Employee.full_name.asc()).all()
-    return render_template('employees.html', form=form, employees=employees_list)
+    return redirect(url_for('main.employees'))
 
 
 @app.route('/salaries', methods=['GET', 'POST'])
@@ -7255,7 +7200,7 @@ def edit_employee_defaults(emp_id):
             d.deductions = float(request.form.get('deductions') or 0)
             safe_db_commit()
             flash(_('Defaults updated / تم تحديث الافتراضات'), 'success')
-            return redirect(url_for('employees'))
+            return redirect(url_for('main.employees'))
         except Exception:
             db.session.rollback()
             flash(_('Failed to update defaults / فشل تحديث الافتراضات'), 'danger')
@@ -7282,7 +7227,7 @@ def edit_employee(emp_id):
             emp.status = form.status.data
             safe_db_commit()
             flash(_('تم تعديل بيانات الموظف / Employee updated'), 'success')
-            return redirect(url_for('employees'))
+            return redirect(url_for('main.employees'))
         except Exception:
             db.session.rollback()
             flash(_('تعذر التعديل. تحقق من عدم تكرار الرمز/الهوية / Could not update. Ensure code/national id are unique.'), 'danger')
@@ -7328,7 +7273,7 @@ def delete_employee(emp_id):
         traceback.print_exc()
         flash(_('تعذر حذف الموظف - يرجى المحاولة مرة أخرى / Could not delete employee - please try again'), 'danger')
 
-    return redirect(url_for('employees'))
+    return redirect(url_for('main.employees'))
 
 # Salaries: Edit
 @app.route('/salaries/<int:salary_id>/edit', methods=['GET', 'POST'])

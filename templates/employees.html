@@ -40,16 +40,7 @@
   <div class="table-responsive">
     <table class="table table-striped align-middle" id="employeeTable">
       <thead class="table-light position-sticky top-0" style="z-index:1">
-        <tr data-id="{{ emp.id }}"
-            data-code="{{ emp.employee_code or emp.code }}"
-            data-name="{{ emp.full_name }}"
-            data-nid="{{ emp.national_id }}"
-            data-dept="{{ emp.department }}"
-            data-pos="{{ emp.position }}"
-            data-phone="{{ emp.phone or '-' }}"
-            data-email="{{ emp.email or '-' }}"
-            data-hiredate="{{ emp.hire_date }}"
-            data-status="{{ emp.status }}">
+        <tr>
           <th style="width:36px"><input type="checkbox" id="select_all" title="Select all visible"></th>
           <th style="width:56px">#</th>
           <th>الرمز</th>
@@ -66,7 +57,16 @@
       </thead>
       <tbody>
         {% for emp in employees %}
-        <tr>
+        <tr data-id="{{ emp.id }}"
+            data-code="{{ emp.employee_code or emp.code }}"
+            data-name="{{ emp.full_name }}"
+            data-nid="{{ emp.national_id }}"
+            data-dept="{{ emp.department }}"
+            data-pos="{{ emp.position }}"
+            data-phone="{{ emp.phone or '-' }}"
+            data-email="{{ emp.email or '-' }}"
+            data-hiredate="{{ emp.hire_date }}"
+            data-status="{{ emp.status }}">
           <td><input type="checkbox" class="form-check-input emp-select" value="{{ emp.id }}" title="تحديد للطباعة الجماعية"/></td>
           <td>{{ loop.index }}</td>
           <td>{{ emp.employee_code or emp.code }}</td>
