@@ -30,11 +30,26 @@
     <span class="me-2"><span class="badge bg-success">نشط</span> = Active</span>
     <span class="me-2"><span class="badge bg-secondary">غير نشط</span> = Inactive</span>
   </div>
+  {% if (employees|length) == 0 %}
+  <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+    <span>لا يوجد موظفون بعد.</span>
+    <a href="{{ url_for('main.add_employee') }}" class="btn btn-sm btn-primary">➕ إضافة أول موظف</a>
+  </div>
+  {% endif %}
 
   <div class="table-responsive">
     <table class="table table-striped align-middle" id="employeeTable">
       <thead class="table-light position-sticky top-0" style="z-index:1">
-        <tr>
+        <tr data-id="{{ emp.id }}"
+            data-code="{{ emp.employee_code or emp.code }}"
+            data-name="{{ emp.full_name }}"
+            data-nid="{{ emp.national_id }}"
+            data-dept="{{ emp.department }}"
+            data-pos="{{ emp.position }}"
+            data-phone="{{ emp.phone or '-' }}"
+            data-email="{{ emp.email or '-' }}"
+            data-hiredate="{{ emp.hire_date }}"
+            data-status="{{ emp.status }}">
           <th style="width:36px"><input type="checkbox" id="select_all" title="Select all visible"></th>
           <th style="width:56px">#</th>
           <th>الرمز</th>
@@ -55,7 +70,9 @@
           <td><input type="checkbox" class="form-check-input emp-select" value="{{ emp.id }}" title="تحديد للطباعة الجماعية"/></td>
           <td>{{ loop.index }}</td>
           <td>{{ emp.employee_code or emp.code }}</td>
-          <td>{{ emp.full_name }}</td>
+          <td>
+            <button type="button" class="btn btn-link p-0" onclick="openEmployeeDetails(this)" data-bs-toggle="modal" data-bs-target="#employeeModal" title="تفاصيل الموظف" aria-label="تفاصيل الموظف">{{ emp.full_name }}</button>
+          </td>
           <td>{{ emp.national_id }}</td>
           <td>{{ emp.department }}</td>
           <td>{{ emp.position }}</td>
@@ -70,6 +87,7 @@
             {% endif %}
           </td>
           <td style="white-space: nowrap;">
+            <button type="button" class="btn btn-sm btn-secondary" onclick="openEmployeeDetails(this)" data-bs-toggle="modal" data-bs-target="#employeeModal" title="تفاصيل" aria-label="تفاصيل">تفاصيل</button>
             <a href="{{ url_for('main.edit_employee', emp_id=emp.id) }}" class="btn btn-sm btn-warning" title="Edit" aria-label="Edit">تعديل</a>
             <a href="{{ url_for('main.pay_salary', emp_id=emp.id, year=current_year, month=current_month) }}" class="btn btn-sm btn-info" title="Pay salary" aria-label="Pay salary">سداد</a>
             <form method="POST" action="{{ url_for('main.employee_delete', eid=emp.id) }}" style="display:inline;">
@@ -84,6 +102,39 @@
   </div>
 </div>
 
+<!-- Employee Quick Details Modal -->
+<div class="modal fade" id="employeeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">تفاصيل الموظف</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-6"><strong>الاسم:</strong> <span id="emName"></span></div>
+          <div class="col-6"><strong>الرمز:</strong> <span id="emCode"></span></div>
+          <div class="col-6"><strong>الهوية:</strong> <span id="emNID"></span></div>
+          <div class="col-6"><strong>القسم:</strong> <span id="emDept"></span></div>
+          <div class="col-6"><strong>الوظيفة:</strong> <span id="emPos"></span></div>
+          <div class="col-6"><strong>الهاتف:</strong> <span id="emPhone"></span></div>
+          <div class="col-6"><strong>البريد:</strong> <span id="emEmail"></span></div>
+          <div class="col-6"><strong>التعيين:</strong> <span id="emHire"></span></div>
+          <div class="col-12">
+            <strong>الحالة:</strong>
+            <span id="emStatusBadge" class="badge"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a id="emEditLink" class="btn btn-warning">تعديل</a>
+        <a id="emPayLink" class="btn btn-info">سداد</a>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 function filterEmployees() {
   let input = document.getElementById("search").value.toLowerCase();
@@ -92,6 +143,30 @@ function filterEmployees() {
     let txt = row.innerText.toLowerCase();
     row.style.display = txt.includes(input) ? "" : "none";
   });
+}
+
+function openEmployeeDetails(btn){
+  try{
+    const row = btn.closest('tr');
+    if(!row) return;
+    const get = k => (row.dataset[k] && row.dataset[k] !== 'None') ? row.dataset[k] : '-';
+    document.getElementById('emName').textContent = get('name');
+    document.getElementById('emCode').textContent = get('code');
+    document.getElementById('emNID').textContent = get('nid');
+    document.getElementById('emDept').textContent = get('dept');
+    document.getElementById('emPos').textContent = get('pos');
+    document.getElementById('emPhone').textContent = get('phone');
+    document.getElementById('emEmail').textContent = get('email');
+    document.getElementById('emHire').textContent = get('hiredate');
+    const status = (get('status')||'').toLowerCase();
+    const badge = document.getElementById('emStatusBadge');
+    badge.textContent = (status === 'active') ? 'نشط' : 'غير نشط';
+    badge.className = 'badge ' + ((status === 'active') ? 'bg-success' : 'bg-secondary');
+    const id = row.dataset.id;
+    const y = {{ current_year }}; const m = {{ current_month }};
+    document.getElementById('emEditLink').href = "{{ url_for('main.edit_employee', emp_id=0) }}".replace('0', id);
+    document.getElementById('emPayLink').href = "{{ url_for('main.pay_salary', emp_id=0, year=current_year, month=current_month) }}".replace('0', id);
+  }catch(e){}
 }
 
 function collectSelectedEmployees(btn){
