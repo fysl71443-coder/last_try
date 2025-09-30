@@ -306,6 +306,12 @@ body {
     .table th, .table td, .styled-table th, .styled-table td {
         border-color: #000 !important;
     }
+    /* Totals footers always black on white */
+    tfoot th, tfoot td, .totals, .totals-row th, .totals-row td {
+        color: #000 !important;
+        background: #fff !important;
+        border-color: #000 !important;
+    }
     /* Buttons print as simple outlined boxes */
     .btn {
         background: #fff !important;
