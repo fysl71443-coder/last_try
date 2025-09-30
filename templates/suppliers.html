@@ -1,12 +1,16 @@
 {% extends 'base.html' %}
 {% block title %}{{ _('Suppliers / الموردون') }}{% endblock %}
 {% block content %}
-<div class="container py-3">
+<div class="container py-3" style="font-size: 1rem;">
   <div class="section-header d-flex justify-content-between align-items-center">
     <h3 class="mb-0">{{ _('Suppliers / الموردون') }}</h3>
-    <div class="d-flex gap-2">
-      <a class="btn btn-outline_secondary" href="{{ url_for('main.purchases') }}">{{ _('Go to Purchases / الذهاب إلى المشتريات') }}</a>
-    </div>
+    <form class="d-flex gap-2" method="get" action="{{ url_for('main.suppliers_list') }}">
+      <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" placeholder="{{ _('Search... / بحث...') }}" style="min-width: 220px;">
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.suppliers_export', q=request.args.get('q')) }}">{{ _('Export CSV / تصدير CSV') }}</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.suppliers_list') }}">{{ _('Suppliers List / قائمة الموردين') }}</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.purchases') }}">{{ _('Go to Purchases / الذهاب إلى المشتريات') }}</a>
+      <button class="btn btn-primary">{{ _('Search / بحث') }}</button>
+    </form>
   </div>
 
   <div class="card mb-3"><div class="card-body">
@@ -48,6 +52,14 @@
         <label class="form-label">{{ _('Notes / ملاحظات') }}</label>
         <input name="notes" class="form-control">
       </div>
+      <div class="col-md-4">
+        <label class="form-label">{{ _('Payment Method / طريقة الدفع') }}</label>
+        <select name="payment_method" class="form-select">
+          <option value="CASH">CASH</option>
+          <option value="BANK">BANK</option>
+          <option value="TRANSFER">TRANSFER</option>
+        </select>
+      </div>
       <div class="col-md-2 form-check mt-4">
         <input type="checkbox" name="active" id="active" class="form-check-input" checked>
         <label for="active" class="form-check-label">{{ _('Active / نشط') }}</label>
@@ -58,48 +70,7 @@
     </form>
   </div></div>
 
-  <div class="card"><div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>{{ _('Name / الاسم') }}</th>
-            <th>{{ _('Contact / جهة الاتصال') }}</th>
-            <th>{{ _('Phone / الهاتف') }}</th>
-            <th>{{ _('Email / البريد') }}</th>
-            <th>{{ _('Tax No / الرقم الضريبي') }}</th>
-            <th>{{ _('Status / الحالة') }}</th>
-            <th class="text-end" style="width:260px;">{{ _('Actions / إجراءات') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in suppliers %}
-          <tr>
-            <td>{{ s.name }}</td>
-            <td>{{ s.contact_person or '-' }}</td>
-            <td>{{ s.phone or '-' }}</td>
-            <td>{{ s.email or '-' }}</td>
-            <td>{{ s.tax_number or '-' }}</td>
-            <td>{% if s.active %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}</td>
-            <td class="text-end">
-              <a class="btn btn-sm btn-outline-primary" href="#">{{ _('Edit / تعديل') }}</a>
-              <form method="post" action="{{ url_for('main.supplier_toggle', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Toggle status? / تبديل الحالة؟') }}')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-sm btn-outline-secondary">{{ _('Toggle / تبديل') }}</button>
-              </form>
-              <form method="post" action="{{ url_for('main.supplier_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this supplier? / حذف هذا المورد؟') }}')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
-              </form>
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="7" class="text-center text-muted">{{ _('No suppliers yet / لا يوجد موردون بعد') }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div></div>
+  
 </div>
 {% endblock %}
 

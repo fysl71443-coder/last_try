@@ -1,382 +1,118 @@
-{% extends 'base.html' %}{% set back_url = url_for('main.dashboard') %}
-{% block title %}{{ _('Employees / الموظفون') }}{% endblock %}
+{% extends "base.html" %}
 {% block content %}
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">👤 {{ _('Employees / الموظفون') }}</h3>
-    <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('main.salaries_pay') }}" class="btn btn-success">💵 {{ _('Pay Salaries / سداد الرواتب') }}</a>
-      <a href="{{ url_for('main.salaries_statements') }}" class="btn btn-outline-success">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</a>
-      <button type="button" class="btn btn-outline-secondary" onclick="clearEmployeeForm(); document.getElementById('employees-form').scrollIntoView({ behavior: 'smooth' });">📝 {{ _('Add New / إضافة جديد') }}</button>
-      <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="mb-0">👤 Employees / الموظفون</h2>
+    <a href="{{ url_for('reports.payroll_report') }}" class="btn btn-outline-secondary btn-sm" title="Detailed Payroll Report" aria-label="Detailed Payroll Report">📊 تقرير الرواتب التفصيلي</a>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+    <a href="{{ url_for('main.add_employee') }}" class="btn btn-primary" title="Add New Employee" aria-label="Add New Employee">➕ إضافة موظف جديد</a>
+    <a href="{{ url_for('main.payroll', year=current_year, month=current_month) }}" class="btn btn-outline-primary" title="Payroll Statements" aria-label="Payroll Statements">🧾 كشوف الرواتب</a>
+    <a href="{{ url_for('main.employees_settings', year=current_year, month=current_month) }}" class="btn btn-outline-info" title="Hourly Settings" aria-label="Hourly Settings">⚙️ إعدادات الرواتب (بالساعة)</a>
+    <form method="POST" action="{{ url_for('main.salary_receipt_bulk') }}" class="d-inline" onsubmit="return openPrintModalAndSubmit(this)">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="year" value="{{ current_year }}"/>
+      <input type="hidden" name="month" value="{{ current_month }}"/>
+      <button type="submit" class="btn btn-outline-secondary" onclick="return collectSelectedEmployees(this)" title="Print receipt for selected" aria-label="Print receipt for selected">🖨️ طباعة إيصال (مختارون)</button>
+    </form>
+    <div class="ms-auto">
+      <input type="text" id="search" class="form-control" placeholder="🔍 بحث في الموظفين..." onkeyup="filterEmployees()" style="min-width: 260px;" aria-label="Search employees">
     </div>
   </div>
 
-  <div class="card mb-4" id="employees-form">
-    <div class="card-body">
-      <h5 class="mb-3" id="form-title">📝 {{ _('Add New Employee / إضافة موظف جديد') }}</h5>
-      <input type="hidden" id="__salaries_pay_url" value="{{ url_for('main.salaries_pay') }}">
-      <input type="hidden" id="__confirm_delete_msg" value="{{ _('Are you sure to delete / هل أنت متأكد من الحذف؟') }}">
-      <form method="POST">
-        {{ form.hidden_tag() }}
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-
-        <div class="row g-3">
-          <div class="col-md-3">{{ form.employee_code.label(class_='form-label') }}{{ form.employee_code(class_='form-control', value=(form.employee_code.data or next_code or '')) }}</div>
-          <div class="col-md-3">{{ form.full_name.label(class_='form-label') }}{{ form.full_name(class_='form-control') }}</div>
-          <div class="col-md-3">{{ form.national_id.label(class_='form-label') }}{{ form.national_id(class_='form-control') }}</div>
-          <div class="col-md-3">{{ form.status.label(class_='form-label') }}{{ form.status(class_='form-select') }}</div>
-          <div class="col-md-3 d-flex align-items-end">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="emp_active" name="active" checked>
-              <label class="form-check-label" for="emp_active">{{ _('Active / نشط') }}</label>
-            </div>
-          </div>
-          <div class="col-md-3">{{ form.department.label(class_='form-label') }}
-            <div class="input-group">
-              {{ form.department(class_='form-control', placeholder=_('e.g. Kitchen / Admin / Cashier')) }}
-              <select class="form-select" id="deptQuickSelect" style="max-width: 9rem">
-                <option value="">{{ _('Choose') }}</option>
-                <option>Kitchen</option>
-                <option>Admin</option>
-                <option>Cashier</option>
-                <option>Store</option>
-                <option>Delivery</option>
-              </select>
-            </div>
-          </div>
-          <div class="col-md-3">{{ form.position.label(class_='form-label') }}{{ form.position(class_='form-control') }}</div>
-          <div class="col-md-3">{{ form.phone.label(class_='form-label') }}{{ form.phone(class_='form-control') }}</div>
-          <div class="col-md-3">{{ form.email.label(class_='form-label') }}{{ form.email(class_='form-control') }}</div>
-          <div class="col-md-3">{{ form.hire_date.label(class_='form-label') }}{{ form.hire_date(class_='form-control') }}</div>
-
-        </div>
-        <hr/>
-        <div class="row g-3">
-          <div class="col-md-3">{{ form.base_salary.label(class_='form-label') }}{{ form.base_salary(class_='form-control') }}</div>
-          <div class="col-md-3">{{ form.allowances.label(class_='form-label') }}{{ form.allowances(class_='form-control') }}</div>
-          <div class="col-md-3">{{ form.deductions.label(class_='form-label') }}{{ form.deductions(class_='form-control') }}</div>
-        </div>
-        <div class="text-end mt-3">
-          <button type="button" class="btn btn-outline-secondary me-2" onclick="clearEmployeeForm()">{{ _('Clear / مسح') }}</button>
-          {{ form.submit(class_='btn btn-success') }}
-        </div>
-      </form>
-    </div>
+  <div class="text-muted small mb-1">
+    إجمالي: {{ employees|length }}
+    &nbsp; | &nbsp; نشط: {{ active_count }}
+    &nbsp; | &nbsp; غير نشط: {{ inactive_count }}
   </div>
-  <!-- Simplified: Payroll actions moved to dedicated screens. Use the top buttons above. -->
-
-
-  {% if employees %}
-  <div class="card">
-    <div class="card-body">
-      {% set emps = employees or [] %}
-      {% set total = emps|length %}
-      {% set active_count = emps|selectattr('status','equalto','active')|list|length %}
-      {% set inactive_count = total - active_count %}
-      <div class="row g-3 mb-3">
-        <div class="col-6 col-md-4"><div class="card shadow-sm h-100"><div class="card-body">
-          <div class="text-muted small">{{ _('Total Employees / إجمالي الموظفين') }}</div>
-          <div class="fs-5 fw-bold">{{ total }}</div>
-        </div></div></div>
-        <div class="col-6 col-md-4"><div class="card shadow-sm h-100"><div class="card-body">
-          <div class="text-muted small">{{ _('Active / نشط') }}</div>
-          <div class="fs-5 fw-bold text-success">{{ active_count }}</div>
-        </div></div></div>
-        <div class="col-6 col-md-4"><div class="card shadow-sm h-100"><div class="card-body">
-          <div class="text-muted small">{{ _('Inactive / غير نشط') }}</div>
-          <div class="fs-5 fw-bold text-secondary">{{ inactive_count }}</div>
-        </div></div></div>
-      </div>
-      <div class="row g-2 mb-2">
-        <div class="col-md-4 ms-auto">
-          <input type="text" class="form-control" id="empSearch" placeholder="{{ _('Search employees... / بحث في الموظفين...') }}">
-        </div>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-bordered table-striped table-hover align-middle table-sm">
-          <thead class="table-light">
-            <tr>
-              <th>#</th>
-              <th>{{ _('Code / الرمز') }}</th>
-              <th>{{ _('Name / الاسم') }}</th>
-              <th>{{ _('National ID / الهوية') }}</th>
-              <th>{{ _('Department / القسم') }}</th>
-              <th>{{ _('Position / الوظيفة') }}</th>
-              <th>{{ _('Phone / الهاتف') }}</th>
-              <th>{{ _('Email / البريد') }}</th>
-              <th>{{ _('Hire Date / التعيين') }}</th>
-              <th>{{ _('Status / الحالة') }}</th>
-              <th>{{ _('Actions / الإجراءات') }}</th>
-            </tr>
-          </thead>
-          <tbody id="empTableBody">
-            {% for e in employees %}
-            <tr>
-              <td>{{ loop.index }}</td>
-              <td>{{ e.employee_code }}</td>
-              <td>{{ e.full_name }}</td>
-              <td>{{ e.national_id }}</td>
-              <td>{{ e.department or '-' }}</td>
-              <td>{{ e.position or '-' }}</td>
-              <td>{% if e.phone %}<a href="tel:{{ e.phone }}">{{ e.phone }}</a>{% else %}-{% endif %}</td>
-              <td>{% if e.email %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% else %}-{% endif %}</td>
-              <td>{{ e.hire_date or '-' }}</td>
-              <td>{% if e.status=='active' %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}</td>
-              <td>
-                <div class="btn-group" role="group">
-                  <button type="button" class="btn btn-sm btn-outline-primary btn-edit" data-emp-id="{{ e.id }}" title="{{ _('Edit / تعديل') }}">✏️</button>
-                  <button type="button" class="btn btn-sm btn-outline-success btn-salary" data-emp-id="{{ e.id }}" title="{{ _('Salary / الراتب') }}">💰</button>
-                  <form method="post" action="{{ url_for('main.employee_delete', eid=e.id) }}" class="d-inline form-delete-emp" data-emp-name="{{ e.full_name }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                    <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete / حذف') }}">🗑️</button>
-                  </form>
-                </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
+  <div class="small text-muted mb-2">
+    <span class="me-2"><span class="badge bg-success">نشط</span> = Active</span>
+    <span class="me-2"><span class="badge bg-secondary">غير نشط</span> = Inactive</span>
   </div>
-  {% endif %}
+
+  <div class="table-responsive">
+    <table class="table table-striped table-bordered align-middle" id="employeeTable">
+      <thead class="table-light position-sticky top-0" style="z-index:1">
+        <tr>
+          <th style="width:36px"><input type="checkbox" id="select_all" title="Select all visible"></th>
+          <th style="width:56px">#</th>
+          <th>الرمز</th>
+          <th>الاسم</th>
+          <th>الهوية</th>
+          <th>القسم</th>
+          <th>الوظيفة</th>
+          <th>الهاتف</th>
+          <th>البريد</th>
+          <th>تاريخ التعيين</th>
+          <th>الحالة</th>
+          <th style="white-space: nowrap;">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in employees %}
+        <tr>
+          <td><input type="checkbox" class="form-check-input emp-select" value="{{ emp.id }}" title="تحديد للطباعة الجماعية"/></td>
+          <td>{{ loop.index }}</td>
+          <td>{{ emp.employee_code or emp.code }}</td>
+          <td>{{ emp.full_name }}</td>
+          <td>{{ emp.national_id }}</td>
+          <td>{{ emp.department }}</td>
+          <td>{{ emp.position }}</td>
+          <td>{{ emp.phone or "-" }}</td>
+          <td>{{ emp.email or "-" }}</td>
+          <td>{{ emp.hire_date }}</td>
+          <td>
+            {% if emp.status == 'active' %}
+              <span class="badge bg-success">نشط</span>
+            {% else %}
+              <span class="badge bg-secondary">غير نشط</span>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap;">
+            <a href="{{ url_for('main.edit_employee', emp_id=emp.id) }}" class="btn btn-sm btn-warning" title="Edit" aria-label="Edit">تعديل</a>
+            <a href="{{ url_for('main.pay_salary', emp_id=emp.id, year=current_year, month=current_month) }}" class="btn btn-sm btn-info" title="Pay salary" aria-label="Pay salary">سداد</a>
+            <form method="POST" action="{{ url_for('main.employee_delete', eid=emp.id) }}" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button class="btn btn-sm btn-danger" onclick="return confirm('تأكيد حذف الموظف؟')" title="Delete" aria-label="Delete">حذف</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <script>
-// WORKING FUNCTIONS - STEP BY STEP
-console.log('JavaScript loaded successfully!');
-
-// i18n strings
-var I18N = {
-  editEmployee: "Edit Employee / تعديل الموظف",
-  addEmployee: "Add New Employee / إضافة موظف جديد",
-  addEmployeeBtn: "Add Employee / إضافة موظف",
-  salarySaved: "Salary saved successfully / تم حفظ الراتب بنجاح",
-  net: "Net",
-  chooseMonth: "Please choose month",
-  chooseEmployee: "Please choose employee",
-  confirmDelete: "Are you sure to delete / هل أنت متأكد من الحذف؟"
-};
-
-// Edit employee function
-function editEmployeeFromRow(button, empId){
-  // Read values from the current row cells to avoid complex escaping in attributes
-  var tr = button.closest('tr');
-  if (!tr) return;
-  function cellText(idx){
-    var td = tr.children[idx];
-    return td ? (td.textContent||'').trim() : '';
-  }
-  var emp = {
-    id: empId,
-    employee_code: cellText(1),
-    full_name: cellText(2),
-    national_id: cellText(3),
-    department: cellText(4) === '-' ? '' : cellText(4),
-    position: cellText(5) === '-' ? '' : cellText(5),
-    phone: cellText(6) === '-' ? '' : cellText(6),
-    email: cellText(7) === '-' ? '' : cellText(7),
-    hire_date: cellText(8) === '-' ? '' : cellText(8),
-    status: (function(){ var b = tr.querySelector('.badge'); return (b && b.classList.contains('bg-success')) ? 'active' : 'inactive'; })()
-  };
-  console.log('Edit employee clicked:', emp.full_name);
-  
-  // Fill the form with employee data
-  const codeInput = document.querySelector('input[name="employee_code"]');
-  const nameInput = document.querySelector('input[name="full_name"]');
-  const nationalIdInput = document.querySelector('input[name="national_id"]');
-  const deptInput = document.querySelector('input[name="department"]');
-  const positionInput = document.querySelector('input[name="position"]');
-  const phoneInput = document.querySelector('input[name="phone"]');
-  const emailInput = document.querySelector('input[name="email"]');
-  const hireDateInput = document.querySelector('input[name="hire_date"]');
-  const statusSelect = document.querySelector('select[name="status"]');
-  
-  if (codeInput) codeInput.value = emp.employee_code || '';
-  if (nameInput) nameInput.value = emp.full_name || '';
-  if (nationalIdInput) nationalIdInput.value = emp.national_id || '';
-  if (deptInput) deptInput.value = emp.department || '';
-  if (positionInput) positionInput.value = emp.position || '';
-  if (phoneInput) phoneInput.value = emp.phone || '';
-  if (emailInput) emailInput.value = emp.email || '';
-  if (hireDateInput) hireDateInput.value = emp.hire_date || '';
-  if (statusSelect) statusSelect.value = emp.status || 'active';
-  const activeChk = document.getElementById('emp_active');
-  if (activeChk) activeChk.checked = (emp.status||'active') === 'active';
-  
-  // Change form action to edit route
-  const form = document.querySelector('#employees-form form');
-  if (form) {
-    form.action = '/employees/edit/' + emp.id;
-    // Change submit text for both button and input submit
-    const btn = form.querySelector('button[type="submit"]');
-    const inp = form.querySelector('input[type="submit"]');
-    const newText = I18N.editEmployee;
-    if (btn) { btn.textContent = newText; btn.className = 'btn btn-warning'; }
-    if (inp) { inp.value = newText; inp.className = 'btn btn-warning'; }
-    // Change form title
-    const formTitle = document.getElementById('form-title');
-    if (formTitle) {
-      formTitle.textContent = '✏️ ' + I18N.editEmployee + ': ' + (emp.full_name || '');
-    }
-  }
-  
-  // Scroll to form
-  const formElement = document.getElementById('employees-form');
-  if (formElement) {
-    formElement.scrollIntoView({ behavior: 'smooth' });
-  }
-  
-  // Focus first field for faster edits
-  var f = document.querySelector('input[name="full_name"]');
-  if (f && typeof f.focus === 'function') { f.focus(); }
-}
-
-// Make function globally accessible
-window.editEmployeeFromRow = editEmployeeFromRow;
-
-console.log('Edit function assigned to window object');
-
-// Delete employee function - NEW
-async function deleteEmployeeNew(id, name) {
-  console.log('Delete employee clicked:', name);
-  
-  try {
-    var msgEl = document.getElementById('__confirm_delete_msg');
-    var baseMsg = msgEl ? msgEl.value : 'Are you sure?';
-    const confirmed = await window.showConfirm(baseMsg + '\n' + name);
-    if (confirmed) {
-      // If there is an existing delete form in the row, submit it to keep CSRF intact
-      var btn = document.querySelector('.btn-edit[data-emp-id="' + id + '"]');
-      var row = btn ? btn.closest('tr') : null;
-      var existingForm = row ? row.querySelector('form.form-delete-emp') : null;
-      if (existingForm) {
-        existingForm.submit();
-        return;
-      }
-      // fallback manual form
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = '/employees/' + id + '/delete';
-      const csrfInput = document.createElement('input');
-      csrfInput.type = 'hidden';
-      csrfInput.name = 'csrf_token';
-      var mt = document.querySelector('meta[name="csrf-token"]');
-      csrfInput.value = mt ? mt.content : '';
-      form.appendChild(csrfInput);
-      document.body.appendChild(form);
-      form.submit();
-    }
-  } catch (error) {
-    console.error('Error in deleteEmployeeNew:', error);
-    alert('خطأ في حذف الموظف');
-  }
-}
-
-// Clear form function
-function clearEmployeeForm() {
-  console.log('Clear form clicked');
-  
-  const form = document.querySelector('#employees-form form');
-  if (form) {
-    form.reset();
-    form.action = '/employees'; // Reset to create route
-    // Reset submit text for both button and input submit
-    const btn = form.querySelector('button[type="submit"]');
-    const inp = form.querySelector('input[type="submit"]');
-    const addText = '{{ _("Add Employee / إضافة موظف") }}';
-    if (btn) { btn.textContent = addText; btn.className = 'btn btn-success'; }
-    if (inp) { inp.value = addText; inp.className = 'btn btn-success'; }
-    // Reset form title
-    const formTitle = document.getElementById('form-title');
-    if (formTitle) {
-      formTitle.textContent = '📝 {{ _("Add New Employee / إضافة موظف جديد") }}';
-    }
-    // Refill employee_code with next_code from server if available
-    var codeInput = document.querySelector('input[name="employee_code"]');
-    if (codeInput) {
-      var serverNext = '{{ next_code or "" }}';
-      if (serverNext) { codeInput.value = serverNext; }
-    }
-  }
-}
-
-// Make function globally accessible
-window.clearEmployeeForm = clearEmployeeForm;
-
-// Quick open Pay Salary section and preselect employee
-function openPaySalary(empId, name){
-  try{
-    // Redirect to salaries page filtered by employee if available, else open salaries main
-    var url = (document.getElementById('__salaries_pay_url')||{}).value || '/salaries/pay';
-    if (empId){ url = url + '?employee=' + encodeURIComponent(empId); }
-    window.location.href = url;
-  }catch(e){ console.warn(e); }
-}
-window.openPaySalary = openPaySalary;
-
-// Live search in employees table
-(function(){
-  var empSearch = document.getElementById('empSearch');
-  if (empSearch && empSearch.addEventListener){
-    empSearch.addEventListener('input', function(){
-      var q = (this.value||'').toLowerCase();
-      var rows = document.querySelectorAll('#empTableBody tr');
-      Array.prototype.forEach.call(rows, function(tr){
-        var txt = (tr.textContent||'').toLowerCase();
-        tr.style.display = (txt.indexOf(q) !== -1) ? '' : 'none';
-      });
-    });
-  }
-})();
-
-// Delegated actions for table buttons
-(function(){
-  var tbody = document.getElementById('empTableBody');
-  if (!tbody) return;
-  tbody.addEventListener('click', function(e){
-    var t = e.target;
-    // If the click is on the icon inside a button, bubble to the button
-    if (t && t.closest) t = t.closest('button, form');
-    if (!t) return;
-    if (t.classList.contains('btn-edit')){
-      // pass the button and employee id
-      var empId = t.getAttribute('data-emp-id');
-      editEmployeeFromRow(t, empId);
-      return;
-    }
-    if (t.classList.contains('btn-salary')){
-      var empId2 = t.getAttribute('data-emp-id');
-      openPaySalary(empId2);
-      return;
-    }
-    if (t.classList.contains('form-delete-emp')){
-      // prevent default and show confirm
-      e.preventDefault();
-      var name = t.getAttribute('data-emp-name') || '';
-      deleteEmployeeNew((function(){
-        var rowBtn = t.parentElement && t.parentElement.querySelector('.btn-edit');
-        return rowBtn ? rowBtn.getAttribute('data-emp-id') : '';
-      })(), name).then(function(){
-        // no-op; actual submit happens in deleteEmployeeNew
-      });
-      return;
-    }
+function filterEmployees() {
+  let input = document.getElementById("search").value.toLowerCase();
+  let rows = document.querySelectorAll("#employeeTable tbody tr");
+  rows.forEach(row => {
+    let txt = row.innerText.toLowerCase();
+    row.style.display = txt.includes(input) ? "" : "none";
   });
-})();
+}
 
-// Quick Department selector fills the input
-(function(){
-  const sel = document.getElementById('deptQuickSelect');
-  if (!sel) return;
-  sel.addEventListener('change', function(){
-    const inp = document.querySelector('input[name="department"]');
-    if (inp && this.value) inp.value = this.value;
+function collectSelectedEmployees(btn){
+  const ids = Array.from(document.querySelectorAll('.emp-select:checked')).map(x=>x.value);
+  if(ids.length === 0){ alert('اختر موظفًا واحدًا على الأقل'); return false; }
+  const form = btn.closest('form');
+  // remove old
+  form.querySelectorAll('input[name="employee_ids"]').forEach(n=>n.remove());
+  // append new
+  ids.forEach(id=>{
+    const i = document.createElement('input');
+    i.type = 'hidden'; i.name = 'employee_ids'; i.value = id; form.appendChild(i);
   });
-})();
+  return true;
+}
 
-// Employees page no longer embeds payroll logic. Use Salaries screens.
+ document.getElementById('select_all')?.addEventListener('change', function(e){
+   const boxes = document.querySelectorAll('.emp-select');
+   boxes.forEach(cb => { if (cb.closest('tr').style.display !== 'none') cb.checked = e.target.checked; });
+ });
 </script>
-
 {% endblock %}
+
+

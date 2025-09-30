@@ -9,7 +9,7 @@
     <div class="d-flex gap-2">
       <a class="btn btn-outline-secondary" href="{{ url_for('main.employees') }}">👤 {{ _('Employees') }}</a>
       <a class="btn btn-outline-success" href="{{ url_for('main.salaries_pay', month='%04d-%02d' % (year, month)) }}">💵 {{ _('Pay Salaries') }}</a>
-      <a class="btn btn-outline-primary" target="_blank" href="{{ url_for('main.reports_print_salaries', month='%04d-%02d' % (year, month)) }}">📄 {{ _('Print Statement / طباعة الكشف') }}</a>
+      <a class="btn btn-outline-primary" target="_blank" href="{{ url_for('main.reports_print_salaries_detailed', month='%04d-%02d' % (year, month), status=(status_f or '')) }}">📄 {{ _('Print Statement / طباعة الكشف') }}</a>
       <a class="btn btn-primary" href="{{ url_for('main.dashboard') }}">🏠 {{ _('Dashboard') }}</a>
     </div>
   </div>
@@ -29,12 +29,27 @@
       </select>
     </div>
     <div class="col-auto">
+      <label class="form-label">{{ _('Status / الحالة') }}</label>
+      <select name="status" class="form-select">
+        <option value="">{{ _('All / الكل') }}</option>
+        <option value="paid" {% if status_f=='paid' %}selected{% endif %}>{{ _('Paid / مدفوعة') }}</option>
+        <option value="due" {% if status_f=='due' %}selected{% endif %}>{{ _('Due / مستحقة') }}</option>
+        <option value="partial" {% if status_f=='partial' %}selected{% endif %}>{{ _('Partial / مدفوعة جزئياً') }}</option>
+      </select>
+    </div>
+    <div class="col-auto">
       <button class="btn btn-secondary">{{ _('Show / عرض') }}</button>
     </div>
   </form>
 
   <div class="card">
     <div class="card-body">
+      <style>
+        .amount-muted { color: #6c757d; }
+        .amount-paid { color: #198754; font-weight: 600; } /* Bootstrap green */
+        .amount-due  { color: #dc3545; font-weight: 600; } /* Bootstrap red */
+        .amount-prev { color: #fd7e14; font-weight: 600; } /* Bootstrap orange */
+      </style>
       <div class="table-responsive">
         <table class="table table-striped align-middle">
           <thead class="table-dark">
@@ -49,21 +64,60 @@
               <th>{{ _('Paid / المدفوع') }}</th>
               <th>{{ _('Remaining / المتبقي') }}</th>
               <th>{{ _('Status / الحالة') }}</th>
+              <th>{{ _('Details / التفاصيل') }}</th>
             </tr>
           </thead>
           <tbody>
             {% for r in rows %}
+            {% set prev_cls = 'amount-prev' if (r.prev or 0)|float > 0 else 'amount-muted' %}
+            {% set paid_cls = 'amount-paid' if (r.paid or 0)|float > 0 else 'amount-muted' %}
+            {% set rem_cls  = 'amount-due' if (r.remaining or 0)|float > 0.01 else 'amount-paid' %}
             <tr>
               <td>{{ loop.index }}</td>
               <td>{{ r.employee_name }}</td>
               <td>{{ '%.2f'|format(r.basic) }}</td>
               <td>{{ '%.2f'|format(r.allow) }}</td>
               <td>{{ '%.2f'|format(r.ded) }}</td>
-              <td>{{ '%.2f'|format(r.prev) }}</td>
+              <td class="{{ prev_cls }}">{{ '%.2f'|format(r.prev) }}</td>
               <td>{{ '%.2f'|format(r.total) }}</td>
-              <td>{{ '%.2f'|format(r.paid) }}</td>
-              <td>{{ '%.2f'|format(r.remaining) }}</td>
+              <td class="{{ paid_cls }}">{{ '%.2f'|format(r.paid) }}</td>
+              <td class="{{ rem_cls }}">{{ '%.2f'|format(r.remaining) }}</td>
               <td>{{ r.status }}</td>
+              <td>
+                <button type="button" class="btn btn-sm btn-outline-info" onclick="togglePrevDetails({{ r.employee_id }})">{{ _('Show Details / عرض التفاصيل') }}</button>
+              </td>
+            </tr>
+            <tr id="prev-details-{{ r.employee_id }}" style="display:none">
+              <td colspan="11">
+                <div class="p-2 border rounded bg-light">
+                  <div class="fw-bold mb-2">{{ _('Previous Months Details / تفاصيل الشهور السابقة') }}</div>
+                  <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                      <thead class="table-secondary">
+                        <tr>
+                          <th>{{ _('Month / الشهر') }}</th>
+                          <th class="text-end">{{ _('Due / المستحق') }}</th>
+                          <th class="text-end">{{ _('Paid / المدفوع') }}</th>
+                          <th class="text-end">{{ _('Remaining / المتبقي') }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for d in (r.prev_details or []) %}
+                        <tr>
+                          <td>{{ d.month }}</td>
+                          <td class="text-end">{{ '%.2f'|format(d.due) }}</td>
+                          <td class="text-end">{{ '%.2f'|format(d.paid) }}</td>
+                          {% set rem = ((d.due or 0)|float - (d.paid or 0)|float) %}
+                          <td class="text-end">{{ '%.2f'|format(rem if rem>0 else 0) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" class="text-center text-muted">{{ _('No previous months / لا يوجد شهور سابقة') }}</td></tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
@@ -74,10 +128,11 @@
               <th>{{ '%.2f'|format(totals.basic) }}</th>
               <th>{{ '%.2f'|format(totals.allow) }}</th>
               <th>{{ '%.2f'|format(totals.ded) }}</th>
-              <th>{{ '%.2f'|format(totals.prev) }}</th>
+              <th class="{{ 'amount-prev' if (totals.prev or 0)|float > 0 else 'amount-muted' }}">{{ '%.2f'|format(totals.prev) }}</th>
               <th>{{ '%.2f'|format(totals.total) }}</th>
-              <th>{{ '%.2f'|format(totals.paid) }}</th>
-              <th>{{ '%.2f'|format(totals.remaining) }}</th>
+              <th class="{{ 'amount-paid' if (totals.paid or 0)|float > 0 else 'amount-muted' }}">{{ '%.2f'|format(totals.paid) }}</th>
+              <th class="{{ 'amount-due' if (totals.remaining or 0)|float > 0.01 else 'amount-paid' }}">{{ '%.2f'|format(totals.remaining) }}</th>
+              <th></th>
               <th></th>
             </tr>
           </tfoot>
@@ -87,5 +142,12 @@
     </div>
   </div>
 </div>
+<script>
+  function togglePrevDetails(empId){
+    var row = document.getElementById('prev-details-' + empId);
+    if(!row) return;
+    row.style.display = (row.style.display === 'none' || row.style.display === '') ? '' : 'none';
+  }
+</script>
 {% endblock %}
 

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+  <div class="d-flex justify-content-between align-items-center">
+    <h2 class="mb-2">🧾 Payroll Statements / كشوفات الرواتب</h2>
+    <a class="btn btn-outline-primary" href="{{ url_for('main.employees') }}">⬅︎ رجوع للموظفين</a>
+  </div>
+
+  <form method="GET" class="filters d-flex gap-2 align-items-end flex-wrap">
+    <label>Year / السنة</label>
+    <select name="year">
+      {% for y in years %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+
+    <label>Month / الشهر</label>
+    <select name="month">
+      {% for m in months %}
+        <option value="{{ m.value }}" {% if m.value == month %}selected{% endif %}>{{ m.label }}</option>
+      {% endfor %}
+    </select>
+
+    <label>Status / الحالة</label>
+    <select name="status">
+      <option value="all" {% if status=="all" %}selected{% endif %}>كل الحالات</option>
+      <option value="due" {% if status=="due" %}selected{% endif %}>مستحقة</option>
+      <option value="partial" {% if status=="partial" %}selected{% endif %}>جزئي</option>
+      <option value="paid" {% if status=="paid" %}selected{% endif %}>مدفوعة</option>
+    </select>
+    <button class="btn btn-primary">🔍 بحث</button>
+    <button type="button" class="btn btn-outline-secondary" onclick="openPrintModal('{{ url_for('main.payroll_print', year=year, month=month) }}')">🖨️ طباعة كشف هذا الشهر</button>
+    <button type="button" class="btn btn-outline-dark" onclick="openPrintModal('{{ url_for('reports.payroll_report', year_from=year, month_from=month, year_to=year, month_to=month, print=1) }}')">🖨️ تقرير تفصيلي للفترة</button>
+  </form>
+
+  <div class="small text-muted mb-2">
+    <span class="me-2">Paid/المدفوع = <span class="text-success fw-bold">أخضر</span></span>
+    <span class="me-2">Remaining/المتبقي = <span class="text-danger fw-bold">أحمر</span> إذا > 0</span>
+    <span class="me-2">Status = <span class="badge bg-success">مدفوعة</span> / <span class="badge bg-warning text-dark">جزئي</span> / <span class="badge bg-danger">مستحقة</span></span>
+  </div>
+
+  <table class="styled-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Employee / الموظف</th>
+        <th class="text-end">Basic / الأساسي</th>
+        <th class="text-end">Allowances / البدلات</th>
+        <th class="text-end">Deductions / الاستقطاعات</th>
+        <th class="text-end">Prev Due / سابقة</th>
+        <th class="text-end">Total / الإجمالي</th>
+        <th class="text-end">Paid / المدفوع</th>
+        <th class="text-end">Remaining / المتبقي</th>
+        <th>Status / الحالة</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in payrolls %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ p.employee.full_name }}</td>
+        <td class="text-end">{{ "%.2f"|format(p.basic) }}</td>
+        <td class="text-end">{{ "%.2f"|format(p.allowances) }}</td>
+        <td class="text-end">{{ "%.2f"|format(p.deductions) }}</td>
+        <td class="text-end">{{ "%.2f"|format(p.prev_due) }}</td>
+        <td class="text-end">{{ "%.2f"|format(p.total) }}</td>
+        <td class="text-end text-success fw-bold">{{ "%.2f"|format(p.paid) }}</td>
+        <td class="text-end {% if p.remaining > 0 %}text-danger{% else %}text-success{% endif %} fw-bold">{{ "%.2f"|format(p.remaining) }}</td>
+        <td>
+          {% if p.status == "due" %}
+            <span class="badge bg-danger">مستحقة</span>
+          {% elif p.status == "partial" %}
+            <span class="badge bg-warning text-dark">جزئي</span>
+          {% else %}
+            <span class="badge bg-success">مدفوعة</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('main.pay_salary', emp_id=p.employee.id, month=month, year=year) }}" class="btn btn-sm btn-success">💵 سداد</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

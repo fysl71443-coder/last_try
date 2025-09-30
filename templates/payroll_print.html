@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>🧾 Monthly Payroll Statement / كشف رواتب الشهر</title>
+    <style>
+        @page { size: A4; margin: 10mm; }
+        :root { --sheet-width: 210mm; }
+        html, body { height: auto; }
+        body {
+            font-family: "Tahoma", Arial, sans-serif;
+            font-size: 13px;
+            margin: 0;
+            display: grid;
+            place-items: start center;
+            background: #fff;
+        }
+        .sheet { width: var(--sheet-width); margin: 14px auto 18px; background: #fff; }
+        h1, h2, h3 { text-align: center; margin: 6px 0 10px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0 18px 0; }
+        th, td { border: 1px solid #444; padding: 6px 8px; vertical-align: middle; word-break: break-word; font-size: 12.5px; }
+        thead th { background: #f7f7f7; font-weight: 700; }
+        tbody tr:nth-child(even) { background: #fbfbfb; }
+        .totals { font-weight: 700; background: #f3f3f3; }
+        .paid { color: #1b5e20; font-weight: 700; }
+        .partial { color: #b26a00; font-weight: 700; }
+        .due { color: #b71c1c; font-weight: 700; }
+        .num { direction: ltr; text-align: right; font-variant-numeric: tabular-nums; }
+        .center { text-align: center; }
+        .w-idx { width: 38px; }
+        .w-name { width: 26%; text-align: center; }
+        .w-small { width: 8.5%; }
+        .btn { padding: 6px 12px; border: 1px solid #333; background: #f0f0f0; cursor: pointer; }
+        .btn:hover { background: #ddd; }
+        .no-print { width: var(--sheet-width); margin: 8px auto 0; display: flex; gap: 8px; justify-content: flex-end; }
+        @media print {
+            body { margin: 0; display: block; }
+            .sheet { width: var(--sheet-width); margin: 10mm auto; }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            tr { page-break-inside: avoid; }
+            h1, h2, h3 { page-break-after: avoid; }
+            .no-print { display: none !important; }
+            * { color:#000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            thead th { background:#fff !important; }
+            .totals { background:#fff !important; }
+        }
+    </style>
+    {% if auto_print %}
+    <script>
+      window.addEventListener('load', function(){ window.print(); });
+    </script>
+    {% endif %}
+    {% if close_after_print %}
+    <script>
+      window.addEventListener('afterprint', function(){ window.close(); });
+    </script>
+    {% endif %}
+  </head>
+<body>
+
+    <div class="no-print">
+      <button class="btn" onclick="window.print()">🖨️ طباعة</button>
+      <a class="btn" href="{{ url_for('main.payroll', year=year, month=month) }}">⬅︎ رجوع</a>
+      <button class="btn" onclick="window.close()">✖︎ إغلاق</button>
+    </div>
+
+    <div class="sheet">
+    <h1>🧾 Monthly Payroll Statement / كشف رواتب الشهر</h1>
+    <h2>{{ year }}/{{ "%02d"|format(month) }}</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th class="w-idx center">#</th>
+                    <th class="w-name center">Employee / الموظف</th>
+                    <th class="w-small center">Basic / الأساسي</th>
+                    <th class="w-small center">Allowances / البدلات</th>
+                    <th class="w-small center">Deductions / الاستقطاعات</th>
+                    <th class="w-small center">Previous Due / سابقة</th>
+                    <th class="w-small center">Total / الإجمالي</th>
+                    <th class="w-small center">Paid / المدفوع</th>
+                    <th class="w-small center">Remaining / المتبقي</th>
+                    <th class="w-small center">Status / الحالة</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in payrolls %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ row.employee.full_name }}</td>
+                    <td class="num">{{ "%.2f"|format(row.basic) }}</td>
+                    <td class="num">{{ "%.2f"|format(row.allowances) }}</td>
+                    <td class="num">{{ "%.2f"|format(row.deductions) }}</td>
+                    <td class="num">{{ "%.2f"|format(row.prev_due) }}</td>
+                    <td class="num">{{ "%.2f"|format(row.total) }}</td>
+                    <td class="num paid">{{ "%.2f"|format(row.paid) }}</td>
+                    <td class="num {% if row.remaining>0 %}due{% else %}paid{% endif %}">{{ "%.2f"|format(row.remaining) }}</td>
+                    <td class="center {% if row.status == 'paid' %}paid{% elif row.status == 'partial' %}partial{% else %}due{% endif %}">
+                        {% if row.status == 'paid' %}paid / مدفوع{% elif row.status == 'partial' %}partial / جزئي{% else %}due / مستحق{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                <tr class="totals">
+                    <td colspan="2" class="center">Totals / الإجماليات</td>
+                    <td class="num">{{ "%.2f"|format(payrolls|sum(attribute='basic')) }}</td>
+                    <td class="num">{{ "%.2f"|format(payrolls|sum(attribute='allowances')) }}</td>
+                    <td class="num">{{ "%.2f"|format(payrolls|sum(attribute='deductions')) }}</td>
+                    <td class="num">{{ "%.2f"|format(payrolls|sum(attribute='prev_due')) }}</td>
+                    <td class="num">{{ "%.2f"|format(payrolls|sum(attribute='total')) }}</td>
+                    <td class="num paid">{{ "%.2f"|format(payrolls|sum(attribute='paid')) }}</td>
+                    {% set rem_sum = (payrolls|sum(attribute='remaining')) %}
+                    <td class="num {% if rem_sum>0 %}due{% else %}paid{% endif %}">{{ "%.2f"|format(rem_sum) }}</td>
+                    <td class="center">-</td>
+                </tr>
+            </tbody>
+        </table>
+ 
+            
+    </div>
+</body>
+</html>
+
+

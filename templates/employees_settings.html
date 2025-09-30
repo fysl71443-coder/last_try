@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">⚙️ إعدادات الرواتب حسب الساعة</h3>
+    <a class="btn btn-outline-primary" href="{{ url_for('main.employees') }}">⬅︎ رجوع للموظفين</a>
+  </div>
+
+  <div class="alert alert-secondary small">
+    حدّث أسعار الساعة للأقسام، ثم أدخل ساعات كل موظف لهذا الشهر. يتم احتساب الراتب الأساسي تلقائيًا = (الساعات × سعر الساعة للقسم).
+  </div>
+
+  <form method="POST" class="row g-2 align-items-end mb-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="year" value="{{ year }}"/>
+    <input type="hidden" name="month" value="{{ month }}"/>
+    <div class="col-sm-3">
+      <label class="form-label">القسم</label>
+      <select name="dept_name" class="form-select" required>
+        {% for r in dept_rates %}
+          <option value="{{ r.name }}" {% if selected and selected.name==r.name %}selected{% endif %}>{{ r.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-3">
+      <label class="form-label">سعر الساعة (SAR)</label>
+      <input type="number" step="0.01" min="0" name="hourly_rate" class="form-control" value="{{ selected.hourly_rate if selected else '' }}" required>
+    </div>
+    <div class="col-sm-3">
+      <button class="btn btn-success w-100">💾 حفظ السعر</button>
+    </div>
+  </form>
+
+  <div class="table-responsive mb-4">
+    <table class="table table-bordered table-sm align-middle">
+      <thead class="table-light position-sticky top-0" style="z-index:1;">
+        <tr>
+          <th>#</th>
+          <th>القسم</th>
+          <th>سعر الساعة</th>
+          <th style="width:160px">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in dept_rates %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ r.name }}</td>
+          <td>{{ '%.2f'|format(r.hourly_rate or 0) }}</td>
+          <td>
+            <form method="post" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <input type="hidden" name="mode" value="delete_dept"/>
+              <input type="hidden" name="dept_name" value="{{ r.name }}"/>
+              <button class="btn btn-sm btn-outline-danger" onclick="return confirm('حذف القسم؟')">حذف</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" class="row g-2 align-items-end mb-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="mode" value="add_dept"/>
+    <div class="col-sm-5">
+      <label class="form-label">إضافة/تعديل قسم</label>
+      <input type="text" name="new_dept_name" class="form-control" placeholder="اسم القسم" required>
+    </div>
+    <div class="col-sm-3">
+      <label class="form-label">سعر الساعة</label>
+      <input type="number" step="0.01" min="0" name="new_hourly_rate" class="form-control" value="0">
+    </div>
+    <div class="col-sm-3">
+      <button class="btn btn-outline-success w-100">حفظ القسم</button>
+    </div>
+  </form>
+
+  <h5 class="mb-2">ساعات العمل الشهرية</h5>
+  <form method="GET" class="row g-2 align-items-end mb-2">
+    <div class="col-sm-2">
+      <label class="form-label">سنة</label>
+      <input type="number" name="year" class="form-control" value="{{ year }}">
+    </div>
+    <div class="col-sm-2">
+      <label class="form-label">شهر</label>
+      <input type="number" name="month" class="form-control" min="1" max="12" value="{{ month }}">
+    </div>
+    <div class="col-sm-2">
+      <button class="btn btn-secondary w-100">تحديث</button>
+    </div>
+  </form>
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="mode" value="hours"/>
+    <input type="hidden" name="year" value="{{ year }}"/>
+    <input type="hidden" name="month" value="{{ month }}"/>
+
+    <div class="table-responsive">
+      <table class="table table-striped table-hover table-sm align-middle" id="hoursTable">
+        <thead class="table-light position-sticky top-0" style="z-index:1;">
+          <tr>
+            <th>#</th>
+            <th>الموظف</th>
+            <th>القسم</th>
+            <th>الساعات</th>
+            <th>الأجر المحسوب</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp in employees %}
+          {% set rate = dept_rate_map.get((emp.department or '')|lower, 0) %}
+          {% set h = hours_map.get(emp.id, 0) %}
+          {% set calc = (rate or 0) * (h or 0) %}
+          <tr data-rate="{{ '%.2f'|format(rate or 0) }}">
+            <td>{{ loop.index }}</td>
+            <td>{{ emp.full_name }}</td>
+            <td>{{ emp.department or '-' }}</td>
+            <td style="width:160px">
+              <input type="number" step="0.01" min="0" class="form-control emp-hours" name="hours_{{ emp.id }}" value="{{ h }}">
+            </td>
+            <td class="fw-bold emp-wage">{{ '%.2f'|format(calc) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+      <button class="btn btn-primary">💾 حفظ الساعات وتحديث الرواتب</button>
+    </div>
+  </form>
+</div>
+
+<script>
+// Live wage recalculation on hours change
+(function(){
+  const table = document.getElementById('hoursTable');
+  if(!table) return;
+  table.addEventListener('input', function(e){
+    const input = e.target.closest('.emp-hours');
+    if(!input) return;
+    const tr = input.closest('tr');
+    const rate = parseFloat(tr.getAttribute('data-rate')) || 0;
+    const hours = parseFloat(input.value) || 0;
+    const wageCell = tr.querySelector('.emp-wage');
+    if(wageCell){ wageCell.textContent = (rate * hours).toFixed(2); }
+  });
+})();
+</script>
+{% endblock %}
+

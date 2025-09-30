@@ -356,6 +356,34 @@ def _set_employee_code(mapper, connection, target):
     except Exception:
         pass
 
+
+# Hourly payroll settings
+class DepartmentRate(db.Model):
+    __tablename__ = 'department_rates'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)  # cooks, hall, admin
+    hourly_rate = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+
+    def __repr__(self):
+        return f'<DepartmentRate {self.name}={self.hourly_rate}>'
+
+
+class EmployeeHours(db.Model):
+    __tablename__ = 'employee_hours'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'year', 'month', name='uq_hours_period'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+    hours = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+
+    employee = db.relationship('Employee')
+
+    def __repr__(self):
+        return f'<EmployeeHours emp={self.employee_id} {self.year}-{self.month} h={self.hours}>'
+
 class Salary(db.Model):
     __tablename__ = 'salaries'
     __table_args__ = (
@@ -562,6 +590,7 @@ class Supplier(db.Model):
     address = db.Column(db.String(300), nullable=True)
     tax_number = db.Column(db.String(50), nullable=True)
     contact_person = db.Column(db.String(100), nullable=True)
+    payment_method = db.Column(db.String(20), default='CASH')  # BANK/CASH/TRANSFER
     notes = db.Column(db.Text, nullable=True)
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
