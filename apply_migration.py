@@ -7,7 +7,7 @@ This script applies necessary database schema changes for both SQLite and Postgr
 import os
 import sys
 from sqlalchemy import text, inspect
-from app import app
+from app import create_app
 from extensions import db
 
 def get_database_type():
@@ -17,6 +17,7 @@ def get_database_type():
 def apply_migration():
     """Apply database migration for both SQLite and PostgreSQL compatibility"""
 
+    app = create_app()
     with app.app_context():
         try:
             db_type = get_database_type()
@@ -65,6 +66,7 @@ def apply_migration():
 def verify_columns():
     """Verify that critical columns exist using SQLAlchemy inspector"""
 
+    app = create_app()
     with app.app_context():
         try:
             print("\n🔍 Verifying critical columns...")
@@ -101,7 +103,8 @@ def verify_columns():
 
 def test_sales_functionality():
     """Test that sales functionality works after migration"""
-    
+
+    app = create_app()
     with app.app_context():
         try:
             print("\n🧪 Testing sales functionality...")

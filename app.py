@@ -7380,9 +7380,13 @@ def salaries_statements():
         month = int(request.args.get('month') or get_saudi_now().month)
     except Exception:
         month = get_saudi_now().month
+    # Optional status filter
+    status_f = (request.args.get('status') or '').strip().lower()
 
     from sqlalchemy import func
     qs = Salary.query.filter_by(year=year, month=month).join(Employee).order_by(Employee.full_name.asc())
+    if status_f in ('paid', 'due', 'partial'):
+        qs = qs.filter(Salary.status == status_f)
     recs = qs.all()
     # Payments per salary
     pays = db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).\
@@ -7416,7 +7420,7 @@ def salaries_statements():
         totals['paid'] += paid
         totals['remaining'] += remaining
 
-    return render_template('salaries_statements.html', year=year, month=month, rows=rows, totals=totals)
+    return render_template('salaries_statements.html', year=year, month=month, rows=rows, totals=totals, status_f=status_f)
 @app.route('/salaries/<int:salary_id>/delete', methods=['POST'])
 @login_required
 def delete_salary(salary_id):
