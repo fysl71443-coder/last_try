@@ -195,6 +195,8 @@
         });
         const data = await resp.json().catch(()=>({}));
         if(resp.ok && data.draft_id){ CURRENT_DRAFT_ID = data.draft_id; }
+        // Refresh tables status after creating draft
+        try{ await fetch(`/api/tables/${BRANCH}`, { credentials:'same-origin' }); }catch(_e){}
       } else {
         // Update existing draft: this endpoint expects 'qty' per item
         await fetch(`/api/draft_orders/${CURRENT_DRAFT_ID}/update`, {
@@ -209,6 +211,8 @@
             supervisor_password: opts && opts.supervisor_password ? opts.supervisor_password : undefined
           })
         });
+        // Optionally ping tables status so other clients can poll new state
+        try{ await fetch(`/api/tables/${BRANCH}`, { credentials:'same-origin' }); }catch(_e){}
       }
     }catch(e){ console.error('saveDraftOrder failed', e); }
   }
