@@ -4200,12 +4200,17 @@ def print_order_preview(branch, table):
     discount_amount = (subtotal + vat_amount) * (discount_pct/100.0)
     total_after = subtotal + vat_amount - discount_amount
 
+    # Resolve payment method from draft if chosen in POS
+    try:
+        pm_raw = (rec.get('payment_method') or '').strip()
+    except Exception:
+        pm_raw = ''
     inv_ctx = {
         'invoice_number': '',  # no real invoice number for preview
         'table_number': table,
         'customer_name': (rec.get('customer') or {}).get('name') or '',
         'customer_phone': (rec.get('customer') or {}).get('phone') or '',
-        'payment_method': '',
+        'payment_method': pm_raw.upper() if pm_raw else '',
         'status': 'DRAFT',
         'total_before_tax': round(subtotal, 2),
         'tax_amount': round(vat_amount, 2),
