@@ -580,6 +580,12 @@ class Settings(db.Model):
 
     logo_url = db.Column(db.String(300), default='/static/chinese-logo.svg')  # receipt logo
 
+    # Print tuning controls
+    receipt_high_contrast = db.Column(db.Boolean, default=True)
+    receipt_bold_totals = db.Column(db.Boolean, default=True)
+    receipt_border_style = db.Column(db.String(10), default='solid')  # solid or dashed
+    receipt_font_bump = db.Column(db.Integer, default=1)  # additional px in @media print
+
 
 class Supplier(db.Model):
     __tablename__ = 'suppliers'
