@@ -14,17 +14,16 @@
             display: grid;
             place-items: start center;
             background: #fff;
+            color:#000; font-weight:700;
         }
         .sheet { width: var(--sheet-width); margin: 14px auto 18px; background: #fff; }
         h1, h2, h3 { text-align: center; margin: 6px 0 10px 0; }
         table { width: 100%; border-collapse: collapse; margin: 12px 0 18px 0; }
         th, td { border: 1px solid #444; padding: 6px 8px; vertical-align: middle; word-break: break-word; font-size: 12.5px; }
-        thead th { background: #f7f7f7; font-weight: 700; }
-        tbody tr:nth-child(even) { background: #fbfbfb; }
-        .totals { font-weight: 700; background: #f3f3f3; color: #000; }
-        .paid { color: #1b5e20; font-weight: 700; }
-        .partial { color: #b26a00; font-weight: 700; }
-        .due { color: #b71c1c; font-weight: 700; }
+        thead th { background: #fff; font-weight: 800; color:#000; }
+        tbody tr:nth-child(even) { background: #fff; }
+        .totals { font-weight: 800; background: #fff; color: #000; }
+        .paid, .partial, .due { color:#000; font-weight:700; }
         .num { direction: ltr; text-align: right; font-variant-numeric: tabular-nums; }
         .center { text-align: center; }
         .w-idx { width: 38px; }
@@ -34,12 +33,12 @@
         .btn:hover { background: #ddd; }
         .no-print { width: var(--sheet-width); margin: 8px auto 0; display: flex; gap: 8px; justify-content: flex-end; }
         @media print {
-            body { margin: 0; display: block; }
+            body { margin: 0; display: block; color:#000 !important; font-weight:700 !important }
             .sheet { width: var(--sheet-width); margin: 10mm auto; }
             /* Buttons as simple outlined text in print */
             button, .btn { color: #000 !important; background: none !important; border: 1px solid #000 !important; box-shadow: none !important; }
             /* Totals and footers high-contrast */
-            tfoot, .totals, .totals-row, .grand-total { color: #000 !important; font-weight: bold !important; background: #fff !important; border-color: #000 !important; }
+            tfoot, .totals, .totals-row, .grand-total { color: #000 !important; font-weight: 800 !important; background: #fff !important; border-color: #000 !important; }
             /* Stronger borders in print */
             th, td { border-color: #000 !important; }
             thead { display: table-header-group; }
@@ -47,7 +46,7 @@
             tr { page-break-inside: avoid; }
             h1, h2, h3 { page-break-after: avoid; }
             .no-print { display: none !important; }
-            * { color:#000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            * { color:#000 !important; font-weight:700 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             thead th { background:#fff !important; }
             .totals { background:#fff !important; }
         }
