@@ -319,6 +319,15 @@
       <span>{{ '%.2f'|format(inv.total_after_tax_discount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency" style="width: 12px; height: 12px; vertical-align: middle;">{% endif %}</span>
     </div>
 
+    {# Payment method under the grand total #}
+    {% set pm = (inv.payment_method or (payment_method if payment_method is defined else None)) %}
+    {% if pm %}
+    <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+      <span>{{ _('Payment') }}:</span>
+      <span>{{ (pm or 'Cash')|title }}</span>
+    </div>
+    {% endif %}
+
     <!-- QR Code Section - only if items exist -->
     {% if items and items|length > 0 %}
     <div class="center" style="margin: 10px 0;">

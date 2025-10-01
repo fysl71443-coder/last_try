@@ -149,6 +149,12 @@
                 <td><strong>Total</strong></td>
                 <td style="text-align:right"><strong>{{ '%.2f' % total }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" width="12" height="12" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" width="12" height="12" alt="currency">{% endif %}</strong></td>
             </tr>
+            {% if invoice and (invoice.payment_method or (invoice.status and invoice.status.lower() == 'paid')) %}
+            <tr>
+                <td>Payment</td>
+                <td style="text-align:right">{{ (invoice.payment_method or 'Cash')|title }}</td>
+            </tr>
+            {% endif %}
         </table>
 
         <!-- Payment & QR Code -->

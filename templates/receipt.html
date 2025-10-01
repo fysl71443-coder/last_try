@@ -224,6 +224,14 @@
                     <span class="currency-amount">{{ '%.2f'|format(invoice.total_after_tax_discount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency">{% elif currency_data_url %} <img src="{{ currency_data_url }}" class="currency-img" alt="currency">{% endif %}</span>
                 </span>
             </div>
+
+            {# Payment method under the grand total #}
+            {% if invoice.payment_method or (invoice.status and invoice.status|lower == 'paid') %}
+            <div class="total-row">
+                <span>Payment:</span>
+                <span>{{ (invoice.payment_method or 'Cash')|title }}</span>
+            </div>
+            {% endif %}
         </div>
 
         <!-- ZATCA QR Code -->
