@@ -36,6 +36,12 @@
         @media print {
             body { margin: 0; display: block; }
             .sheet { width: var(--sheet-width); margin: 10mm auto; }
+            /* Buttons as simple outlined text in print */
+            button, .btn { color: #000 !important; background: none !important; border: 1px solid #000 !important; box-shadow: none !important; }
+            /* Totals and footers high-contrast */
+            tfoot, .totals, .totals-row, .grand-total { color: #000 !important; font-weight: bold !important; background: #fff !important; border-color: #000 !important; }
+            /* Stronger borders in print */
+            th, td { border-color: #000 !important; }
             thead { display: table-header-group; }
             tfoot { display: table-footer-group; }
             tr { page-break-inside: avoid; }

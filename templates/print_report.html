@@ -11,8 +11,12 @@
       body { font-size: 11pt; }
       .no-print { display: none !important; }
       a { text-decoration: none; color: inherit; }
+      /* Enforce black text and high-contrast in print */
+      body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      button, .btn { color: #000 !important; background: none !important; border: 1px solid #000 !important; box-shadow: none !important; }
+      tfoot, .totals-row, .grand-total { color: #000 !important; font-weight: bold !important; background: #fff !important; border-color: #000 !important; }
       .table-print th, .table-print td { border-color: #bbb !important; }
-      .table-print thead th { background: #f1f1f1 !important; }
+      .table-print thead th { background: #fff !important; color:#000 !important; }
       table { page-break-inside: auto; }
       tr { page-break-inside: avoid; page-break-after: auto; }
     }
