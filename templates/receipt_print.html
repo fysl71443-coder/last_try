@@ -35,7 +35,7 @@
         }
         .items td {
             padding: 4px 0;
-            border-bottom: 1px dotted #000;
+            border-bottom: 1px solid #000;
             color: #000;
         }
         .totals td {
@@ -47,7 +47,7 @@
         }
         hr {
             border: none;
-            border-top: 1px dashed #000;
+            border-top: 2px solid #000;
             margin: 8px 0;
         }
         .qr-section {
@@ -73,12 +73,13 @@
         @media print {
             body { 
               margin: 0; 
-              font-size: {{ (fs|int + 1) if (fs|int < 14) else fs }}px; 
+              font-size: {{ (fs|int + 2) if (fs|int < 15) else fs }}px; 
               -webkit-print-color-adjust: exact; 
               color-adjust: exact; 
               print-color-adjust: exact; 
               color: #000; 
             }
+            table, th, td, .thank-you, .small { color: #000 !important; }
             .receipt { width: {{ pw }}mm; max-width: {{ pw }}mm; }
             @page { margin: 0 0 {{ extra_bottom }}mm 0; size: {{ pw }}mm auto; }
         }
