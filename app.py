@@ -2740,20 +2740,28 @@ def api_get_tables(branch_code):
     try:
         from models import Table, DraftOrder, SalesInvoice
 
+        # Normalize branch variants for robust matching
+        branch_l = (branch_code or '').strip().lower()
+        branch_opts = {branch_l}
+        if 'india' in branch_l:
+            branch_opts |= {'place_india', 'india_place', 'place india', 'india place'}
+        elif 'china' in branch_l:
+            branch_opts |= {'china_town', 'china town', 'town china', 'china'}
+
         # Get existing table records
-        existing_tables = Table.query.filter_by(branch_code=branch_code).all()
+        existing_tables = Table.query.filter(Table.branch_code.in_(list(branch_opts))).all()
         table_statuses = {safe_table_number(t.table_number): t.status for t in existing_tables}
 
         # Check for open invoices (real-time status)
-        open_invoices = SalesInvoice.query.filter_by(branch=branch_code, status='open').all()
+        open_invoices = SalesInvoice.query.filter(SalesInvoice.branch.in_(list(branch_opts)), SalesInvoice.status == 'open').all()
         occupied_tables = set()
         for invoice in open_invoices:
             if hasattr(invoice, 'table_number') and invoice.table_number:
                 table_num = safe_table_number(invoice.table_number)
                 occupied_tables.add(table_num)
 
-        # Count active draft orders per table
-        draft_orders = DraftOrder.query.filter_by(branch_code=branch_code, status='draft').all()
+        # Count active draft orders per table (use branch variants)
+        draft_orders = DraftOrder.query.filter(DraftOrder.branch_code.in_(list(branch_opts)), DraftOrder.status == 'draft').all()
         draft_counts = {}
         for draft in draft_orders:
             table_num = safe_table_number(draft.table_number)
@@ -4140,18 +4148,27 @@ def api_tables_status():
     branch = request.args.get('branch')
     status = {}
     try:
+        # Normalize branch variants for robust matching
+        branch_opts = set()
+        if branch:
+            branch_l = (branch or '').strip().lower()
+            branch_opts = {branch_l}
+            if 'india' in branch_l:
+                branch_opts |= {'place_india', 'india_place', 'place india', 'india place'}
+            elif 'china' in branch_l:
+                branch_opts |= {'china_town', 'china town', 'town china', 'china'}
         # In-memory marked as open
         for key in list(OPEN_INVOICES_MEM.keys()):
             try:
                 b, t = key.split(':', 1)
-                if branch and b != branch:
+                if branch and (b not in branch_opts):
                     continue
                 status[str(int(t))] = 'open'
             except Exception:
                 continue
         # Draft orders in DB are also open
         if branch:
-            drafts = DraftOrder.query.filter_by(branch_code=branch, status='draft').all()
+            drafts = DraftOrder.query.filter(DraftOrder.branch_code.in_(list(branch_opts)), DraftOrder.status == 'draft').all()
             for d in drafts:
                 try:
                     status[str(int(d.table_number))] = 'open'
