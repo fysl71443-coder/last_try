@@ -12,4 +12,4 @@ services:
     startCommand: gunicorn -k gevent --timeout 120 app:app
     envVars:
       - key: ASSET_VERSION
-        value: "20251001"
+        value: "20251001.1"
