@@ -4,20 +4,30 @@
 {% block title %}{{ _('All Invoices / كل الفواتير') }}{% endblock %}
 {% block content %}
 
-<style>
-/* محلي — يمكنك نقله إلى CSS مركزي إذا رغبت */
-.invoice-card { background: #fff; border-radius: 12px; padding: 1.25rem; box-shadow: 0 4px 10px rgba(0,0,0,0.04); margin-bottom:1rem; }
-.status-badge { padding: 0.25rem 0.6rem; border-radius: 18px; font-weight:600; font-size:0.85rem; }
-.status-pending { background:#ffeaa7; color:#2d3436; }
-.status-partial { background:#fab1a0; color:#2d3436; }
-.status-paid { background:#00b894; color:#fff; }
-.nav-buttons { background: #fff; padding: 0.8rem; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); margin-bottom:1rem; }
-.table td, .table th { vertical-align: middle; }
-.select-col { width: 48px; text-align: center; }
-</style>
+    {# === Safe back_url: avoid protected routes for unauthenticated users === #}
+    {% if current_user.is_authenticated %}
+      {% if kind is defined %}
+        {% set back_url = url_for('main.invoices', type=kind) %}
+      {% else %}
+        {% set back_url = url_for('main.dashboard') %}
+      {% endif %}
+    {% else %}
+      {% set back_url = '#' %}
+    {% endif %}
 
-<div class="container py-4">
-  <h3 class="mb-4">{{ _('All Invoices / كل الفواتير') }}</h3>
+    {% if request.endpoint != 'main.login' %}
+    <nav class="navbar navbar-expand-lg" style="background: var(--bg); border-bottom:1px solid #eee;">
+      <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.dashboard') if current_user.is_authenticated else url_for('main.login') }}">
+          <img src="/static/logo.svg" alt="logo" style="width:32px;height:32px;"/>
+          <span>{{ (settings.company_name if settings and settings.company_name else 'Company') }}</span>
+        </a>
+        
+        <div class="d-flex align-items-center gap-2">
+          {% if current_user.is_authenticated %}
+            <span class="me-3 text-muted">{{ _('Welcome') }} {{ current_user.username }}</span>
+          {% endif %}
+          <a class="btn btn-outline-secondary" href="?lang=en">English</a>
 
   <div class="nav-buttons">
     <div class="row align-items-center">

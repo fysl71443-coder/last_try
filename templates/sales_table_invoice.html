@@ -17,7 +17,7 @@
   }
 </style>
 
-{% set back_url = url_for('main.sales_tables', branch_code=branch_code) %}
+{% if current_user.is_authenticated %}{% set back_url = url_for('main.sales_tables', branch_code=branch_code) %}{% else %}{% set back_url = '#' %}{% endif %}
 
 {% set currency_src = None %}
 {% if settings and settings.currency_image %}

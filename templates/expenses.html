@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('main.dashboard') %}
+{% if current_user.is_authenticated %}{% set back_url = url_for('main.dashboard') %}{% else %}{% set back_url = '#' %}{% endif %}
 
 {% block title %}{{ _('Expenses / المصروفات') }}{% endblock %}
 {% block content %}

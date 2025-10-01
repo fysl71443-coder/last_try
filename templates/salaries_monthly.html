@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('main.employees') %}
+{% if current_user.is_authenticated %}{% set back_url = url_for('main.employees') %}{% else %}{% set back_url = '#' %}{% endif %}
 
 {% set back_url = url_for('main.employees') %}
 
@@ -8,7 +8,7 @@
 <div class="container py-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">💼 {{ _('Monthly Salaries / رواتب شهرية') }}</h3>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+  <a href="{{ url_for('main.dashboard') if current_user.is_authenticated else url_for('main.login') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
   </div>
 
   <!-- اختيار السنة والشهر -->
@@ -30,7 +30,7 @@
     </div>
   </form>
 
-  <form method="POST" action="{{ url_for('salaries_monthly_save') }}">
+  <form method="POST" action="{{ url_for('main.salaries_monthly_save') if current_user.is_authenticated else '#' }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <input type="hidden" name="year" value="{{ year }}">
     <input type="hidden" name="month" value="{{ month }}">
