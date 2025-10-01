@@ -3577,6 +3577,20 @@ def api_draft_create_or_update(branch_code, table_number):
             'tax_pct': float((payload.get('tax_pct') or 15) or 15),
             'payment_method': (payload.get('payment_method') or '')
         })
+        # Persist table status in DB for multi-user consistency
+        try:
+            from models import Table
+            _tbl_no = str(table_number)
+            table = Table.query.filter_by(branch_code=branch_code, table_number=_tbl_no).first()
+            if not table:
+                table = Table(branch_code=branch_code, table_number=_tbl_no, status='occupied')
+                db.session.add(table)
+            else:
+                table.status = 'occupied'
+                table.updated_at = get_saudi_now()
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         return jsonify({'success': True, 'draft_id': draft_id})
     except Exception as e:
         db.session.rollback()
@@ -3666,6 +3680,21 @@ def api_draft_update(draft_id):
             try: rec['tax_pct'] = float(payload.get('tax_pct') or 15)
             except Exception: rec['tax_pct'] = 15.0
         kv_set(f'draft:{branch}:{table}', rec)
+        # Also ensure DB table status reflects occupied when items exist
+        try:
+            if rec.get('items'):
+                from models import Table
+                _tbl_no = str(table)
+                t = Table.query.filter_by(branch_code=branch, table_number=_tbl_no).first()
+                if not t:
+                    t = Table(branch_code=branch, table_number=_tbl_no, status='occupied')
+                    db.session.add(t)
+                else:
+                    t.status = 'occupied'
+                    t.updated_at = get_saudi_now()
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
         return jsonify({'success': True})
     except Exception as e:
         db.session.rollback()
@@ -3762,6 +3791,7 @@ def api_draft_checkout():
                 total_price=round((price or 0.0) * qty, 2),
             ))
         db.session.commit()
+        # Mark table available only after we confirm print+pay (handled in api_invoice_confirm_print)
     except Exception as e:
 
 
@@ -3877,9 +3907,18 @@ def api_invoice_confirm_print():
             inv.status = 'paid'
             db.session.commit()
 
-        # Clear draft to free the table
+        # Clear draft to free the table and update DB table status to available
         if branch and table:
             kv_set(f'draft:{branch}:{table}', {'draft_id': f'{branch}:{table}', 'items': []})
+            try:
+                from models import Table
+                t = Table.query.filter_by(branch_code=branch, table_number=str(table)).first()
+                if t:
+                    t.status = 'available'
+                    t.updated_at = get_saudi_now()
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
         return jsonify({'success': True})
     except Exception as e:
         db.session.rollback()
