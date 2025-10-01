@@ -1160,7 +1160,92 @@ def invoices():
     t = (request.args.get('type') or 'sales').strip().lower()
     if t not in ('sales','purchases','expenses','all'):
         t = 'sales'
-    return render_template('invoices.html', current_type=t)
+
+    # Build invoices list for template to render checkboxes and actions
+    invoices = []
+    try:
+        # Helper to compute paid sum
+        def paid_sum(kind: str, ids: list):
+            if not ids:
+                return {}
+            rows = db.session.query(
+                Payment.invoice_id,
+                func.coalesce(func.sum(Payment.amount_paid), 0)
+            ).filter(
+                Payment.invoice_type == kind,
+                Payment.invoice_id.in_(ids)
+            ).group_by(Payment.invoice_id).all()
+            return {int(i): float(p or 0.0) for i, p in rows}
+
+        if t in ('all', 'sales'):
+            try:
+                sales = SalesInvoice.query.order_by(SalesInvoice.date.desc()).limit(500).all()
+            except Exception:
+                sales = []
+            s_ids = [int(getattr(s, 'id', 0) or 0) for s in (sales or [])]
+            s_paid = paid_sum('sales', s_ids)
+            for s in (sales or []):
+                total = float(getattr(s, 'total_after_tax_discount', 0) or 0)
+                paid = float(s_paid.get(int(getattr(s, 'id', 0) or 0), 0.0))
+                invoices.append({
+                    'id': int(getattr(s, 'id', 0) or 0),
+                    'invoice_number': getattr(s, 'invoice_number', None) or f"S-{getattr(s, 'id', '')}",
+                    'invoice_type': 'sales',
+                    'customer_supplier': getattr(s, 'customer_name', None) or '-',
+                    'total_amount': total,
+                    'paid_amount': paid,
+                    'remaining_amount': max(total - paid, 0.0),
+                    'status': (getattr(s, 'status', '') or 'paid').lower(),
+                    'due_date': None,
+                })
+
+        if t in ('all', 'purchases'):
+            try:
+                purchases = PurchaseInvoice.query.order_by(PurchaseInvoice.date.desc()).limit(500).all()
+            except Exception:
+                purchases = []
+            p_ids = [int(getattr(p, 'id', 0) or 0) for p in (purchases or [])]
+            p_paid = paid_sum('purchase', p_ids)
+            for p in (purchases or []):
+                total = float(getattr(p, 'total_after_tax_discount', 0) or 0)
+                paid = float(p_paid.get(int(getattr(p, 'id', 0) or 0), 0.0))
+                invoices.append({
+                    'id': int(getattr(p, 'id', 0) or 0),
+                    'invoice_number': getattr(p, 'invoice_number', None) or f"P-{getattr(p, 'id', '')}",
+                    'invoice_type': 'purchases',
+                    'customer_supplier': getattr(p, 'supplier_name', None) or '-',
+                    'total_amount': total,
+                    'paid_amount': paid,
+                    'remaining_amount': max(total - paid, 0.0),
+                    'status': (getattr(p, 'status', '') or 'unpaid').lower(),
+                    'due_date': None,
+                })
+
+        if t in ('all', 'expenses'):
+            try:
+                expenses = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).limit(500).all()
+            except Exception:
+                expenses = []
+            e_ids = [int(getattr(e, 'id', 0) or 0) for e in (expenses or [])]
+            e_paid = paid_sum('expense', e_ids)
+            for e in (expenses or []):
+                total = float(getattr(e, 'total_after_tax_discount', 0) or 0)
+                paid = float(e_paid.get(int(getattr(e, 'id', 0) or 0), 0.0))
+                invoices.append({
+                    'id': int(getattr(e, 'id', 0) or 0),
+                    'invoice_number': getattr(e, 'invoice_number', None) or f"E-{getattr(e, 'id', '')}",
+                    'invoice_type': 'expenses',
+                    'customer_supplier': 'Expense',
+                    'total_amount': total,
+                    'paid_amount': paid,
+                    'remaining_amount': max(total - paid, 0.0),
+                    'status': (getattr(e, 'status', '') or 'paid').lower(),
+                    'due_date': None,
+                })
+    except Exception:
+        invoices = []
+
+    return render_template('invoices.html', current_type=t, invoices=invoices)
 @main.route('/reports/print/payments', methods=['GET'], endpoint='reports_print_payments')
 @login_required
 def reports_print_payments():
