@@ -62,7 +62,7 @@
     }
     td{
       padding: 3px 2px; 
-      border-bottom: 1px dashed #000;
+      border-bottom: 1px solid #000;
       vertical-align: top;
       color: #000;
     }
@@ -89,7 +89,7 @@
     hr{
       margin: 8px 0;
       border: none;
-      border-top: 1px dashed #000;
+      border-top: 2px solid #000;
     }
     
     /* Footer */
@@ -102,7 +102,7 @@
       .no-print{display: none !important;}
       body{
         background: #fff; 
-        font-size: {{ (fs|int + 1) if (fs|int < 14) else fs }}px;
+        font-size: {{ (fs|int + 2) if (fs|int < 15) else fs }}px;
         margin: 0;
         padding: 4px;
         -webkit-print-color-adjust: exact;
@@ -110,6 +110,7 @@
         print-color-adjust: exact;
         color: #000;
       }
+      table, th, td, .company-name, .muted, .small { color: #000 !important; }
       .wrap{
         width: {{ pw }}mm;
         max-width: {{ pw }}mm;
