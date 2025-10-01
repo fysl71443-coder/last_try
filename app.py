@@ -7648,6 +7648,14 @@ def settings():
         s.receipt_show_logo = bool(request.form.get('receipt_show_logo'))
         s.receipt_show_tax_number = bool(request.form.get('receipt_show_tax_number'))
         s.receipt_footer_text = (request.form.get('receipt_footer_text') or s.receipt_footer_text or '')
+        # Advanced print tuning
+        s.receipt_border_style = (request.form.get('receipt_border_style') or s.receipt_border_style or 'solid')
+        try:
+            s.receipt_font_bump = int(request.form.get('receipt_font_bump') or s.receipt_font_bump or 1)
+        except Exception:
+            pass
+        s.receipt_high_contrast = bool(request.form.get('receipt_high_contrast'))
+        s.receipt_bold_totals = bool(request.form.get('receipt_bold_totals'))
 
         # New: printer type, footer message, and currency image
         s.printer_type = (request.form.get('printer_type') or s.printer_type or 'thermal').lower()

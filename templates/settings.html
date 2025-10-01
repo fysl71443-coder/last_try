@@ -250,6 +250,29 @@
             <label class="form-label">ارتفاع الشعار (px)</label>
             <input type="number" step="1" min="20" name="receipt_logo_height" class="form-control" value="{{ s.receipt_logo_height if s.receipt_logo_height is not none else 72 }}">
           </div>
+          <div class="col-md-3">
+            <label class="form-label">نمط حدود الجدول</label>
+            <select name="receipt_border_style" class="form-select">
+              <option value="solid" {% if (s.receipt_border_style or 'solid')=='solid' %}selected{% endif %}>صلبة (مقترح للطابعات القديمة)</option>
+              <option value="dashed" {% if s.receipt_border_style=='dashed' %}selected{% endif %}>متقطعة</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">زيادة حجم الخط عند الطباعة (+px)</label>
+            <input type="number" step="1" min="0" max="4" name="receipt_font_bump" class="form-control" value="{{ s.receipt_font_bump if s.receipt_font_bump is not none else 1 }}">
+          </div>
+          <div class="col-md-3">
+            <div class="form-check mt-4">
+              <input class="form-check-input" type="checkbox" name="receipt_high_contrast" id="recHigh" {% if s.receipt_high_contrast %}checked{% endif %}>
+              <label class="form-check-label" for="recHigh">تباين عالٍ (أسود صريح)</label>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="form-check mt-4">
+              <input class="form-check-input" type="checkbox" name="receipt_bold_totals" id="recBold" {% if s.receipt_bold_totals %}checked{% endif %}>
+              <label class="form-check-label" for="recBold">إبراز المجاميع (عريض)</label>
+            </div>
+          </div>
         </div>
       <!-- New: Printer type, footer message, currency image -->
       <div class="row g-3 mt-3">
