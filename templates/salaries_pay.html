@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('main.employees') %}
+{% if current_user.is_authenticated %}{% set back_url = url_for('main.employees') %}{% else %}{% set back_url = '#' %}{% endif %}
 {% block title %}{{ _('Pay Salaries / سداد الرواتب') }}{% endblock %}
 {% block content %}
 <div class="container py-4">
