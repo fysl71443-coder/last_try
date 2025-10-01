@@ -3499,6 +3499,20 @@ def api_tables_status(branch_code):
         from models import Table
         rows = Table.query.filter_by(branch_code=branch_code).all()
         db_status = { (str(r.table_number).strip()): (r.status or 'available') for r in (rows or []) }
+        # Expand count to include highest table number present in DB
+        try:
+            max_db_no = 0
+            for r in (rows or []):
+                try:
+                    n = safe_table_number(getattr(r, 'table_number', None))
+                    if n > max_db_no:
+                        max_db_no = n
+                except Exception:
+                    continue
+            if max_db_no > count:
+                count = max_db_no
+        except Exception:
+            pass
     except Exception:
         db_status = {}
     for i in range(1, count+1):
