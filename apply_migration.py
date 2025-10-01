@@ -28,6 +28,31 @@ def apply_migration():
             db.create_all()
             print("✅ All tables created/updated successfully")
 
+            # Ensure new Settings columns exist (idempotent)
+            try:
+                inspector = inspect(db.engine)
+                cols = set()
+                if 'settings' in inspector.get_table_names():
+                    cols = {c['name'] for c in inspector.get_columns('settings')}
+                missing = [
+                    ('receipt_high_contrast', 'BOOLEAN', 'TRUE'),
+                    ('receipt_bold_totals', 'BOOLEAN', 'TRUE'),
+                    ('receipt_border_style', 'VARCHAR(10)', "'solid'"),
+                    ('receipt_font_bump', 'INTEGER', '1'),
+                ]
+                for col_name, col_type, default_expr in missing:
+                    if col_name not in cols:
+                        if db_type == 'postgresql':
+                            db.session.execute(text(f"ALTER TABLE settings ADD COLUMN IF NOT EXISTS {col_name} {col_type} DEFAULT {default_expr}"))
+                        else:
+                            # SQLite: no IF NOT EXISTS for columns; we already checked via inspector
+                            db.session.execute(text(f"ALTER TABLE settings ADD COLUMN {col_name} {col_type} DEFAULT {default_expr}"))
+                db.session.commit()
+                print("✅ Settings columns ensured (receipt_high_contrast, receipt_bold_totals, receipt_border_style, receipt_font_bump)")
+            except Exception as e:
+                print(f"⚠️ Ensuring Settings columns failed: {e}")
+                db.session.rollback()
+
             # Apply database-specific optimizations
             if db_type == 'postgresql':
                 print("🔧 Applying PostgreSQL-specific optimizations...")
