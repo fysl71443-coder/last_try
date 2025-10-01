@@ -1275,6 +1275,13 @@ def invoices_delete():
     inv_type = (request.form.get('invoice_type') or request.form.get('current_type') or 'sales').strip().lower()
     ids = [int(x) for x in request.form.getlist('invoice_ids') if str(x).isdigit()]
     deleted = 0
+    # If user chose to delete selected invoices but none were selected, do not proceed with bulk delete
+    if scope == 'selected' and not ids:
+        try:
+            flash('لم يتم تحديد أي فاتورة للحذف', 'warning')
+        except Exception:
+            flash('No selected invoices to delete', 'warning')
+        return redirect(url_for('main.invoices', type=inv_type))
     try:
         if inv_type == 'sales':
             q = SalesInvoice.query
