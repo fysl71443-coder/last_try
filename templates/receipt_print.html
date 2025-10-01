@@ -15,6 +15,7 @@
             font-size: {{ fs }}px;
             margin: 0;
             padding: 0;
+            color: #000;
         }
         .receipt {
             width: {{ pw }}mm;
@@ -65,8 +66,8 @@
         }
         .thank-you {
             margin-top: 12px;
-            font-weight: bold;
-            font-size: {{ (fs|int + 2) }}px;
+            font-weight: 800;
+            font-size: {{ (fs|int + 3) }}px;
         }
 
         /* طباعة */
@@ -79,7 +80,8 @@
               print-color-adjust: exact; 
               color: #000; 
             }
-            table, th, td, .thank-you, .small { color: #000 !important; }
+            /* Re-assert black for all text elements */
+            body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i, table, .thank-you, .small { color: #000 !important; }
             .receipt { width: {{ pw }}mm; max-width: {{ pw }}mm; }
             @page { margin: 0 0 {{ extra_bottom }}mm 0; size: {{ pw }}mm auto; }
         }

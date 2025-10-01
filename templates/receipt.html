@@ -7,6 +7,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/receipt.css') }}?v={{ ASSET_VERSION }}">
     <style>
         /* Enhanced receipt styles */
+        /* Force all text to solid black in screen and print; make all text bold */
+        body { color: #000; font-weight: 700; }
+        body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i { color: #000 !important; font-weight: 700 !important; }
         .currency-amount {
             display: inline-flex;
             align-items: center;
@@ -105,6 +108,8 @@
         
         /* Print styles */
         @media print {
+            /* Re-assert black and bold for all elements in print */
+            body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i { color: #000 !important; font-weight: 700 !important; }
             .print-actions {
                 display: none;
             }
