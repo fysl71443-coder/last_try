@@ -323,9 +323,9 @@
     {% if items and items|length > 0 %}
     <div class="center" style="margin: 10px 0;">
       {% if qr_data_url %}
-        <img src="{{ qr_data_url }}" alt="QR Code" style="width: 60px; height: 60px;">
+        <img src="{{ qr_data_url }}" alt="QR Code" style="width: 140px; height: 140px;">
       {% else %}
-        <div id="qr-code" style="width: 60px; height: 60px; margin: 0 auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #000;">
+        <div id="qr-code" style="width: 140px; height: 140px; margin: 0 auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #000;">
           QR
         </div>
       {% endif %}
