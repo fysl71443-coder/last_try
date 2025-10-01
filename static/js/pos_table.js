@@ -19,6 +19,25 @@
     return Promise.resolve();
   }
 
+  // Ensure we persist the latest draft when the page loses visibility or unloads
+  function saveDraftBeacon(){
+    try{
+      if(!BRANCH || !TABLE_NO) return;
+      if(!items || !items.length) return;
+      const payload = {
+        items: items.map(x=>({ id:x.meal_id, name:x.name, price:x.unit, quantity:x.qty })),
+        customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' },
+        discount_pct: number(qs('#discountPct')?.value || 0),
+        tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
+        payment_method: (qs('#payMethod')?.value || '')
+      };
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      if(navigator && typeof navigator.sendBeacon === 'function'){
+        navigator.sendBeacon(`/api/draft-order/${BRANCH}/${TABLE_NO}`, blob);
+      }
+    }catch(_e){ /* ignore */ }
+  }
+
   // Load branch settings (void password, etc.)
   async function loadBranchSettings() {
     if (!BRANCH) return;
@@ -156,7 +175,7 @@
       // If items are empty: clear draft for this table and mark table available
       if(!items.length){
         await fetch(`/api/draft-order/${BRANCH}/${TABLE_NO}`, {
-          method:'POST', headers, credentials:'same-origin',
+          method:'POST', headers, credentials:'same-origin', keepalive:true,
           body: JSON.stringify({ items: [] })
         });
         return;
@@ -165,7 +184,7 @@
       // If no draft yet: create or update via branch/table endpoint (server will create if not exists)
       if(!CURRENT_DRAFT_ID){
         const resp = await fetch(`/api/draft-order/${BRANCH}/${TABLE_NO}`, {
-          method:'POST', headers, credentials:'same-origin',
+          method:'POST', headers, credentials:'same-origin', keepalive:true,
           body: JSON.stringify({
             items: items.map(x=>({ id:x.meal_id, name:x.name, price:x.unit, quantity:x.qty })),
             customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' },
@@ -179,7 +198,7 @@
       } else {
         // Update existing draft: this endpoint expects 'qty' per item
         await fetch(`/api/draft_orders/${CURRENT_DRAFT_ID}/update`, {
-          method:'POST', headers, credentials:'same-origin',
+          method:'POST', headers, credentials:'same-origin', keepalive:true,
           body: JSON.stringify({
             items: items.map(x=>({ meal_id:x.meal_id, qty:x.qty })),
             customer_name: qs('#custName')?.value || '',
@@ -414,6 +433,11 @@
 
     // Initial render
     renderItems();
+
+    // Persist drafts when the tab loses visibility or the page is unloading
+    document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'hidden'){ try{ flushPendingSave(); saveDraftBeacon(); }catch(_e){} } });
+    window.addEventListener('pagehide', function(){ try{ saveDraftBeacon(); }catch(_e){} });
+    window.addEventListener('beforeunload', function(){ try{ saveDraftBeacon(); }catch(_e){} });
   });
 })();
 
