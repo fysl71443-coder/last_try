@@ -314,6 +314,32 @@ def get_saudi_now():
         pass
     return _dt.utcnow()
 
+# ---------- Table status helpers (transactional & safe for concurrency) ----------
+def _set_table_status_concurrent(branch_code: str, table_number: str, status: str) -> None:
+    """Set a table's status with a short transaction and row-level lock.
+    Creates the row if missing. Safe for concurrent updates under Postgres.
+    """
+    try:
+        from models import Table
+        tbl_no = str(table_number)
+        # Short, isolated transaction
+        with db.session.begin():
+            # Lock the target row if exists; otherwise create
+            t = (db.session.query(Table)
+                 .with_for_update(of=Table, nowait=False)
+                 .filter_by(branch_code=branch_code, table_number=tbl_no)
+                 .first())
+            if not t:
+                t = Table(branch_code=branch_code, table_number=tbl_no, status=status)
+                db.session.add(t)
+            else:
+                t.status = status
+                t.updated_at = get_saudi_now()
+    except Exception:
+        # Do not propagate table-status errors to main flow
+        try: db.session.rollback()
+        except Exception: pass
+
 def kv_get(key, default=None):
     rec = AppKV.query.filter_by(k=key).first()
     if not rec:
@@ -3590,29 +3616,8 @@ def api_draft_create_or_update(branch_code, table_number):
             'tax_pct': float((payload.get('tax_pct') or 15) or 15),
             'payment_method': (payload.get('payment_method') or '')
         })
-        # Persist table status in DB for multi-user consistency
-        try:
-            from models import Table
-            _tbl_no = str(table_number)
-            table = Table.query.filter_by(branch_code=branch_code, table_number=_tbl_no).first()
-            if not items:
-                # Empty items -> mark table available
-                if not table:
-                    table = Table(branch_code=branch_code, table_number=_tbl_no, status='available')
-                    db.session.add(table)
-                else:
-                    table.status = 'available'
-                    table.updated_at = get_saudi_now()
-            else:
-                if not table:
-                    table = Table(branch_code=branch_code, table_number=_tbl_no, status='occupied')
-                    db.session.add(table)
-                else:
-                    table.status = 'occupied'
-                    table.updated_at = get_saudi_now()
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+        # Persist table status in DB for multi-user consistency (transactional helper)
+        _set_table_status_concurrent(branch_code, str(table_number), 'available' if not items else 'occupied')
         return jsonify({'success': True, 'draft_id': draft_id})
     except Exception as e:
         db.session.rollback()
@@ -3709,28 +3714,7 @@ def api_draft_update(draft_id):
             except Exception: rec['tax_pct'] = 15.0
         kv_set(f'draft:{branch}:{table}', rec)
         # Also ensure DB table status reflects occupied/available based on items
-        try:
-            from models import Table
-            _tbl_no = str(table)
-            t = Table.query.filter_by(branch_code=branch, table_number=_tbl_no).first()
-            if rec.get('items'):
-                from models import Table
-                if not t:
-                    t = Table(branch_code=branch, table_number=_tbl_no, status='occupied')
-                    db.session.add(t)
-                else:
-                    t.status = 'occupied'
-                    t.updated_at = get_saudi_now()
-            else:
-                if not t:
-                    t = Table(branch_code=branch, table_number=_tbl_no, status='available')
-                    db.session.add(t)
-                else:
-                    t.status = 'available'
-                    t.updated_at = get_saudi_now()
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+        _set_table_status_concurrent(branch, str(table), 'occupied' if rec.get('items') else 'available')
         return jsonify({'success': True})
     except Exception as e:
         db.session.rollback()
@@ -3751,15 +3735,7 @@ def api_draft_cancel(draft_id):
 
         # clear draft and mark table available in DB
         kv_set(f'draft:{branch}:{table}', {'draft_id': draft_id, 'items': []})
-        try:
-            from models import Table
-            t = Table.query.filter_by(branch_code=branch, table_number=str(table)).first()
-            if t:
-                t.status = 'available'
-                t.updated_at = get_saudi_now()
-                db.session.commit()
-        except Exception:
-            db.session.rollback()
+        _set_table_status_concurrent(branch, str(table), 'available')
         return jsonify({'success': True})
     except Exception as e:
         db.session.rollback()
