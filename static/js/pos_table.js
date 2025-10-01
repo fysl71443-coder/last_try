@@ -211,7 +211,7 @@
             supervisor_password: opts && opts.supervisor_password ? opts.supervisor_password : undefined
           })
         });
-        // Optionally ping tables status so other clients can poll new state
+        // Ping tables status so other clients can poll new state
         try{ await fetch(`/api/tables/${BRANCH}`, { credentials:'same-origin' }); }catch(_e){}
       }
     }catch(e){ console.error('saveDraftOrder failed', e); }

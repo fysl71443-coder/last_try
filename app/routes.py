@@ -3468,11 +3468,18 @@ def api_tables_status(branch_code):
     else:
         count = 20
     items = []
+    # Build a quick map of DB table statuses for this branch
+    try:
+        from models import Table
+        rows = Table.query.filter_by(branch_code=branch_code).all()
+        db_status = { (str(r.table_number).strip()): (r.status or 'available') for r in (rows or []) }
+    except Exception:
+        db_status = {}
     for i in range(1, count+1):
         draft = kv_get(f'draft:{branch_code}:{i}', {}) or {}
-        status = 'occupied' if (draft.get('items') or []) else 'available'
-
-
+        has_draft = bool(draft.get('items') or [])
+        tbl_st = (db_status.get(str(i)) or 'available').lower()
+        status = 'occupied' if (has_draft or tbl_st == 'occupied') else 'available'
         items.append({'table_number': i, 'status': status})
     return jsonify(items)
 
