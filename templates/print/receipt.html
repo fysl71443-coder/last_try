@@ -17,7 +17,11 @@
       line-height: 1.3;
       margin: 0;
       padding: 8px;
+      color: #000;
     }
+    /* Force all common text elements to render in solid black */
+    body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i,
+    .muted, .small, .company-name, .grand-total { color: #000 !important; }
     .wrap{
       width: {{ pw }}mm; 
       max-width: {{ pw }}mm; 
@@ -110,7 +114,9 @@
         print-color-adjust: exact;
         color: #000;
       }
-      table, th, td, .company-name, .muted, .small { color: #000 !important; }
+      /* Re-assert black for all relevant elements when printing */
+      body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i,
+      table, .company-name, .muted, .small, .grand-total { color: #000 !important; }
       .wrap{
         width: {{ pw }}mm;
         max-width: {{ pw }}mm;
@@ -297,7 +303,7 @@
       {% set base_total = (inv.total_before_tax or 0) %}
       {% set rate = (inv.discount_amount / base_total * 100) if base_total > 0 else 0 %}
       {% set cust = (inv.customer_name or '')|upper %}
-      <div style="display: flex; justify-content: space-between; margin-bottom: 2px; color: #d63384;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 2px; color: #000;">
         <span>{{ _('Discount') }}{% if cust in ['KEETA','HUNGER'] %} ({{ '%.1f'|format(rate or 0) }}%){% endif %}</span>
         <span>-{{ '%.2f'|format(inv.discount_amount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency" style="width: 12px; height: 12px; vertical-align: middle;">{% endif %}</span>
       </div>
@@ -317,7 +323,7 @@
       {% if qr_data_url %}
         <img src="{{ qr_data_url }}" alt="QR Code" style="width: 60px; height: 60px;">
       {% else %}
-        <div id="qr-code" style="width: 60px; height: 60px; margin: 0 auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #666;">
+        <div id="qr-code" style="width: 60px; height: 60px; margin: 0 auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #000;">
           QR
         </div>
       {% endif %}
