@@ -3,12 +3,12 @@
 
 {% block title %}{{ _(title) }}{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
+<div class="container py-4 printable">
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
     <h3 class="mb-0">🧾 {{ _(title) }} — {{ inv.invoice_number }}</h3>
     <div class="d-flex gap-2">
       <a href="{{ url_for('main.invoices', type=kind) }}" class="btn btn-outline-secondary">⬅️ {{ _('Back / رجوع') }}</a>
-      <a href="#" target="_blank" class="btn btn-success">🖨 {{ _('Print / طباعة') }}</a>
+      <a href="#" target="_blank" onclick="window.print()" class="btn btn-success">🖨 {{ _('Print / طباعة') }}</a>
     </div>
   </div>
 
@@ -21,7 +21,7 @@
   <div class="card mb-3">
     <div class="card-body">
       <div class="table-responsive">
-        <table class="table table-striped">
+        <table class="table table-striped table-bordered invoice-table">
           <thead class="table-dark">
             <tr>
               <th>#</th>
@@ -61,7 +61,7 @@
   <div class="row g-3 mt-3">
     <div class="col-md-4"><div class="card p-3"><div><strong>{{ _('Paid / المدفوع') }}</strong></div><div>{{ '%.2f'|format(paid) }}</div></div></div>
     <div class="col-md-4"><div class="card p-3"><div><strong>{{ _('Remaining / المتبقي') }}</strong></div><div>{{ '%.2f'|format(remaining) }}</div></div></div>
-    <div class="col-md-4">
+    <div class="col-md-4 no-print">
       <div class="card p-3">
         <div class="d-flex gap-2">
           <button class="btn btn-success" onclick="payFull('{{ kind }}','{{ inv.id }}','{{ remaining }}')">{{ _('Pay Full') }}</button>
@@ -71,6 +71,35 @@
     </div>
   </div>
 </div>
+
+<style>
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .printable, .printable * {
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-weight: bold !important;
+  }
+  .table thead th {
+    background: black !important;
+    color: white !important;
+  }
+  .table tbody td {
+    border: 1px solid black !important;
+  }
+  .card {
+    border: 1px solid black !important;
+    box-shadow: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+</style>
 
 <script>
 function sendPayment(kind, id, amount){
@@ -100,4 +129,3 @@ function payCustom(kind, id, remaining){
 }
 </script>
 {% endblock %}
-

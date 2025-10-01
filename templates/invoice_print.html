@@ -163,12 +163,6 @@
         .status-unpaid { background: #dc3545; color: white; }
         .status-draft { background: #ffc107; color: #212529; }
         
-        @media print {
-            body { margin: 0; padding: 0; }
-            .invoice-container { border: none; border-radius: 0; box-shadow: none; }
-            .no-print { display: none; }
-        }
-        
         .print-actions {
             text-align: center;
             padding: 20px;
@@ -192,6 +186,60 @@
         .btn-primary:hover { background: #0056b3; }
         .btn-secondary { background: #6c757d; color: white; }
         .btn-secondary:hover { background: #545b62; }
+
+        /* 🔽 تحسين الطباعة */
+        @media print {
+            body, .invoice-container {
+                background: #ffffff !important;
+                color: #000000 !important;
+                font-family: Arial, Tahoma, sans-serif !important;
+                font-size: 13px !important;
+                font-weight: bold !important;
+            }
+
+            .invoice-header {
+                background: #ffffff !important;
+                color: #000000 !important;
+                border-bottom: 2px solid #000 !important;
+            }
+
+            .invoice-header img {
+                max-height: 100px !important;
+            }
+
+            .items-table th, 
+            .items-table td,
+            .totals-table td {
+                background: #ffffff !important;
+                color: #000000 !important;
+                font-weight: bold !important;
+                border: 1px solid #000 !important;
+            }
+
+            .grand-total, 
+            .totals-table .total-amount {
+                font-size: 16px !important;
+                font-weight: bold !important;
+                color: #000000 !important;
+            }
+
+            .invoice-footer {
+                background: #ffffff !important;
+                color: #000000 !important;
+                font-size: 12px !important;
+                border-top: 1px solid #000 !important;
+            }
+
+            .status-badge {
+                background: #ffffff !important;
+                color: #000000 !important;
+                border: 1px solid #000 !important;
+            }
+
+            .btn, .print-actions {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -210,13 +258,13 @@
             {% endif %}
         </div>
 
-        <!-- بقية المحتوى كما هو بدون تعديل -->
+        <!-- بقية المحتوى -->
         {% include 'invoice_content.html' %}
         
     </div>
     
     <script>
-        // Auto-print when page loads (optional)
+        // Auto-print when page loads (اختياري)
         // window.onload = function() { window.print(); }
     </script>
 </body>
