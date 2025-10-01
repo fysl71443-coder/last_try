@@ -10,3 +10,6 @@ services:
       pip install --upgrade pip
       pip install -r requirements.txt
     startCommand: gunicorn -k gevent --timeout 120 app:app
+    envVars:
+      - key: ASSET_VERSION
+        value: "20251001"
