@@ -3295,8 +3295,8 @@ def pos_home(branch_code):
 @login_required
 def pos_table(branch_code, table_number):
     if not user_can('sales','view', branch_code):
-        flash('\u0644\u0627 \u062a\u0645\u0644\u0643 \u0635\u0644\u0627\u062d\u064a\u0629 \u0627\u0644\u0648\u0635\u0648\u0644 \u0644\u0641\u0631\u0639 \u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0647\u0630\u0627', 'warning')
-        return redirect(url_for('main.sales'))
+        # If XHR requested HTML (POS page) but user is not allowed, redirect to login preserving next
+        return redirect(url_for('main.login', next=request.path))
     branch_label = BRANCH_LABELS.get(branch_code, branch_code)
     vat_rate = 15
     # Load any existing draft for this table
@@ -3569,11 +3569,17 @@ def api_branch_settings(branch_code):
 @main.route('/api/draft-order/<branch_code>/<int:table_number>', methods=['POST'], endpoint='api_draft_create_or_update')
 @login_required
 def api_draft_create_or_update(branch_code, table_number):
+    # Return 401 for unauthenticated XHR so the front-end can redirect cleanly
+    try:
+        if not getattr(current_user, 'is_authenticated', False):
+            return jsonify({'success': False, 'error': 'unauthenticated'}), 401
+    except Exception:
+        return jsonify({'success': False, 'error': 'unauthenticated'}), 401
     if not user_can('sales','view', branch_code):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
 
     try:
-        payload = request.get_json(force=True) or {}
+        payload = request.get_json(silent=True) or {}
         items = payload.get('items') or []
         draft_id = f"{branch_code}:{table_number}"
         kv_set(f'draft:{branch_code}:{table_number}', {
@@ -3627,7 +3633,13 @@ def api_draft_update(draft_id):
         branch, table = _parse_draft_id(draft_id)
         if not branch:
             return jsonify({'success': False, 'error': 'invalid_draft_id'}), 400
-        payload = request.get_json(force=True) or {}
+        # Return 401 for unauthenticated XHR so the front-end can redirect cleanly
+        try:
+            if not getattr(current_user, 'is_authenticated', False):
+                return jsonify({'success': False, 'error': 'unauthenticated'}), 401
+        except Exception:
+            return jsonify({'success': False, 'error': 'unauthenticated'}), 401
+        payload = request.get_json(silent=True) or {}
         if not user_can('sales','view', branch):
             return jsonify({'success': False, 'error': 'forbidden'}), 403
 
