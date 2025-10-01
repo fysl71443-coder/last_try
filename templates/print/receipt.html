@@ -251,12 +251,7 @@
         <span><strong>{{ inv.table_number }}</strong></span>
       </div>
       {% endif %}
-      {% if inv and (inv.payment_method or (inv.status in ['paid','PAID']) or paid) %}
-      <div style="display: flex; justify-content: space-between;">
-        <span>Payment:</span>
-        <span>{{ (inv.payment_method or 'Cash')|title }}</span>
-      </div>
-      {% endif %}
+      {# Payment moved under Grand Total to avoid duplication #}
       <div style="display: flex; justify-content: space-between;">
         <span>Customer:</span>
         <span>{{ inv.customer_name or 'Cash customer' }}</span>
