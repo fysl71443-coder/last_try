@@ -1,8 +1,21 @@
-{% extends 'base.html' %}
-{% set back_url = url_for('main.dashboard') %}
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}Accounting App{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}?v={{ ASSET_VERSION or '1.0' }}" rel="stylesheet">
+    <style>
+      /* هنا تبقى كل الستايلات كما هي */
+    </style>
 
-{% block title %}{{ _('All Invoices / كل الفواتير') }}{% endblock %}
-{% block content %}
+    {% block head %}{% endblock %}
+  </head>
+  <body class="{{ (session.get('theme') or (settings.default_theme if settings else 'light')) }}">
 
     {# === Safe back_url: avoid protected routes for unauthenticated users === #}
     {% if current_user.is_authenticated %}
@@ -29,261 +42,82 @@
           {% endif %}
           <a class="btn btn-outline-secondary" href="?lang=en">English</a>
 
-  <div class="nav-buttons">
-    <div class="row align-items-center">
-      <div class="col-md-8">
-        <a href="{{ url_for('main.invoices', type='sales') }}" class="btn btn-outline-primary me-2 {{ 'active' if current_type == 'sales' else '' }}">{{ _('Sales / المبيعات') }}</a>
-        <a href="{{ url_for('main.invoices', type='purchases') }}" class="btn btn-outline-primary me-2 {{ 'active' if current_type == 'purchases' else '' }}">{{ _('Purchases / المشتريات') }}</a>
-        <a href="{{ url_for('main.invoices', type='expenses') }}" class="btn btn-outline-primary me-2 {{ 'active' if current_type == 'expenses' else '' }}">{{ _('Expenses / المصروفات') }}</a>
-        <a href="{{ url_for('main.invoices', type='all') }}" class="btn btn-outline-secondary {{ 'active' if current_type == 'all' else '' }}">{{ _('All / الكل') }}</a>
-      </div>
-      <div class="col-md-4 text-end">
-        <div class="btn-group" role="group">
-          <a href="#" id="btnPrintAll" class="btn btn-success" target="_blank">📄 {{ _('Print All / طباعة الكل') }}</a>
-          <button id="btnDeleteSelected" class="btn btn-outline-danger" type="button">🗑️ {{ _('Delete Selected / حذف المحدد') }}</button>
+          {% if current_user.is_authenticated and (current_user.role|default('') != 'user') %}
+          <form method="post" action="#" class="d-inline">
+            <button class="btn btn-sm btn-outline-dark" type="button">
+              <i class="fa fa-moon"></i> {{ 'Dark' if (session.get('theme') or (settings.default_theme if settings else 'light'))=='light' else 'Light' }}
+            </button>
+          </form>
+          {% endif %}
+          {% if current_user.is_authenticated %}
+            <a class="btn btn-outline-danger" href="{{ url_for('main.logout') }}">{{ _('Logout') }}</a>
+          {% endif %}
         </div>
       </div>
-    </div>
-  </div>
+    </nav>
 
-  {% if invoices %}
-  <div class="invoice-card">
-    <div class="table-responsive">
-      <table class="table table-striped table-bordered">
-        <thead class="table-dark">
-          <tr>
-            <th class="select-col"><input type="checkbox" id="select-all" aria-label="{{ _('Select all invoices') }}"></th>
-            <th>#</th>
-            <th>{{ _('Invoice No') }}</th>
-            <th>{{ _('Type') }}</th>
-            <th>{{ _('Customer/Supplier') }}</th>
-            <th>{{ _('Total') }}</th>
-            <th>{{ _('Paid') }}</th>
-            <th>{{ _('Remaining') }}</th>
-            <th>{{ _('Status') }}</th>
-            <th>{{ _('Due Date') }}</th>
-            <th>{{ _('Pay') }}</th>
-            <th>{{ _('View') }}</th>
-            <th>{{ _('Actions / الإجراءات') }}</th>
-          </tr>
-        </thead>
-        <tbody id="invoice-list">
-          {% for invoice in invoices %}
-          <tr data-invoice-id="{{ invoice.id }}">
-            <td class="select-col text-center">
-              <input type="checkbox"
-                     class="select-invoice"
-                     name="invoice_select"
-                     value="{{ invoice.id }}"
-                     data-invoice-number="{{ invoice.invoice_number|e }}">
-            </td>
-            <td>{{ loop.index }}</td>
-            <td><strong>{{ invoice.invoice_number }}</strong></td>
-            <td><span class="badge bg-secondary">{{ invoice.invoice_type.title() }}</span></td>
-            <td>{{ invoice.customer_supplier }}</td>
-            <td>${{ "%.2f"|format(invoice.total_amount) }}</td>
-            <td>${{ "%.2f"|format(invoice.paid_amount) }}</td>
-            <td>${{ "%.2f"|format(invoice.remaining_amount) }}</td>
-            <td>
-              <span class="status-badge status-{{ invoice.status }}">{{ invoice.status.title() }}</span>
-            </td>
-            <td>{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '-' }}</td>
-            <td class="text-nowrap">
-              {% if invoice.status != 'paid' %}
-                <!-- ملاحظة: هذا نموذج دفع منفصل لكل سطر، لا نغلف الجدول داخل form عام -->
-                <form method="post" action="{{ url_for('main.pay_invoice') }}" class="d-flex" style="gap:.4rem;">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                  <input type="hidden" name="invoice_id" value="{{ invoice.id }}"/>
-                  <input type="number" step="0.01" name="payment_amount" placeholder="Amount"
-                         class="form-control form-control-sm" style="width:100px;" max="{{ invoice.remaining_amount }}" required>
-                  <button type="submit" class="btn btn-sm btn-primary">{{ _('Pay') }}</button>
-                </form>
-              {% else %}
-                <span class="text-success">✓ {{ _('Paid') }}</span>
-              {% endif %}
-            </td>
-            <td>
-              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.view_invoice', invoice_id=invoice.id) }}">{{ _('View / عرض') }}</a>
-            </td>
-            <td>
-              <!-- زر حذف فردي (اختياري) -->
-              <form method="post" action="{{ url_for('main.invoices_delete_single', invoice_id=invoice.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Confirm delete this invoice? / تأكيد حذف الفاتورة؟') }}');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Delete') }}</button>
-              </form>
-            </td>
-          </tr>
+    <div class="container mt-5">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
+        {% endif %}
+      {% endwith %}
 
-    <!-- دفع مجمع (مثال): يتيح توزيع مبلغ على المحدد — يمكن تعديله حسب منطقك -->
-    <div class="row mt-3">
-      <div class="col-md-6">
-        <div class="input-group">
-          <span class="input-group-text">$</span>
-          <input id="bulk-payment-amount" type="number" step="0.01" class="form-control" placeholder="{{ _('Total Amount for Selected') }}">
-          <button id="btnBulkPay" class="btn btn-warning" type="button">💳 {{ _('Pay Selected / دفع المحدد') }}</button>
+      {% if not hide_back_button %}
+      <div class="mb-3 d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-secondary" id="global-back-button" data-back-url="{{ back_url }}">⬅️ {{ _('Back') }}</button>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+    <!-- Print Modal (iframe-based) -->
+    <div class="modal fade" id="printModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 1200px;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">🖨️ Preview / معاينة الطباعة</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-0" style="height: 80vh;">
+            <iframe id="printFrame" name="printFrame" title="Print Frame" style="border:0; width:100%; height:100%; background:#fff;"></iframe>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            <button type="button" class="btn btn-primary" onclick="try{document.getElementById('printFrame').contentWindow.print()}catch(e){}">طباعة</button>
+          </div>
         </div>
       </div>
-      <div class="col-md-6 text-end">
-        <small class="text-muted">{{ _('Select invoices and enter total amount to distribute payment equally') }}</small>
-      </div>
     </div>
 
-  </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v={{ ASSET_VERSION or '1.0' }}"></script>
+    <script src="{{ url_for('static', filename='js/modal-system.js') }}?v={{ ASSET_VERSION or '1.0' }}"></script>
+    <script src="{{ url_for('static', filename='js/printInvoice.js') }}?v={{ ASSET_VERSION or '1.0' }}"></script>
+    <script src="{{ url_for('static', filename='js/base-behavior.js') }}?v={{ ASSET_VERSION or '1.0' }}"></script>
 
-  {% else %}
-  <div class="invoice-card text-center">
-    <h5>{{ _('No invoices found / لا توجد فواتير') }}</h5>
-    <p class="text-muted">{{ _('Create your first invoice to get started / أنشئ أول فاتورة للبدء') }}</p>
-  </div>
-  {% endif %}
-
-</div>
-
-<!-- Delete Selected Modal -->
-<div class="modal fade" id="deleteSelectedModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form id="delete-selected-form" method="post" action="{{ url_for('main.invoices_delete') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-        <input type="hidden" name="current_type" value="{{ current_type }}">
-        <div class="modal-header">
-          <h5 class="modal-title">{{ _('Delete Selected Invoices / حذف الفواتير المحددة') }}</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <p id="delete-selected-count" class="mb-2"></p>
-          <div id="delete-selected-list" style="max-height:220px; overflow:auto; border:1px dashed #e9ecef; padding:.5rem; border-radius:6px;"></div>
-          <div class="alert alert-warning mt-3 small">{{ _('This action is irreversible. Related items and payments will be deleted as well. / هذا الإجراء لا يمكن التراجع عنه وسيتم حذف العناصر والمدفوعات المرتبطة أيضاً') }}</div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel / إلغاء') }}</button>
-          <button type="submit" class="btn btn-danger">{{ _('Delete / حذف المحدد') }}</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-{% endblock %}
-
-{% block scripts %}
-{{ super() }}
-<script>
-(function(){
-  // ترجمة نصوص JS باستخدام Jinja لترجمة السيرفر
-  const msgNoSelected = "{{ _('No invoices selected / لم يتم تحديد فواتير') }}";
-  const msgConfirmBulkPay = "{{ _('Confirm distribute payment equally? / تأكيد توزيع الدفع بالتساوي؟') }}";
-
-  // عناصر
-  const selectAll = document.getElementById('select-all');
-  const invoiceCheckboxSelector = '.select-invoice';
-  const btnDeleteSelected = document.getElementById('btnDeleteSelected');
-  const deleteModalEl = document.getElementById('deleteSelectedModal');
-  const deleteForm = document.getElementById('delete-selected-form');
-  const deleteCount = document.getElementById('delete-selected-count');
-  const deleteList = document.getElementById('delete-selected-list');
-
-  // تابع لمساعدة جمع المحددات
-  function getSelectedCheckboxes(){
-    return Array.from(document.querySelectorAll(invoiceCheckboxSelector)).filter(cb => cb.checked);
-  }
-
-  // select-all toggle
-  if(selectAll){
-    selectAll.addEventListener('change', function(){
-      const checked = !!this.checked;
-      document.querySelectorAll(invoiceCheckboxSelector).forEach(cb => cb.checked = checked);
-    });
-  }
-
-  // تحديث حالة select-all بناءً على تغيّر أي خانة
-  document.addEventListener('change', function(ev){
-    if(ev.target && ev.target.matches(invoiceCheckboxSelector)){
-      const all = Array.from(document.querySelectorAll(invoiceCheckboxSelector));
-      if(all.length){
-        const allChecked = all.every(cb => cb.checked);
-        const anyChecked = all.some(cb => cb.checked);
-        if(selectAll) selectAll.checked = allChecked;
-        // لو حاب تضيف زر يظهر/يختفي عند أي محدد: هنا يمكنك إضافة لوغيك
-      }
-    }
-  });
-
-  // Delete Selected button handler
-  btnDeleteSelected?.addEventListener('click', function(){
-    const selected = getSelectedCheckboxes();
-    if(!selected.length){
-      alert(msgNoSelected);
-      return;
-    }
-
-    // تحديث المودال: عداد وقائمة أرقام الفواتير
-    deleteCount.textContent = "{{ _('You are about to delete') }} " + selected.length + " {{ _('invoice(s). / فاتورة(فواتير).') }}";
-    deleteList.innerHTML = '';
-    // إزالة مدخلات قديمة في الفورم قبل إضافة جديدة
-    deleteForm.querySelectorAll('input[name="invoice_ids"]').forEach(i => i.remove());
-
-    selected.forEach(cb => {
-      // إنشاء عنصر نصي للقائمة
-      const row = document.createElement('div');
-      row.style.padding = '.25rem .5rem';
-      row.style.borderBottom = '1px solid #f1f1f1';
-      row.textContent = (cb.dataset.invoiceNumber || ('ID: ' + cb.value));
-      deleteList.appendChild(row);
-
-      // إضافة hidden input للفورم
-      const h = document.createElement('input');
-      h.type = 'hidden';
-      h.name = 'invoice_ids';
-      h.value = cb.value;
-      deleteForm.appendChild(h);
-    });
-
-    // إظهار المودال
-    const modal = new bootstrap.Modal(deleteModalEl);
-    modal.show();
-  });
-
-  // طباعة الكل — إعادة توجيه لصفحة الطباعة حسب التبويب الحالي
-  document.getElementById('btnPrintAll')?.addEventListener('click', function(ev){
-    ev.preventDefault();
-    const t = "{{ current_type }}";
-    let base = '/reports/print/all-invoices/sales';
-    let dropBranch = false;
-    if(t === 'purchases'){ base = '/reports/print/all-invoices/purchases'; dropBranch = true; }
-    else if(t === 'expenses'){ base = '/reports/print/all-invoices/expenses'; dropBranch = true; }
-    // افتح علامة تبويب جديدة
-    window.open(base, '_blank');
-  });
-
-  // مثال: دفع مجمّع مبسط (يوزّع المبلغ بالتساوي على المحدد)
-  document.getElementById('btnBulkPay')?.addEventListener('click', function(){
-    const selected = getSelectedCheckboxes();
-    if(!selected.length){ alert(msgNoSelected); return; }
-    const amountInput = document.getElementById('bulk-payment-amount');
-    const amount = parseFloat(amountInput?.value || 0);
-    if(!amount || amount <= 0){ alert("{{ _('Enter a valid amount / ادخل مبلغ صالح') }}"); return; }
-    if(!confirm(msgConfirmBulkPay)) return;
-    // توزيع دفع: إرسال لكل فاتورة عبر POST منفصل أو حسب منطقتك — سنرسل POST لendpoint مثال (يمكنك تعديله)
-    const per = (amount / selected.length);
-    selected.forEach(cb => {
-      const form = document.createElement('form');
-      form.method = 'post';
-      form.style.display = 'none';
-      form.action = "{{ url_for('main.pay_invoice') }}";
-      // csrf
-      const csrf = document.createElement('input'); csrf.type='hidden'; csrf.name='csrf_token'; csrf.value = "{{ csrf_token() }}"; form.appendChild(csrf);
-      const iid = document.createElement('input'); iid.type='hidden'; iid.name='invoice_id'; iid.value = cb.value; form.appendChild(iid);
-      const amt = document.createElement('input'); amt.type='hidden'; amt.name='payment_amount'; amt.value = per.toFixed(2); form.appendChild(amt);
-      document.body.appendChild(form);
-      form.submit();
-    });
-  });
-
-})();
-</script>
-{% endblock %}
+    <script>
+      window.openPrintModal = function(url){
+        try{
+          var modal = new bootstrap.Modal(document.getElementById('printModal'));
+          if (url){ document.getElementById('printFrame').src = url; }
+          modal.show();
+        }catch(e){}
+      };
+      window.openPrintModalAndSubmit = function(form){
+        try{
+          form.setAttribute('target','printFrame');
+          document.getElementById('printFrame').src = 'about:blank';
+          var modal = new bootstrap.Modal(document.getElementById('printModal'));
+          modal.show();
+          setTimeout(function(){ form.submit(); }, 50);
+        }catch(e){ form.submit(); }
+        return false;
+      };
+    </script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>
