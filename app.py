@@ -2748,12 +2748,13 @@ def api_get_tables(branch_code):
         elif 'china' in branch_l:
             branch_opts |= {'china_town', 'china town', 'town china', 'china'}
 
-        # Get existing table records
-        existing_tables = Table.query.filter(Table.branch_code.in_(list(branch_opts))).all()
+        # Get existing table records (case-insensitive branch match)
+        from sqlalchemy import func as _func
+        existing_tables = Table.query.filter(_func.lower(Table.branch_code).in_(list(branch_opts))).all()
         table_statuses = {safe_table_number(t.table_number): t.status for t in existing_tables}
 
         # Check for open invoices (real-time status)
-        open_invoices = SalesInvoice.query.filter(SalesInvoice.branch.in_(list(branch_opts)), SalesInvoice.status == 'open').all()
+        open_invoices = SalesInvoice.query.filter(_func.lower(SalesInvoice.branch).in_(list(branch_opts)), SalesInvoice.status == 'open').all()
         occupied_tables = set()
         for invoice in open_invoices:
             if hasattr(invoice, 'table_number') and invoice.table_number:
@@ -2761,7 +2762,7 @@ def api_get_tables(branch_code):
                 occupied_tables.add(table_num)
 
         # Count active draft orders per table (use branch variants)
-        draft_orders = DraftOrder.query.filter(DraftOrder.branch_code.in_(list(branch_opts)), DraftOrder.status == 'draft').all()
+        draft_orders = DraftOrder.query.filter(_func.lower(DraftOrder.branch_code).in_(list(branch_opts)), DraftOrder.status == 'draft').all()
         draft_counts = {}
         for draft in draft_orders:
             table_num = safe_table_number(draft.table_number)
@@ -4157,18 +4158,19 @@ def api_tables_status():
                 branch_opts |= {'place_india', 'india_place', 'place india', 'india place'}
             elif 'china' in branch_l:
                 branch_opts |= {'china_town', 'china town', 'town china', 'china'}
-        # In-memory marked as open
+        # In-memory marked as open (normalize branch for comparison)
         for key in list(OPEN_INVOICES_MEM.keys()):
             try:
                 b, t = key.split(':', 1)
-                if branch and (b not in branch_opts):
+                if branch and ((b or '').strip().lower() not in branch_opts):
                     continue
                 status[str(int(t))] = 'open'
             except Exception:
                 continue
         # Draft orders in DB are also open
         if branch:
-            drafts = DraftOrder.query.filter(DraftOrder.branch_code.in_(list(branch_opts)), DraftOrder.status == 'draft').all()
+            from sqlalchemy import func as _func
+            drafts = DraftOrder.query.filter(_func.lower(DraftOrder.branch_code).in_(list(branch_opts)), DraftOrder.status == 'draft').all()
             for d in drafts:
                 try:
                     status[str(int(d.table_number))] = 'open'
