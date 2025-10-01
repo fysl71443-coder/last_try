@@ -18,10 +18,11 @@
       margin: 0;
       padding: 8px;
       color: #000;
+      font-weight: 700;
     }
     /* Force all common text elements to render in solid black */
     body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i,
-    .muted, .small, .company-name, .grand-total { color: #000 !important; }
+    .muted, .small, .company-name, .grand-total { color: #000 !important; font-weight: 700 !important; }
     .wrap{
       width: {{ pw }}mm; 
       max-width: {{ pw }}mm; 
@@ -45,7 +46,7 @@
     
     /* Company info */
     .company-name{
-      font-size: {{ (fs|int + 2) if fs else 14 }}px;
+      font-size: {{ (fs|int + 3) if fs else 15 }}px;
       font-weight: bold;
       margin-bottom: 6px;
     }
@@ -61,7 +62,7 @@
       padding: 4px 2px; 
       border-bottom: 1px solid #000;
       font-weight: 700;
-      font-size: {{ (fs|int - 1) if (fs|int > 8) else fs }}px;
+      font-size: {{ (fs|int + 1) if (fs|int > 8) else (fs|int) }}px;
       color: #000;
     }
     td{
@@ -79,7 +80,7 @@
     .grand-total{
       border-top: 2px solid #000 !important;
       border-bottom: 2px solid #000 !important;
-      font-size: {{ (fs|int + 1) if fs else 13 }}px;
+      font-size: {{ (fs|int + 3) if fs else 15 }}px;
       font-weight: 700;
       color: #000;
     }
@@ -113,10 +114,11 @@
         color-adjust: exact;
         print-color-adjust: exact;
         color: #000;
+        font-weight: 700;
       }
       /* Re-assert black for all relevant elements when printing */
       body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i,
-      table, .company-name, .muted, .small, .grand-total { color: #000 !important; }
+      table, .company-name, .muted, .small, .grand-total { color: #000 !important; font-weight: 700 !important; }
       .wrap{
         width: {{ pw }}mm;
         max-width: {{ pw }}mm;
