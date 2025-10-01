@@ -45,6 +45,26 @@
   <div class="card">
     <div class="card-body">
       <style>
+        /* Fallback layout if Bootstrap is not applied */
+        .card { border: 1px solid #dee2e6; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px rgba(16,24,40,0.06); }
+        .card-body { padding: 16px; }
+        .table { width: 100%; border-collapse: collapse; background: #fff; }
+        .table th, .table td { border: 1px solid #dee2e6; padding: 8px 10px; text-align: center; }
+        .table thead th { background: #2c3e50; color: #fff; font-weight: 700; }
+        .table-striped tbody tr:nth-child(even) { background: #fbfcfd; }
+        .table-dark th { background: #2c3e50 !important; color: #fff !important; }
+        .btn { display:inline-block; padding: 6px 12px; border-radius: 6px; border: 1px solid #ced4da; background:#fff; cursor:pointer; font-weight:600; }
+        .btn-outline-secondary { color:#495057; border-color:#ced4da; }
+        .btn-outline-success { color:#198754; border-color:#198754; }
+        .btn-outline-primary { color:#0d6efd; border-color:#0d6efd; }
+        .btn-primary { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+        .btn + .btn { margin-right: 6px; }
+        .badge { display:inline-block; padding: .35em .65em; font-size: .75em; font-weight: 700; line-height: 1; color: #fff; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: .25rem; }
+        .bg-success { background-color: #198754 !important; }
+        .bg-secondary { background-color: #6c757d !important; }
+        .table-responsive { width:100%; overflow:auto; }
+      </style>
+      <style>
         .amount-muted { color: #6c757d; }
         .amount-paid { color: #198754; font-weight: 600; } /* Bootstrap green */
         .amount-due  { color: #dc3545; font-weight: 600; } /* Bootstrap red */

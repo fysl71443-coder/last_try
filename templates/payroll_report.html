@@ -41,6 +41,11 @@
             tr { page-break-inside: avoid; }
             h1, h2, h3 { page-break-after: avoid; }
             .no-print { display: none !important; }
+            /* Enforce black text and high-contrast in print */
+            body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            button, .btn { color: #000 !important; background: none !important; border: 1px solid #000 !important; box-shadow: none !important; }
+            thead th { background: #fff !important; color: #000 !important; }
+            tfoot, .totals, .totals-row, .grand-total { color: #000 !important; font-weight: bold !important; background: #fff !important; border-color: #000 !important; }
         }
     </style>
     {% if auto_print %}
