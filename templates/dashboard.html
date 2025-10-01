@@ -61,8 +61,8 @@ body {
 	          <h6>{{ _('Suppliers / الموردون') }}</h6>
 	        </div>
 	      </a>
-    {% endif %}
 	    </div>
+    {% endif %}
 
 
     {% if can('expenses','view') %}
@@ -196,8 +196,8 @@ body {
           <h6>{{ _('Settings / الإعدادات') }}</h6>
         </div>
       </a>
-    {% endif %}
     </div>
+    {% endif %}
 
     {% if can('table_settings','view') %}
     <div class="col-md-3 col-sm-6">
@@ -207,8 +207,8 @@ body {
           <h6>{{ _('Table Settings / إعدادات الطاولات') }}</h6>
         </div>
       </a>
-    {% endif %}
     </div>
+    {% endif %}
 
     {% if can('users','view') %}
     <div class="col-md-3 col-sm-6">
@@ -218,8 +218,8 @@ body {
           <h6>{{ _('Users & Permissions / إدارة المستخدمين والصلاحيات') }}</h6>
         </div>
       </a>
-    {% endif %}
     </div>
+    {% endif %}
 
     {% if can('sample_data','view') %}
     <div class="col-md-3 col-sm-6">
@@ -230,8 +230,8 @@ body {
           <small class="text-muted">{{ _('For testing purposes / لأغراض الاختبار') }}</small>
         </div>
       </a>
-    {% endif %}
     </div>
+    {% endif %}
 
   {% if (current_user.role|default('')) == 'user' %}
   <div class="mt-4">
@@ -241,8 +241,6 @@ body {
   </div>
   {% endif %}
 
-      </a>
-    </div>
   </div>
 </div>
 
