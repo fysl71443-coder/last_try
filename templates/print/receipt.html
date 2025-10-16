@@ -296,15 +296,21 @@
         <span>{{ _('VAT 15%%') }}</span>
         <span>{{ '%.2f'|format(inv.tax_amount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency" style="width: 12px; height: 12px; vertical-align: middle;">{% endif %}</span>
       </div>
-      {% if inv.discount_amount and inv.discount_amount > 0 %}
-      {% set base_total = (inv.total_before_tax or 0) %}
-      {% set rate = (inv.discount_amount / base_total * 100) if base_total > 0 else 0 %}
-      {% set cust = (inv.customer_name or '')|upper %}
-      <div style="display: flex; justify-content: space-between; margin-bottom: 2px; color: #000;">
-        <span>{{ _('Discount') }}{% if cust in ['KEETA','HUNGER'] %} ({{ '%.1f'|format(rate or 0) }}%){% endif %}</span>
-        <span>-{{ '%.2f'|format(inv.discount_amount or 0) }}{% if settings and settings.currency_image %} <img src="{{ settings.currency_image }}" class="currency-img" alt="currency" style="width: 12px; height: 12px; vertical-align: middle;">{% endif %}</span>
-      </div>
-      {% endif %}
+      {% if inv.discount_amount or inv.discount %}
+{% set discount_value = inv.discount_amount or inv.discount or 0 %}
+{% if discount_value > 0 %}
+  {% set base_total = (inv.total_before_tax or 0) %}
+  {% set rate = (discount_value / base_total * 100) if base_total > 0 else 0 %}
+  <div style="display: flex; justify-content: space-between; margin-bottom: 2px; color: #000;">
+    <span>{{ _('Discount') }} ({{ '%.1f'|format(rate or 0) }}%)</span>
+    <span>-{{ '%.2f'|format(discount_value) }}{% if settings and settings.currency_image %}
+      <img src="{{ settings.currency_image }}" class="currency-img" alt="currency"
+      style="width: 12px; height: 12px; vertical-align: middle;">{% endif %}
+    </span>
+  </div>
+{% endif %}
+{% endif %}
+      
     </div>
 
     <hr style="margin: 6px 0; border-top: 2px solid #000;">
