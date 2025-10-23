@@ -14,22 +14,26 @@
       font-family: 'Courier New', monospace;
       font-size: {{ fs }}px;
       color: #000;
-      font-weight: 700;  /* جميع النصوص بالخط العريض */
+      font-weight: 700;
       margin: 0;
       padding: 8px;
       line-height: 1.3;
     }
+
     .wrap { width: {{ pw }}mm; max-width: {{ pw }}mm; margin: 0 auto; }
     .center { text-align: center; }
     .right { text-align: right; }
-    .small { font-size: {{ (fs|int - 2) if fs|int > 8 else fs }}px; }
+    .left { text-align: left; }
+    .small { font-size: {{ (fs|int - 2) if fs|int > 8 else fs }}px; color: #000; }
+    .muted { color: #000; }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    th, td { padding: 4px 2px; border-bottom: 1px solid #000; font-weight: 700; color: #000; }
-    .grand-total { border-top: 2px solid #000; border-bottom: 2px solid #000; font-size: {{ (fs|int + 2) }}px; }
+    th, td { padding: 4px 2px; border-bottom: 1px solid #000; color: #000; font-weight: 700; }
+    .total-row td { font-weight: 700; }
+    .grand-total { border-top: 2px solid #000; border-bottom: 2px solid #000; font-size: {{ (fs|int + 2) }}px; font-weight: 700; }
     .logo-img { height: {{ logo_h }}px; margin-bottom: 8px; object-fit: contain; }
 
     @media print {
-      body { background:#fff; color:#000; font-size: {{ (fs|int + 1) }}px; font-weight: 700; }
+      body { background:#fff; color:#000; font-size: {{ (fs|int + 1) }}px; }
       @page { margin: 2mm 2mm {{ extra_bottom }}mm 2mm; size: {{ pw }}mm auto; }
       .no-print { display: none; }
     }
@@ -38,26 +42,36 @@
 <body>
   <div class="wrap">
     <div class="center">
-      <img src="{{ settings.logo_url | default(logo_url) }}" alt="logo" class="logo-img"/>
-      <div>{{ settings.company_name | default(company_name) }}</div>
-      {% if settings.tax_number %}<div class="small">{{ _('VAT No.') }}: {{ settings.tax_number }}</div>{% endif %}
-      {% if settings.phone %}<div class="small">{{ _('Phone') }}: {{ settings.phone }}</div>{% endif %}
-      {% if settings.address %}<div class="small">{{ settings.address }}</div>{% endif %}
+      {% if settings and settings.logo_url %}
+        <img src="{{ settings.logo_url }}" alt="logo" class="logo-img"/>
+      {% elif logo_url %}
+        <img src="{{ logo_url }}" alt="logo" class="logo-img"/>
+      {% endif %}
+      <div><strong>{{ settings.company_name if settings else company_name }}</strong></div>
+      {% if settings and settings.tax_number %}
+        <div class="small muted">{{ _('VAT No.') }}: {{ settings.tax_number }}</div>
+      {% endif %}
+      {% if settings and settings.phone %}
+        <div class="small muted">{{ _('Phone') }}: {{ settings.phone }}</div>
+      {% endif %}
+      {% if settings and settings.address %}
+        <div class="small muted">{{ settings.address }}</div>
+      {% endif %}
     </div>
 
     <hr/>
 
     <div class="small">
-      <div>Invoice No: {{ display_invoice_number | default(inv.invoice_number | default(inv.id)) }}</div>
-      <div>Date/Time: {{ (inv.created_at or now()).strftime('%Y-%m-%d %H:%M:%S') }}</div>
-      <div>Branch: {{ branch_name | default(inv.branch | default(inv.branch_code | default('Main'))) }}</div>
+      <div>Invoice No: {{ display_invoice_number or (inv.invoice_number or inv.id) }}</div>
+      {% set sa_time = (inv.created_at or now()).astimezone(pytz.timezone('Asia/Riyadh')) %}
+      <div>Date/Time: {{ sa_time.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+      <div>Branch: {{ branch_name or (inv.branch or inv.branch_code or 'Main') }}</div>
       {% if inv.table_number %}<div>Table: {{ inv.table_number }}</div>{% endif %}
-      {% if inv.payment_method %}<div>Payment: {{ (inv.payment_method or 'Cash')|title }}</div>{% endif %}
-      <div>Customer: {{ inv.customer_name | default('Cash customer') }}</div>
+      <div>Customer: {{ inv.customer_name or 'Cash customer' }}</div>
       {% if inv.customer_phone %}<div>Phone: {{ inv.customer_phone }}</div>{% endif %}
     </div>
 
-    <table id="receipt-items">
+    <table>
       <thead>
         <tr>
           <th>{{ _('Item') }}</th>
@@ -70,43 +84,56 @@
         {% for it in items %}
         <tr>
           <td>{{ it.product_name }}</td>
-          <td class="center">{{ '%.2f'|format(it.quantity | default(0)) }}</td>
-          <td class="center">{{ '%.2f'|format((it.total_price | default(0))/(it.quantity | default(1))) }}</td>
-          <td class="right">{{ '%.2f'|format(it.total_price | default(0)) }}</td>
+          <td class="center">{{ '%.2f'|format(it.quantity or 0) }}</td>
+          <td class="center">{{ '%.2f'|format(((it.total_price or 0)/(it.quantity or 1))) }}</td>
+          <td class="right">{{ '%.2f'|format(it.total_price or 0) }}</td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot>
-        <tr>
+        <tr class="total-row">
           <td colspan="3">{{ _('Subtotal') }}</td>
-          <td class="right">{{ '%.2f'|format(inv.total_before_tax | default(0)) }}</td>
+          <td class="right">{{ '%.2f'|format(inv.total_before_tax or 0) }}</td>
         </tr>
 
-        {% set discount_value = inv.discount_amount | default(inv.discount | default(0)) %}
-        {% if discount_value > 0 %}
-          {% set base_total = inv.total_before_tax | default(0) %}
-          {% set rate = (discount_value / base_total * 100) if base_total > 0 else 0 %}
-          <tr>
-            <td colspan="3">{{ _('Discount') }} ({{ '%.1f'|format(rate) }}%)</td>
-            <td class="right">-{{ '%.2f'|format(discount_value) }}</td>
-          </tr>
+        {% if inv.discount_amount or inv.discount %}
+          {% set discount_value = inv.discount_amount or inv.discount or 0 %}
+          {% if discount_value > 0 %}
+            {% set base_total = inv.total_before_tax or 0 %}
+            {% set rate = (discount_value / base_total * 100) if base_total > 0 else 0 %}
+            <tr class="total-row">
+              <td colspan="3">{{ _('Discount') }} ({{ '%.1f'|format(rate) }}%)</td>
+              <td class="right">-{{ '%.2f'|format(discount_value) }}</td>
+            </tr>
+          {% endif %}
         {% endif %}
 
-        <tr>
+        <tr class="total-row">
           <td colspan="3">{{ _('VAT 15%') }}</td>
-          <td class="right">{{ '%.2f'|format(inv.tax_amount | default(0)) }}</td>
+          <td class="right">{{ '%.2f'|format(inv.tax_amount or 0) }}</td>
         </tr>
 
         <tr class="grand-total">
           <td colspan="3">{{ _('Grand Total') }}</td>
-          <td class="right">{{ '%.2f'|format(inv.total_after_tax_discount | default(0)) }}</td>
+          <td class="right">{{ '%.2f'|format(inv.total_after_tax_discount or 0) }}</td>
         </tr>
+
+        {% if inv.payment_method %}
+        <tr class="total-row">
+          <td colspan="3">{{ _('Payment') }}</td>
+          <td class="right">{{ inv.payment_method|title }}</td>
+        </tr>
+        {% endif %}
       </tfoot>
     </table>
 
-    <div class="center small" style="margin-top:8px">
-      <div>{{ settings.receipt_footer_text | default(settings.footer_message | default(_('THANK YOU FOR VISIT'))) }}</div>
-      {% if not settings.receipt_footer_text and not settings.footer_message %}
+    <div class="center small muted" style="margin-top:8px">
+      {% if settings and settings.receipt_footer_text %}
+        <div><strong>{{ settings.receipt_footer_text }}</strong></div>
+      {% elif settings and settings.footer_message %}
+        <div><strong>{{ settings.footer_message }}</strong></div>
+      {% else %}
+        <div><strong>{{ _('THANK YOU FOR VISIT') }}</strong></div>
         <div>{{ _('Visit us again!') }}</div>
       {% endif %}
     </div>
