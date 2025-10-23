@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>فاتورة مبيعات</title>
+  <title>فاتورة مبيعات / Sales Receipt</title>
   <style>
     {% set pw = (settings.receipt_paper_width if settings and settings.receipt_paper_width else '80') %}
     {% set fs = (settings.receipt_font_size if settings and settings.receipt_font_size else 12) %}
     {% set logo_h = (settings.receipt_logo_height if settings and settings.receipt_logo_height else 100) %}
-    {% set extra_bottom = (settings.receipt_extra_bottom_mm if settings and (settings.receipt_extra_bottom_mm is not none) else 15) %}
-    body{
+    {% set extra_bottom = (settings.receipt_extra_bottom_mm if settings and settings.receipt_extra_bottom_mm is not none else 15) %}
+
+    body {
       font-family: 'Courier New', monospace;
       font-size: {{ fs }}px;
       color: #000;
@@ -18,24 +19,25 @@
       padding: 8px;
       line-height: 1.3;
     }
-    .wrap{width: {{ pw }}mm; max-width: {{ pw }}mm; margin: 0 auto;}
-    .center{text-align:center;}
-    .right{text-align:right;}
-    .small{font-size: {{ (fs|int - 2) if (fs|int > 8) else fs }}px;}
-    .muted{color:#000;}
-    table{width:100%; border-collapse:collapse; margin-top:8px;}
-    th,td{padding:4px 2px; border-bottom:1px solid #000;}
-    th{font-weight:bold; color:#000;}
-    .total-row td{font-weight:bold;}
-    .grand-total{border-top:2px solid #000; border-bottom:2px solid #000; font-size:{{ (fs|int + 2) }}px;}
-    .logo-img{height: {{ logo_h }}px; margin-bottom:8px; object-fit:contain;}
-    @media print{
-      body{background:#fff; color:#000; font-size:{{ (fs|int + 1) }}px;}
-      @page{ margin: 2mm 2mm {{ extra_bottom }}mm 2mm; size: {{ pw }}mm auto; }
+    .wrap { width: {{ pw }}mm; max-width: {{ pw }}mm; margin: 0 auto; }
+    .center { text-align: center; }
+    .right { text-align: right; }
+    .small { font-size: {{ (fs|int - 2) if fs|int > 8 else fs }}px; }
+    .muted { color: #000; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { padding: 4px 2px; border-bottom: 1px solid #000; }
+    th { font-weight: bold; color: #000; }
+    .total-row td { font-weight: bold; }
+    .grand-total { border-top: 2px solid #000; border-bottom: 2px solid #000; font-size: {{ (fs|int + 2) }}px; }
+    .logo-img { height: {{ logo_h }}px; margin-bottom: 8px; object-fit: contain; }
+
+    @media print {
+      body { background:#fff; color:#000; font-size: {{ (fs|int + 1) }}px; }
+      @page { margin: 2mm 2mm {{ extra_bottom }}mm 2mm; size: {{ pw }}mm auto; }
+      .no-print { display: none; }
     }
   </style>
 </head>
-
 <body>
   <div class="wrap">
     <div class="center">
@@ -58,10 +60,9 @@
 
     <hr/>
 
-    {% set local_time = (inv.created_at or now()) + timedelta(hours=3) %}
     <div class="small">
       <div>Invoice No: {{ display_invoice_number or (inv.invoice_number or inv.id) }}</div>
-      <div>Date/Time: {{ local_time.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+      <div>Date/Time: {{ (inv.created_at or now()).strftime('%Y-%m-%d %H:%M:%S') }}</div>
       <div>Branch: {{ branch_name or (inv.branch or inv.branch_code or 'Main') }}</div>
       {% if inv.table_number %}<div>Table: {{ inv.table_number }}</div>{% endif %}
       {% if inv.payment_method %}<div>Payment: {{ (inv.payment_method or 'Cash')|title }}</div>{% endif %}
@@ -83,7 +84,7 @@
         <tr>
           <td>{{ it.product_name }}</td>
           <td class="center">{{ '%.2f'|format(it.quantity or 0) }}</td>
-          <td class="center">{{ '%.2f'|format(((it.total_price or 0) / (it.quantity or 1))) }}</td>
+          <td class="center">{{ '%.2f'|format(((it.total_price or 0)/(it.quantity or 1))) }}</td>
           <td class="right">{{ '%.2f'|format(it.total_price or 0) }}</td>
         </tr>
         {% endfor %}
@@ -97,12 +98,8 @@
         {% if inv.discount_amount or inv.discount %}
           {% set discount_value = inv.discount_amount or inv.discount or 0 %}
           {% if discount_value > 0 %}
-            {% set base_total = (inv.total_before_tax or 0) %}
-            {% if base_total > 0 %}
-              {% set rate = ((discount_value / base_total) * 100) | round(1, 'common') %}
-            {% else %}
-              {% set rate = 0 %}
-            {% endif %}
+            {% set base_total = inv.total_before_tax or 0 %}
+            {% set rate = (discount_value / base_total * 100) if base_total > 0 else 0 %}
             <tr class="total-row">
               <td colspan="3">{{ _('Discount') }} ({{ '%.1f'|format(rate) }}%)</td>
               <td class="right">-{{ '%.2f'|format(discount_value) }}</td>
@@ -114,6 +111,7 @@
           <td colspan="3">{{ _('VAT 15%') }}</td>
           <td class="right">{{ '%.2f'|format(inv.tax_amount or 0) }}</td>
         </tr>
+
         <tr class="grand-total">
           <td colspan="3">{{ _('Grand Total') }}</td>
           <td class="right">{{ '%.2f'|format(inv.total_after_tax_discount or 0) }}</td>
@@ -128,6 +126,7 @@
         <div><strong>{{ settings.footer_message }}</strong></div>
       {% else %}
         <div><strong>{{ _('THANK YOU FOR VISIT') }}</strong></div>
+        <div>{{ _('Visit us again!') }}</div>
       {% endif %}
     </div>
 
