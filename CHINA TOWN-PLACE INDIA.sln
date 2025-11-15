@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TableManagerWinForms", "TableManagerWinForms\TableManagerWinForms.csproj", "{B1683A70-C766-A395-4B37-D129D3C67DED}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B1683A70-C766-A395-4B37-D129D3C67DED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1683A70-C766-A395-4B37-D129D3C67DED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1683A70-C766-A395-4B37-D129D3C67DED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1683A70-C766-A395-4B37-D129D3C67DED}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {693022CD-353F-4C67-9431-2C9258928075}
+	EndGlobalSection
+EndGlobal

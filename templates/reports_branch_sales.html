@@ -2,8 +2,8 @@
 {% block title %}{{ _('Branch Sales by Day / مبيعات الفرع حسب اليوم') }}{% endblock %}
 {% block content %}
 <div class="container py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4>{{ _('Branch Sales by Day / مبيعات الفرع حسب اليوم') }}</h4>
+  <div class="section-header mb-3">
+    <h4 class="mb-0">{{ _('Branch Sales by Day / مبيعات الفرع حسب اليوم') }}</h4>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-secondary" href="{{ url_for('reports_branch_sales_print', year=year, month=month, branch=branch) }}">🖨️ {{ _('Print') }}</a>
       <a class="btn btn-outline-primary" href="{{ url_for('dashboard') }}">🏠 {{ _('Dashboard') }}</a>

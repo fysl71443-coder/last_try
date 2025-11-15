@@ -37,6 +37,35 @@
         window.safeBack(url);
       });
     }
+
+    try{
+      const savedTheme = localStorage.getItem('theme') || '';
+      if(savedTheme === 'dark'){ document.body.classList.add('dark'); }
+      const savedDensity = localStorage.getItem('density') || '';
+      if(savedDensity === 'compact'){ document.body.classList.add('compact'); }
+    }catch(e){}
+
+    const themeBtn = document.getElementById('btnThemeToggle');
+    if(themeBtn){
+      themeBtn.addEventListener('click', function(){
+        const isDark = document.body.classList.toggle('dark');
+        try{ localStorage.setItem('theme', isDark ? 'dark' : 'light'); }catch(e){}
+        this.textContent = isDark ? '☀️' : '🌙';
+      });
+      const isDarkInit = document.body.classList.contains('dark');
+      themeBtn.textContent = isDarkInit ? '☀️' : '🌙';
+    }
+
+    const densBtn = document.getElementById('btnDensityToggle');
+    if(densBtn){
+      densBtn.addEventListener('click', function(){
+        const isCompact = document.body.classList.toggle('compact');
+        try{ localStorage.setItem('density', isCompact ? 'compact' : 'comfortable'); }catch(e){}
+        this.textContent = isCompact ? '📐' : '📏';
+      });
+      const isCompactInit = document.body.classList.contains('compact');
+      densBtn.textContent = isCompactInit ? '📐' : '📏';
+    }
   });
 
   // Warn on unload if dirty

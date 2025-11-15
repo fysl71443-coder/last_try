@@ -25,6 +25,8 @@ class AppKV(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+
+
 # ---- Basic restaurant models (minimal fields to make POS work) ----
 # NOTE: MenuCategory and MenuItem are defined in the main models.py
 # to avoid duplicate class names in the SQLAlchemy registry. Use:

@@ -40,15 +40,13 @@ body {
 
 <div class="container py-4">
     <!-- شريط التنقل السريع -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <h3 class="mb-0">🛒 {{ _('Purchases / المشتريات') }}</h3>
-        </div>
-        <div class="col-md-6 text-end">
-            <a href="{{ url_for('main.raw_materials') }}" class="btn btn-outline-success me-2">
+    <div class="section-header mb-3">
+        <h3 class="mb-0">🛒 {{ _('Purchases / المشتريات') }}</h3>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('main.raw_materials') }}" class="btn btn-outline-success">
                 🥘 {{ _('Raw Materials / المواد الخام') }}
             </a>
-            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info me-2">
+            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info">
                 💰 {{ _('Sales / المبيعات') }}
             </a>
             <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">

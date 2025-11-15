@@ -19,6 +19,17 @@ body {
     line-height: 1.6;
 }
 
+body.compact .btn{ padding:6px 10px; border-radius:6px; }
+body.compact .table thead th{ padding:10px; }
+body.compact .table td{ padding:8px; }
+body.compact .card{ box-shadow:none; }
+body.compact .card .card-body{ padding:12px; }
+body.compact .dashboard-card{ padding:14px; }
+body.compact .navbar-brand{ font-size:1.25rem; }
+
+.section-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.section-header h3{ margin:0; }
+
 /* Dashboard Cards */
 .dashboard-card {
     background: white;

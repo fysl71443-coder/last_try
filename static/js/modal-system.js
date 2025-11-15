@@ -104,6 +104,25 @@
       <p>${message}</p>
       <input type="text" class="form-control" id="${inputId}" value="${defaultValue}" placeholder="أدخل القيمة / Enter value">
     `;
+    
+    return showPromptModal(body, title, inputId);
+  };
+
+  // Password Prompt (shows dots)
+  window.showPasswordPrompt = function(message, title = 'كلمة السر / Password') {
+    const id = generateModalId();
+    const inputId = `input-${id}`;
+    const body = `
+      <p>${message}</p>
+      <input type="password" class="form-control" id="${inputId}" placeholder="أدخل كلمة السر / Enter password">
+    `;
+    
+    return showPromptModal(body, title, inputId);
+  };
+
+  // Common prompt modal logic
+  function showPromptModal(body, title, inputId) {
+    const id = generateModalId();
     const buttons = `
       <button type="button" class="btn btn-secondary" data-result="null" data-bs-dismiss="modal">
         إلغاء / Cancel
@@ -153,7 +172,7 @@
       
       modal.show();
     });
-  };
+  }
 
   // Custom form modal
   window.showFormModal = function(title, fields, submitText = 'حفظ / Save') {

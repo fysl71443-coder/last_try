@@ -1,5 +1,7 @@
 from flask import Blueprint, render_template, request
 from datetime import datetime, timedelta
+import pytz
+_ksa_tz = pytz.timezone("Asia/Riyadh")
 from sqlalchemy import func
 from extensions import db
 from models import Account, LedgerEntry, SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment
@@ -8,7 +10,7 @@ bp = Blueprint('financials', __name__, url_prefix='/financials')
 
 
 def period_range(kind: str):
-    today = datetime.utcnow().date()
+    today = datetime.now(_ksa_tz).date()
     if kind == 'today':
         return today, today
     if kind == 'this_week':

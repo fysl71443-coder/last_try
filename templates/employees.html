@@ -2,7 +2,7 @@
 {% block title %}{{ _('Employees / الموظفون') }}{% endblock %}
 {% block content %}
 <div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="section-header mb-3">
     <h3 class="mb-0">👤 {{ _('Employees / الموظفون') }}</h3>
     <div class="d-flex flex-wrap gap-2">
       <a href="{{ url_for('main.salaries_pay') }}" class="btn btn-success">💵 {{ _('Pay Salaries / سداد الرواتب') }}</a>
@@ -134,6 +134,7 @@
         </div>
         <div class="col-md-3 d-flex align-items-end">
           <button class="btn btn-outline-primary" id="btnLoadStatements">{{ _('Load / تحميل') }}</button>
+          <button class="btn btn-outline-success ms-2" id="btnExportStatements">{{ _('Export / تصدير') }}</button>
         </div>
       </div>
       <div class="table-responsive">
@@ -193,8 +194,24 @@
         </div></div></div>
       </div>
       <div class="row g-2 mb-2">
-        <div class="col-md-4 ms-auto">
+        <div class="col-md-3 ms-auto">
           <input type="text" class="form-control" id="empSearch" placeholder="{{ _('Search employees... / بحث في الموظفين...') }}">
+        </div>
+        <div class="col-md-2">
+          <select class="form-select" id="empFilterStatus">
+            <option value="">{{ _('All Status / كل الحالات') }}</option>
+            <option value="active">{{ _('Active / نشط') }}</option>
+            <option value="inactive">{{ _('Inactive / غير نشط') }}</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <input type="text" class="form-control" id="empFilterDept" placeholder="{{ _('Filter by Dept / تصفية بالقسم') }}">
+        </div>
+        <div class="col-md-2">
+          <input type="text" class="form-control" id="empFilterPos" placeholder="{{ _('Filter by Position / تصفية بالوظيفة') }}">
+        </div>
+        <div class="col-md-3 text-end">
+          <button class="btn btn-outline-primary" id="btnExportEmployees">{{ _('Export Employees / تصدير الموظفين') }}</button>
         </div>
       </div>
       <div class="table-responsive">
@@ -367,6 +384,49 @@ window.clearEmployeeForm = clearEmployeeForm;
   });
 });
 
+(function(){
+  const filter = ()=>{
+    const q = (document.getElementById('empSearch')?.value||'').toLowerCase();
+    const st = (document.getElementById('empFilterStatus')?.value||'').toLowerCase();
+    const dp = (document.getElementById('empFilterDept')?.value||'').toLowerCase();
+    const ps = (document.getElementById('empFilterPos')?.value||'').toLowerCase();
+    document.querySelectorAll('#empTableBody tr').forEach(tr => {
+      const t = tr.textContent.toLowerCase();
+      const okQ = !q || t.includes(q);
+      const okS = !st || t.includes(st);
+      const okD = !dp || t.includes(dp);
+      const okP = !ps || t.includes(ps);
+      tr.style.display = (okQ && okS && okD && okP) ? '' : 'none';
+    });
+  };
+  ['empFilterStatus','empFilterDept','empFilterPos'].forEach(id=>{
+    const el = document.getElementById(id); el && el.addEventListener('input', filter);
+  });
+})();
+
+document.getElementById('btnExportEmployees')?.addEventListener('click', function(){
+  const rows = [['Code','Name','National ID','Department','Position','Phone','Email','Hire Date','Status']];
+  const depTotals = {}; const stTotals = {active:0,inactive:0};
+  document.querySelectorAll('#empTableBody tr').forEach(tr=>{
+    if(tr.style.display==='none') return;
+    const tds = Array.from(tr.children).map(td=> td.textContent.trim());
+    const code = tds[1]||''; const name = tds[2]||''; const nid = tds[3]||''; const dept=tds[4]||''; const pos=tds[5]||''; const phone=tds[6]||''; const email=tds[7]||''; const hire=tds[8]||''; const status=tds[9]||'';
+    rows.push([code,name,nid,dept,pos,phone,email,hire,status]);
+    if(dept){ depTotals[dept] = (depTotals[dept]||0) + 1; }
+    const isActive = /active|نشط/i.test(status);
+    stTotals[isActive?'active':'inactive'] += 1;
+  });
+  rows.push([]);
+  rows.push(['Department Totals','Count']);
+  Object.keys(depTotals).sort().forEach(k=> rows.push([k, depTotals[k]]));
+  rows.push([]);
+  rows.push(['Status Totals','Active','Inactive']);
+  rows.push(['', stTotals.active, stTotals.inactive]);
+  const csv = rows.map(r=> r.map(x=> String(x).includes(',') ? '"'+String(x).replaceAll('"','""')+'"' : String(x)).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'employees.csv'; a.click();
+});
+
 // Quick Department selector fills the input
 (function(){
   const sel = document.getElementById('deptQuickSelect');
@@ -433,26 +493,51 @@ async function handleCreateSalary(ev){
 }
 
 // Stub: load statements (UI only placeholder for now)
-(document.getElementById('btnLoadStatements')||{}).addEventListener?.('click', function(e){
+(document.getElementById('btnLoadStatements')||{}).addEventListener?.('click', async function(e){
   e.preventDefault();
-  const tbody = document.querySelector('#tblStatements tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  let tEmps=0, tBasic=0, tAllow=0, tDed=0, tPaid=0, tNet=0, tRemain=0;
-  {% for e in employees or [] %}
-    // Defaults unknown at UI layer; render zeroed row with employee + department only
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>{{ e.full_name|e }}</td><td>{{ (e.department or '-')|e }}</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td>`;
-    tbody.appendChild(tr);
-    tEmps += 1;
-  {% endfor %}
-  document.getElementById('t_emps')?.innerText = tEmps;
-  document.getElementById('t_basic')?.innerText = tBasic.toFixed(2);
-  document.getElementById('t_allow')?.innerText = tAllow.toFixed(2);
-  document.getElementById('t_ded')?.innerText = tDed.toFixed(2);
-  document.getElementById('t_paid')?.innerText = tPaid.toFixed(2);
-  document.getElementById('t_net')?.innerText = tNet.toFixed(2);
-  document.getElementById('t_remain')?.innerText = tRemain.toFixed(2);
+  const month = document.getElementById('stmt_month')?.value || '';
+  try{
+    const url = month ? `/api/salaries/statements?month=${encodeURIComponent(month)}` : '/api/salaries/statements';
+    const resp = await fetch(url, {credentials:'same-origin'});
+    const data = await resp.json();
+    if(!resp.ok || !data.ok){ alert('فشل تحميل كشوف الرواتب'); return; }
+    window.statementsData = data;
+    const tbody = document.querySelector('#tblStatements tbody'); if(!tbody) return;
+    tbody.innerHTML = '';
+    let tEmps=0;
+    (data.rows||[]).forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.employee_name||''}</td>
+        <td>${r.department||''}</td>
+        <td class="text-end">${Number(r.basic||0).toFixed(2)}</td>
+        <td class="text-end">${Number(r.allow||0).toFixed(2)}</td>
+        <td class="text-end">${Number(r.ded||0).toFixed(2)}</td>
+        <td class="text-end">${Number(r.net||0).toFixed(2)}</td>
+        <td class="text-end">${Number(r.paid||0).toFixed(2)}</td>
+        <td class="text-end">${Number(r.remaining||0).toFixed(2)}</td>`;
+      tbody.appendChild(tr); tEmps += 1;
+    });
+    const t = data.totals || {basic:0,allow:0,ded:0,total:0,paid:0,remaining:0};
+    document.getElementById('t_emps')?.innerText = tEmps;
+    document.getElementById('t_basic')?.innerText = Number(t.basic||0).toFixed(2);
+    document.getElementById('t_allow')?.innerText = Number(t.allow||0).toFixed(2);
+    document.getElementById('t_ded')?.innerText = Number(t.ded||0).toFixed(2);
+    document.getElementById('t_paid')?.innerText = Number(t.paid||0).toFixed(2);
+    document.getElementById('t_net')?.innerText = Number(t.total||0).toFixed(2);
+    document.getElementById('t_remain')?.innerText = Number(t.remaining||0).toFixed(2);
+  }catch(err){ alert('خطأ في الشبكة'); }
+});
+
+document.getElementById('btnExportStatements')?.addEventListener('click', function(){
+  const data = window.statementsData || {rows:[], totals:{}};
+  const rows = [['Employee','Department','Basic','Allowances','Deductions','Net','Paid','Remaining']];
+  (data.rows||[]).forEach(r=> rows.push([r.employee_name||'', r.department||'', Number(r.basic||0), Number(r.allow||0), Number(r.ded||0), Number(r.net||0), Number(r.paid||0), Number(r.remaining||0)]));
+  rows.push([]);
+  const t = data.totals || {}; rows.push(['Totals','', Number(t.basic||0), Number(t.allow||0), Number(t.ded||0), Number(t.total||0), Number(t.paid||0), Number(t.remaining||0)]);
+  const csv = rows.map(r=> r.map(x=> String(x).includes(',') ? '"'+String(x).replaceAll('"','""')+'"' : String(x)).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'payroll_statements.csv'; a.click();
 });
 </script>
 

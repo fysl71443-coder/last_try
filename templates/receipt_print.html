@@ -7,7 +7,7 @@
     <style>
         {% set pw = (settings.receipt_paper_width if settings and settings.receipt_paper_width else '80') %}
         {% set fs = (settings.receipt_font_size if settings and settings.receipt_font_size else 12) %}
-        {% set logo_h = (settings.receipt_logo_height if settings and settings.receipt_logo_height else 40) %}
+        {% set logo_h = (settings.receipt_logo_height if settings and settings.receipt_logo_height else 100) %}
         {% set extra_bottom = (settings.receipt_extra_bottom_mm if settings and (settings.receipt_extra_bottom_mm is not none) else 15) %}
         /* تنسيقات مبسطة للطباعة الحرارية */
         body {
@@ -25,8 +25,9 @@
         .center { text-align: center; }
         .logo {
             max-height: {{ logo_h }}px;
+            max-width: {{ logo_h|int * 3 }}px;
             object-fit: contain;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
         }
         table {
             width: 100%;

@@ -34,9 +34,20 @@ def create_app(config_class=None):
     # Load configuration (prefers local SQLite when no DATABASE_URL)
     from config import Config
     app.config.from_object(Config)
+    app.config.setdefault('BABEL_DEFAULT_TIMEZONE', 'Asia/Riyadh')
     # Ensure secrets
     app.config.setdefault('SECRET_KEY', os.getenv('SECRET_KEY', os.urandom(24)))
     app.config.setdefault('WTF_CSRF_SECRET_KEY', app.config['SECRET_KEY'])
+
+    try:
+        import time as _time
+        os.environ.setdefault('TZ', 'Asia/Riyadh')
+        try:
+            _time.tzset()
+        except Exception:
+            pass
+    except Exception:
+        pass
     # Inject common template globals (asset version + CSRF token helper)
     from flask_wtf.csrf import generate_csrf
     @app.context_processor
@@ -113,12 +124,23 @@ def create_app(config_class=None):
             except Exception:
                 return '/static/logo.svg'
 
+        def saudi_now(fmt: str = None):
+            try:
+                import pytz, datetime as _dtm
+                d = _dtm.datetime.now(pytz.timezone('Asia/Riyadh'))
+                if fmt:
+                    return d.strftime(fmt)
+                return d
+            except Exception:
+                return _dt.utcnow()
+
         return {
             'ASSET_VERSION': os.getenv('ASSET_VERSION', ''),
             'csrf_token': generate_csrf,
             'can': can,
             'settings': None,
             'section_image_for': section_image_for,
+            'saudi_now': saudi_now,
         }
 
 
@@ -138,6 +160,17 @@ def create_app(config_class=None):
             return db.session.get(User, int(user_id))
         except Exception:
             return None
+
+    @login_manager.unauthorized_handler
+    def _unauthorized():
+        try:
+            from flask import request, jsonify, redirect, url_for
+            if (request.path or '').startswith('/api/'):
+                return jsonify({'success': False, 'error': 'unauthorized'}), 401
+            return redirect(url_for('main.login'))
+        except Exception:
+            from flask import redirect, url_for
+            return redirect(url_for('main.login'))
 
 
 

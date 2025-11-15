@@ -3,13 +3,32 @@
 Create test data for the restaurant system
 """
 
-from app import app, db
-from models import Settings, Employee, EmployeeSalaryDefault, RawMaterial, Meal
+from app import create_app, db
+from sqlalchemy import inspect, text
+from models import Settings, Employee, EmployeeSalaryDefault, RawMaterial, Meal, User
 from datetime import datetime
+
+app = create_app()
 
 def create_test_data():
     """Create comprehensive test data"""
     with app.app_context():
+        try:
+            print('DB URI:', app.config.get('SQLALCHEMY_DATABASE_URI'))
+        except Exception:
+            pass
+
+        # Ensure employees table has backward-compatible columns
+        try:
+            insp = inspect(db.engine)
+            cols = [c['name'] for c in insp.get_columns('employees')]
+            with db.engine.begin() as conn:
+                if 'active' not in cols:
+                    conn.execute(text('ALTER TABLE employees ADD COLUMN active INTEGER DEFAULT 1'))
+                if 'work_hours' not in cols:
+                    conn.execute(text('ALTER TABLE employees ADD COLUMN work_hours INTEGER DEFAULT 0'))
+        except Exception:
+            pass
         try:
             # Create settings if missing
             if not Settings.query.first():
@@ -40,7 +59,11 @@ def create_test_data():
                 print('✅ Settings created')
             
             # Create employees if missing
-            if Employee.query.count() == 0:
+            try:
+                emp_count = Employee.query.count()
+            except Exception:
+                emp_count = 0
+            if emp_count == 0:
                 sample_employees = [
                     {
                         'employee_code': 'EMP001',
@@ -112,8 +135,7 @@ def create_test_data():
                         'name_ar': 'أرز',
                         'unit': 'kg',
                         'cost_per_unit': 5.0,
-                        'current_stock': 100.0,
-                        'minimum_stock': 20.0,
+                        'stock_quantity': 100.0,
                         'active': True
                     },
                     {
@@ -121,8 +143,7 @@ def create_test_data():
                         'name_ar': 'دجاج',
                         'unit': 'kg',
                         'cost_per_unit': 15.0,
-                        'current_stock': 50.0,
-                        'minimum_stock': 10.0,
+                        'stock_quantity': 50.0,
                         'active': True
                     },
                     {
@@ -130,8 +151,7 @@ def create_test_data():
                         'name_ar': 'خضروات',
                         'unit': 'kg',
                         'cost_per_unit': 8.0,
-                        'current_stock': 30.0,
-                        'minimum_stock': 5.0,
+                        'stock_quantity': 30.0,
                         'active': True
                     }
                 ]
@@ -144,43 +164,48 @@ def create_test_data():
                 print('✅ Raw materials added')
             
             # Add some meals if missing
-            if Meal.query.count() < 5:
-                meals = [
-                    {
-                        'name': 'Chicken Curry',
-                        'name_ar': 'كاري الدجاج',
-                        'description': 'Delicious chicken curry',
-                        'description_ar': 'كاري دجاج لذيذ',
-                        'selling_price': 25.0,
-                        'cost_price': 15.0,
-                        'active': True
-                    },
-                    {
-                        'name': 'Fried Rice',
-                        'name_ar': 'أرز مقلي',
-                        'description': 'Chinese fried rice',
-                        'description_ar': 'أرز مقلي صيني',
-                        'selling_price': 20.0,
-                        'cost_price': 12.0,
-                        'active': True
-                    },
-                    {
-                        'name': 'Vegetable Soup',
-                        'name_ar': 'شوربة خضار',
-                        'description': 'Fresh vegetable soup',
-                        'description_ar': 'شوربة خضار طازجة',
-                        'selling_price': 15.0,
-                        'cost_price': 8.0,
-                        'active': True
-                    }
-                ]
-                
-                for meal_data in meals:
-                    if not Meal.query.filter_by(name=meal_data['name']).first():
-                        meal = Meal(**meal_data)
-                        db.session.add(meal)
-                
-                print('✅ Sample meals added')
+            try:
+                if Meal.query.count() < 5:
+                    uid = None
+                    u = User.query.first()
+                    if u:
+                        uid = u.id
+                    meals = [
+                        {
+                            'name': 'Chicken Curry',
+                            'name_ar': 'كاري الدجاج',
+                            'description': 'Delicious chicken curry',
+                            'selling_price': 25.0,
+                            'active': True,
+                            'user_id': uid or 1
+                        },
+                        {
+                            'name': 'Fried Rice',
+                            'name_ar': 'أرز مقلي',
+                            'description': 'Chinese fried rice',
+                            'selling_price': 20.0,
+                            'active': True,
+                            'user_id': uid or 1
+                        },
+                        {
+                            'name': 'Vegetable Soup',
+                            'name_ar': 'شوربة خضار',
+                            'description': 'Fresh vegetable soup',
+                            'selling_price': 15.0,
+                            'active': True,
+                            'user_id': uid or 1
+                        }
+                    ]
+                    for meal_data in meals:
+                        if not Meal.query.filter_by(name=meal_data['name']).first():
+                            try:
+                                meal = Meal(**meal_data)
+                                db.session.add(meal)
+                            except Exception:
+                                pass
+                    print('✅ Sample meals added')
+            except Exception:
+                pass
             
             # Commit all changes
             db.session.commit()

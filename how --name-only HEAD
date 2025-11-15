@@ -1,0 +1,36 @@
+warning: in the working copy of 'TableManagerWinForms/Program.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'forms.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'run_local.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'run_server.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'static/js/modal-system.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'templates/print/receipt.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'templates/receipt_print.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'templates/table_settings.html', LF will be replaced by CRLF the next time Git touches it
+TableManagerWinForms/MainForm.cs
+TableManagerWinForms/Models/Section.cs
+TableManagerWinForms/Models/Table.cs
+TableManagerWinForms/TableManagerWinForms.csproj
+TableManagerWinForms/obj/Debug/net8.0-windows/TableManagerWinForms.AssemblyInfo.cs
+TableManagerWinForms/obj/Debug/net8.0-windows/TableManagerWinForms.AssemblyInfoInputs.cache
+TableManagerWinForms/obj/Debug/net8.0-windows/TableManagerWinForms.GeneratedMSBuildEditorConfig.editorconfig
+TableManagerWinForms/obj/Debug/net8.0-windows/TableManagerWinForms.assets.cache
+TableManagerWinForms/obj/TableManagerWinForms.csproj.nuget.dgspec.json
+TableManagerWinForms/obj/project.nuget.cache
+app.py
+app/models.py
+app/routes.py
+config.py
+models.py
+run_local.py
+static/js/main.js
+static/js/modal-system.js
+static/js/pos_table.js
+templates/employees.html
+templates/expenses.html
+templates/index.html
+templates/pos_invoice.html
+templates/print/receipt.html
+templates/receipt_print.html
+templates/settings.html
+templates/table_settings.html

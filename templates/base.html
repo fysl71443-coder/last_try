@@ -100,14 +100,11 @@
           {% if current_user.is_authenticated %}
             <span class="me-3 text-muted">{{ _('Welcome') }} {{ current_user.username }}</span>
           {% endif %}
-          <a class="btn btn-outline-secondary" href="?lang=en">English</a>
+        <a class="btn btn-outline-secondary" href="?lang=en">English</a>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnDensityToggle">📏</button>
 
           {% if current_user.is_authenticated and (current_user.role|default('') != 'user') %}
-          <form method="post" action="#" class="d-inline">
-            <button class="btn btn-sm btn-outline-dark" type="button">
-              <i class="fa fa-moon"></i> {{ 'Dark' if (session.get('theme') or (settings.default_theme if settings else 'light'))=='light' else 'Light' }}
-            </button>
-          </form>
+          <button class="btn btn-sm btn-outline-dark" type="button" id="btnThemeToggle">🌙</button>
           {% endif %}
           {% if current_user.is_authenticated %}
             <a class="btn btn-outline-danger" href="{{ url_for('main.logout') }}">{{ _('Logout') }}</a>

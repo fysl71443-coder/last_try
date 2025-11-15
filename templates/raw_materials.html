@@ -28,18 +28,16 @@ body {
 
 <div class="container py-4">
     <!-- شريط التنقل السريع -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <h3 class="mb-0">🥘 {{ _('Raw Materials / المواد الخام') }}</h3>
-        </div>
-        <div class="col-md-6 text-end">
-            <a href="{{ url_for('main.meals') }}" class="btn btn-outline-success me-2">
+    <div class="section-header mb-3">
+        <h3 class="mb-0">🥘 {{ _('Raw Materials / المواد الخام') }}</h3>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('main.meals') }}" class="btn btn-outline-success">
                 🍽️ {{ _('Meals / الوجبات') }}
             </a>
-            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning me-2">
+            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning">
                 🛒 {{ _('Purchases / المشتريات') }}
             </a>
-            <a href="{{ url_for('main.inventory') }}" class="btn btn-outline-info me-2">
+            <a href="{{ url_for('main.inventory') }}" class="btn btn-outline-info">
                 📦 {{ _('Inventory / المخزون') }}
             </a>
             <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
