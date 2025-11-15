@@ -135,7 +135,7 @@ def create_app(config_class=None):
     csrf.exempt('main.salary_receipt_bulk')
     # Flask-Login setup: login view and user loader
     login_manager.login_view = 'main.login'
-    from app.models import User
+    from models import User
     @login_manager.user_loader
     def load_user(user_id):
         try:
@@ -173,6 +173,11 @@ def create_app(config_class=None):
                     ext_db.create_all()
                 except Exception:
                     pass
+    except Exception:
+        pass
+    try:
+        from logging_setup import setup_logging
+        setup_logging(app)
     except Exception:
         pass
 

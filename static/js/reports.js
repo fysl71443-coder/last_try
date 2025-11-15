@@ -145,6 +145,16 @@
     return new URLSearchParams({start_date,end_date,branch,payment_method}).toString();
   }
 
+  function filenameSuffix(){
+    const form = document.querySelector('form');
+    const start = form?.start_date?.value || '';
+    const end = form?.end_date?.value || '';
+    const branch = (form?.branch?.value || 'all').replace(/[^a-zA-Z0-9_-]/g,'');
+    const s = start || 'start';
+    const e = end || 'end';
+    return branch+'_'+s+'_'+e;
+  }
+
   async function loadPurchasesReport(){
     const btn = document.getElementById('btnLoadPurchases');
     try{
@@ -188,7 +198,8 @@
     rows.push([]);
     rows.push(['Payment Totals','Count','Amount','Tax']);
     Object.keys(pays).filter(x=>x).sort().forEach(k=>{ const v=pays[k]; rows.push([k, v.c, Number(v.a.toFixed(2)), Number(v.t.toFixed(2))]); });
-    downloadCsv(rows, 'purchases_report.csv');
+    const suf = filenameSuffix();
+    downloadCsv(rows, 'purchases_report_'+suf+'.csv');
   }
 
   // -------- Expenses --------
@@ -233,7 +244,8 @@
     rows.push([]);
     rows.push(['Payment Totals','Count','Amount']);
     Object.keys(pays).filter(x=>x).sort().forEach(k=>{ const v=pays[k]; rows.push([k, v.c, Number(v.a.toFixed(2))]); });
-    downloadCsv(rows, 'expenses_report.csv');
+    const suf = filenameSuffix();
+    downloadCsv(rows, 'expenses_report_'+suf+'.csv');
   }
 
   // -------- Payroll --------
@@ -356,7 +368,8 @@
     rows.push([]);
     rows.push(['Branch Totals','','Amount','Discount','VAT','Total']);
     Object.keys(branches).filter(x=>x).sort().forEach(k=>{ const v=branches[k]; rows.push([k, '', Number(v.a.toFixed(2)), Number(v.d.toFixed(2)), Number(v.v.toFixed(2)), Number(v.t.toFixed(2))]); });
-    downloadCsv(rows, 'all_invoices.csv');
+    const suf = filenameSuffix();
+    downloadCsv(rows, 'all_invoices_'+suf+'.csv');
   }
 
   // -------- All Purchases (Unified, no branch) --------
@@ -420,7 +433,8 @@
     rows.push([]);
     rows.push(['Payment Totals','Count','Amount','Discount','VAT','Total']);
     Object.keys(pays).filter(x=>x).sort().forEach(k=>{ const v=pays[k]; rows.push([k, Number(v.c), Number(v.a.toFixed(2)), Number(v.d.toFixed(2)), Number(v.v.toFixed(2)), Number(v.t.toFixed(2))]); });
-    downloadCsv(rows, 'all_purchases.csv');
+    const suf = filenameSuffix();
+    downloadCsv(rows, 'all_purchases_'+suf+'.csv');
   }
 
 

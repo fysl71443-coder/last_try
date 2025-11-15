@@ -1,6 +1,7 @@
 from app import db, bcrypt
 from flask_login import UserMixin
 from datetime import datetime
+from models import get_saudi_now
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
@@ -21,8 +22,8 @@ class AppKV(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     k = db.Column(db.String(100), unique=True, nullable=False)
     v = db.Column(db.Text, nullable=False)  # JSON string
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+    updated_at = db.Column(db.DateTime, default=get_saudi_now, onupdate=get_saudi_now)
 
     @classmethod
     def get(cls, key):
@@ -45,7 +46,7 @@ class AppKV(db.Model):
             item = cls.query.filter_by(k=key).first()
             if item:
                 item.v = value_str
-                item.updated_at = datetime.utcnow()
+                item.updated_at = get_saudi_now()
             else:
                 item = cls(k=key, v=value_str)
                 db.session.add(item)
@@ -60,8 +61,8 @@ class TableLayout(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     branch_code = db.Column(db.String(50), nullable=False, unique=True)
     layout_data = db.Column(db.Text, nullable=False)  # JSON string
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+    updated_at = db.Column(db.DateTime, default=get_saudi_now, onupdate=get_saudi_now)
 
     @classmethod
     def get_layout(cls, branch_code):
@@ -84,7 +85,7 @@ class TableLayout(db.Model):
             layout = cls.query.filter_by(branch_code=branch_code).first()
             if layout:
                 layout.layout_data = value_str
-                layout.updated_at = datetime.utcnow()
+                layout.updated_at = get_saudi_now()
             else:
                 layout = cls(branch_code=branch_code, layout_data=value_str)
                 db.session.add(layout)

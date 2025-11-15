@@ -41,6 +41,8 @@
     <div class="col-auto">
       <button type="submit" class="btn btn-primary">{{ _('Print / طباعة') }}</button>
       <button type="button" class="btn btn-outline-success" onclick="openCSV()">{{ _('Export CSV / تصدير CSV') }}</button>
+      <button type="button" class="btn btn-warning" onclick="openDailySales()">{{ _('Daily Sales CSV / المبيعات اليومية CSV') }}</button>
+      <button type="button" class="btn btn-warning" onclick="openDailySalesPDF()">{{ _('Daily Sales PDF / المبيعات اليومية PDF') }}</button>
       <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">{{ _('Back / رجوع') }}</a>
     </div>
   </form>
@@ -74,6 +76,20 @@ function openCSV() {
   if (cat === 'purchases') path = '/reports/print/all-invoices/purchases';
   else if (cat === 'expenses') path = '/reports/print/all-invoices/expenses';
   const url = `${path}?payment_method=${encodeURIComponent(pm)}&start_date=${encodeURIComponent(sd)}&end_date=${encodeURIComponent(ed)}&branch=${encodeURIComponent(br)}&format=csv`;
+  window.open(url, '_blank');
+}
+
+function openDailySales(){
+  const pm = document.getElementById('pm').value || 'all';
+  const br = document.getElementById('branch').value || 'all';
+  const url = `/reports/print/daily-sales?payment_method=${encodeURIComponent(pm)}&branch=${encodeURIComponent(br)}&format=csv`;
+  window.open(url, '_blank');
+}
+
+function openDailySalesPDF(){
+  const pm = document.getElementById('pm').value || 'all';
+  const br = document.getElementById('branch').value || 'all';
+  const url = `/reports/print/daily-sales?payment_method=${encodeURIComponent(pm)}&branch=${encodeURIComponent(br)}&format=pdf`;
   window.open(url, '_blank');
 }
 </script>

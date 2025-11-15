@@ -29,6 +29,10 @@
     .monospace-numbers { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .table-print { font-size: 0.95rem; }
     .table-print tfoot tr { border-top: 2px solid #888; }
+    .items-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .item-card { border: 1px solid #bbb; border-radius: 6px; padding: 6px; background: #fff; }
+    .item-name { font-weight: 600; margin-bottom: 4px; }
+    .item-meta { font-size: 0.85rem; display: grid; grid-template-columns: repeat(3, auto); gap: 4px 12px; }
   </style>
 </head>
 <body>
@@ -40,7 +44,7 @@
           {% if settings and settings.receipt_show_logo and settings.logo_url %}
             <img src="{{ settings.logo_url }}" alt="logo" class="report-logo" />
           {% endif %}
-        </div>
+</div>
         <div class="col">
           <div class="h5 mb-1">{{ settings.company_name or 'Company' }}</div>
           <div class="small text-muted">VAT: {{ settings.tax_number or '-' }}{% if settings.address %} | {{ settings.address }}{% endif %}</div>
@@ -50,6 +54,16 @@
         </div>
       </div>
     </div>
+    <script>
+      document.addEventListener('click', function(e){
+        var btn = e.target.closest('[data-target]');
+        if(!btn) return;
+        var sel = btn.getAttribute('data-target');
+        var el = document.querySelector(sel);
+        if(!el) return;
+        el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+      });
+    </script>
 
     <div class="report-header">
       <div class="d-flex justify-content-between align-items-center">
@@ -63,6 +77,63 @@
       </div>
     </div>
 
+    {% if grouped_invoices %}
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm align-middle table-print">
+        <thead class="table-light">
+          <tr>
+            <th>Branch</th>
+            <th>Date</th>
+            <th>Invoice No.</th>
+            <th>Items</th>
+            <th>Payment</th>
+            <th class="text-end">Subtotal</th>
+            <th class="text-end">Discount</th>
+            <th class="text-end">VAT</th>
+            <th class="text-end">Total</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in grouped_invoices %}
+          {% set _id = 'inv_items_' ~ loop.index0 %}
+          <tr class="table-secondary">
+            <td>{{ inv.branch }}</td>
+            <td>{{ inv.date }}</td>
+            <td>{{ inv.invoice_number }}</td>
+            <td class="text-end monospace-numbers">{{ (inv.item_count or (inv['items']|length)) }}</td>
+            <td>{{ inv.payment_method }}</td>
+            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.subtotal) }}</td>
+            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.discount) }}</td>
+            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.vat) }}</td>
+            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.total) }}</td>
+            <td><button type="button" class="btn btn-sm btn-link p-0" data-target="#{{ _id }}">🔽</button></td>
+          </tr>
+          <tr class="table-row-details">
+            <td colspan="10">
+              <div id="{{ _id }}" style="display:none;">
+                <div class="items-grid">
+                  {% for it in inv['items'] %}
+                  <div class="item-card">
+                    <div class="item-name">{{ it.item_name }}</div>
+                    <div class="item-meta">
+                      <div>Qty: <span class="monospace-numbers">{{ "%.2f"|format(it.quantity) }}</span></div>
+                      <div>Amt: <span class="monospace-numbers">{{ "%.2f"|format(it.amount) }}</span></div>
+                      {% if it.discount and it.discount > 0 %}<div>Disc: <span class="monospace-numbers">{{ "%.2f"|format(it.discount) }}</span></div>{% endif %}
+                      <div>VAT: <span class="monospace-numbers">{{ "%.2f"|format(it.vat) }}</span></div>
+                      <div>Total: <span class="monospace-numbers">{{ "%.2f"|format(it.total) }}</span></div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
     <div class="table-responsive">
       <table class="table table-bordered table-striped table-sm align-middle table-print">
         <thead class="table-light">
@@ -97,6 +168,7 @@
         {% endif %}
       </table>
     </div>
+    {% endif %}
 
     {% if item_totals %}
     <div class="mt-3">
@@ -125,6 +197,43 @@
 	      </table>
 	    </div>
 	    {% endif %}
+
+    {% if branch_totals %}
+    <div class="mt-3">
+      <h6>Branch Totals</h6>
+      <table class="table table-sm table-bordered w-auto table-print">
+        <thead class="table-light"><tr><th>Branch</th><th class="text-end">Amount</th><th class="text-end">Discount</th><th class="text-end">VAT</th><th class="text-end">Total</th></tr></thead>
+        <tbody>
+          {% for br, t in branch_totals|dictsort %}
+          <tr>
+            <td>{{ br }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(t.amount) }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(t.discount) }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(t.vat) }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(t.total) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {% if overall %}
+    <div class="mt-3">
+      <h6>Grand Totals</h6>
+      <table class="table table-sm table-bordered w-auto table-print">
+        <thead class="table-light"><tr><th class="text-end">Amount</th><th class="text-end">Discount</th><th class="text-end">VAT</th><th class="text-end">Total</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.amount or 0) }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.discount or 0) }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.vat or 0) }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.total or 0) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
 
   </div>
 

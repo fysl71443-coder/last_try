@@ -79,9 +79,10 @@ def start_server():
         print("⏹️  Press Ctrl+C to stop the server")
         print("="*60)
         
-        # Import and run the app
-        import app
-        app.app.run(
+        # Import and run the app via factory
+        from app import create_app
+        app = create_app()
+        app.run(
             host='127.0.0.1',
             port=5000,
             debug=False,

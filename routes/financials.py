@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request
 from datetime import datetime, timedelta
+from models import get_saudi_now
 from sqlalchemy import func
 from extensions import db
 from models import Account, LedgerEntry, SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment
@@ -8,7 +9,7 @@ bp = Blueprint('financials', __name__, url_prefix='/financials')
 
 
 def period_range(kind: str):
-    today = datetime.utcnow().date()
+    today = get_saudi_now().date()
     if kind == 'today':
         return today, today
     if kind == 'this_week':
@@ -91,7 +92,7 @@ def income_statement():
 @bp.route('/balance_sheet')
 def balance_sheet():
     asof_str = request.args.get('date')
-    today = datetime.utcnow().date()
+    today = get_saudi_now().date()
     try:
         asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
     except Exception:
@@ -120,7 +121,7 @@ def balance_sheet():
 @bp.route('/trial_balance')
 def trial_balance():
     asof_str = request.args.get('date')
-    today = datetime.utcnow().date()
+    today = get_saudi_now().date()
     try:
         asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
     except Exception:
@@ -148,7 +149,7 @@ def trial_balance():
 @bp.route('/print/trial_balance')
 def print_trial_balance():
     asof_str = request.args.get('date')
-    today = datetime.utcnow().date()
+    today = get_saudi_now().date()
     try:
         asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
     except Exception:

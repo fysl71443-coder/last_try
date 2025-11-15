@@ -8,6 +8,7 @@ def get_saudi_now():
     """Get current datetime in Saudi Arabia timezone"""
     return datetime.now(KSA_TZ)
 from flask_login import UserMixin
+from app import bcrypt
 from extensions import db
 
 class User(db.Model, UserMixin):
@@ -21,14 +22,14 @@ class User(db.Model, UserMixin):
     last_login_at = db.Column(db.DateTime, nullable=True)
     active = db.Column(db.Boolean, default=True)
 
-    def set_password(self, password, bcrypt):
+    def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
 
-    def check_password(self, password, bcrypt):
+    def check_password(self, password):
         return bcrypt.check_password_hash(self.password_hash, password)
 
     def last_login(self):
-        self.last_login_at = datetime.utcnow()
+        self.last_login_at = get_saudi_now()
 
 class Invoice(db.Model):
     __tablename__ = 'invoices'
@@ -40,8 +41,8 @@ class Invoice(db.Model):
     paid_amount = db.Column(db.Float, nullable=False, default=0.0)
     status = db.Column(db.String(20), default='pending')  # pending, partial, paid
     due_date = db.Column(db.Date, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+    updated_at = db.Column(db.DateTime, default=get_saudi_now, onupdate=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     def __repr__(self):
@@ -62,10 +63,10 @@ class Invoice(db.Model):
 class SalesInvoice(db.Model):
     __tablename__ = 'sales_invoices'
     id = db.Column(db.Integer, primary_key=True)
-    invoice_number = db.Column(db.String(50), unique=True, nullable=False)
-    date = db.Column(db.Date, default=lambda: get_saudi_now().date())
+    invoice_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    date = db.Column(db.Date, default=lambda: get_saudi_now().date(), index=True)
     payment_method = db.Column(db.String(20), nullable=False)
-    branch = db.Column(db.String(50), nullable=False)  # 'place_india' or 'china_town'
+    branch = db.Column(db.String(50), nullable=False, index=True)  # 'place_india' or 'china_town'
     table_number = db.Column(db.Integer, nullable=True)  # Table number
     customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=True)  # Customer reference
     customer_name = db.Column(db.String(100), nullable=True)
@@ -86,7 +87,7 @@ class SalesInvoice(db.Model):
 class SalesInvoiceItem(db.Model):
     __tablename__ = 'sales_invoice_items'
     id = db.Column(db.Integer, primary_key=True)
-    invoice_id = db.Column(db.Integer, db.ForeignKey('sales_invoices.id'), nullable=False)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('sales_invoices.id'), nullable=False, index=True)
     product_name = db.Column(db.String(200), nullable=False)
     quantity = db.Column(db.Numeric(10, 2), nullable=False)
     price_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
@@ -125,7 +126,7 @@ class Product(db.Model):
     category = db.Column(db.String(100), nullable=True)
     barcode = db.Column(db.String(50), nullable=True)
     active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
 
     def __repr__(self):
         return f'<Product {self.name}>'
@@ -146,7 +147,7 @@ class RawMaterial(db.Model):
     stock_quantity = db.Column(db.Numeric(12, 4), default=0)  # Current stock quantity
     category = db.Column(db.String(100), nullable=True)
     active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
 
     def __repr__(self):
         return f'<RawMaterial {self.name}>'
@@ -168,7 +169,7 @@ class Meal(db.Model):
     profit_margin_percent = db.Column(db.Numeric(5, 2), nullable=False, default=30.00)  # Default 30%
     selling_price = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # Cost + profit margin
     active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     # Relationship to ingredients
@@ -225,7 +226,7 @@ class PurchaseInvoice(db.Model):
     __tablename__ = 'purchase_invoices'
     id = db.Column(db.Integer, primary_key=True)
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
-    date = db.Column(db.Date, default=datetime.utcnow)
+    date = db.Column(db.Date, default=lambda: get_saudi_now().date(), index=True)
     supplier_name = db.Column(db.String(200), nullable=True)
     supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
     payment_method = db.Column(db.String(20), nullable=False)  # مدى, فيزا, بنك, كاش, ...
@@ -234,7 +235,7 @@ class PurchaseInvoice(db.Model):
     discount_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     total_after_tax_discount = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(db.String(20), default='unpaid')  # paid, partial, unpaid
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     supplier = db.relationship('Supplier', lazy=True)
@@ -265,14 +266,14 @@ class ExpenseInvoice(db.Model):
     __tablename__ = 'expense_invoices'
     id = db.Column(db.Integer, primary_key=True)
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
-    date = db.Column(db.Date, default=datetime.utcnow)
+    date = db.Column(db.Date, default=lambda: get_saudi_now().date(), index=True)
     payment_method = db.Column(db.String(20), nullable=False)  # cash, bank, visa, mada, etc.
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
     tax_amount = db.Column(db.Numeric(12, 2), nullable=False)
     discount_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     total_after_tax_discount = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(db.String(20), default='paid')  # paid, pending
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     items = db.relationship('ExpenseInvoiceItem', backref='invoice', lazy=True)
@@ -409,16 +410,16 @@ class EmployeeSalaryDefault(db.Model):
     base_salary = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     allowances = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     deductions = db.Column(db.Numeric(12, 2), nullable=False, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
 
 # Payments
 class Payment(db.Model):
     __tablename__ = 'payments'
     id = db.Column(db.Integer, primary_key=True)
-    invoice_id = db.Column(db.Integer, nullable=False)
-    invoice_type = db.Column(db.String(20), nullable=False)  # sales, purchase, expense, salary
+    invoice_id = db.Column(db.Integer, nullable=False, index=True)
+    invoice_type = db.Column(db.String(20), nullable=False, index=True)  # sales, purchase, expense, salary
     amount_paid = db.Column(db.Numeric(12, 2), nullable=False)
-    payment_date = db.Column(db.DateTime, default=datetime.utcnow)
+    payment_date = db.Column(db.DateTime, default=get_saudi_now)
     payment_method = db.Column(db.String(20))  # cash, visa, bank, etc.
 
     def __repr__(self):
@@ -431,8 +432,8 @@ class Table(db.Model):
     branch_code = db.Column(db.String(20), nullable=False)  # place_india, china_town
     table_number = db.Column(db.String(20), nullable=False)  # Changed to String to support custom numbering
     status = db.Column(db.String(20), default='available')  # available, reserved, occupied
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+    updated_at = db.Column(db.DateTime, default=get_saudi_now, onupdate=get_saudi_now)
 
     __table_args__ = (db.UniqueConstraint('branch_code', 'table_number', name='unique_branch_table'),)
 
@@ -447,8 +448,8 @@ class TableSettings(db.Model):
     table_count = db.Column(db.Integer, default=20)
     numbering_system = db.Column(db.String(20), default='numeric')  # numeric, alpha, custom
     custom_numbers = db.Column(db.Text)  # JSON string for custom table numbers
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+    updated_at = db.Column(db.DateTime, default=get_saudi_now, onupdate=get_saudi_now)
 
     def __repr__(self):
         return f'<TableSettings {self.branch_code}: {self.table_count} tables ({self.numbering_system})>'
@@ -460,8 +461,8 @@ class TableSection(db.Model):
     branch_code = db.Column(db.String(20), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     sort_order = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+    updated_at = db.Column(db.DateTime, default=get_saudi_now, onupdate=get_saudi_now)
 
     __table_args__ = (
         db.UniqueConstraint('branch_code', 'name', name='uq_section_branch_name'),
@@ -498,8 +499,8 @@ class DraftOrder(db.Model):
     customer_phone = db.Column(db.String(20), nullable=True)
     payment_method = db.Column(db.String(50), nullable=False, default='CASH')  # NOT NULL with default
     status = db.Column(db.String(20), nullable=False, default='draft')  # NOT NULL with default
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+    updated_at = db.Column(db.DateTime, default=get_saudi_now, onupdate=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     items = db.relationship('DraftOrderItem', backref='draft_order', lazy=True, cascade='all, delete-orphan')
@@ -599,7 +600,7 @@ class Supplier(db.Model):
     payment_method = db.Column(db.String(20), default='CASH')  # BANK/CASH/TRANSFER
     notes = db.Column(db.Text, nullable=True)
     active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
 
     def __repr__(self):
         return f'<Supplier {self.name}>'
@@ -612,7 +613,7 @@ class Customer(db.Model):
     phone = db.Column(db.String(50), nullable=True)
     discount_percent = db.Column(db.Numeric(5, 2), default=0)
     active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
 
     def __repr__(self):
         return f'<Customer {self.name}>'
@@ -723,7 +724,7 @@ class UserPermission(db.Model):
 class Account(db.Model):
     __tablename__ = 'accounts'
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(20), unique=True, nullable=False)
+    code = db.Column(db.String(20), unique=True, nullable=False, index=True)
     name = db.Column(db.String(200), nullable=False)
     type = db.Column(db.String(30), nullable=False)  # ASSET, LIABILITY, EQUITY, REVENUE, COGS, EXPENSE, OTHER_INCOME, OTHER_EXPENSE, TAX
 
@@ -733,7 +734,7 @@ class Account(db.Model):
 class LedgerEntry(db.Model):
     __tablename__ = 'ledger_entries'
     id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    date = db.Column(db.Date, nullable=False, default=lambda: get_saudi_now().date(), index=True)
     account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=False)
     description = db.Column(db.String(500))
     debit = db.Column(db.Numeric(12, 2), default=0)

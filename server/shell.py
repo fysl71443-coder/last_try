@@ -6,11 +6,13 @@ import json
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    from app import create_app, db, get_saudi_now, generate_branch_invoice_number
+    from app import create_app
+    from extensions import db
     app = create_app()
 except Exception:
-    from app import app, db, get_saudi_now, generate_branch_invoice_number  # fallback if app factory not used
-from models import User, Meal, SalesInvoice, SalesInvoiceItem, Payment
+    from app import app
+    from extensions import db
+from models import User, Meal, SalesInvoice, SalesInvoiceItem, Payment, get_saudi_now
 
 def get_user(identifier):
     """ احصل على المستخدم بواسطة username أو id """
@@ -29,7 +31,6 @@ def get_user(identifier):
 def create_invoice(user, branch_code, items, customer_name=None, customer_phone=None):
     """ إنشاء فاتورة مباشرة في قاعدة البيانات """
     with app.app_context():
-        from datetime import datetime as _dt, timezone as _tz
 
         # توليد رقم الفاتورة
         last = SalesInvoice.query.order_by(SalesInvoice.id.desc()).first()
@@ -40,7 +41,7 @@ def create_invoice(user, branch_code, items, customer_name=None, customer_phone=
                 new_num = last_num + 1
             except:
                 pass
-        _now = _dt.now(_tz.utc)
+        _now = get_saudi_now()
         invoice_number = f"SAL-{_now.year}-{new_num:03d}"
 
         # جمع العناصر وحساب الإجمالي
@@ -109,12 +110,13 @@ def create_invoice(user, branch_code, items, customer_name=None, customer_phone=
         print(f"✅ Invoice created: {invoice_number}, ID={inv.id}")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Usage: python shell.py <username_or_id> <meal_id:qty> [meal_id:qty ...]")
+    if len(sys.argv) < 4:
+        print("Usage: python shell.py <username_or_id> <branch_code> <meal_id:qty> [meal_id:qty ...]")
         sys.exit(1)
 
     identifier = sys.argv[1]
-    item_args = sys.argv[2:]
+    branch_code = sys.argv[2]
+    item_args = sys.argv[3:]
     items = []
     for arg in item_args:
         try:
@@ -126,5 +128,4 @@ if __name__ == "__main__":
 
     user = get_user(identifier)
 
-    # تجربة بفرع "1"
-    create_invoice(user, branch_code="1", items=items)
+    create_invoice(user, branch_code=branch_code, items=items)

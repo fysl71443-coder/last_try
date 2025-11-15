@@ -189,4 +189,91 @@
         <div class="small muted">
           {{ _('Phone') }}: {{ (settings.china_town_phone1 or '') ~ ((' / ' ~ settings.china_town_phone2) if settings.china_town_phone2 else '') }}
         </div>
+        {% endif %}
+      {% elif is_india %}
+        {% if settings and (settings.place_india_phone1 or settings.place_india_phone2) %}
+        <div class="small muted">
+          {{ _('Phone') }}: {{ (settings.place_india_phone1 or '') ~ ((' / ' ~ settings.place_india_phone2) if settings.place_india_phone2 else '') }}
+        </div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    {% if date_time %}
+    <div class="center small muted">{{ date_time }}</div>
+    {% endif %}
+    {% if display_invoice_number %}
+    <div class="center small muted">{{ _('Invoice') }}: {{ display_invoice_number }}</div>
+    {% endif %}
+    {% if inv.table_number %}
+    <div class="center small muted">{{ _('Table') }}: {{ inv.table_number }}</div>
+    {% endif %}
+    <hr/>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="left">{{ _('Item') }}</th>
+          <th class="center-text">{{ _('Qty') }}</th>
+          <th class="right">{{ _('Amount') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in items %}
+        <tr>
+          <td class="left">{{ r.product_name }}</td>
+          <td class="center-text">{{ (r.quantity or 0)|int }}</td>
+          <td class="right">{{ '%.2f'|format(r.total_price or 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <hr/>
+    <table>
+      <tr class="total-row">
+        <td class="left">{{ _('Subtotal') }}</td>
+        <td></td>
+        <td class="right">{{ '%.2f'|format(inv.total_before_tax or 0) }}</td>
+      </tr>
+      <tr class="total-row">
+        <td class="left">{{ _('VAT') }}</td>
+        <td></td>
+        <td class="right">{{ '%.2f'|format(inv.tax_amount or 0) }}</td>
+      </tr>
+      {% if inv.discount_amount and inv.discount_amount > 0 %}
+      <tr class="total-row">
+        <td class="left">{{ _('Discount') }}</td>
+        <td></td>
+        <td class="right">-{{ '%.2f'|format(inv.discount_amount) }}</td>
+      </tr>
+      {% endif %}
+      <tr class="total-row grand-total">
+        <td class="left">{{ _('Total') }}</td>
+        <td></td>
+        <td class="right">{{ '%.2f'|format(inv.total_after_tax_discount or 0) }}</td>
+      </tr>
+    </table>
+
+    {% if paid and inv.payment_method %}
+    <div class="center small">{{ _('Payment') }}: {{ (inv.payment_method or 'CASH')|upper }}</div>
+    {% endif %}
+
+    {% if qr_data_url %}
+    <div class="center"><img src="{{ qr_data_url }}" alt="QR" style="width:90px;height:90px"/></div>
+    {% endif %}
+
+    <div class="footer center">
+      {% if settings and settings.receipt_footer_text %}
+        {{ settings.receipt_footer_text }}
+      {% elif settings and settings.footer_message %}
+        {{ settings.footer_message }}
+      {% else %}
+        THANK YOU FOR VISIT
+      {% endif %}
+    </div>
+
+    <div class="no-print center">
+      <button onclick="window.print()">{{ _('Print') }}</button>
+    </div>
        

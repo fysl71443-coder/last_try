@@ -10,9 +10,11 @@ from sqlalchemy.exc import IntegrityError
 from app import db, csrf
 from app import __init__ as app_init  # for template globals, including can()
 ext_db = None
-from app.models import User, AppKV, TableLayout
+from app.models import AppKV, TableLayout
+from models import User
 from models import OrderInvoice
 from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault, DepartmentRate, EmployeeHours
+from models import get_saudi_now
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
 main = Blueprint('main', __name__)
@@ -305,14 +307,7 @@ except Exception:  # pragma: no cover
     _pytz = None
 from datetime import datetime as _dt
 
-def get_saudi_now():
-    """Return timezone-aware now() in Asia/Riyadh; falls back to UTC naive on error."""
-    try:
-        if _pytz is not None:
-            return _dt.now(_pytz.timezone("Asia/Riyadh"))
-    except Exception:
-        pass
-    return _dt.utcnow()
+# use get_saudi_now from models
 
 # ---------- Table status helpers (transactional & safe for concurrency) ----------
 def _set_table_status_concurrent(branch_code: str, table_number: str, status: str) -> None:
@@ -484,9 +479,14 @@ def login():
     except Exception:
         pass
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = User.query.filter_by(username=username).first()
+        username = (request.form.get('username') or '').strip()
+        password = (request.form.get('password') or '').strip()
+        user = None
+        if username:
+            try:
+                user = User.query.filter(func.lower(User.username) == username.lower()).first()
+            except Exception:
+                user = User.query.filter_by(username=username).first()
 
         # Safe bootstrap: if DB has no users at all, allow creating default admin/admin123 on first login
         if not user:
@@ -507,12 +507,24 @@ def login():
                     db.session.rollback()
                     flash('خطأ في تهيئة المستخدم الافتراضي', 'danger')
 
-        if user and user.check_password(password):
+        if user and password and user.check_password(password):
             login_user(user)
             return redirect(url_for('main.dashboard'))
         else:
             flash('خطأ في اسم المستخدم أو كلمة المرور', 'danger')
     return render_template('login.html')
+
+@main.route('/debug/db', methods=['GET'], endpoint='debug_db')
+def debug_db():
+    try:
+        uri = current_app.config.get('SQLALCHEMY_DATABASE_URI')
+    except Exception:
+        uri = None
+    try:
+        cnt = int(User.query.count())
+    except Exception:
+        cnt = -1
+    return jsonify({'uri': uri, 'users_count': cnt})
 
 @main.route('/logout')
 @login_required
@@ -4131,7 +4143,7 @@ def print_receipt(invoice_number):
     except Exception:
         s = None
     branch_name = BRANCH_LABELS.get(getattr(inv, 'branch', None) or '', getattr(inv, 'branch', ''))
-    dt_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    dt_str = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
     # Prepare embedded logo as data URL for more reliable thermal printing
     logo_data_url = None
     try:
@@ -6248,6 +6260,57 @@ def reports_print_all_invoices_sales():
     except Exception:
         item_totals = {}
 
+    grouped_invoices = []
+    try:
+        inv_map = {}
+        for inv, it in results:
+            key = getattr(inv, 'invoice_number', None) or str(getattr(inv, 'id', ''))
+            if key not in inv_map:
+                if getattr(inv, 'created_at', None):
+                    date_s = inv.created_at.date().isoformat()
+                elif getattr(inv, 'date', None):
+                    date_s = inv.date.isoformat()
+                else:
+                    date_s = ''
+                branch = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
+                subtotal = float(inv_base.get(inv.id, 0.0) or 0.0)
+                disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+                vat = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
+                total = float(getattr(inv, 'total_after_tax_discount', 0.0) or (subtotal - disc + vat))
+                inv_map[key] = {
+                    'branch': branch,
+                    'date': date_s,
+                    'invoice_number': getattr(inv, 'invoice_number', key),
+                    'payment_method': (inv.payment_method or '').upper(),
+                    'subtotal': round(subtotal, 2),
+                    'discount': round(disc, 2),
+                    'vat': round(vat, 2),
+                    'total': round(total, 2),
+                    'items': []
+                }
+            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
+            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
+            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+            inv_vat  = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
+            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
+                disc_part = inv_disc * (amount / base_total)
+                vat_part  = inv_vat  * (amount / base_total)
+            else:
+                disc_part = float(getattr(it, 'discount', 0.0) or 0.0)
+                vat_part  = float(getattr(it, 'tax', 0.0) or 0.0)
+            line_total = max(amount - disc_part, 0.0) + vat_part
+            inv_map[key]['items'].append({
+                'item_name': it.product_name,
+                'quantity': float(it.quantity or 0.0),
+                'amount': round(amount, 2),
+                'discount': round(disc_part, 2),
+                'vat': round(vat_part, 2),
+                'total': round(line_total, 2),
+            })
+        grouped_invoices = list(inv_map.values())
+    except Exception:
+        grouped_invoices = []
+
     meta = {
         'title': 'Sales Invoices (All) — Print',
         'payment_method': payment_method or 'all',
@@ -6302,7 +6365,246 @@ def reports_print_all_invoices_sales():
                            payment_method=meta['payment_method'], branch=meta['branch'],
                            columns=columns, data=data, totals=totals, totals_columns=totals_columns,
                            totals_colspan=totals_colspan, payment_totals=payment_totals,
-                           item_totals=item_totals)
+                           item_totals=item_totals, grouped_invoices=grouped_invoices)
+
+
+@main.route('/reports/print/daily-sales', methods=['GET'], endpoint='reports_print_daily_sales')
+@login_required
+def reports_print_daily_sales():
+    pm = (request.args.get('payment_method') or 'all').strip().lower()
+    branch = (request.args.get('branch') or 'all').strip().lower()
+    fmt = (request.args.get('format') or '').strip().lower()
+    now = get_saudi_now()
+    from datetime import datetime as _dt, timedelta as _td
+    try:
+        from models import KSA_TZ
+        tz = KSA_TZ
+    except Exception:
+        tz = getattr(now, 'tzinfo', None)
+    anchor = now.date() if now.hour >= 11 else (now - _td(days=1)).date()
+    start_dt = tz.localize(_dt(anchor.year, anchor.month, anchor.day, 11, 0, 0)) if hasattr(tz, 'localize') else _dt(anchor.year, anchor.month, anchor.day, 11, 0, 0)
+    end_dt = start_dt + _td(hours=14)
+    rows = []
+    results = []
+    inv_base = {}
+    branch_totals = {}
+    overall = {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0}
+    try:
+        q = db.session.query(SalesInvoice, SalesInvoiceItem).join(
+            SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id
+        )
+        if pm and pm != 'all':
+            q = q.filter(func.lower(SalesInvoice.payment_method) == pm)
+        if branch and branch != 'all':
+            q = q.filter(func.lower(SalesInvoice.branch) == branch)
+        if hasattr(SalesInvoice, 'created_at'):
+            q = q.filter(SalesInvoice.created_at >= start_dt, SalesInvoice.created_at < end_dt)
+            q = q.order_by(SalesInvoice.created_at.asc())
+        else:
+            q = q.filter(SalesInvoice.date.in_([start_dt.date(), end_dt.date()]))
+            q = q.order_by(SalesInvoice.date.asc())
+        results = q.all()
+        for inv, it in results:
+            line_base = float(it.price_before_tax or 0.0) * float(it.quantity or 0.0)
+            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
+        for inv, it in results:
+            b = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
+            if getattr(inv, 'created_at', None):
+                date_s = inv.created_at.strftime('%Y-%m-%d %H:%M')
+            elif getattr(inv, 'date', None):
+                date_s = inv.date.isoformat()
+            else:
+                date_s = ''
+            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
+            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
+            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+            inv_vat  = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
+            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
+                disc = inv_disc * (amount / base_total)
+                vat  = inv_vat  * (amount / base_total)
+            else:
+                disc = float(getattr(it, 'discount', 0.0) or 0.0)
+                vat  = float(getattr(it, 'tax', 0.0) or 0.0)
+            base_after_disc = max(amount - disc, 0.0)
+            total = base_after_disc + vat
+            pmu = (inv.payment_method or '').upper()
+            rows.append({
+                'branch': b,
+                'date': date_s,
+                'invoice_number': inv.invoice_number,
+                'item_name': it.product_name,
+                'quantity': float(it.quantity or 0.0),
+                'amount': amount,
+                'discount': round(disc, 2),
+                'vat': round(vat, 2),
+                'total': round(total, 2),
+                'payment_method': pmu,
+            })
+            bt = branch_totals.setdefault(b, {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0})
+            bt['amount'] += amount; bt['discount'] += disc; bt['vat'] += vat; bt['total'] += total
+            overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += total
+    except Exception:
+        pass
+    try:
+        settings = Settings.query.first()
+    except Exception:
+        settings = None
+    payment_totals = {}
+    for r in rows:
+        pmu = (r.get('payment_method') or '').upper()
+        payment_totals[pmu] = payment_totals.get(pmu, 0.0) + float(r.get('total') or 0.0)
+    item_totals = {}
+    try:
+        for r in rows:
+            name = (r.get('item_name') or '').strip()
+            qty = float(r.get('quantity') or 0.0)
+            if name:
+                item_totals[name] = item_totals.get(name, 0.0) + qty
+    except Exception:
+        item_totals = {}
+    meta = {
+        'title': 'Daily Sales — Print',
+        'payment_method': pm or 'all',
+        'branch': branch or 'all',
+        'start_date': start_dt.strftime('%Y-%m-%d %H:%M'),
+        'end_date': end_dt.strftime('%Y-%m-%d %H:%M'),
+        'generated_at': now.strftime('%Y-%m-%d %H:%M')
+    }
+    inv_map = {}
+    try:
+        for inv, it in results:
+            key = getattr(inv, 'invoice_number', None) or str(getattr(inv, 'id', ''))
+            if key not in inv_map:
+                b = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
+                if getattr(inv, 'created_at', None):
+                    date_s = inv.created_at.strftime('%Y-%m-%d %H:%M')
+                elif getattr(inv, 'date', None):
+                    date_s = inv.date.isoformat()
+                else:
+                    date_s = ''
+                subtotal = float(inv_base.get(inv.id, 0.0) or 0.0)
+                disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+                vat = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
+                total = float(getattr(inv, 'total_after_tax_discount', 0.0) or (subtotal - disc + vat))
+                inv_map[key] = {
+                    'branch': b,
+                    'date': date_s,
+                    'invoice_number': getattr(inv, 'invoice_number', key),
+                    'payment_method': (inv.payment_method or '').upper(),
+                    'subtotal': round(subtotal, 2),
+                    'discount': round(disc, 2),
+                    'vat': round(vat, 2),
+                    'total': round(total, 2),
+                    'items': [],
+                    'item_count': 0
+                }
+            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
+            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
+            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+            inv_vat  = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
+            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
+                disc_part = inv_disc * (amount / base_total)
+                vat_part  = inv_vat  * (amount / base_total)
+            else:
+                disc_part = float(getattr(it, 'discount', 0.0) or 0.0)
+                vat_part  = float(getattr(it, 'tax', 0.0) or 0.0)
+            line_total = max(amount - disc_part, 0.0) + vat_part
+            inv_map[key]['items'].append({
+                'item_name': it.product_name,
+                'quantity': float(it.quantity or 0.0),
+                'amount': round(amount, 2),
+                'discount': round(disc_part, 2),
+                'vat': round(vat_part, 2),
+                'total': round(line_total, 2),
+            })
+            inv_map[key]['item_count'] = int(inv_map[key].get('item_count', 0)) + 1
+        grouped_invoices = list(inv_map.values())
+    except Exception:
+        grouped_invoices = []
+    if fmt == 'csv':
+        try:
+            import io, csv
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(['Branch','Date','Invoice No.','Items','Payment','Subtotal','Discount','VAT','Total'])
+            for inv in grouped_invoices:
+                writer.writerow([
+                    inv.get('branch',''),
+                    inv.get('date',''),
+                    inv.get('invoice_number',''),
+                    int(inv.get('item_count') or (len(inv.get('items') or []))),
+                    inv.get('payment_method',''),
+                    inv.get('subtotal',0.0),
+                    inv.get('discount',0.0),
+                    inv.get('vat',0.0),
+                    inv.get('total',0.0)
+                ])
+            from flask import Response
+            fname = f"daily_sales_{anchor.isoformat()}.csv"
+            return Response(output.getvalue(), mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+        except Exception:
+            pass
+    if fmt == 'pdf':
+        try:
+            import io
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.units import mm
+            buffer = io.BytesIO()
+            p = canvas.Canvas(buffer, pagesize=A4)
+            w, h = A4
+            y = h - 20*mm
+            p.setFont("Helvetica-Bold", 14)
+            p.drawString(20*mm, y, "Daily Sales Report")
+            y -= 8*mm
+            p.setFont("Helvetica", 10)
+            p.drawString(20*mm, y, f"Period: {meta['start_date']} → {meta['end_date']}")
+            y -= 6*mm
+            p.drawString(20*mm, y, f"Generated: {meta['generated_at']}")
+            y -= 10*mm
+            p.setFont("Helvetica-Bold", 9)
+            headers = ["Branch","Date","Invoice","Items","PM","Subtotal","Discount","VAT","Total"]
+            xs = [10*mm, 30*mm, 70*mm, 100*mm, 115*mm, 130*mm, 150*mm, 170*mm, 190*mm]
+            for i, hdr in enumerate(headers):
+                p.drawString(xs[i], y, hdr)
+            y -= 5*mm
+            p.setFont("Helvetica", 9)
+            for inv in grouped_invoices:
+                row = [
+                    str(inv.get('branch','')),
+                    str(inv.get('date','')),
+                    str(inv.get('invoice_number','')),
+                    str(int(inv.get('item_count') or (len(inv.get('items') or [])))) ,
+                    str(inv.get('payment_method','')),
+                    f"{inv.get('subtotal',0.0):.2f}",
+                    f"{inv.get('discount',0.0):.2f}",
+                    f"{inv.get('vat',0.0):.2f}",
+                    f"{inv.get('total',0.0):.2f}",
+                ]
+                if y < 20*mm:
+                    p.showPage(); y = h - 20*mm; p.setFont("Helvetica", 9)
+                for i, val in enumerate(row):
+                    p.drawString(xs[i], y, val)
+                y -= 5*mm
+            y -= 6*mm
+            p.setFont("Helvetica-Bold", 10)
+            p.drawString(130*mm, y, f"Totals: {overall['total']:.2f}")
+            p.showPage(); p.save()
+            pdf_bytes = buffer.getvalue()
+            from flask import Response
+            fname = f"daily_sales_{anchor.isoformat()}.pdf"
+            return Response(pdf_bytes, mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+        except Exception:
+            pass
+    return render_template('print_report.html', report_title=meta['title'], settings=settings,
+                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
+                           payment_method=meta['payment_method'], branch=meta['branch'],
+                           columns=['Branch','Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment'], data=rows,
+                           totals={'Amount': overall['amount'], 'Discount': overall['discount'], 'VAT': overall['vat'], 'Total': overall['total']},
+                           totals_columns=['Amount','Discount','VAT','Total'], totals_colspan=6,
+                           payment_totals=payment_totals, item_totals=item_totals,
+                           branch_totals=branch_totals, overall=overall,
+                           grouped_invoices=grouped_invoices, summary_mode=True)
 
 
 @main.route('/reports/print/all-invoices/purchases', methods=['GET'], endpoint='reports_print_all_invoices_purchases')
