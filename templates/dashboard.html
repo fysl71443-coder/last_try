@@ -26,9 +26,48 @@ body {
 </style>
 
 <div class="container py-4">
-  <h3 class="mb-4">{{ _('Dashboard / لوحة التحكم') }}</h3>
+  <div class="section-header mb-3">
+    <h3 class="mb-0">{{ _('Dashboard / لوحة التحكم') }}</h3>
+  </div>
 
-  
+  <!-- شريط التنقل السريع -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="card-title mb-3">🚀 {{ _('Quick Access / الوصول السريع') }}</h6>
+          <div class="d-flex flex-wrap gap-2">
+            {% if can('sales','view') %}
+            <a href="{{ url_for('main.sales') }}" class="btn btn-primary btn-sm">
+              💰 {{ _('New Sale / مبيعة جديدة') }}
+            </a>
+            {% endif %}
+            {% if can('purchases','view') %}
+            <a href="{{ url_for('main.purchases') }}" class="btn btn-warning btn-sm">
+              🛒 {{ _('New Purchase / شراء جديد') }}
+            </a>
+            {% endif %}
+            {% if can('inventory','view') %}
+            <a href="{{ url_for('main.raw_materials') }}" class="btn btn-success btn-sm">
+              🥘 {{ _('Add Material / إضافة مادة') }}
+            </a>
+            <a href="{{ url_for('main.meals') }}" class="btn btn-info btn-sm">
+              🍽️ {{ _('Create Meal / إنشاء وجبة') }}
+            </a>
+            <a href="{{ url_for('main.inventory') }}" class="btn btn-secondary btn-sm">
+              📦 {{ _('View Inventory / عرض المخزون') }}
+            </a>
+            {% endif %}
+            {% if can('expenses','view') %}
+            <a href="{{ url_for('main.expenses') }}" class="btn btn-danger btn-sm">
+              💸 {{ _('Add Expense / إضافة مصروف') }}
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="row g-4">
     {% if can('sales','view') %}
@@ -61,8 +100,8 @@ body {
 	          <h6>{{ _('Suppliers / الموردون') }}</h6>
 	        </div>
 	      </a>
-	    </div>
     {% endif %}
+	    </div>
 
 
     {% if can('expenses','view') %}
@@ -98,18 +137,16 @@ body {
     </div>
     {% endif %}
 
-    {% if can('employees','view') %}
+    {% if can('salaries','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('main.employees') }}" class="text-decoration-none text-dark">
         <div class="dashboard-card">
-          <div class="dashboard-icon">🧑‍💼</div>
-          <h6>{{ _('Employees / الموظفون') }}</h6>
+          <div class="dashboard-icon">👨‍💼</div>
+          <h6>{{ _('Employees & Salaries / الموظفين والرواتب') }}</h6>
         </div>
       </a>
     </div>
     {% endif %}
-
-    
 
     {% if can('payments','view') %}
     <div class="col-md-3 col-sm-6">
@@ -117,17 +154,6 @@ body {
         <div class="dashboard-card">
           <div class="dashboard-icon">💳</div>
           <h6>{{ _('Payments & Receivables / المدفوعات والمستحقات') }}</h6>
-        </div>
-      </a>
-    </div>
-    {% endif %}
-
-    {% if can('orders','view') %}
-    <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('main.order_invoices_list') }}" class="text-decoration-none text-dark">
-        <div class="dashboard-card">
-          <div class="dashboard-icon">🧾</div>
-          <h6>فواتير الطلبات (قبل الدفع)</h6>
         </div>
       </a>
     </div>
@@ -196,8 +222,8 @@ body {
           <h6>{{ _('Settings / الإعدادات') }}</h6>
         </div>
       </a>
-    </div>
     {% endif %}
+    </div>
 
     {% if can('table_settings','view') %}
     <div class="col-md-3 col-sm-6">
@@ -207,8 +233,8 @@ body {
           <h6>{{ _('Table Settings / إعدادات الطاولات') }}</h6>
         </div>
       </a>
-    </div>
     {% endif %}
+    </div>
 
     {% if can('users','view') %}
     <div class="col-md-3 col-sm-6">
@@ -218,8 +244,8 @@ body {
           <h6>{{ _('Users & Permissions / إدارة المستخدمين والصلاحيات') }}</h6>
         </div>
       </a>
-    </div>
     {% endif %}
+    </div>
 
     {% if can('sample_data','view') %}
     <div class="col-md-3 col-sm-6">
@@ -230,8 +256,8 @@ body {
           <small class="text-muted">{{ _('For testing purposes / لأغراض الاختبار') }}</small>
         </div>
       </a>
-    </div>
     {% endif %}
+    </div>
 
   {% if (current_user.role|default('')) == 'user' %}
   <div class="mt-4">
@@ -241,6 +267,8 @@ body {
   </div>
   {% endif %}
 
+      </a>
+    </div>
   </div>
 </div>
 

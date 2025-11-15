@@ -19,6 +19,17 @@ body {
     line-height: 1.6;
 }
 
+body.compact .btn{ padding:6px 10px; border-radius:6px; }
+body.compact .table thead th{ padding:10px; }
+body.compact .table td{ padding:8px; }
+body.compact .card{ box-shadow:none; }
+body.compact .card .card-body{ padding:12px; }
+body.compact .dashboard-card{ padding:14px; }
+body.compact .navbar-brand{ font-size:1.25rem; }
+
+.section-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.section-header h3{ margin:0; }
+
 /* Dashboard Cards */
 .dashboard-card {
     background: white;
@@ -86,29 +97,6 @@ body {
 
 .table tbody tr:hover {
     background-color: #f8f9fa;
-}
-
-/* Styled Table (used by payroll and reports) */
-.styled-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: #fff;
-    border: 1px solid var(--border-color);
-}
-.styled-table thead th {
-    background: #f1f5f9;
-    color: #111;
-    font-weight: 700;
-    border-bottom: 2px solid var(--border-color);
-    padding: 10px;
-}
-.styled-table tbody td,
-.styled-table tbody th {
-    border-bottom: 1px solid var(--border-color);
-    padding: 8px 10px;
-}
-.styled-table tbody tr:nth-child(even) {
-    background: #fbfcfd;
 }
 
 /* Cards */
@@ -283,39 +271,11 @@ body {
     }
     
     body {
-        background: #fff !important;
+        background: white !important;
     }
     
     .card, .dashboard-card {
         box-shadow: none !important;
         border: 1px solid #ccc !important;
-    }
-
-    /* Force high-contrast, black text for print */
-    body, table, th, td, h1, h2, h3, h4, h5, h6, p, li, a, span, strong, em, small,
-    .btn, .badge, .alert {
-        color: #000 !important;
-    }
-    /* Remove colored backgrounds in print for clarity */
-    .table thead th, thead th, .badge, .alert, .btn, .styled-table thead th {
-        background: #fff !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-    }
-    /* Keep borders visible in print */
-    .table th, .table td, .styled-table th, .styled-table td {
-        border-color: #000 !important;
-    }
-    /* Totals footers always black on white */
-    tfoot th, tfoot td, .totals, .totals-row th, .totals-row td {
-        color: #000 !important;
-        background: #fff !important;
-        border-color: #000 !important;
-    }
-    /* Buttons print as simple outlined boxes */
-    .btn {
-        background: #fff !important;
-        border: 1px solid #000 !important;
-        box-shadow: none !important;
     }
 }

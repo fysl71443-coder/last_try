@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% if current_user.is_authenticated %}{% set back_url = url_for('main.dashboard') %}{% else %}{% set back_url = '#' %}{% endif %}
+{% set back_url = url_for('main.dashboard') %}
 
 {% block title %}{{ _('Inventory & Cost Management / المخزون وإدارة التكاليف') }}{% endblock %}
 {% block content %}
@@ -53,15 +53,13 @@ body {
 
 <div class="container py-4">
     <!-- شريط التنقل السريع -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <h3 class="mb-0">📦 {{ _('Inventory & Cost Management / المخزون وإدارة التكاليف') }}</h3>
-        </div>
-        <div class="col-md-6 text-end">
-            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning me-2">
+    <div class="section-header mb-3">
+        <h3 class="mb-0">📦 {{ _('Inventory & Cost Management / المخزون وإدارة التكاليف') }}</h3>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning">
                 🛒 {{ _('Purchases / المشتريات') }}
             </a>
-            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info me-2">
+            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info">
                 💰 {{ _('Sales / المبيعات') }}
             </a>
             <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
@@ -86,7 +84,7 @@ body {
         </div>
         <div class="col-md-4">
             <div class="stats-card">
-                <h4>ر.س {{ "%.2f"|format(meals|sum(attribute='total_cost') or 0) }}</h4>
+                <h4>${{ "%.2f"|format(meals|sum(attribute='total_cost') or 0) }}</h4>
                 <p class="mb-0">{{ _('Total Investment / إجمالي الاستثمار') }}</p>
             </div>
         </div>
@@ -134,7 +132,7 @@ body {
                     <tr>
                         <td>{{ material.display_name }}</td>
                         <td><span class="badge bg-secondary">{{ material.unit }}</span></td>
-                        <td class="cost-highlight">ر.س {{ "%.4f"|format(material.cost_per_unit) }}</td>
+                        <td class="cost-highlight">${{ "%.4f"|format(material.cost_per_unit) }}</td>
                         <td>{{ material.category or '-' }}</td>
                     </tr>
                     {% endfor %}
@@ -157,46 +155,6 @@ body {
     </div>
     {% endif %}
 
-    <!-- جدول ترصيد وتكاليف المشتريات إلى المخزون -->
-    <div class="inventory-card">
-        <h5 class="mb-3">{{ _('Inventory Cost Ledger / دفتر تكاليف المخزون') }}</h5>
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th>{{ _('Material / المادة') }}</th>
-                        <th>{{ _('Unit / الوحدة') }}</th>
-                        <th class="text-end">{{ _('Purchased Qty / الكمية المشتراة') }}</th>
-                        <th class="text-end">{{ _('Avg Cost / متوسط التكلفة') }}</th>
-                        <th class="text-end">{{ _('Total Cost / إجمالي التكلفة') }}</th>
-                        <th class="text-end">{{ _('Current Stock / المخزون الحالي') }}</th>
-                        <th class="text-end">{{ _('Stock Value / قيمة المخزون') }}</th>
-                        <th class="text-end">{{ _('Last Purchase / آخر شراء') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in (ledger_rows or []) %}
-                    <tr>
-                        <td>{{ r.material }}</td>
-                        <td><span class="badge bg-secondary">{{ r.unit }}</span></td>
-                        <td class="text-end">{{ '%.4f'|format(r.purchased_qty) }}</td>
-                        <td class="text-end cost-highlight">ر.س {{ '%.4f'|format(r.avg_cost) }}</td>
-                        <td class="text-end">ر.س {{ '%.2f'|format(r.total_cost) }}</td>
-                        <td class="text-end">{{ '%.4f'|format(r.current_stock) }}</td>
-                        <td class="text-end">ر.س {{ '%.2f'|format(r.stock_value) }}</td>
-                        <td class="text-end">{{ r.last_date or '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                    {% if not ledger_rows %}
-                    <tr>
-                        <td colspan="8" class="text-center text-muted">{{ _('No purchase activity yet / لا توجد عمليات شراء بعد') }}</td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
     <!-- ملخص الوجبات -->
     {% if meals %}
     <div class="inventory-card">
@@ -218,12 +176,9 @@ body {
                     <tr>
                         <td><strong>{{ meal.display_name }}</strong></td>
                         <td>{{ meal.ingredients|length }} {{ _('items / عناصر') }}</td>
-                        {% set sp = (meal.selling_price or 0)|float %}
-                        {% set pct = ((meal.profit_margin_percent or 0)|float) / 100 %}
-                        {% set derived_cost = sp * (1 - pct) %}
-                        <td class="cost-highlight">ر.س {{ "%.2f"|format(derived_cost) }}</td>
+                        <td class="cost-highlight">${{ "%.2f"|format(meal.total_cost) }}</td>
                         <td>{{ "%.1f"|format(meal.profit_margin_percent) }}%</td>
-                        <td class="price-highlight">ر.س {{ "%.2f"|format(meal.selling_price) }}</td>
+                        <td class="price-highlight">${{ "%.2f"|format(meal.selling_price) }}</td>
                     </tr>
                     {% endfor %}
                     {% if meals|length > 10 %}

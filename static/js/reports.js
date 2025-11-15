@@ -7,6 +7,7 @@
     try {
       if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Loading...'; }
       const resp = await fetch('/api/reports/sales', {credentials:'same-origin'});
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
       const data = await resp.json();
       window.salesReportData = data;
       renderSalesTable(data);
@@ -95,8 +96,20 @@
   function exportSalesExcel(){
     if(!window.salesReportData){ alert('الرجاء تحميل التقرير أولاً'); return; }
     const rows = [["Date","Invoice","Item","Amount","Tax","Payment","Discount"]];
-    (window.salesReportData.china||[]).forEach(r=> rows.push([r.date,r.invoice,r.item,r.amount,r.tax,r.payment,r.discount]));
-    (window.salesReportData.india||[]).forEach(r=> rows.push([r.date,r.invoice,r.item,r.amount,r.tax,r.payment,r.discount]));
+    const items = {};
+    const pays = {};
+    (window.salesReportData.china||[]).forEach(r=>{ rows.push([r.date,r.invoice,r.item,r.amount,r.tax,r.payment,r.discount]); const k=r.item||''; const p=r.payment||''; const a=Number(r.amount||0); const t=Number(r.tax||0); const d=Number(r.discount||0); items[k]=items[k]?{c:items[k].c+1,a:items[k].a+a,t:items[k].t+t,d:items[k].d+d}:{c:1,a:a,t:t,d:d}; pays[p]=pays[p]?{c:pays[p].c+1,a:pays[p].a+a,t:pays[p].t+t}:{c:1,a:a,t:t}; });
+    (window.salesReportData.india||[]).forEach(r=>{ rows.push([r.date,r.invoice,r.item,r.amount,r.tax,r.payment,r.discount]); const k=r.item||''; const p=r.payment||''; const a=Number(r.amount||0); const t=Number(r.tax||0); const d=Number(r.discount||0); items[k]=items[k]?{c:items[k].c+1,a:items[k].a+a,t:items[k].t+t,d:items[k].d+d}:{c:1,a:a,t:t,d:d}; pays[p]=pays[p]?{c:pays[p].c+1,a:pays[p].a+a,t:pays[p].t+t}:{c:1,a:a,t:t}; });
+    rows.push([]);
+    rows.push(["Item Totals","Count","Amount","Tax","Discount"]);
+    Object.keys(items).filter(x=>x).sort().forEach(k=>{ const v=items[k]; rows.push([k, v.c, Number(v.a.toFixed(2)), Number(v.t.toFixed(2)), Number(v.d.toFixed(2))]); });
+    rows.push([]);
+    rows.push(["Payment Totals","Count","Amount","Tax"]);
+    Object.keys(pays).filter(x=>x).sort().forEach(k=>{ const v=pays[k]; rows.push([k, v.c, Number(v.a.toFixed(2)), Number(v.t.toFixed(2))]); });
+    let sumAmount=0, sumTax=0, sumDiscount=0;
+    rows.forEach(r=>{ if(Array.isArray(r) && r.length===7 && typeof r[3]==='number'){ sumAmount+=r[3]; sumTax+=r[4]; if(typeof r[6]==='number') sumDiscount+=r[6]; } });
+    rows.push([]);
+    rows.push(['Totals','','', Number(sumAmount.toFixed(2)), Number(sumTax.toFixed(2)), '', Number(sumDiscount.toFixed(2))]);
     downloadCsv(rows, 'sales_report.csv');
   }
 
@@ -137,6 +150,7 @@
     try{
       if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Loading...'; }
       const resp = await fetch('/api/reports/purchases?'+getReportFilters(), {credentials:'same-origin'});
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
       const data = await resp.json();
       window.purchasesReportData = data; renderPurchasesTable(data);
     }catch(err){ console.error('Load purchases failed', err); alert('فشل تحميل تقرير المشتريات'); }
@@ -166,7 +180,14 @@
   function exportPurchasesExcel(){
     const data = window.purchasesReportData || { purchases: [] };
     const rows = [['Date','Invoice/PO','Item','Amount Before Tax','Tax','Payment/Supplier']];
-    (data.purchases||[]).forEach(r=> rows.push([r.date||'', r.invoice||'', r.item||'', r.amount||0, r.tax||0, r.payment||'']));
+    const items = {}; const pays = {};
+    (data.purchases||[]).forEach(r=>{ const a=Number(r.amount||r.amount_before_tax||0); const t=Number(r.tax||r.tax_amount||0); rows.push([r.date||'', r.invoice||'', r.item||'', a, t, r.payment||r.supplier_or_payment||'']); const k=r.item||''; const p=(r.payment||r.supplier_or_payment||''); items[k]=items[k]?{c:items[k].c+1,a:items[k].a+a,t:items[k].t+t}:{c:1,a:a,t:t}; pays[p]=pays[p]?{c:pays[p].c+1,a:pays[p].a+a,t:pays[p].t+t}:{c:1,a:a,t:t}; });
+    rows.push([]);
+    rows.push(['Item Totals','Count','Amount','Tax']);
+    Object.keys(items).filter(x=>x).sort().forEach(k=>{ const v=items[k]; rows.push([k, v.c, Number(v.a.toFixed(2)), Number(v.t.toFixed(2))]); });
+    rows.push([]);
+    rows.push(['Payment Totals','Count','Amount','Tax']);
+    Object.keys(pays).filter(x=>x).sort().forEach(k=>{ const v=pays[k]; rows.push([k, v.c, Number(v.a.toFixed(2)), Number(v.t.toFixed(2))]); });
     downloadCsv(rows, 'purchases_report.csv');
   }
 
@@ -176,6 +197,7 @@
     try{
       if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Loading...'; }
       const resp = await fetch('/api/reports/expenses?'+getReportFilters(), {credentials:'same-origin'});
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
       const data = await resp.json();
       window.expensesReportData = data; renderExpensesTable(data);
     }catch(err){ console.error('Load expenses failed', err); alert('فشل تحميل تقرير المصروفات'); }
@@ -203,7 +225,14 @@
   function exportExpensesExcel(){
     const data = window.expensesReportData || { expenses: [] };
     const rows = [['Date','Voucher','Type','Amount','Payment']];
-    (data.expenses||[]).forEach(r=> rows.push([r.date||'', r.voucher||'', r.type||'', r.amount||0, r.payment||'']));
+    const types = {}; const pays = {};
+    (data.expenses||[]).forEach(r=>{ const a=Number(r.amount||0); rows.push([r.date||'', r.voucher||'', r.type||r.expense_type||'', a, r.payment||r.payment_method||'']); const k=r.type||r.expense_type||''; const p=r.payment||r.payment_method||''; types[k]=types[k]?{c:types[k].c+1,a:types[k].a+a}:{c:1,a:a}; pays[p]=pays[p]?{c:pays[p].c+1,a:pays[p].a+a}:{c:1,a:a}; });
+    rows.push([]);
+    rows.push(['Type Totals','Count','Amount']);
+    Object.keys(types).filter(x=>x).sort().forEach(k=>{ const v=types[k]; rows.push([k, v.c, Number(v.a.toFixed(2))]); });
+    rows.push([]);
+    rows.push(['Payment Totals','Count','Amount']);
+    Object.keys(pays).filter(x=>x).sort().forEach(k=>{ const v=pays[k]; rows.push([k, v.c, Number(v.a.toFixed(2))]); });
     downloadCsv(rows, 'expenses_report.csv');
   }
 
@@ -211,6 +240,7 @@
   async function loadPayrollReport(){
     try{
       const resp = await fetch('/api/reports/payroll?'+getReportFilters(), {credentials:'same-origin'});
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
       const data = await resp.json();
       window.payrollReportData = data; renderPayrollTable(data);
     }catch(err){ console.error('Load payroll failed', err); alert('فشل تحميل تقرير الرواتب'); }
@@ -233,13 +263,17 @@
   function exportPayrollExcel(){
     const data = window.payrollReportData || { payroll: [] };
     const rows = [['Month','Basic Total','Allowances Total','Deductions Total','Net Paid','Employees']];
-    (data.payroll||[]).forEach(r=> rows.push([r.month||'', r.basic||r.total_basic||0, r.allowances||r.total_allowances||0, r.deductions||r.total_deductions||0, r.net||r.net_paid||0, r.employees||r.employee_count||0]));
+    let tb=0, ta=0, td=0, tn=0, ec=0;
+    (data.payroll||[]).forEach(r=>{ const b=Number(r.basic||r.total_basic||0), a=Number(r.allowances||r.total_allowances||0), d=Number(r.deductions||r.total_deductions||0), n=Number(r.net||r.net_paid||0), e=Number(r.employees||r.employee_count||0); rows.push([r.month||'', b, a, d, n, e]); tb+=b; ta+=a; td+=d; tn+=n; ec+=e; });
+    rows.push([]);
+    rows.push(['Totals','', Number(tb.toFixed(2)), Number(ta.toFixed(2)), Number(td.toFixed(2)), Number(tn.toFixed(2)), Number(ec)]);
     downloadCsv(rows, 'payroll_report.csv');
   }
   // -------- All Invoices (Unified) --------
   async function loadAllInvoicesReport(){
     try{
       const resp = await fetch('/api/reports/all-invoices?'+getReportFilters(), {credentials:'same-origin'});
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
       const data = await resp.json();
       window.allInvoicesData = data; renderAllInvoicesTable(data);
     }catch(err){ console.error('Load all invoices failed', err); alert('فشل تحميل تقرير كل الفواتير'); }
@@ -306,12 +340,22 @@
     const rows = [[
       'Branch','Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment'
     ]];
-    (data.invoices||[]).forEach(r=> rows.push([
+    const items = {}; const pays = {}; const branches = {};
+    (data.invoices||[]).forEach(r=>{ rows.push([
       r.branch||'', r.date||'', r.invoice_number||'', r.item_name||'', Number(r.quantity||0),
       Number(r.price||0), Number(r.discount||0), Number(r.vat||0), Number(r.total||0), r.payment_method||''
-    ]));
+    ]); const k=r.item_name||''; const p=r.payment_method||''; const b=r.branch||''; const a=Number(r.price||0); const v=Number(r.vat||0); const d=Number(r.discount||0); const t=Number(r.total||0); items[k]=items[k]?{c:items[k].c+Number(r.quantity||0),a:items[k].a+a,d:items[k].d+d,v:items[k].v+v,t:items[k].t+t}:{c:Number(r.quantity||0),a:a,d:d,v:v,t:t}; pays[p]=pays[p]?{c:pays[p].c+1,a:pays[p].a+a,d:pays[p].d+d,v:pays[p].v+v,t:pays[p].t+t}:{c:1,a:a,d:d,v:v,t:t}; branches[b]=branches[b]?{a:branches[b].a+a,d:branches[b].d+d,v:branches[b].v+v,t:branches[b].t+t}:{a:a,d:d,v:v,t:t}; });
     rows.push([]);
     rows.push(['Totals','','','','', Number(data.summary.amount||0), Number(data.summary.discount||0), Number(data.summary.vat||0), Number(data.summary.total||0), '' ]);
+    rows.push([]);
+    rows.push(['Item Totals','Qty','Amount','Discount','VAT','Total']);
+    Object.keys(items).filter(x=>x).sort().forEach(k=>{ const v=items[k]; rows.push([k, Number(v.c), Number(v.a.toFixed(2)), Number(v.d.toFixed(2)), Number(v.v.toFixed(2)), Number(v.t.toFixed(2))]); });
+    rows.push([]);
+    rows.push(['Payment Totals','Count','Amount','Discount','VAT','Total']);
+    Object.keys(pays).filter(x=>x).sort().forEach(k=>{ const v=pays[k]; rows.push([k, Number(v.c), Number(v.a.toFixed(2)), Number(v.d.toFixed(2)), Number(v.v.toFixed(2)), Number(v.t.toFixed(2))]); });
+    rows.push([]);
+    rows.push(['Branch Totals','','Amount','Discount','VAT','Total']);
+    Object.keys(branches).filter(x=>x).sort().forEach(k=>{ const v=branches[k]; rows.push([k, '', Number(v.a.toFixed(2)), Number(v.d.toFixed(2)), Number(v.v.toFixed(2)), Number(v.t.toFixed(2))]); });
     downloadCsv(rows, 'all_invoices.csv');
   }
 
@@ -319,6 +363,7 @@
   async function loadAllPurchasesReport(){
     try{
       const resp = await fetch('/api/reports/all-purchases?'+getReportFilters(), {credentials:'same-origin'});
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
       const data = await resp.json();
       window.allPurchasesData = data; renderAllPurchasesTable(data);
     }catch(err){ console.error('Load all purchases failed', err); alert('فشل تحميل تقرير المشتريات'); }
@@ -361,20 +406,28 @@
   function exportAllPurchasesExcel(){
     const data = window.allPurchasesData || { purchases: [], overall_totals: {amount:0,discount:0,vat:0,total:0} };
     const rows = [[ 'Date','Purchase No.','Item','Qty','Amount','Discount','VAT','Total','Payment Method' ]];
-    (data.purchases||[]).forEach(r=> rows.push([
+    const items = {}; const pays = {};
+    (data.purchases||[]).forEach(r=>{ rows.push([
       r.date||'', r.purchase_number||'', r.item_name||'', Number(r.quantity||0),
       Number(r.price||0), Number(r.discount||0), Number(r.vat||0), Number(r.total||0), r.payment_method||''
-    ]));
+    ]); const k=r.item_name||''; const p=r.payment_method||''; const a=Number(r.price||0); const v=Number(r.vat||0); const d=Number(r.discount||0); const t=Number(r.total||0); items[k]=items[k]?{c:items[k].c+Number(r.quantity||0),a:items[k].a+a,d:items[k].d+d,v:items[k].v+v,t:items[k].t+t}:{c:Number(r.quantity||0),a:a,d:d,v:v,t:t}; pays[p]=pays[p]?{c:pays[p].c+1,a:pays[p].a+a,d:pays[p].d+d,v:pays[p].v+v,t:pays[p].t+t}:{c:1,a:a,d:d,v:v,t:t}; });
     rows.push([]);
     const t = data.overall_totals || {amount:0,discount:0,vat:0,total:0};
     rows.push(['Totals','','','', Number(t.amount||0), Number(t.discount||0), Number(t.vat||0), Number(t.total||0), '' ]);
+    rows.push([]);
+    rows.push(['Item Totals','Qty','Amount','Discount','VAT','Total']);
+    Object.keys(items).filter(x=>x).sort().forEach(k=>{ const v=items[k]; rows.push([k, Number(v.c), Number(v.a.toFixed(2)), Number(v.d.toFixed(2)), Number(v.v.toFixed(2)), Number(v.t.toFixed(2))]); });
+    rows.push([]);
+    rows.push(['Payment Totals','Count','Amount','Discount','VAT','Total']);
+    Object.keys(pays).filter(x=>x).sort().forEach(k=>{ const v=pays[k]; rows.push([k, Number(v.c), Number(v.a.toFixed(2)), Number(v.d.toFixed(2)), Number(v.v.toFixed(2)), Number(v.t.toFixed(2))]); });
     downloadCsv(rows, 'all_purchases.csv');
   }
 
 
   function downloadCsv(rows, filename){
     const csv = rows.map(r=> r.map(x=> String(x).includes(',') ? '"'+String(x).replaceAll('"','""')+'"' : String(x)).join(',')).join('\n');
-    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM+csv], {type:'text/csv;charset=utf-8;'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
   }
 

@@ -42,6 +42,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Nested repo (do not commit)
+last_try/
+
 
 # Logs and local backups
 app.log
