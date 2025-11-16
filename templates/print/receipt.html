@@ -197,6 +197,9 @@
         </div>
         {% endif %}
       {% endif %}
+      {% if branch_name %}
+      <div class="small muted">{{ _('Branch') }}: {{ branch_name }}</div>
+      {% endif %}
     </div>
 
     {% if date_time %}
@@ -207,6 +210,12 @@
     {% endif %}
     {% if inv.table_number %}
     <div class="center small muted">{{ _('Table') }}: {{ inv.table_number }}</div>
+    {% endif %}
+    {% if inv.customer_name %}
+    <div class="center small muted">{{ _('Customer') }}: {{ inv.customer_name }}</div>
+    {% endif %}
+    {% if inv.customer_phone %}
+    <div class="center small muted">{{ _('Phone') }}: {{ inv.customer_phone }}</div>
     {% endif %}
     <hr/>
 
@@ -255,7 +264,7 @@
       </tr>
     </table>
 
-    {% if paid and inv.payment_method %}
+    {% if inv.payment_method %}
     <div class="center small">{{ _('Payment') }}: {{ (inv.payment_method or 'CASH')|upper }}</div>
     {% endif %}
 

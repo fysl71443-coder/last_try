@@ -4137,6 +4137,8 @@ def print_receipt(invoice_number):
         'tax_amount': float(inv.tax_amount or 0.0),
         'discount_amount': float(inv.discount_amount or 0.0),
         'total_after_tax_discount': float(inv.total_after_tax_discount or 0.0),
+        'branch': getattr(inv, 'branch', None),
+        'branch_code': getattr(inv, 'branch', None),
     }
     try:
         s = Settings.query.first()
