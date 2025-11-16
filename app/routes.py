@@ -5363,7 +5363,7 @@ def vat_dashboard():
     branch = (request.args.get('branch') or 'all').strip()
 
     try:
-    y = request.args.get('year', type=int) or get_saudi_now().year
+        y = request.args.get('year', type=int) or get_saudi_now().year
     except Exception:
         y = get_saudi_now().year
 
