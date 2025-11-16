@@ -4236,7 +4236,7 @@ def print_order_preview(branch, table):
     except Exception:
         s = None
     branch_name = BRANCH_LABELS.get(branch, branch)
-    dt_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    dt_str = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
     # Keep preview number generation as before, but with INV prefix to match final
     order_no = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
     # Persist this preview number so checkout reuses exactly the same value
@@ -4306,7 +4306,7 @@ def print_order_preview(branch, table):
         b64 = generate_zatca_qr_base64(
             getattr(s, 'company_name', 'Restaurant'),
             getattr(s, 'tax_number', '123456789012345'),
-            datetime.now(),
+            get_saudi_now(),
             float(total_after),
             float(vat_amount)
         )
