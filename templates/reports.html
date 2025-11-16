@@ -47,6 +47,39 @@
     </div>
   </form>
 
+  <hr/>
+  <h5 class="mt-3">{{ _('Customer Sales / مبيعات العملاء') }}</h5>
+  <form class="row g-2 align-items-end mb-3" onsubmit="openCustomerSales(); return false;">
+    <div class="col-md-4">
+      <label class="form-label">{{ _('Customer Groups / مجموعات العملاء') }}</label>
+      <select id="cust-groups" class="form-select" multiple>
+        <option value="hunger">hunger</option>
+        <option value="keeta">keeta</option>
+        <option value="noon">noon</option>
+      </select>
+      <div class="form-text">{{ _('Select one or more groups / اختر مجموعة أو أكثر') }}</div>
+    </div>
+    <div class="col-auto">
+      <label class="form-label">{{ _('From Date / من تاريخ') }}</label>
+      <input id="csd" type="date" class="form-control">
+    </div>
+    <div class="col-auto">
+      <label class="form-label">{{ _('To Date / إلى تاريخ') }}</label>
+      <input id="ced" type="date" class="form-control">
+    </div>
+    <div class="col-auto">
+      <label class="form-label">{{ _('Branch / الفرع') }}</label>
+      <select id="cbranch" class="form-select">
+        <option value="all">{{ _('All / جميع الفروع') }}</option>
+        <option value="place_india">Place India</option>
+        <option value="china_town">China Town</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-outline-primary" type="submit">{{ _('Open Report / فتح التقرير') }}</button>
+    </div>
+  </form>
+
   <div class="alert alert-info">
     {{ _('Choose the category, date range and payment method, then click Print. A print page will open in a new tab. / اختر النوع وحدد الفترة وطريقة الدفع ثم اضغط طباعة. سيتم فتح صفحة الطباعة في نافذة جديدة.') }}
   </div>
@@ -90,6 +123,26 @@ function openDailySalesPDF(){
   const pm = document.getElementById('pm').value || 'all';
   const br = document.getElementById('branch').value || 'all';
   const url = `/reports/print/daily-sales?payment_method=${encodeURIComponent(pm)}&branch=${encodeURIComponent(br)}&format=pdf`;
+  window.open(url, '_blank');
+}
+
+function selectedGroups(){
+  const sel = document.getElementById('cust-groups');
+  return Array.from(sel?.selectedOptions || []).map(o => o.value);
+}
+
+function openCustomerSales(){
+  const sd = document.getElementById('csd').value || '';
+  const ed = document.getElementById('ced').value || '';
+  const br = document.getElementById('cbranch').value || 'all';
+  const names = selectedGroups();
+  const qs = new URLSearchParams({
+    start_date: sd,
+    end_date: ed,
+    branch: br,
+  });
+  if(names.length > 0){ qs.set('customers', names.join(',')); }
+  const url = `/reports/print/customer-sales?${qs.toString()}`;
   window.open(url, '_blank');
 }
 </script>

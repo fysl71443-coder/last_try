@@ -146,7 +146,7 @@ body {
         <div class="col-md-3">
             <div class="card bg-danger text-white">
                 <div class="card-body text-center">
-                    <h4 class="mb-1">${{ "%.2f"|format(total_expenses) }}</h4>
+                    <h4 class="mb-1">﷼{{ "%.2f"|format(total_expenses) }}</h4>
                     <small>{{ _('Total Expenses / إجمالي المصروفات') }}</small>
                 </div>
             </div>
@@ -154,7 +154,7 @@ body {
         <div class="col-md-3">
             <div class="card bg-success text-white">
                 <div class="card-body text-center">
-                    <h4 class="mb-1">${{ "%.2f"|format(paid_expenses) }}</h4>
+                    <h4 class="mb-1">﷼{{ "%.2f"|format(paid_expenses) }}</h4>
                     <small>{{ _('Paid / مدفوع') }}</small>
                 </div>
             </div>
@@ -162,7 +162,7 @@ body {
         <div class="col-md-3">
             <div class="card bg-warning text-white">
                 <div class="card-body text-center">
-                    <h4 class="mb-1">${{ "%.2f"|format(pending_expenses) }}</h4>
+                    <h4 class="mb-1">﷼{{ "%.2f"|format(pending_expenses) }}</h4>
                     <small>{{ _('Pending / معلق') }}</small>
                 </div>
             </div>
@@ -227,7 +227,7 @@ body {
                         <div class="col-md-6" id="expense-partial-box" style="display:none;">
                             <label class="form-label fw-bold">{{ _('Paid Amount (Partial) / المبلغ المدفوع (جزئي)') }}</label>
                             <div class="input-group">
-                                <span class="input-group-text">$</span>
+                                <span class="input-group-text">﷼</span>
                                 <input name="partial_paid_amount" id="expense-partial-amount" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
                             </div>
                             <div class="form-text">{{ _('Max is Final Total / الحد الأقصى هو الإجمالي النهائي') }}: <span id="expense-partial-max" class="fw-bold text-danger"></span></div>
@@ -265,27 +265,27 @@ body {
                                 <div class="col-md-2">
                                     {{ item_form.price_before_tax.label(class_='form-label fw-bold') }}
                                     <div class="input-group">
-                                        <span class="input-group-text">$</span>
+                                        <span class="input-group-text">﷼</span>
                                         {{ item_form.price_before_tax(class_='form-control', step='0.01') }}
                                     </div>
                                 </div>
                                 <div class="col-md-1">
                                     {{ item_form.tax.label(class_='form-label fw-bold') }}
                                     <div class="input-group">
-                                        <span class="input-group-text">$</span>
+                                        <span class="input-group-text">﷼</span>
                                         {{ item_form.tax(class_='form-control', step='0.01', value='0') }}
                                     </div>
                                 </div>
                                 <div class="col-md-1">
                                     {{ item_form.discount.label(class_='form-label fw-bold') }}
                                     <div class="input-group">
-                                        <span class="input-group-text">$</span>
+                                        <span class="input-group-text">﷼</span>
                                         {{ item_form.discount(class_='form-control', step='0.01', value='0') }}
                                     </div>
                                 </div>
                                 <div class="col-md-1">
                                     <label class="form-label fw-bold">{{ _('Total / الإجمالي') }}</label>
-                                    <div class="form-control bg-success text-white fw-bold item-total">$0.00</div>
+                                    <div class="form-control bg-success text-white fw-bold item-total">﷼0.00</div>
                                 </div>
                                 <div class="col-md-1 d-flex align-items-end">
                                     <button type="button" class="btn btn-outline-danger btn-sm remove-item-btn w-100">🗑️</button>
@@ -304,19 +304,19 @@ body {
                     <div class="row g-3">
                         <div class="col-md-3">
                             <label class="form-label fw-bold">{{ _('Subtotal / المجموع الفرعي') }}</label>
-                            <div class="form-control bg-info text-white fw-bold" id="total-before-tax">$0.00</div>
+                            <div class="form-control bg-info text-white fw-bold" id="total-before-tax">﷼0.00</div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold">{{ _('Tax / الضريبة') }}</label>
-                            <div class="form-control bg-warning text-dark fw-bold" id="tax-amount">$0.00</div>
+                            <div class="form-control bg-warning text-dark fw-bold" id="tax-amount">﷼0.00</div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold">{{ _('Discount / الخصم') }}</label>
-                            <div class="form-control bg-secondary text-white fw-bold" id="total-discount">$0.00</div>
+                            <div class="form-control bg-secondary text-white fw-bold" id="total-discount">﷼0.00</div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold">{{ _('Final Total / الإجمالي النهائي') }}</label>
-                            <div class="form-control bg-danger text-white fw-bold fs-5" id="final-total">$0.00</div>
+                            <div class="form-control bg-danger text-white fw-bold fs-5" id="final-total">﷼0.00</div>
                         </div>
                     </div>
                 </div>
@@ -389,7 +389,7 @@ body {
                             {% endif %}
                         </td>
                         <td class="text-end">
-                            <span class="fw-bold text-danger fs-6">${{ "%.2f"|format(invoice.total_after_tax_discount) }}</span>
+                            <span class="fw-bold text-danger fs-6">﷼{{ "%.2f"|format(invoice.total_after_tax_discount) }}</span>
                         </td>
                         <td class="text-center">
                             {% if invoice.status == 'paid' %}
@@ -433,7 +433,7 @@ body {
     var socket = io();
     socket.on('expense_update', function(data) {
         console.log('Expense updated:', data);
-        alert('New expense invoice created: ' + data.invoice_number + ' - $' + data.total);
+        alert('New expense invoice created: ' + data.invoice_number + ' - ﷼' + data.total);
         location.reload();
     });
 
@@ -468,7 +468,7 @@ body {
             const itemBeforeTax = quantity * price;
             const itemTotal = itemBeforeTax + tax - discount;
 
-            totalDisplay.textContent = '$' + itemTotal.toFixed(2);
+            totalDisplay.textContent = '﷼' + itemTotal.toFixed(2);
             totalBeforeTax += itemBeforeTax;
             totalTax += tax;
             totalDiscount += discount;
@@ -476,10 +476,10 @@ body {
 
         const finalTotal = totalBeforeTax + totalTax - totalDiscount;
 
-        document.getElementById('total-before-tax').textContent = '$' + totalBeforeTax.toFixed(2);
-        document.getElementById('tax-amount').textContent = '$' + totalTax.toFixed(2);
-        document.getElementById('total-discount').textContent = '$' + totalDiscount.toFixed(2);
-        document.getElementById('final-total').textContent = '$' + finalTotal.toFixed(2);
+        document.getElementById('total-before-tax').textContent = '﷼' + totalBeforeTax.toFixed(2);
+        document.getElementById('tax-amount').textContent = '﷼' + totalTax.toFixed(2);
+        document.getElementById('total-discount').textContent = '﷼' + totalDiscount.toFixed(2);
+        document.getElementById('final-total').textContent = '﷼' + finalTotal.toFixed(2);
         try{ if(typeof updateExpensePartialMax==='function') updateExpensePartialMax(); }catch(e){}
     }
 
@@ -513,27 +513,27 @@ body {
                 <div class="col-md-2">
                     <label class="form-label fw-bold">{{ _('Unit Price / سعر الوحدة') }}</label>
                     <div class="input-group">
-                        <span class="input-group-text">$</span>
+                        <span class="input-group-text">﷼</span>
                         <input class="form-control" name="items-${itemIndex}-price_before_tax" step="0.01" type="number">
                     </div>
                 </div>
                 <div class="col-md-1">
                     <label class="form-label fw-bold">{{ _('Tax / الضريبة') }}</label>
                     <div class="input-group">
-                        <span class="input-group-text">$</span>
+                        <span class="input-group-text">﷼</span>
                         <input class="form-control" name="items-${itemIndex}-tax" step="0.01" type="number" value="0">
                     </div>
                 </div>
                 <div class="col-md-1">
                     <label class="form-label fw-bold">{{ _('Discount / الخصم') }}</label>
                     <div class="input-group">
-                        <span class="input-group-text">$</span>
+                        <span class="input-group-text">﷼</span>
                         <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" value="0">
                     </div>
                 </div>
                 <div class="col-md-1">
                     <label class="form-label fw-bold">{{ _('Total / الإجمالي') }}</label>
-                    <div class="form-control bg-success text-white fw-bold item-total">$0.00</div>
+                    <div class="form-control bg-success text-white fw-bold item-total">﷼0.00</div>
                 </div>
                 <div class="col-md-1 d-flex align-items-end">
                     <button type="button" class="btn btn-outline-danger btn-sm remove-item-btn w-100">🗑️</button>
@@ -653,7 +653,7 @@ body {
   function parseMoneyText(txt){ const s = String(txt||'').replace(/[^0-9.\-]/g,''); const v = parseFloat(s); return isNaN(v)?0:v; }
   function updateExpensePartialMax(){
     const max = parseMoneyText(document.getElementById('final-total')?.textContent||'0');
-    const span = document.getElementById('expense-partial-max'); if(span) span.textContent = '$' + max.toFixed(2);
+    const span = document.getElementById('expense-partial-max'); if(span) span.textContent = '﷼' + max.toFixed(2);
     const inp = document.getElementById('expense-partial-amount');
     if(inp){ let v = parseFloat(inp.value||'0'); if(isNaN(v)) v = 0; if(v>max) inp.value = max.toFixed(2); if(v<0) inp.value='0.00'; }
   }

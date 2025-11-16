@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('main.inventory') %}
+{% set back_url = url_for('main.dashboard') %}
 
 {% block title %}{{ _('Purchases / المشتريات') }}{% endblock %}
 {% block content %}
@@ -85,6 +85,8 @@ body {
                     <label class="form-label">{{ _('Tax Number / الرقم الضريبي') }}</label>
                     <input id="s_tax" class="form-control" value="" readonly>
                   </div>
+                </div>
+                <div class="row g-3 align-items-end mt-1">
                   <div class="col-md-6">
                     <label class="form-label">{{ _('Address / الموقع') }}</label>
                     <input id="s_address" class="form-control" value="" readonly>
@@ -112,16 +114,16 @@ body {
                     {{ form.date(class_='form-control') }}
                   </div>
                   <div class="col-md-3">
-                    <label class="form-label">{{ _('Invoice No / رقم الفاتورة') }}</label>
-                    <input class="form-control" value="{{ _('Auto on save (e.g. INV-PUR-YYYY-0001) / يُولّد تلقائياً عند الحفظ (مثال: INV-PUR-YYYY-0001)') }}" readonly>
-                  </div>
-                  <div class="col-md-3">
                     {{ form.payment_method.label(class_='form-label') }}
                     {{ form.payment_method(class_='form-select') }}
                   </div>
                   <div class="col-md-3">
                     <label class="form-label">{{ _('Reference No / رقم المرجع') }}</label>
                     <input name="reference_number" class="form-control" placeholder="PO/Ref if provided">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">{{ _('Invoice No / رقم الفاتورة') }}</label>
+                    <input class="form-control" value="{{ _('Auto on save (e.g. INV-PUR-YYYY-0001) / يُولّد تلقائياً عند الحفظ (مثال: INV-PUR-YYYY-0001)') }}" readonly>
                   </div>
                 </div>
                   <div class="row g-3 mt-1">
@@ -175,7 +177,7 @@ body {
                         </div>
                         <div class="col-md-1">
                             <label class="form-label">{{ _('Total / الإجمالي') }}</label>
-                            <div class="form-control bg-light item-total">$0.00</div>
+                            <div class="form-control bg-light item-total">﷼0.00</div>
                         </div>
                         <div class="col-md-1 d-flex align-items-end">
                             <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
@@ -189,19 +191,19 @@ body {
             <div class="row mb-3">
                 <div class="col-md-3">
                     <label class="form-label">{{ _('Total Before Discount & Tax / الإجمالي قبل الخصم والضريبة') }}</label>
-                    <div class="form-control bg-light" id="total-before-tax">$0.00</div>
+                    <div class="form-control bg-light" id="total-before-tax">﷼0.00</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ _('Tax / الضريبة') }}</label>
-                    <div class="form-control bg-light" id="tax-amount">$0.00</div>
+                    <div class="form-control bg-light" id="tax-amount">﷼0.00</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ _('Total Discount / إجمالي الخصم') }}</label>
-                    <div class="form-control bg-light" id="total-discount">$0.00</div>
+                    <div class="form-control bg-light" id="total-discount">﷼0.00</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ _('Final Total / الإجمالي النهائي') }}</label>
-                    <div class="form-control bg-success text-white fw-bold" id="final-total">$0.00</div>
+                    <div class="form-control bg-success text-white fw-bold" id="final-total">﷼0.00</div>
                 </div>
             </div>
 
@@ -261,13 +263,13 @@ body {
             totalTax += tax;
             finalTotal += lineTotal;
             const totalDisplay = row.querySelector('.item-total');
-            if (totalDisplay) totalDisplay.textContent = '$' + lineTotal.toFixed(2);
+            if (totalDisplay) totalDisplay.textContent = '﷼' + lineTotal.toFixed(2);
 
         });
-        document.getElementById('total-before-tax').textContent = '$' + totalBefore.toFixed(2);
-        document.getElementById('tax-amount').textContent = '$' + totalTax.toFixed(2);
-        document.getElementById('total-discount').textContent = '$' + totalDiscount.toFixed(2);
-        document.getElementById('final-total').textContent = '$' + finalTotal.toFixed(2);
+        document.getElementById('total-before-tax').textContent = '﷼' + totalBefore.toFixed(2);
+        document.getElementById('tax-amount').textContent = '﷼' + totalTax.toFixed(2);
+        document.getElementById('total-discount').textContent = '﷼' + totalDiscount.toFixed(2);
+        document.getElementById('final-total').textContent = '﷼' + finalTotal.toFixed(2);
         try{ if(typeof updatePartialMax==='function') updatePartialMax(); }catch(e){}
     }
 
@@ -283,7 +285,7 @@ body {
             if (dn === val || en === val) { match = m; break; }
         }
         if (match) {
-            stockInfoDiv.textContent = `Current stock: ${match.stock_quantity} ${match.unit} | Cost: $${match.cost_per_unit}/unit`;
+            stockInfoDiv.textContent = `Current stock: ${match.stock_quantity} ${match.unit} | Cost: ﷼${match.cost_per_unit}/unit`;
             if (unitInput && !unitInput.value) unitInput.value = match.unit || '';
         } else {
             stockInfoDiv.textContent = '';
@@ -339,7 +341,7 @@ body {
                 </div>
                 <div class="col-md-1">
                     <label class="form-label">{{ _('Total / الإجمالي') }}</label>
-                    <div class="form-control bg-light item-total">$0.00</div>
+                    <div class="form-control bg-light item-total">﷼0.00</div>
                 </div>
                 <div class="col-md-1 d-flex align-items-end">
                     <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
@@ -428,7 +430,7 @@ body {
   }
   function updatePartialMax(){
     const max = parseMoneyText(document.getElementById('final-total')?.textContent||'0');
-    const span = document.getElementById('partial-max'); if(span) span.textContent = '$' + max.toFixed(2);
+    const span = document.getElementById('partial-max'); if(span) span.textContent = '﷼' + max.toFixed(2);
     const inp = document.getElementById('partial-paid-amount');
     if(inp){ let v = parseFloat(inp.value||'0'); if(isNaN(v)) v = 0; if(v>max) inp.value = max.toFixed(2); if(v<0) inp.value='0.00'; }
   }

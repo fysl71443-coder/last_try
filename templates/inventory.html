@@ -68,6 +68,88 @@ body {
         </div>
     </div>
 
+    <div class="inventory-card">
+        <h5 class="mb-3">{{ _('Purchases Ledger / سجل المشتريات') }}</h5>
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>{{ _('Date / التاريخ') }}</th>
+                        <th>{{ _('Invoice No / رقم الفاتورة') }}</th>
+                        <th>{{ _('Supplier / المورد') }}</th>
+                        <th>{{ _('Payment / الدفع') }}</th>
+                        <th>{{ _('Status / الحالة') }}</th>
+                        <th class="text-end">{{ _('Subtotal / المجموع الفرعي') }}</th>
+                        <th class="text-end">{{ _('VAT / الضريبة') }}</th>
+                        <th class="text-end">{{ _('Discount / الخصم') }}</th>
+                        <th class="text-end">{{ _('Final Total / الإجمالي') }}</th>
+                        <th>{{ _('Items / العناصر') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in purchases or [] %}
+                    <tr>
+                        <td class="text-center"><span class="badge bg-secondary">{{ loop.index }}</span></td>
+                        <td>{{ p.date }}</td>
+                        <td><strong class="text-primary">{{ p.invoice_number }}</strong></td>
+                        <td>{{ p.supplier_name or '-' }}</td>
+                        <td><span class="badge bg-light text-dark">{{ p.payment_method }}</span></td>
+                        <td>
+                            {% if (p.status or '').lower() == 'paid' %}
+                            <span class="badge bg-success">{{ _('Paid / مدفوع') }}</span>
+                            {% elif (p.status or '').lower() == 'partial' %}
+                            <span class="badge bg-warning">{{ _('Partial / جزئي') }}</span>
+                            {% elif (p.status or '').lower() == 'unpaid' %}
+                            <span class="badge bg-danger">{{ _('Unpaid / غير مدفوع') }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ p.status or '-' }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">﷼{{ '%.2f'|format(p.total_before_tax or 0) }}</td>
+                        <td class="text-end">﷼{{ '%.2f'|format(p.tax_amount or 0) }}</td>
+                        <td class="text-end">﷼{{ '%.2f'|format(p.discount_amount or 0) }}</td>
+                        <td class="text-end">﷼{{ '%.2f'|format(p.total_after_tax_discount or 0) }}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-toggle-items="{{ p.id }}">{{ _('Show Items / عرض العناصر') }}</button>
+                        </td>
+                    </tr>
+                    <tr class="d-none" data-items-row="{{ p.id }}">
+                        <td colspan="11">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>{{ _('Item / الصنف') }}</th>
+                                            <th class="text-end">{{ _('Unit Price / سعر الوحدة') }}</th>
+                                            <th class="text-end">{{ _('Quantity / الكمية') }}</th>
+                                            <th class="text-end">{{ _('Discount / الخصم') }}</th>
+                                            <th class="text-end">{{ _('Tax / الضريبة') }}</th>
+                                            <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for it in p['items'] %}
+                                        <tr>
+                                            <td>{{ it.name }}</td>
+                                            <td class="text-end">﷼{{ '%.4f'|format(it.price_before_tax or 0) }}</td>
+                                            <td class="text-end">{{ '%.4f'|format(it.quantity or 0) }}</td>
+                                            <td class="text-end">﷼{{ '%.2f'|format(it.discount or 0) }}</td>
+                                            <td class="text-end">﷼{{ '%.2f'|format(it.tax or 0) }}</td>
+                                            <td class="text-end">﷼{{ '%.2f'|format(it.total_price or 0) }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- إحصائيات سريعة -->
     <div class="row mb-4">
         <div class="col-md-4">
@@ -223,5 +305,20 @@ body {
     </div>
     {% endif %}
 </div>
+<script>
+(function(){
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-toggle-items]');
+    if(!btn) return;
+    var id = btn.getAttribute('data-toggle-items');
+    var row = document.querySelector('tr[data-items-row="' + id + '"]');
+    if(!row) return;
+    var showText = '{{ _('Show Items / عرض العناصر') }}';
+    var hideText = '{{ _('Hide Items / إخفاء العناصر') }}';
+    if(row.classList.contains('d-none')){ row.classList.remove('d-none'); btn.textContent = hideText; }
+    else { row.classList.add('d-none'); btn.textContent = showText; }
+  });
+})();
+</script>
 
 {% endblock %}

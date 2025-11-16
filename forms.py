@@ -14,6 +14,18 @@ PAYMENT_METHODS = [
     ('آجل', 'آجل / Credit'),
 ]
 
+# Purchases should restrict payment methods to CASH or BANK
+PURCHASE_PAYMENT_METHODS = [
+    ('CASH', 'نقداً / CASH'),
+    ('BANK', 'بنك / BANK'),
+]
+
+# Expenses should restrict payment methods to CASH or BANK
+EXPENSE_PAYMENT_METHODS = [
+    ('CASH', 'نقداً / CASH'),
+    ('BANK', 'بنك / BANK'),
+]
+
 BRANCHES = [
     ('place_india', 'Place India'),
     ('china_town', 'China Town'),
@@ -97,7 +109,7 @@ class PurchaseInvoiceForm(FlaskForm):
         csrf = False
     date = DateField(_l('Date / التاريخ'), validators=[DataRequired()], format='%Y-%m-%d')
     supplier_name = StringField(_l('Supplier Name / اسم المورد'))
-    payment_method = SelectField(_l('Payment Method / طريقة الدفع'), choices=PAYMENT_METHODS, validators=[DataRequired()])
+    payment_method = SelectField(_l('Payment Method / طريقة الدفع'), choices=PURCHASE_PAYMENT_METHODS, validators=[DataRequired()])
     items = FieldList(FormField(PurchaseInvoiceItemForm), min_entries=1)
     submit = SubmitField(_l('Save Purchase Invoice / حفظ فاتورة الشراء'))
 
@@ -131,7 +143,7 @@ class ExpenseInvoiceForm(FlaskForm):
     class Meta:
         csrf = False
     date = DateField(_l('Date / التاريخ'), validators=[DataRequired()], format='%Y-%m-%d')
-    payment_method = SelectField(_l('Payment Method / طريقة الدفع'), choices=PAYMENT_METHODS, validators=[DataRequired()])
+    payment_method = SelectField(_l('Payment Method / طريقة الدفع'), choices=EXPENSE_PAYMENT_METHODS, validators=[DataRequired()])
     items = FieldList(FormField(ExpenseInvoiceItemForm), min_entries=1)
     submit = SubmitField(_l('Save Expense Invoice / حفظ فاتورة المصروفات'))
 

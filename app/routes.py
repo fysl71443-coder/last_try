@@ -4,7 +4,7 @@ from datetime import datetime, date, timedelta
 from datetime import date as _date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, send_from_directory, send_file
 from flask_login import login_user, logout_user, login_required, current_user
-from sqlalchemy import func, inspect, text
+from sqlalchemy import func, inspect, text, or_
 from sqlalchemy.exc import IntegrityError
 
 from app import db, csrf
@@ -645,14 +645,28 @@ def purchases():
         suppliers = []
     suppliers_json = []
     for s in suppliers:
+        cr = getattr(s, 'cr_number', None)
+        iban = getattr(s, 'iban', None)
+        if (not cr or not iban):
+            try:
+                notes = (getattr(s, 'notes', '') or '')
+                if notes:
+                    for part in notes.split('|'):
+                        p = (part or '').strip()
+                        if (not cr) and p[:3].upper() == 'CR:':
+                            cr = p[3:].strip()
+                        if (not iban) and p[:5].upper() == 'IBAN:':
+                            iban = p[5:].strip()
+            except Exception:
+                pass
         suppliers_json.append({
             'id': s.id,
             'name': s.name,
             'phone': getattr(s, 'phone', None),
             'tax_number': getattr(s, 'tax_number', None),
             'address': getattr(s, 'address', None),
-            'cr_number': getattr(s, 'cr_number', None),
-            'iban': getattr(s, 'iban', None),
+            'cr_number': cr,
+            'iban': iban,
             'active': getattr(s, 'active', True),
         })
     try:
@@ -1082,7 +1096,45 @@ def inventory():
     except Exception:
         ledger_rows = []
 
-    return render_template('inventory.html', raw_materials=raw_materials, meals=meals, ledger_rows=ledger_rows)
+    purchases = []
+    try:
+        invs = PurchaseInvoice.query.order_by(PurchaseInvoice.created_at.desc()).limit(1000).all()
+    except Exception:
+        invs = []
+    items_map = {}
+    try:
+        ids = [inv.id for inv in invs]
+        if ids:
+            rows = PurchaseInvoiceItem.query.filter(PurchaseInvoiceItem.invoice_id.in_(ids)).order_by(PurchaseInvoiceItem.id.asc()).all()
+            for it in rows:
+                items_map.setdefault(it.invoice_id, []).append(it)
+    except Exception:
+        items_map = {}
+    for inv in invs:
+        items_ctx = []
+        for it in items_map.get(inv.id, []):
+            items_ctx.append({
+                'name': it.raw_material_name,
+                'quantity': float(it.quantity or 0),
+                'price_before_tax': float(it.price_before_tax or 0),
+                'discount': float(it.discount or 0),
+                'tax': float(it.tax or 0),
+                'total_price': float(it.total_price or 0),
+            })
+        purchases.append({
+            'id': inv.id,
+            'invoice_number': inv.invoice_number,
+            'date': inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '',
+            'supplier_name': getattr(inv, 'supplier_name', '') or '',
+            'payment_method': (getattr(inv, 'payment_method', '') or '').upper(),
+            'status': getattr(inv, 'status', '') or '',
+            'total_before_tax': float(getattr(inv, 'total_before_tax', 0.0) or 0.0),
+            'tax_amount': float(getattr(inv, 'tax_amount', 0.0) or 0.0),
+            'discount_amount': float(getattr(inv, 'discount_amount', 0.0) or 0.0),
+            'total_after_tax_discount': float(getattr(inv, 'total_after_tax_discount', 0.0) or 0.0),
+            'items': items_ctx,
+        })
+    return render_template('inventory.html', raw_materials=raw_materials, meals=meals, ledger_rows=ledger_rows, purchases=purchases)
 
 @main.route('/expenses', methods=['GET', 'POST'], endpoint='expenses')
 @login_required
@@ -1564,6 +1616,7 @@ def employees():
         inactive_count=inactive_count,
         current_year=get_saudi_now().year,
         current_month=get_saudi_now().month,
+        form=form,
     )
 
 
@@ -3192,6 +3245,124 @@ def payments():
 @login_required
 def reports():
     return render_template('reports.html')
+
+@main.route('/reports/print/customer-sales', methods=['GET'], endpoint='reports_print_customer_sales')
+@login_required
+def reports_print_customer_sales():
+    customer = (request.args.get('customer') or '').strip()
+    customers_param = (request.args.get('customers') or '').strip()
+    start_date = (request.args.get('start_date') or '').strip()
+    end_date = (request.args.get('end_date') or '').strip()
+    branch = (request.args.get('branch') or 'all').strip()
+    rows = []
+    totals = {'Amount': 0.0, 'Discount': 0.0, 'VAT': 0.0, 'Total': 0.0}
+    payment_totals = {}
+    try:
+        from sqlalchemy import or_, and_
+        import re
+        def normalize_group(n: str):
+            s = re.sub(r'[^a-z]', '', (n or '').lower())
+            if s.startswith('hunger'): return 'hunger'
+            if s.startswith('keeta') or s.startswith('keet'): return 'keeta'
+            if s.startswith('noon'): return 'noon'
+            return s
+        # Aggregate items per invoice for amount and VAT
+        items_sub = db.session.query(
+            SalesInvoiceItem.invoice_id.label('inv_id'),
+            func.sum(SalesInvoiceItem.price_before_tax * SalesInvoiceItem.quantity).label('amount_sum'),
+            func.sum(SalesInvoiceItem.tax).label('vat_sum')
+        ).group_by(SalesInvoiceItem.invoice_id).subquery()
+
+        q = db.session.query(
+            SalesInvoice,
+            items_sub.c.amount_sum,
+            items_sub.c.vat_sum
+        ).outerjoin(items_sub, items_sub.c.inv_id == SalesInvoice.id)
+        q = q.filter(SalesInvoice.status == 'paid')
+        customers_list = []
+        if customers_param:
+            customers_list = [normalize_group(s) for s in customers_param.split(',') if s.strip()]
+        base_filters = []
+        if customers_list:
+            for base in customers_list:
+                if base:
+                    base_filters.append(SalesInvoice.customer_name.ilike(base + '%'))
+        elif customer:
+            base = normalize_group(customer)
+            if base:
+                base_filters.append(SalesInvoice.customer_name.ilike(base + '%'))
+        if base_filters:
+            q = q.filter(or_(*base_filters))
+        if branch and branch != 'all':
+            q = q.filter(SalesInvoice.branch == branch)
+        # Date range
+        sd_dt = None; ed_dt = None
+        try:
+            sd_dt = datetime.fromisoformat(start_date) if start_date else None
+        except Exception:
+            sd_dt = None
+        try:
+            ed_dt = datetime.fromisoformat(end_date) if end_date else None
+        except Exception:
+            ed_dt = None
+        if sd_dt and ed_dt:
+            q = q.filter(or_(SalesInvoice.created_at.between(sd_dt, ed_dt), SalesInvoice.date.between(sd_dt, ed_dt)))
+        elif sd_dt and (not ed_dt):
+            q = q.filter(or_(SalesInvoice.created_at >= sd_dt, SalesInvoice.date >= sd_dt))
+        elif ed_dt and (not sd_dt):
+            q = q.filter(or_(SalesInvoice.created_at <= ed_dt, SalesInvoice.date <= ed_dt))
+
+        q = q.order_by(SalesInvoice.created_at.desc(), SalesInvoice.date.desc()).limit(2000)
+        for inv, amount_sum, vat_sum in q.all():
+            dt = getattr(inv, 'created_at', None) or getattr(inv, 'date', None) or get_saudi_now()
+            day_name = dt.strftime('%A')
+            amount = float(amount_sum or 0.0)
+            discount = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+            vat = float(vat_sum or 0.0)
+            total = float(amount - discount + vat)
+            pm = (inv.payment_method or '').upper()
+            rows.append({
+                'Date': dt.strftime('%Y-%m-%d'),
+                'Day': day_name,
+                'Invoice': inv.invoice_number,
+                'Payment': pm,
+                'Amount': amount,
+                'Discount': discount,
+                'VAT': vat,
+                'Total': total,
+            })
+            totals['Amount'] += amount
+            totals['Discount'] += discount
+            totals['VAT'] += vat
+            totals['Total'] += total
+            payment_totals[pm] = payment_totals.get(pm, 0.0) + total
+    except Exception:
+        pass
+
+    try:
+        settings = Settings.query.first()
+    except Exception:
+        settings = None
+    title_customer = (normalize_group(customer) if customer else '')
+    if customers_list:
+        try:
+            title_customer = ', '.join(customers_list)
+        except Exception:
+            title_customer = title_customer or 'multiple'
+    meta = {
+        'title': f"Customer Sales — {title_customer}",
+        'customer': title_customer,
+        'branch': branch,
+        'start_date': start_date,
+        'end_date': end_date,
+        'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+    }
+    columns = ['Date','Day','Invoice','Payment','Amount','Discount','VAT','Total']
+    return render_template('print_report.html', report_title=meta['title'], settings=settings,
+                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
+                           payment_method='all', branch=meta['branch'],
+                           columns=columns, data=rows, totals=totals, totals_columns=['Amount','Discount','VAT','Total'],
+                           totals_colspan=4, payment_totals=payment_totals)
 
 # ---------- POS/Tables: basic navigation ----------
 @main.route('/sales/<branch_code>/tables', endpoint='sales_tables')
@@ -4943,7 +5114,7 @@ def api_users_delete():
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 # Permissions: persist to AppKV to avoid schema changes
-PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','employees','salaries','financials','vat','reports','invoices','payments','customers','menu','settings','suppliers','table_settings','users','sample_data']
+PERM_SCREENS = ['dashboard','sales','purchases','inventory','expenses','employees','salaries','financials','vat','reports','invoices','payments','customers','menu','settings','suppliers','table_settings','users','sample_data','archive']
 
 def _perms_k(uid, scope):
     return f"user_perms:{scope or 'all'}:{int(uid)}"
@@ -4963,6 +5134,14 @@ def api_users_permissions_get(uid):
                 items = []
         else:
             items = [{ 'screen_key': s, 'view': False, 'add': False, 'edit': False, 'delete': False, 'print': False } for s in PERM_SCREENS]
+            try:
+                u = User.query.get(int(uid))
+            except Exception:
+                u = None
+            if u and ((getattr(u, 'username','') == 'admin') or (getattr(u,'id',None) == 1) or (getattr(u,'role','') == 'admin')):
+                for it in items:
+                    if it.get('screen_key') == 'archive':
+                        it['view'] = True
         return jsonify({'ok': True, 'items': items})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
@@ -5549,8 +5728,8 @@ def vat_dashboard():
         purchases_deductible_total = purchases_deductible_base + purchases_deductible_vat
 
         purchases_non_deductible_base = float(p_nd_base or 0.0) + float(e_nd_base or 0.0)
-    purchases_non_deductible_vat = 0.0
-    purchases_non_deductible_total = purchases_non_deductible_base
+        purchases_non_deductible_vat = 0.0
+        purchases_non_deductible_total = purchases_non_deductible_base
     except Exception:
         purchases_deductible_base = purchases_deductible_vat = purchases_deductible_total = 0.0
         purchases_non_deductible_base = purchases_non_deductible_vat = purchases_non_deductible_total = 0.0
@@ -7059,11 +7238,11 @@ def print_payroll():
         basic_sum = allow_sum = ded_sum = prev_sum = total_sum = paid_sum = 0.0
         months_rows = []
         unpaid_count = 0
-    for (yy, mm) in iter_months(y_from, m_from, y_to, m_to):
-        s = Salary.query.filter_by(employee_id=emp.id, year=int(yy), month=int(mm)).first()
-        if not s:
-            b, a, d = get_defaults(emp.id)
-            prev = 0.0
+        for (yy, mm) in iter_months(y_from, m_from, y_to, m_to):
+            s = Salary.query.filter_by(employee_id=emp.id, year=int(yy), month=int(mm)).first()
+            if not s:
+                b, a, d = get_defaults(emp.id)
+                prev = 0.0
                 tot = float(b + a - d + prev)
                 sal_id = None
             else:
@@ -7231,35 +7410,84 @@ def _archive_invoice_pdf(inv):
 @login_required
 def api_archive_list():
     try:
+        if not user_can('archive','view'):
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
         year = request.args.get('year', type=int)
         quarter = (request.args.get('quarter') or '').strip().upper() or None
         month = request.args.get('month', type=int)
         day = request.args.get('day', type=int)
-        q = SalesInvoice.query.filter((SalesInvoice.status == 'paid'))
-        if year:
-            q = q.filter(func.extract('year', SalesInvoice.created_at) == int(year))
-        if month:
-            q = q.filter(func.extract('month', SalesInvoice.created_at) == int(month))
-        if day:
-            q = q.filter(func.extract('day', SalesInvoice.created_at) == int(day))
-        rows = q.order_by(SalesInvoice.created_at.desc()).limit(500).all()
+        branch = (request.args.get('branch') or '').strip()
+        page = request.args.get('page', type=int) or 1
+        page_size = request.args.get('page_size', type=int) or 100
+        if page_size > 500:
+            page_size = 500
+        if page_size < 1:
+            page_size = 100
+        start_date = None
+        end_date = None
+        if year and (not quarter and not month and not day):
+            start_date = datetime(year, 1, 1)
+            end_date = datetime(year, 12, 31, 23, 59, 59)
+        if year and quarter and (not month and not day):
+            qmap = {'Q1': (1, 3), 'Q2': (4, 6), 'Q3': (7, 9), 'Q4': (10, 12)}
+            rng = qmap.get(quarter)
+            if rng:
+                start_date = datetime(year, rng[0], 1)
+                if rng[1] == 12:
+                    end_date = datetime(year, 12, 31, 23, 59, 59)
+                else:
+                    end_date = datetime(year, rng[1] + 1, 1) - timedelta(seconds=1)
+        if year and month and (not day):
+            start_date = datetime(year, month, 1)
+            if month == 12:
+                end_date = datetime(year, 12, 31, 23, 59, 59)
+            else:
+                end_date = datetime(year, month + 1, 1) - timedelta(seconds=1)
+        if year and month and day:
+            start_date = datetime(year, month, day)
+            end_date = start_date + timedelta(days=1) - timedelta(seconds=1)
+
+        q = db.session.query(
+            SalesInvoice.invoice_number,
+            SalesInvoice.created_at,
+            SalesInvoice.date,
+            SalesInvoice.payment_method,
+            SalesInvoice.total_after_tax_discount,
+            SalesInvoice.branch
+        ).filter((SalesInvoice.status == 'paid'))
+        if branch:
+            q = q.filter(SalesInvoice.branch == branch)
+        if start_date and end_date:
+            q = q.filter(or_(SalesInvoice.created_at.between(start_date, end_date), SalesInvoice.date.between(start_date, end_date)))
+        q = q.order_by(SalesInvoice.created_at.desc(), SalesInvoice.date.desc())
+        rows = q.offset((page - 1) * page_size).limit(page_size).all()
+        keys = [f"pdf_path:sales:{r[0]}" for r in rows]
+        meta_rows = AppKV.query.filter(AppKV.k.in_(keys)).all() if keys else []
+        meta_map = {}
+        for kv in meta_rows:
+            try:
+                meta_map[kv.k] = json.loads(kv.v) if kv.v else {}
+            except Exception:
+                meta_map[kv.k] = {}
         out = []
-        for inv in rows:
-            m = int((getattr(inv, 'created_at', get_saudi_now())).month)
+        for r in rows:
+            inv_no, created_at, date_f, pm, total_amt, branch_code = r
+            dt = created_at or date_f or get_saudi_now()
+            m = int(dt.month)
             qn = ((m - 1) // 3) + 1
-            meta = kv_get(f"pdf_path:sales:{inv.invoice_number}", {}) or {}
+            meta = meta_map.get(f"pdf_path:sales:{inv_no}", {}) or {}
             out.append({
-                'invoice_number': inv.invoice_number,
-                'date': (getattr(inv, 'created_at', get_saudi_now())).strftime('%Y-%m-%d'),
-                'payment_method': inv.payment_method,
-                'total_amount': float(inv.total_after_tax_discount or 0.0),
-                'branch': getattr(inv, 'branch', None),
+                'invoice_number': inv_no,
+                'date': dt.strftime('%Y-%m-%d'),
+                'payment_method': pm,
+                'total_amount': float(total_amt or 0.0),
+                'branch': branch_code,
                 'quarter': f"Q{qn}",
                 'pdf_path': meta.get('path')
             })
         if quarter in ('Q1','Q2','Q3','Q4'):
             out = [x for x in out if x['quarter'] == quarter]
-        return jsonify({'ok': True, 'items': out})
+        return jsonify({'ok': True, 'items': out, 'page': page, 'page_size': page_size})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
 
@@ -7267,6 +7495,8 @@ def api_archive_list():
 @login_required
 def archive_open(invoice_number):
     try:
+        if not user_can('archive','view'):
+            return 'Forbidden', 403
         meta = kv_get(f"pdf_path:sales:{invoice_number}", {}) or {}
         p = meta.get('path')
         if not p or (not os.path.exists(p)):
@@ -7279,6 +7509,115 @@ def archive_open(invoice_number):
 @login_required
 def archive_page():
     try:
-        return render_template('archive.html', now=get_saudi_now())
+        if not user_can('archive','view'):
+            return 'Forbidden', 403
+        return render_template('archive.html', now=get_saudi_now(), branches=BRANCH_LABELS)
     except Exception as e:
         return f'Error loading archive: {e}', 500
+
+@main.route('/archive/download', methods=['GET'], endpoint='archive_download')
+@login_required
+def archive_download():
+    try:
+        if not user_can('archive','view'):
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
+        import io, zipfile, csv
+        year = request.args.get('year', type=int)
+        quarter = (request.args.get('quarter') or '').strip().upper() or None
+        month = request.args.get('month', type=int)
+        day = request.args.get('day', type=int)
+        branch = (request.args.get('branch') or '').strip()
+        fmt = (request.args.get('fmt') or '').strip().lower() or 'zip'
+        start_date = None
+        end_date = None
+        if year and (not quarter and not month and not day):
+            start_date = datetime(year, 1, 1)
+            end_date = datetime(year, 12, 31, 23, 59, 59)
+        if year and quarter and (not month and not day):
+            qmap = {'Q1': (1, 3), 'Q2': (4, 6), 'Q3': (7, 9), 'Q4': (10, 12)}
+            rng = qmap.get(quarter)
+            if rng:
+                start_date = datetime(year, rng[0], 1)
+                if rng[1] == 12:
+                    end_date = datetime(year, 12, 31, 23, 59, 59)
+                else:
+                    end_date = datetime(year, rng[1] + 1, 1) - timedelta(seconds=1)
+        if year and month and (not day):
+            start_date = datetime(year, month, 1)
+            if month == 12:
+                end_date = datetime(year, 12, 31, 23, 59, 59)
+            else:
+                end_date = datetime(year, month + 1, 1) - timedelta(seconds=1)
+        if year and month and day:
+            start_date = datetime(year, month, day)
+            end_date = start_date + timedelta(days=1) - timedelta(seconds=1)
+        q = db.session.query(
+            SalesInvoice.invoice_number,
+            SalesInvoice.created_at,
+            SalesInvoice.date,
+            SalesInvoice.payment_method,
+            SalesInvoice.total_after_tax_discount,
+            SalesInvoice.branch
+        ).filter((SalesInvoice.status == 'paid'))
+        if branch:
+            q = q.filter(SalesInvoice.branch == branch)
+        if start_date and end_date:
+            q = q.filter(or_(SalesInvoice.created_at.between(start_date, end_date), SalesInvoice.date.between(start_date, end_date)))
+        rows = q.order_by(SalesInvoice.created_at.desc(), SalesInvoice.date.desc()).limit(2000).all()
+        items = []
+        keys = [f"pdf_path:sales:{r[0]}" for r in rows]
+        meta_rows = AppKV.query.filter(AppKV.k.in_(keys)).all() if keys else []
+        meta_map = {}
+        for kv in meta_rows:
+            try:
+                meta_map[kv.k] = json.loads(kv.v) if kv.v else {}
+            except Exception:
+                meta_map[kv.k] = {}
+        for r in rows:
+            inv_no, created_at, date_f, pm, total_amt, branch_code = r
+            dt = created_at or date_f or get_saudi_now()
+            m = int(dt.month)
+            qn = ((m - 1) // 3) + 1
+            if quarter in ('Q1','Q2','Q3','Q4') and f"Q{qn}" != quarter:
+                continue
+            meta = meta_map.get(f"pdf_path:sales:{inv_no}", {}) or {}
+            p = meta.get('path')
+            items.append({
+                'invoice_number': inv_no,
+                'date': dt.strftime('%Y-%m-%d'),
+                'payment_method': pm,
+                'total_amount': float(total_amt or 0.0),
+                'branch': branch_code,
+                'quarter': f"Q{qn}",
+                'pdf_path': p if (p and os.path.exists(p)) else None
+            })
+        ts = get_saudi_now().strftime('%Y%m%d-%H%M%S')
+        if fmt == 'csv':
+            out = io.StringIO()
+            w = csv.writer(out)
+            w.writerow(['invoice_number','date','payment_method','total_amount','branch','quarter','pdf_path'])
+            for it in items:
+                w.writerow([it['invoice_number'], it['date'], it['payment_method'] or '', f"{it['total_amount']:.2f}", it['branch'] or '', it['quarter'], it['pdf_path'] or ''])
+            data = out.getvalue().encode('utf-8')
+            buf = io.BytesIO(data)
+            return send_file(buf, mimetype='text/csv', as_attachment=True, download_name=f"invoices-{ts}.csv")
+        else:
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED) as z:
+                manifest = io.StringIO()
+                w = csv.writer(manifest)
+                w.writerow(['invoice_number','date','payment_method','total_amount','branch','quarter','pdf_path'])
+                for it in items:
+                    w.writerow([it['invoice_number'], it['date'], it['payment_method'] or '', f"{it['total_amount']:.2f}", it['branch'] or '', it['quarter'], it['pdf_path'] or ''])
+                z.writestr('manifest.csv', manifest.getvalue())
+                for it in items:
+                    if it['pdf_path']:
+                        name = f"{it['invoice_number']}.pdf"
+                        try:
+                            z.write(it['pdf_path'], arcname=name)
+                        except Exception:
+                            pass
+            buf.seek(0)
+            return send_file(buf, mimetype='application/zip', as_attachment=True, download_name=f"invoices-{ts}.zip")
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
