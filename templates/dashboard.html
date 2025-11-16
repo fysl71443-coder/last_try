@@ -170,6 +170,17 @@ body {
     </div>
     {% endif %}
 
+    {% if can('reports','view') %}
+    <div class="col-md-3 col-sm-6">
+      <a href="{{ url_for('main.archive') }}" class="text-decoration-none text-dark">
+        <div class="dashboard-card">
+          <div class="dashboard-icon">📁</div>
+          <h6>{{ _('Archive / الأرشيف') }}</h6>
+        </div>
+      </a>
+    </div>
+    {% endif %}
+
     {% if can('vat','view') %}
     <div class="col-md-3 col-sm-6">
       <a href="{{ url_for('vat.vat_dashboard') }}" class="text-decoration-none text-dark">
