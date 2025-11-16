@@ -125,18 +125,33 @@
             <tbody>
               {% set p_deduct_base = (data.purchases_deductible_base or 0)|float %}
               {% set p_non_base = (data.purchases_non_deductible_base or 0)|float %}
-              {% set input_vat = (data.input_vat or 0)|float %}
+              {% set e_deduct_base = (data.expenses_deductible_base or 0)|float %}
+              {% set e_deduct_vat = (data.expenses_deductible_vat or 0)|float %}
+              {% set e_non_base = (data.expenses_non_deductible_base or 0)|float %}
+              {% set p_deduct_vat = (data.purchases_deductible_vat or 0)|float %}
               <tr>
                 <td>Deductible Purchases</td>
                 <td class="text-end">{{ '%.2f'|format(p_deduct_base) }}</td>
-                <td class="text-end">{{ '%.2f'|format(input_vat) }}</td>
-                <td class="text-end">{{ '%.2f'|format(p_deduct_base + input_vat) }}</td>
+                <td class="text-end">{{ '%.2f'|format(p_deduct_vat) }}</td>
+                <td class="text-end">{{ '%.2f'|format(p_deduct_base + p_deduct_vat) }}</td>
+              </tr>
+              <tr>
+                <td>Deductible Expenses</td>
+                <td class="text-end">{{ '%.2f'|format(e_deduct_base) }}</td>
+                <td class="text-end">{{ '%.2f'|format(e_deduct_vat) }}</td>
+                <td class="text-end">{{ '%.2f'|format(e_deduct_base + e_deduct_vat) }}</td>
               </tr>
               <tr>
                 <td>Non-deductible Purchases</td>
                 <td class="text-end">{{ '%.2f'|format(p_non_base) }}</td>
                 <td class="text-end">-</td>
                 <td class="text-end">{{ '%.2f'|format(p_non_base) }}</td>
+              </tr>
+              <tr>
+                <td>Non-deductible Expenses</td>
+                <td class="text-end">{{ '%.2f'|format(e_non_base) }}</td>
+                <td class="text-end">-</td>
+                <td class="text-end">{{ '%.2f'|format(e_non_base) }}</td>
               </tr>
             </tbody>
           </table>

@@ -5496,14 +5496,15 @@ def vat_dashboard():
         purchases_deductible_total = purchases_deductible_base + purchases_deductible_vat
 
         purchases_non_deductible_base = float(p_nd_base or 0.0) + float(e_nd_base or 0.0)
-        purchases_non_deductible_vat = 0.0
-        purchases_non_deductible_total = purchases_non_deductible_base
+    purchases_non_deductible_vat = 0.0
+    purchases_non_deductible_total = purchases_non_deductible_base
     except Exception:
         purchases_deductible_base = purchases_deductible_vat = purchases_deductible_total = 0.0
         purchases_non_deductible_base = purchases_non_deductible_vat = purchases_non_deductible_total = 0.0
 
     # Summary
     output_vat = float(sales_standard_vat or 0.0)
+    # Include deductible expenses VAT in input VAT
     input_vat = float(purchases_deductible_vat or 0.0)
     net_vat = output_vat - input_vat
 
@@ -5533,6 +5534,10 @@ def vat_dashboard():
         'purchases_deductible_total': float(purchases_deductible_total or 0.0),
         'purchases_non_deductible_base': float(purchases_non_deductible_base or 0.0),
         'purchases_non_deductible_total': float(purchases_non_deductible_total or 0.0),
+        # Expenses breakdown (explicit rows)
+        'expenses_deductible_base': float(e_ded_base or 0.0),
+        'expenses_deductible_vat': float(e_ded_vat or 0.0),
+        'expenses_non_deductible_base': float(e_nd_base or 0.0),
         # Summary
         'output_vat': float(output_vat or 0.0),
         'input_vat': float(input_vat or 0.0),
@@ -5623,8 +5628,21 @@ def vat_print():
         s = None
     vat_rate = float(getattr(s, 'vat_rate', 15) or 15)/100.0
 
-    output_vat = float(sales_total or 0) * vat_rate
-    input_vat = float((purchases_total or 0) + (expenses_total or 0)) * vat_rate
+    try:
+        output_vat = float(db.session.query(func.coalesce(func.sum(SalesInvoice.tax_amount), 0))
+            .filter(SalesInvoice.date.between(start_date, end_date))
+            .scalar() or 0.0)
+    except Exception:
+        output_vat = float(sales_total or 0) * vat_rate
+    try:
+        input_vat = float(db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.tax), 0))
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id)
+            .filter(PurchaseInvoice.date.between(start_date, end_date))
+            .scalar() or 0.0) + float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.tax_amount), 0))
+            .filter(ExpenseInvoice.date.between(start_date, end_date))
+            .scalar() or 0.0)
+    except Exception:
+        input_vat = float((purchases_total or 0) + (expenses_total or 0)) * vat_rate
     net_vat = output_vat - input_vat
 
     # Render unified print report (support CSV export)
