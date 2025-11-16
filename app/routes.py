@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, date, timedelta
 from datetime import date as _date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, send_from_directory
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, send_from_directory, send_file
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -3953,6 +3953,10 @@ def api_invoice_confirm_print():
                 ))
             inv.status = 'paid'
             db.session.commit()
+            try:
+                _archive_invoice_pdf(inv)
+            except Exception as e:
+                current_app.logger.error('Archive PDF failed: %s', e)
 
         # Clear draft to free the table and update DB table status to available
         if branch and table:
@@ -7155,3 +7159,126 @@ def print_selected():
         qs['employee_codes'] = ','.join([c.strip() for c in raw.split(',') if c.strip()])
     # Redirect to GET printer with params to avoid resubmission issues
     return redirect(url_for('main.print_payroll', **qs))
+def _archive_invoice_pdf(inv):
+    import os, io
+    try:
+        dt = getattr(inv, 'created_at', None) or get_saudi_now()
+    except Exception:
+        dt = get_saudi_now()
+    year = dt.year; month = dt.month; day = dt.day
+    quarter_num = ((month - 1) // 3) + 1
+    quarter = f"Q{quarter_num}"
+    base_dir = os.getenv('ARCHIVE_DIR') or os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Archive')
+    rel_dir = os.path.join(str(year), quarter, f"{month:02d}", f"{day:02d}")
+    out_dir = os.path.join(base_dir, rel_dir)
+    os.makedirs(out_dir, exist_ok=True)
+    fname = f"INV-{inv.invoice_number}.pdf"
+    fpath = os.path.join(out_dir, fname)
+    # Render receipt HTML
+    try:
+        items = SalesInvoiceItem.query.filter_by(invoice_id=inv.id).all()
+        items_ctx = []
+        for it in items:
+            line = float(getattr(it, 'price_before_tax', 0) or 0) * float(getattr(it, 'quantity', 0) or 0)
+            items_ctx.append({'product_name': getattr(it, 'product_name', '') or '', 'quantity': float(getattr(it, 'quantity', 0) or 0), 'total_price': line})
+        s = None
+        try:
+            s = Settings.query.first()
+        except Exception:
+            s = None
+        dt_str = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
+        html = render_template('print/receipt.html', inv={
+            'invoice_number': inv.invoice_number,
+            'table_number': inv.table_number,
+            'customer_name': inv.customer_name,
+            'customer_phone': inv.customer_phone,
+            'payment_method': inv.payment_method,
+            'status': 'PAID',
+            'total_before_tax': float(inv.total_before_tax or 0.0),
+            'tax_amount': float(inv.tax_amount or 0.0),
+            'discount_amount': float(inv.discount_amount or 0.0),
+            'total_after_tax_discount': float(inv.total_after_tax_discount or 0.0),
+            'branch': getattr(inv, 'branch', None),
+            'branch_code': getattr(inv, 'branch', None),
+        }, items=items_ctx, settings=s, branch_name=BRANCH_LABELS.get(getattr(inv,'branch',None) or '', getattr(inv,'branch','')), date_time=dt_str, display_invoice_number=inv.invoice_number)
+    except Exception:
+        html = '<html><body><h3>Receipt</h3><p>Render failed.</p></body></html>'
+    # Convert to PDF
+    pdf_bytes = None
+    try:
+        from weasyprint import HTML
+        pdf_bytes = HTML(string=html, base_url=current_app.root_path).write_pdf()
+    except Exception:
+        try:
+            import pdfkit
+            pdf_bytes = pdfkit.from_string(html, False)
+        except Exception:
+            pdf_bytes = None
+    if pdf_bytes:
+        with open(fpath, 'wb') as f:
+            f.write(pdf_bytes)
+    else:
+        # Fallback: save HTML for now
+        fpath = fpath[:-4] + '.html'
+        with open(fpath, 'w', encoding='utf-8') as f:
+            f.write(html)
+    try:
+        kv_set(f"pdf_path:sales:{inv.invoice_number}", {'path': fpath, 'saved_at': get_saudi_now().isoformat()})
+    except Exception:
+        pass
+
+@main.route('/api/archive/list', methods=['GET'], endpoint='api_archive_list')
+@login_required
+def api_archive_list():
+    try:
+        year = request.args.get('year', type=int)
+        quarter = (request.args.get('quarter') or '').strip().upper() or None
+        month = request.args.get('month', type=int)
+        day = request.args.get('day', type=int)
+        q = SalesInvoice.query.filter((SalesInvoice.status == 'paid'))
+        if year:
+            q = q.filter(func.extract('year', SalesInvoice.created_at) == int(year))
+        if month:
+            q = q.filter(func.extract('month', SalesInvoice.created_at) == int(month))
+        if day:
+            q = q.filter(func.extract('day', SalesInvoice.created_at) == int(day))
+        rows = q.order_by(SalesInvoice.created_at.desc()).limit(500).all()
+        out = []
+        for inv in rows:
+            m = int((getattr(inv, 'created_at', get_saudi_now())).month)
+            qn = ((m - 1) // 3) + 1
+            meta = kv_get(f"pdf_path:sales:{inv.invoice_number}", {}) or {}
+            out.append({
+                'invoice_number': inv.invoice_number,
+                'date': (getattr(inv, 'created_at', get_saudi_now())).strftime('%Y-%m-%d'),
+                'payment_method': inv.payment_method,
+                'total_amount': float(inv.total_after_tax_discount or 0.0),
+                'branch': getattr(inv, 'branch', None),
+                'quarter': f"Q{qn}",
+                'pdf_path': meta.get('path')
+            })
+        if quarter in ('Q1','Q2','Q3','Q4'):
+            out = [x for x in out if x['quarter'] == quarter]
+        return jsonify({'ok': True, 'items': out})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/archive/open/<invoice_number>', methods=['GET'], endpoint='archive_open')
+@login_required
+def archive_open(invoice_number):
+    try:
+        meta = kv_get(f"pdf_path:sales:{invoice_number}", {}) or {}
+        p = meta.get('path')
+        if not p or (not os.path.exists(p)):
+            return 'File not found', 404
+        return send_file(p, as_attachment=False)
+    except Exception as e:
+        return f'Error: {e}', 500
+
+@main.route('/archive', methods=['GET'], endpoint='archive')
+@login_required
+def archive_page():
+    try:
+        return render_template('archive.html', now=get_saudi_now())
+    except Exception as e:
+        return f'Error loading archive: {e}', 500

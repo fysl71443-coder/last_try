@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Archive</title>
+  <style>
+    body{font-family: Arial, sans-serif; padding:16px}
+    .filters{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+    table{width:100%; border-collapse: collapse}
+    th, td{border:1px solid #ccc; padding:6px}
+    th{background:#f5f5f5}
+  </style>
+</head>
+<body>
+  <h2>📁 Archive / أرشيف الفواتير</h2>
+  <div class="filters">
+    <select id="year">
+      <option value="">Year</option>
+      {% for y in range((now.year-2), (now.year+1)) %}
+      <option value="{{ y }}">{{ y }}</option>
+      {% endfor %}
+    </select>
+    <select id="quarter">
+      <option value="">Quarter</option>
+      <option>Q1</option>
+      <option>Q2</option>
+      <option>Q3</option>
+      <option>Q4</option>
+    </select>
+    <select id="month">
+      <option value="">Month</option>
+      {% for m in range(1,13) %}
+      <option value="{{ '%02d'|format(m) }}">{{ '%02d'|format(m) }}</option>
+      {% endfor %}
+    </select>
+    <select id="day">
+      <option value="">Day</option>
+      {% for d in range(1,32) %}
+      <option value="{{ '%02d'|format(d) }}">{{ '%02d'|format(d) }}</option>
+      {% endfor %}
+    </select>
+    <button id="search">بحث</button>
+  </div>
+
+  <table id="grid">
+    <thead>
+      <tr>
+        <th>Invoice</th>
+        <th>Date</th>
+        <th>Payment</th>
+        <th>Total</th>
+        <th>Branch</th>
+        <th>Open PDF</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    async function load(){
+      const y = document.getElementById('year').value || '';
+      const q = document.getElementById('quarter').value || '';
+      const m = document.getElementById('month').value || '';
+      const d = document.getElementById('day').value || '';
+      const url = `/api/archive/list?year=${encodeURIComponent(y)}&quarter=${encodeURIComponent(q)}&month=${encodeURIComponent(m)}&day=${encodeURIComponent(d)}`;
+      const res = await fetch(url, {credentials:'same-origin'});
+      const j = await res.json();
+      const tbody = document.querySelector('#grid tbody');
+      tbody.innerHTML = '';
+      if(!j.ok){ tbody.innerHTML = `<tr><td colspan="6">Error: ${j.error||'Failed'}</td></tr>`; return; }
+      j.items.forEach(row=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${row.invoice_number}</strong></td>
+          <td>${row.date}</td>
+          <td>${row.payment_method||'-'}</td>
+          <td>${(row.total_amount||0).toFixed(2)}</td>
+          <td>${row.branch||'-'}</td>
+          <td>${row.pdf_path ? `<a href="/archive/open/${row.invoice_number}" target="_blank">Open</a>` : '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    document.getElementById('search').addEventListener('click', (ev)=>{ ev.preventDefault(); load(); });
+    load();
+  </script>
+</body>
+</html>
