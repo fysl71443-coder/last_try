@@ -254,6 +254,10 @@ body {
                                 <div class="col-md-4">
                                     {{ item_form.form.description.label(class_='form-label fw-bold') }}
                                     {{ item_form.form.description(class_='form-control', placeholder=_('e.g., Office rent, Electricity bill / مثل: إيجار المكتب، فاتورة الكهرباء')) }}
+                                    <div class="mt-2">
+                                        {{ item_form.form.account_code.label(class_='form-label fw-bold') }}
+                                        {{ item_form.form.account_code(class_='form-select') }}
+                                    </div>
                                 </div>
                                 <div class="col-md-2">
                                     {{ item_form.quantity.label(class_='form-label fw-bold') }}
@@ -405,12 +409,10 @@ body {
                         </td>
                         <td class="text-center">
                             <div class="btn-group" role="group">
-                                <button class="btn btn-sm btn-outline-info" onclick="window.viewInvoice({{ invoice.id }})" title="{{ _('View Details / عرض التفاصيل') }}">
+                                <button class="btn btn_sm btn-outline-info" onclick="window.viewInvoice({{ invoice.id }})" title="{{ _('View Details / عرض التفاصيل') }}">
                                     👁️
                                 </button>
-                                <button class="btn btn-sm btn-outline-primary" onclick="window.editInvoice({{ invoice.id }})" title="{{ _('Edit / تعديل') }}">
-                                    ✏️
-                                </button>
+                                
                                 <form method="post" action="{{ url_for('main.expense_delete', eid=invoice.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this expense invoice? / حذف فاتورة المصروفات هذه؟') }}')">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete / حذف') }}">🗑️</button>
@@ -502,6 +504,21 @@ body {
                 <div class="col-md-4">
                     <label class="form-label fw-bold">{{ _('Description / الوصف') }}</label>
                     <input class="form-control" name="items-${itemIndex}-description" type="text" placeholder="{{ _('e.g., Office rent, Electricity bill / مثل: إيجار المكتب، فاتورة الكهرباء') }}">
+                    <div class="mt-2">
+                        <label class="form-label fw-bold">{{ _('Account / الحساب') }}</label>
+                        <select class="form-select" name="items-${itemIndex}-account_code">
+                            <option value="RENT">{{ _('Rent / إيجار') }}</option>
+                            <option value="MAINT">{{ _('Maintenance / صيانة') }}</option>
+                            <option value="UTIL">{{ _('Utilities / مرافق') }}</option>
+                            <option value="LOG">{{ _('Logistics / لوجستيات') }}</option>
+                            <option value="MKT">{{ _('Marketing / تسويق') }}</option>
+                            <option value="TEL">{{ _('Telecom & Internet / اتصالات وإنترنت') }}</option>
+                            <option value="STAT">{{ _('Stationery / قرطاسية') }}</option>
+                            <option value="CLEAN">{{ _('Cleaning / نظافة') }}</option>
+                            <option value="GOV">{{ _('Government Payments / مدفوعات حكومية') }}</option>
+                            <option value="EXP" selected>{{ _('Operating Expenses / مصروفات تشغيلية') }}</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label fw-bold">{{ _('Quantity / الكمية') }}</label>
@@ -611,10 +628,45 @@ body {
         document.body.removeChild(link);
     }
 
+    const EXP_INVOICES = {{ (invoices_json or []) | tojson | safe }};
     // View invoice details
     window.viewInvoice = function(invoiceId) {
-        // Open in new tab
-        window.open(`/expenses/${invoiceId}/view`, '_blank');
+        const inv = EXP_INVOICES.find(x => x.id === invoiceId);
+        if(!inv) return;
+        const modalBody = document.getElementById('expenseModalBody');
+        if(!modalBody) return;
+        const rows = (inv.items||[]).map(it=>`
+          <tr>
+            <td>${it.description||''}</td>
+            <td class="text-end">${(it.quantity||0).toFixed(2)}</td>
+            <td class="text-end">﷼${(it.price_before_tax||0).toFixed(2)}</td>
+            <td class="text-end">﷼${(it.discount||0).toFixed(2)}</td>
+            <td class="text-end">﷼${(it.tax||0).toFixed(2)}</td>
+            <td class="text-end">﷼${(it.total_price||0).toFixed(2)}</td>
+          </tr>`).join('');
+        modalBody.innerHTML = `
+          <div class="mb-2"><strong>{{ _('Invoice No / رقم الفاتورة') }}:</strong> ${inv.invoice_number||'-'}</div>
+          <div class="mb-2"><strong>{{ _('Date / التاريخ') }}:</strong> ${inv.date||'-'}</div>
+          <div class="mb-2"><strong>{{ _('Payment / الدفع') }}:</strong> ${(inv.payment_method||'-').toUpperCase()}</div>
+          <div class="mb-2"><strong>{{ _('Status / الحالة') }}:</strong> ${(inv.status||'-').toUpperCase()}</div>
+          <div class="mb-2"><strong>{{ _('Total / الإجمالي') }}:</strong> ﷼${(inv.total||0).toFixed(2)}</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>{{ _('Description / الوصف') }}</th>
+                  <th class="text-end">{{ _('Quantity / الكمية') }}</th>
+                  <th class="text-end">{{ _('Unit Price / سعر الوحدة') }}</th>
+                  <th class="text-end">{{ _('Discount / الخصم') }}</th>
+                  <th class="text-end">{{ _('Tax / الضريبة') }}</th>
+                  <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+        const m = new bootstrap.Modal(document.getElementById('expenseViewModal'));
+        m.show();
     }
 
     // Edit invoice
@@ -672,6 +724,18 @@ body {
   });
 })();
 </script>
+
+<div class="modal fade" id="expenseViewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{ _('Expense Details / تفاصيل المصروف') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="expenseModalBody"></div>
+    </div>
+  </div>
+</div>
 
 
     // Initialize calculations

@@ -26,6 +26,19 @@ EXPENSE_PAYMENT_METHODS = [
     ('BANK', 'بنك / BANK'),
 ]
 
+EXPENSE_ACCOUNT_CHOICES = [
+    ('RENT', 'Rent / إيجار'),
+    ('MAINT', 'Maintenance / صيانة'),
+    ('UTIL', 'Utilities / مرافق'),
+    ('LOG', 'Logistics / لوجستيات'),
+    ('MKT', 'Marketing / تسويق'),
+    ('TEL', 'Telecom & Internet / اتصالات وإنترنت'),
+    ('STAT', 'Stationery / قرطاسية'),
+    ('CLEAN', 'Cleaning / نظافة'),
+    ('GOV', 'Government Payments / مدفوعات حكومية'),
+    ('EXP', 'Operating Expenses / مصروفات تشغيلية'),
+]
+
 BRANCHES = [
     ('place_india', 'Place India'),
     ('china_town', 'China Town'),
@@ -118,6 +131,7 @@ class ExpenseInvoiceItemForm(FlaskForm):
     class Meta:
         csrf = False
     description = StringField(_l('Description / الوصف'), validators=[DataRequired()])
+    account_code = SelectField(_l('Account / الحساب'), choices=EXPENSE_ACCOUNT_CHOICES, validators=[Optional()])
     quantity = DecimalField(_l('Quantity / الكمية'), default=1, validators=[DataRequired(), NumberRange(min=0.01)], places=2)
     price_before_tax = DecimalField(_l('Unit Price / سعر الوحدة'), validators=[DataRequired(), NumberRange(min=0)], places=2)
     tax = DecimalField(_l('Tax / الضريبة'), validators=[Optional(), NumberRange(min=0)], places=2)

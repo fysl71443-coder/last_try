@@ -166,7 +166,7 @@ body {
         </div>
         <div class="col-md-4">
             <div class="stats-card">
-                <h4>${{ "%.2f"|format(meals|sum(attribute='total_cost') or 0) }}</h4>
+                <h4>﷼{{ "%.2f"|format(meals|sum(attribute='total_cost') or 0) }}</h4>
                 <p class="mb-0">{{ _('Total Investment / إجمالي الاستثمار') }}</p>
             </div>
         </div>
@@ -214,7 +214,7 @@ body {
                     <tr>
                         <td>{{ material.display_name }}</td>
                         <td><span class="badge bg-secondary">{{ material.unit }}</span></td>
-                        <td class="cost-highlight">${{ "%.4f"|format(material.cost_per_unit) }}</td>
+                        <td class="cost-highlight">﷼{{ "%.4f"|format(material.cost_per_unit) }}</td>
                         <td>{{ material.category or '-' }}</td>
                     </tr>
                     {% endfor %}
@@ -258,9 +258,9 @@ body {
                     <tr>
                         <td><strong>{{ meal.display_name }}</strong></td>
                         <td>{{ meal.ingredients|length }} {{ _('items / عناصر') }}</td>
-                        <td class="cost-highlight">${{ "%.2f"|format(meal.total_cost) }}</td>
+                        <td class="cost-highlight">﷼{{ "%.2f"|format(meal.total_cost) }}</td>
                         <td>{{ "%.1f"|format(meal.profit_margin_percent) }}%</td>
-                        <td class="price-highlight">${{ "%.2f"|format(meal.selling_price) }}</td>
+                        <td class="price-highlight">﷼{{ "%.2f"|format(meal.selling_price) }}</td>
                     </tr>
                     {% endfor %}
                     {% if meals|length > 10 %}

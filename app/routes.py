@@ -13,7 +13,7 @@ ext_db = None
 from app.models import AppKV, TableLayout
 from models import User
 from models import OrderInvoice
-from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault, DepartmentRate, EmployeeHours
+from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault, DepartmentRate, EmployeeHours, Account, LedgerEntry
 from models import get_saudi_now
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
@@ -689,7 +689,6 @@ def purchases():
         })
 
     if request.method == 'POST':
-        # Parse minimal fields
         pm = (request.form.get('payment_method') or 'cash').strip().lower()
         date_str = request.form.get('date') or get_saudi_now().date().isoformat()
         supplier_name = (request.form.get('supplier_name') or '').strip() or None
@@ -703,16 +702,11 @@ def purchases():
                 payment_method=pm,
                 user_id=getattr(current_user, 'id', 1)
             )
-            # Payment status from form (paid / partial / unpaid)
             inv.status = (request.form.get('status') or (getattr(PurchaseInvoice, 'status', None) and 'unpaid') or 'unpaid').strip().lower()
             if inv.status not in ('paid','partial','unpaid'):
                 inv.status = 'unpaid'
-            # Collect items
             idx = 0
-            total_before = 0.0
-            total_tax = 0.0
-            total_disc = 0.0
-            items_created = 0
+            total_before = total_tax = total_disc = 0.0
             while True:
                 prefix = f"items-{idx}-"
                 name = request.form.get(prefix + 'item_name')
@@ -723,45 +717,31 @@ def purchases():
                 tax_pct = request.form.get(prefix + 'tax_pct')
                 if name is None and qty is None and price is None and disc_pct is None and tax_pct is None:
                     break
-                # Skip empty rows
                 if not name and not qty and not price:
                     idx += 1
                     continue
                 try:
-                    q = float(qty or 0)
-                    p = float(price or 0)
-                    d_pct = float(disc_pct or 0)
-                    t_pct = float(tax_pct or 0)
+                    q = float(qty or 0); p = float(price or 0); d_pct = float(disc_pct or 0); t_pct = float(tax_pct or 0)
                 except Exception:
-                    q = p = 0.0
-                    d_pct = t_pct = 0.0
+                    q = p = 0.0; d_pct = t_pct = 0.0
                 before = q * p
                 disc_amt = max(0.0, min(before, before * (d_pct/100.0)))
                 base = max(0.0, before - disc_amt)
                 tax_amt = max(0.0, base * (t_pct/100.0))
-                line_total = base + tax_amt
-                total_before += before
-                total_disc += disc_amt
-                total_tax += tax_amt
-
-                # Resolve RawMaterial by name; create if not exists
+                total_before += before; total_disc += disc_amt; total_tax += tax_amt
                 rm = None
                 try:
                     n = (name or '').strip().lower()
                     if n:
-                        rm = RawMaterial.query.filter(func.lower(RawMaterial.name) == n).first()
-                        if not rm:
-                            rm = RawMaterial.query.filter(func.lower(RawMaterial.name_ar) == n).first()
+                        rm = RawMaterial.query.filter(func.lower(RawMaterial.name) == n).first() or RawMaterial.query.filter(func.lower(RawMaterial.name_ar) == n).first()
                 except Exception:
                     rm = None
                 if not rm and name:
-                    # Create minimal RawMaterial to satisfy FK
                     try:
                         rm = RawMaterial(name=name.strip(), unit=(unit or 'unit'), cost_per_unit=p or 0)
                         db.session.add(rm)
                         db.session.flush()
                     except Exception:
-                        # As a last resort, set unit to 'unit'
                         try:
                             db.session.rollback()
                         except Exception:
@@ -769,70 +749,56 @@ def purchases():
                         db.session.add(RawMaterial(name=name.strip(), unit='unit', cost_per_unit=p or 0))
                         db.session.flush()
                         rm = RawMaterial.query.filter(func.lower(RawMaterial.name) == n).first()
-
-                it = PurchaseInvoiceItem(
-                    raw_material_name=name or 'Item',
-                    quantity=q,
-                    price_before_tax=p,
-                    discount=d_pct,
-                    tax=tax_amt,
-                    total_price=line_total,
-                )
+                it = PurchaseInvoiceItem(raw_material_name=name or 'Item', quantity=q, price_before_tax=p, discount=d_pct, tax=tax_amt, total_price=base + tax_amt)
                 if rm:
                     it.raw_material_id = rm.id
                 inv.items.append(it)
-                items_created += 1
                 idx += 1
             inv.total_before_tax = total_before
             inv.tax_amount = total_tax
             inv.discount_amount = total_disc
             inv.total_after_tax_discount = max(0.0, total_before - total_disc + total_tax)
             if ext_db is not None:
-                ext_db.session.add(inv)
-                ext_db.session.commit()
+                ext_db.session.add(inv); ext_db.session.commit()
             else:
-                db.session.add(inv)
-                db.session.commit()
-            # Auto-create payment if status is 'paid' or 'partial'
-            try:
-                st = (getattr(inv, 'status', '') or '').lower()
-                total_amt = float(inv.total_after_tax_discount or 0.0)
-                if st == 'paid' and total_amt > 0:
-                    db.session.add(Payment(
-                        invoice_id=inv.id,
-                        invoice_type='purchase',
-                        amount_paid=total_amt,
-                        payment_method=(pm or 'CASH').upper()
-                    ))
-                    db.session.commit()
-                elif st == 'partial':
-                    amt_raw = request.form.get('partial_paid_amount')
-                    try:
-                        amt = float(amt_raw or 0.0)
-                    except Exception:
-                        amt = 0.0
-                    if total_amt > 0 and amt > 0:
-                        if amt > total_amt:
-                            amt = total_amt
-                        db.session.add(Payment(
-                            invoice_id=inv.id,
-                            invoice_type='purchase',
-                            amount_paid=amt,
-                            payment_method=(pm or 'CASH').upper()
-                        ))
-                        db.session.commit()
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-            flash('Purchase invoice saved', 'success')
+                db.session.add(inv); db.session.commit()
         except Exception as e:
             if ext_db is not None:
                 ext_db.session.rollback()
             else:
                 db.session.rollback()
             flash(f'Could not save purchase invoice: {e}', 'danger')
+            return redirect(url_for('main.purchases'))
+
+        # Auto-create payment and ledger outside main try
+        st = (getattr(inv, 'status', '') or '').lower()
+        total_amt = float(inv.total_after_tax_discount or 0.0)
+        base_amt = float(getattr(inv, 'total_before_tax', 0) or 0.0) - float(getattr(inv, 'discount_amount', 0) or 0.0)
+        tax_amt = float(getattr(inv, 'tax_amount', 0) or 0.0)
+        _post_ledger(inv.date, 'COGS', 'Cost of Goods Sold', 'expense', base_amt, 0.0, f'PUR {inv.invoice_number}')
+        if tax_amt > 0:
+            _post_ledger(inv.date, 'VAT_IN', 'VAT Input', 'tax', tax_amt, 0.0, f'PUR {inv.invoice_number}')
+        _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', 0.0, base_amt + tax_amt, f'PUR {inv.invoice_number}')
+        if st == 'paid' and total_amt > 0:
+            db.session.add(Payment(invoice_id=inv.id, invoice_type='purchase', amount_paid=total_amt, payment_method=(pm or 'CASH').upper()))
+            db.session.commit()
+            cash_acc = _pm_account(pm)
+            _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', total_amt, 0.0, f'PAY PUR {inv.invoice_number}')
+            if cash_acc:
+                _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', 0.0, total_amt, f'PAY PUR {inv.invoice_number}')
+        elif st == 'partial':
+            amt_raw = request.form.get('partial_paid_amount')
+            amt = float(amt_raw or 0.0)
+            if total_amt > 0 and amt > 0:
+                if amt > total_amt:
+                    amt = total_amt
+                db.session.add(Payment(invoice_id=inv.id, invoice_type='purchase', amount_paid=amt, payment_method=(pm or 'CASH').upper()))
+                db.session.commit()
+                cash_acc = _pm_account(pm)
+                _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', amt, 0.0, f'PAY PUR {inv.invoice_number}')
+                if cash_acc:
+                    _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', 0.0, amt, f'PAY PUR {inv.invoice_number}')
+        flash('Purchase invoice saved', 'success')
         return redirect(url_for('main.purchases'))
 
     return render_template('purchases.html', form=form, suppliers_list=suppliers, suppliers_json=suppliers_json, materials_json=materials_json)
@@ -1098,7 +1064,7 @@ def inventory():
 
     purchases = []
     try:
-        invs = PurchaseInvoice.query.order_by(PurchaseInvoice.created_at.desc()).limit(1000).all()
+        invs = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).limit(1000).all()
     except Exception:
         invs = []
     items_map = {}
@@ -1139,88 +1105,131 @@ def inventory():
 @main.route('/expenses', methods=['GET', 'POST'], endpoint='expenses')
 @login_required
 def expenses():
-	form = ExpenseInvoiceForm()
-	try:
-		form.date.data = get_saudi_now().date()
-	except Exception:
-		pass
-	if request.method == 'POST':
-		try:
-			date_str = request.form.get('date') or get_saudi_now().date().isoformat()
-			pm = (request.form.get('payment_method') or 'CASH').strip().upper()
-			if pm not in ('CASH','BANK','TRANSFER'):
-				pm = 'CASH'
-			# normalize status first
-			status_val = (request.form.get('status') or 'paid').strip().lower()
-			if status_val not in ('paid','partial','unpaid'):
-				status_val = 'paid'
-			# Collect items first to avoid NOT NULL flush errors on invoice totals
-			idx = 0
-			total_before = 0.0
-			total_tax = 0.0
-			total_disc = 0.0
-			items_buffer = []
-			while True:
-				prefix = f"items-{idx}-"
-				desc = request.form.get(prefix + 'description')
-				qty = request.form.get(prefix + 'quantity')
-				price = request.form.get(prefix + 'price_before_tax')
-				tax = request.form.get(prefix + 'tax')
-				disc = request.form.get(prefix + 'discount')
-				if desc is None and qty is None and price is None and tax is None and disc is None:
-					break
-				if not desc and not qty and not price:
-					idx += 1
-					continue
-				try:
-					qf = float(qty or 0.0); pf = float(price or 0.0); tf = float(tax or 0.0); df = float(disc or 0.0)
-				except Exception:
-					qf = 0.0; pf = 0.0; tf = 0.0; df = 0.0
-				line_total = (qf * pf) - df + tf
-				total_before += (qf * pf)
-				total_tax += tf
-				total_disc += df
-				items_buffer.append({
-					'description': (desc or '').strip(),
-					'quantity': qf,
-					'price_before_tax': pf,
-					'tax': tf,
-					'discount': df,
-					'total_price': line_total,
-				})
-				idx += 1
-			# Create invoice with totals populated, then flush and add items
-			inv = ExpenseInvoice(
-				invoice_number=f"INV-EXP-{get_saudi_now().year}-{(ExpenseInvoice.query.count()+1):04d}",
-				date=datetime.strptime(date_str, '%Y-%m-%d').date(),
-				payment_method=pm,
-				total_before_tax=total_before,
-				tax_amount=total_tax,
-				discount_amount=total_disc,
-				total_after_tax_discount=max(0.0, total_before - total_disc + total_tax),
-				status=status_val,
-				user_id=getattr(current_user, 'id', 1)
-			)
-			db.session.add(inv)
-			db.session.flush()
-			for row in items_buffer:
-				item = ExpenseInvoiceItem(
-					invoice_id=inv.id,
-					description=row['description'],
-					quantity=row['quantity'],
-					price_before_tax=row['price_before_tax'],
-					tax=row['tax'],
-					discount=row['discount'],
-					total_price=row['total_price']
-				)
-				db.session.add(item)
-			db.session.commit()
-			flash('Expense saved', 'success')
-		except Exception as e:
-			db.session.rollback()
-			flash('Failed to save expense', 'danger')
-		return redirect(url_for('main.expenses'))
-	return render_template('expenses.html', form=form, invoices=ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).limit(50).all())
+    form = ExpenseInvoiceForm()
+    try:
+        form.date.data = get_saudi_now().date()
+    except Exception:
+        pass
+    if request.method == 'POST':
+        try:
+            date_str = request.form.get('date') or get_saudi_now().date().isoformat()
+            pm = (request.form.get('payment_method') or 'CASH').strip().upper()
+            if pm not in ('CASH','BANK'):
+                pm = 'CASH'
+            status_val = (request.form.get('status') or 'paid').strip().lower()
+            if status_val not in ('paid','partial','unpaid'):
+                status_val = 'paid'
+            idx = 0
+            total_before = 0.0
+            total_tax = 0.0
+            total_disc = 0.0
+            items_buffer = []
+            while True:
+                prefix = f"items-{idx}-"
+                desc = request.form.get(prefix + 'description')
+                qty = request.form.get(prefix + 'quantity')
+                price = request.form.get(prefix + 'price_before_tax')
+                tax = request.form.get(prefix + 'tax')
+                disc = request.form.get(prefix + 'discount')
+                acc_code = request.form.get(prefix + 'account_code')
+                if desc is None and qty is None and price is None and tax is None and disc is None:
+                    break
+                if not desc and not qty and not price:
+                    idx += 1
+                    continue
+                try:
+                    qf = float(qty or 0.0); pf = float(price or 0.0); tf = float(tax or 0.0); df = float(disc or 0.0)
+                except Exception:
+                    qf = 0.0; pf = 0.0; tf = 0.0; df = 0.0
+                line_total = (qf * pf) - df + tf
+                total_before += (qf * pf)
+                total_tax += tf
+                total_disc += df
+                items_buffer.append({
+                    'description': (desc or '').strip(),
+                    'quantity': qf,
+                    'price_before_tax': pf,
+                    'tax': tf,
+                    'discount': df,
+                    'total_price': line_total,
+                    'account_code': (acc_code or '').strip().upper(),
+                })
+                idx += 1
+            inv = ExpenseInvoice(
+                invoice_number=f"INV-EXP-{get_saudi_now().year}-{(ExpenseInvoice.query.count()+1):04d}",
+                date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+                payment_method=pm,
+                total_before_tax=total_before,
+                tax_amount=total_tax,
+                discount_amount=total_disc,
+                total_after_tax_discount=max(0.0, total_before - total_disc + total_tax),
+                status=status_val,
+                user_id=getattr(current_user, 'id', 1)
+            )
+            db.session.add(inv)
+            db.session.flush()
+            for row in items_buffer:
+                item = ExpenseInvoiceItem(
+                    invoice_id=inv.id,
+                    description=row['description'],
+                    quantity=row['quantity'],
+                    price_before_tax=row['price_before_tax'],
+                    tax=row['tax'],
+                    discount=row['discount'],
+                    total_price=row['total_price']
+                )
+                db.session.add(item)
+            db.session.commit()
+            try:
+                tax_amt = float(inv.tax_amount or 0.0)
+                for row in items_buffer:
+                    try:
+                        base = float(row.get('quantity',0) or 0) * float(row.get('price_before_tax',0) or 0) - float(row.get('discount',0) or 0)
+                        sel = _expense_account_by_code(row.get('account_code'))
+                        if not sel:
+                            sel = _expense_account_for(row.get('description',''))
+                        acc_code, acc_name, acc_type = sel
+                        if base > 0:
+                            _post_ledger(inv.date, acc_code, acc_name, acc_type, base, 0.0, f'EXP {inv.invoice_number}')
+                    except Exception:
+                        continue
+                if tax_amt > 0:
+                    _post_ledger(inv.date, 'VAT_IN', 'VAT Input', 'tax', tax_amt, 0.0, f'EXP {inv.invoice_number}')
+                total_base = float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0)
+                _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', 0.0, total_base + tax_amt, f'EXP {inv.invoice_number}')
+            except Exception:
+                pass
+            flash('Expense saved', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash('Failed to save expense', 'danger')
+        return redirect(url_for('main.expenses'))
+    invs = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).limit(50).all()
+    invs_json = []
+    try:
+        for inv in invs:
+            items = []
+            for it in (getattr(inv, 'items', []) or []):
+                items.append({
+                    'description': getattr(it, 'description', ''),
+                    'quantity': float(getattr(it, 'quantity', 0) or 0),
+                    'price_before_tax': float(getattr(it, 'price_before_tax', 0) or 0),
+                    'tax': float(getattr(it, 'tax', 0) or 0),
+                    'discount': float(getattr(it, 'discount', 0) or 0),
+                    'total_price': float(getattr(it, 'total_price', 0) or 0),
+                })
+            invs_json.append({
+                'id': inv.id,
+                'invoice_number': inv.invoice_number,
+                'date': inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '',
+                'payment_method': getattr(inv, 'payment_method', ''),
+                'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
+                'status': getattr(inv, 'status', ''),
+                'items': items,
+            })
+    except Exception:
+        pass
+    return render_template('expenses.html', form=form, invoices=invs, invoices_json=invs_json)
 
 @main.route('/expenses/delete/<int:eid>', methods=['POST'], endpoint='expense_delete')
 @login_required
@@ -2034,6 +2043,13 @@ def salaries_pay():
                             db.session.add(p)
                             db.session.flush()
                             try:
+                                cash_acc = _pm_account(method)
+                                _post_ledger(get_saudi_now().date(), 'SAL_EXP', 'Salary Expense', 'expense', pay_amount, 0.0, f'PAY SAL {row.year}-{row.month} EMP {row.employee_id}')
+                                if cash_acc:
+                                    _post_ledger(get_saudi_now().date(), cash_acc.code, cash_acc.name, 'asset', 0.0, pay_amount, f'PAY SAL {row.year}-{row.month} EMP {row.employee_id}')
+                            except Exception:
+                                pass
+                            try:
                                 created_payment_ids.append(int(p.id))
                             except Exception:
                                 pass
@@ -2067,6 +2083,13 @@ def salaries_pay():
                         p2 = Payment(invoice_id=adv_row.id, invoice_type='salary', amount_paid=remaining_payment, payment_method=method)
                         db.session.add(p2)
                         db.session.flush()
+                        try:
+                            cash_acc = _pm_account(method)
+                            _post_ledger(get_saudi_now().date(), 'SAL_EXP', 'Salary Expense', 'expense', remaining_payment, 0.0, f'PAY SAL {adv_row.year}-{adv_row.month} EMP {adv_row.employee_id}')
+                            if cash_acc:
+                                _post_ledger(get_saudi_now().date(), cash_acc.code, cash_acc.name, 'asset', 0.0, remaining_payment, f'PAY SAL {adv_row.year}-{adv_row.month} EMP {adv_row.employee_id}')
+                        except Exception:
+                            pass
                         try:
                             created_payment_ids.append(int(p2.id))
                         except Exception:
@@ -4009,6 +4032,24 @@ def api_draft_checkout():
                 total_price=round((price or 0.0) * qty, 2),
             ))
         db.session.commit()
+        try:
+            base_amt = float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0)
+            tax_amt = float(inv.tax_amount or 0.0)
+            _post_ledger(inv.date, 'AR', 'Accounts Receivable', 'asset', float(inv.total_after_tax_discount or 0.0), 0.0, f'SALE {inv.invoice_number}')
+            _post_ledger(inv.date, 'REV', 'Revenue', 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
+            if tax_amt > 0:
+                _post_ledger(inv.date, 'VAT_OUT', 'VAT Output', 'tax', 0.0, tax_amt, f'SALE {inv.invoice_number}')
+        except Exception:
+            pass
+        try:
+            base_amt = float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0)
+            tax_amt = float(inv.tax_amount or 0.0)
+            _post_ledger(inv.date, 'AR', 'Accounts Receivable', 'asset', float(inv.total_after_tax_discount or 0.0), 0.0, f'SALE {inv.invoice_number}')
+            _post_ledger(inv.date, 'REV', 'Revenue', 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
+            if tax_amt > 0:
+                _post_ledger(inv.date, 'VAT_OUT', 'VAT Output', 'tax', 0.0, tax_amt, f'SALE {inv.invoice_number}')
+        except Exception:
+            pass
         # Mark table available only after we confirm print+pay (handled in api_invoice_confirm_print)
     except Exception as e:
 
@@ -4125,6 +4166,14 @@ def api_invoice_confirm_print():
             inv.status = 'paid'
             db.session.commit()
             try:
+                amt = float(total_amount or float(inv.total_after_tax_discount or 0))
+                cash_acc = _pm_account(payment_method)
+                _post_ledger(inv.date, 'AR', 'Accounts Receivable', 'asset', 0.0, amt, f'PAY SALE {inv.invoice_number}')
+                if cash_acc:
+                    _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', amt, 0.0, f'PAY SALE {inv.invoice_number}')
+            except Exception:
+                pass
+            try:
                 _archive_invoice_pdf(inv)
             except Exception as e:
                 current_app.logger.error('Archive PDF failed: %s', e)
@@ -4209,6 +4258,16 @@ def register_payment_ajax():
             else:
                 inv.status = inv.status or ('unpaid' if invoice_type=='purchase' else 'paid')
         db.session.commit()
+        try:
+            if invoice_type == 'purchase':
+                _post_ledger(get_saudi_now().date(), 'AP', 'Accounts Payable', 'liability', amt, 0.0, f'PAY PUR {inv_id}')
+            else:
+                _post_ledger(get_saudi_now().date(), 'AP', 'Accounts Payable', 'liability', amt, 0.0, f'PAY EXP {inv_id}')
+            ca = _pm_account(payment_method)
+            if ca:
+                _post_ledger(get_saudi_now().date(), ca.code, ca.name, 'asset', 0.0, amt, f'PAY {invoice_type.upper()} {inv_id}')
+        except Exception:
+            pass
         return jsonify({'status': 'success', 'invoice_id': inv_id, 'amount': amt, 'paid': paid, 'total': total, 'new_status': getattr(inv, 'status', None)})
     except Exception as e:
         db.session.rollback()
@@ -6151,12 +6210,38 @@ def balance_sheet():
 @financials.route('/trial-balance', endpoint='trial_balance')
 @login_required
 def trial_balance():
-    d = (request.args.get('date') or date.today().isoformat())
+    d_str = (request.args.get('date') or get_saudi_now().date().isoformat())
+    try:
+        asof = datetime.strptime(d_str, '%Y-%m-%d').date()
+    except Exception:
+        asof = get_saudi_now().date()
+    rows = db.session.query(
+        Account.code.label('code'),
+        Account.name.label('name'),
+        func.coalesce(func.sum(LedgerEntry.debit), 0).label('debit'),
+        func.coalesce(func.sum(LedgerEntry.credit), 0).label('credit'),
+    ).outerjoin(LedgerEntry, LedgerEntry.account_id == Account.id) \
+     .filter((LedgerEntry.date <= asof) | (LedgerEntry.id == None)) \
+     .group_by(Account.id) \
+     .order_by(Account.code.asc()).all()
+    if not rows:
+        rev = float(db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)).filter(SalesInvoice.date <= asof).scalar() or 0.0)
+        cgs = float(db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.price_before_tax * PurchaseInvoiceItem.quantity), 0))
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id)
+            .filter(PurchaseInvoice.date <= asof).scalar() or 0.0)
+        opex = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0)).filter(ExpenseInvoice.date <= asof).scalar() or 0.0)
+        rows = [
+            type('R', (), {'code': 'REV', 'name': 'Revenue', 'debit': 0.0, 'credit': rev}),
+            type('R', (), {'code': 'COGS', 'name': 'COGS', 'debit': cgs, 'credit': 0.0}),
+            type('R', (), {'code': 'EXP', 'name': 'Operating Expenses', 'debit': opex, 'credit': 0.0}),
+        ]
+    total_debit = float(sum([float(getattr(r, 'debit', 0) or 0) for r in rows]))
+    total_credit = float(sum([float(getattr(r, 'credit', 0) or 0) for r in rows]))
     data = {
-        'date': d,
-        'rows': [],
-        'total_debit': 0.0,
-        'total_credit': 0.0,
+        'date': asof,
+        'rows': rows,
+        'total_debit': total_debit,
+        'total_credit': total_credit,
     }
     return render_template('financials/trial_balance.html', data=data)
 
@@ -6190,26 +6275,48 @@ def print_balance_sheet():
 @financials.route('/trial-balance/print', endpoint='print_trial_balance')
 @login_required
 def print_trial_balance():
-    d = (request.args.get('date') or date.today().isoformat())
+    d_str = (request.args.get('date') or get_saudi_now().date().isoformat())
+    try:
+        asof = datetime.strptime(d_str, '%Y-%m-%d').date()
+    except Exception:
+        asof = get_saudi_now().date()
+    rows_q = db.session.query(
+        Account.code.label('code'),
+        Account.name.label('name'),
+        func.coalesce(func.sum(LedgerEntry.debit), 0).label('debit'),
+        func.coalesce(func.sum(LedgerEntry.credit), 0).label('credit'),
+    ).outerjoin(LedgerEntry, LedgerEntry.account_id == Account.id) \
+     .filter((LedgerEntry.date <= asof) | (LedgerEntry.id == None)) \
+     .group_by(Account.id) \
+     .order_by(Account.code.asc()).all()
     rows = []
-    total_debit = 0.0
-    total_credit = 0.0
+    if rows_q:
+        for r in rows_q:
+            rows.append({'Code': r.code, 'Account': r.name, 'Debit': float(r.debit or 0.0), 'Credit': float(r.credit or 0.0)})
+    else:
+        rev = float(db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)).filter(SalesInvoice.date <= asof).scalar() or 0.0)
+        cgs = float(db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.price_before_tax * PurchaseInvoiceItem.quantity), 0))
+            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id)
+            .filter(PurchaseInvoice.date <= asof).scalar() or 0.0)
+        opex = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0)).filter(ExpenseInvoice.date <= asof).scalar() or 0.0)
+        rows = [
+            {'Code': 'REV', 'Account': 'Revenue', 'Debit': 0.0, 'Credit': rev},
+            {'Code': 'COGS', 'Account': 'COGS', 'Debit': cgs, 'Credit': 0.0},
+            {'Code': 'EXP', 'Account': 'Operating Expenses', 'Debit': opex, 'Credit': 0.0},
+        ]
+    total_debit = float(sum([float(r.get('Debit') or 0.0) for r in rows]))
+    total_credit = float(sum([float(r.get('Credit') or 0.0) for r in rows]))
     try:
         settings = Settings.query.first()
     except Exception:
         settings = None
     columns = ['Code', 'Account', 'Debit', 'Credit']
-    data_rows = [
-        {'Code': r.get('code', ''), 'Account': r.get('name', ''),
-         'Debit': float(r.get('debit') or 0.0), 'Credit': float(r.get('credit') or 0.0)}
-        for r in rows
-    ]
-    totals = {'Debit': float(total_debit or 0.0), 'Credit': float(total_credit or 0.0)}
-    return render_template('print_report.html', report_title=f"Trial Balance — {d}", settings=settings,
+    totals = {'Debit': total_debit, 'Credit': total_credit}
+    return render_template('print_report.html', report_title=f"Trial Balance — {asof}", settings=settings,
                            generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
-                           start_date=d, end_date=d,
+                           start_date=asof, end_date=asof,
                            payment_method=None, branch='all',
-                           columns=columns, data=data_rows, totals=totals, totals_columns=['Debit','Credit'],
+                           columns=columns, data=rows, totals=totals, totals_columns=['Debit','Credit'],
                            totals_colspan=2, payment_totals=None)
 
 
@@ -7621,3 +7728,66 @@ def archive_download():
             return send_file(buf, mimetype='application/zip', as_attachment=True, download_name=f"invoices-{ts}.zip")
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
+def _account(code, name, kind):
+    try:
+        a = Account.query.filter(func.lower(Account.code) == code.lower()).first()
+        if not a:
+            a = Account(code=code.upper(), name=name, type=kind)
+            db.session.add(a)
+            db.session.flush()
+        return a
+    except Exception:
+        return None
+
+def _pm_account(pm):
+    p = (pm or 'CASH').strip().upper()
+    if p in ('CASH',):
+        return _account('CASH', 'Cash', 'asset')
+    if p in ('BANK','CARD','VISA','MASTERCARD'):
+        return _account('BANK', 'Bank', 'asset')
+    return _account('CASH', 'Cash', 'asset')
+
+def _post_ledger(date_val, acc_code, acc_name, acc_type, debit_amt, credit_amt, ref_text):
+    a = _account(acc_code, acc_name, acc_type)
+    if not a:
+        return
+    try:
+        le = LedgerEntry(account_id=a.id, date=date_val, description=ref_text, debit=float(debit_amt or 0.0), credit=float(credit_amt or 0.0))
+        db.session.add(le)
+        db.session.flush()
+    except Exception:
+        db.session.rollback()
+
+def _expense_account_by_code(code):
+    c = (code or '').strip().upper()
+    table = {
+        'RENT': ('RENT','Rent','expense'),
+        'MAINT': ('MAINT','Maintenance','expense'),
+        'UTIL': ('UTIL','Utilities','expense'),
+        'LOG': ('LOG','Logistics','expense'),
+        'MKT': ('MKT','Marketing','expense'),
+        'TEL': ('TEL','Telecom & Internet','expense'),
+        'STAT': ('STAT','Stationery','expense'),
+        'CLEAN': ('CLEAN','Cleaning','expense'),
+        'GOV': ('GOV','Government Payments','expense'),
+        'EXP': ('EXP','Operating Expenses','expense'),
+    }
+    return table.get(c)
+
+def _expense_account_for(desc):
+    s = (desc or '').strip().lower()
+    mapping = [
+        (('rent','ايجار','إيجار'), ('RENT','Rent','expense')),
+        (('maintenance','صيانة'), ('MAINT','Maintenance','expense')),
+        (('electric','كهرب','كهرباء','water','ماء','utilities','فاتورة'), ('UTIL','Utilities','expense')),
+        (('delivery','نقل','شحن','logistics','لوجست'), ('LOG','Logistics','expense')),
+        (('marketing','تسويق','اعلان','إعلان','دعاية'), ('MKT','Marketing','expense')),
+        (('internet','انترنت','شبكة','اتصالات','هاتف','phone'), ('TEL','Telecom & Internet','expense')),
+        (('stationery','قرطاس','قرطاسية','مطبوعات'), ('STAT','Stationery','expense')),
+        (('clean','نظافة'), ('CLEAN','Cleaning','expense')),
+    ]
+    for kws, acc in mapping:
+        for kw in kws:
+            if kw in s:
+                return acc
+    return ('EXP','Operating Expenses','expense')

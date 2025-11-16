@@ -296,7 +296,7 @@ function editEmployee(id, name, code, nationalId, dept, position, phone, email, 
   // Change form action to edit route
   const form = document.querySelector('#employees-form form');
   if (form) {
-    form.action = `/employees/${id}/edit`;
+    form.action = '/employees/edit/' + id;
     // Change submit button text
     const submitBtn = form.querySelector('button[type="submit"]');
     if (submitBtn) {
@@ -323,6 +323,38 @@ function editEmployee(id, name, code, nationalId, dept, position, phone, email, 
 window.editEmployee = editEmployee;
 
 console.log('Edit function assigned to window object');
+
+// Go to salary section for a specific employee and prefill
+function goToSalary(id){
+  try{
+    const sel = document.getElementById('pay_employee');
+    if (sel){ sel.value = String(id); }
+    const month = document.getElementById('pay_month');
+    if (month && !month.value){
+      const d = new Date();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      month.value = `${d.getFullYear()}-${m}`;
+    }
+    document.getElementById('pay-salaries-section')?.scrollIntoView({behavior:'smooth'});
+  }catch(e){ console.error(e); }
+}
+window.goToSalary = goToSalary;
+
+// Replace salary button alerts with goToSalary behavior
+(function(){
+  try{
+    const titleTxt = '{{ _("Salary / الراتب") }}';
+    document.querySelectorAll(`#empTableBody button[title="${titleTxt}"]`).forEach(btn=>{
+      const oc = btn.getAttribute('onclick')||'';
+      const m = oc.match(/ID:\s*(\d+)/);
+      const id = m ? parseInt(m[1], 10) : null;
+      if (id){
+        btn.removeAttribute('onclick');
+        btn.addEventListener('click', function(){ goToSalary(id); });
+      }
+    });
+  }catch(e){ console.error(e); }
+})();
 
 // Delete employee function - NEW
 async function deleteEmployeeNew(id, name) {
@@ -449,8 +481,8 @@ function updateNet(){
   const remaining = Math.max(0, net - paid);
   const netEl = document.getElementById('net_salary');
   const remEl = document.getElementById('remaining_salary');
-  if (netEl) netEl.value = net.toFixed(2);
-  if (remEl) remEl.value = remaining.toFixed(2);
+  if (netEl) netEl.value = '﷼' + net.toFixed(2);
+  if (remEl) remEl.value = '﷼' + remaining.toFixed(2);
 }
 ['basic_salary','allowances','deductions','previous_due','paid_amount'].forEach(id=>{
   const el = document.getElementById(id);
