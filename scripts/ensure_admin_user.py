@@ -10,7 +10,8 @@ if REPO_ROOT not in sys.path:
 
 # Load app package explicitly by path to avoid clash with top-level app.py
 APP_INIT_PATH = os.path.join(REPO_ROOT, 'app', '__init__.py')
-MODELS_PATH = os.path.join(REPO_ROOT, 'app', 'models.py')
+# Use ROOT models.py (the one referenced by routes/login and login_manager)
+MODELS_PATH = os.path.join(REPO_ROOT, 'models.py')
 
 spec_app = importlib.util.spec_from_file_location('app_pkg', APP_INIT_PATH)
 app_pkg = importlib.util.module_from_spec(spec_app)
@@ -19,18 +20,25 @@ spec_app.loader.exec_module(app_pkg)  # type: ignore
 # Expose as 'app' for any internal imports "from app import ..."
 sys.modules.setdefault('app', app_pkg)
 
-# Load models
-spec_models = importlib.util.spec_from_file_location('app_models', MODELS_PATH)
-app_models = importlib.util.module_from_spec(spec_models)
-spec_models.loader.exec_module(app_models)  # type: ignore
+# Load ROOT models (used by routes/login) under canonical name 'models'
+spec_root_models = importlib.util.spec_from_file_location('models', MODELS_PATH)
+root_models = importlib.util.module_from_spec(spec_root_models)
+spec_root_models.loader.exec_module(root_models)  # type: ignore
 
-# Also expose under package name if referenced
+# Load APP models for AppKV/TableLayout
+APP_MODELS_PATH = os.path.join(REPO_ROOT, 'app', 'models.py')
+spec_app_models = importlib.util.spec_from_file_location('app_models', APP_MODELS_PATH)
+app_models = importlib.util.module_from_spec(spec_app_models)
+spec_app_models.loader.exec_module(app_models)  # type: ignore
+
+# Expose modules for imports
+# 'models' already registered by exec_module; ensure mapping remains consistent
 sys.modules.setdefault('app.models', app_models)
 
 create_app = getattr(app_pkg, 'create_app')
 db = getattr(app_pkg, 'db')
 
-User = getattr(app_models, 'User')
+User = getattr(root_models, 'User')
 
 
 def check_admin(password: str) -> str:

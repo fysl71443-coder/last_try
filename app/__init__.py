@@ -31,6 +31,13 @@ def create_app(config_class=None):
         static_url_path='/static'
     )
 
+    # Honor reverse proxy headers (Render), fix scheme/host/port
+    try:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+    except Exception:
+        pass
+
     # Load configuration (prefers local SQLite when no DATABASE_URL)
     from config import Config
     app.config.from_object(Config)

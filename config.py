@@ -43,6 +43,13 @@ class Config:
     WTF_CSRF_TIME_LIMIT = None  # No time limit for CSRF tokens
     WTF_CSRF_SSL_STRICT = False  # Allow CSRF over HTTP for development
 
+    # Cookie/session settings (Render-friendly defaults)
+    SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
+    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', '1' if os.getenv('RENDER_EXTERNAL_URL') else '0').strip().lower() in ('1','true','yes','on')
+    REMEMBER_COOKIE_SAMESITE = SESSION_COOKIE_SAMESITE
+    REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
+    PREFERRED_URL_SCHEME = 'https' if SESSION_COOKIE_SECURE else 'http'
+
     # Admin settings
     ADMIN_DELETE_PASSWORD = os.getenv('ADMIN_DELETE_PASSWORD', '1991')
 

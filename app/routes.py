@@ -634,7 +634,7 @@ def purchases():
     form = PurchaseInvoiceForm()
     try:
         if not form.date.data:
-            form.date.data = datetime.utcnow().date()
+            form.date.data = get_saudi_now().date()
     except Exception:
         pass
     suppliers = []
@@ -677,12 +677,12 @@ def purchases():
     if request.method == 'POST':
         # Parse minimal fields
         pm = (request.form.get('payment_method') or 'cash').strip().lower()
-        date_str = request.form.get('date') or datetime.utcnow().date().isoformat()
+        date_str = request.form.get('date') or get_saudi_now().date().isoformat()
         supplier_name = (request.form.get('supplier_name') or '').strip() or None
         supplier_id = request.form.get('supplier_id', type=int)
         try:
             inv = PurchaseInvoice(
-                invoice_number=f"INV-PUR-{datetime.utcnow().year}-{(PurchaseInvoice.query.count()+1):04d}",
+                invoice_number=f"INV-PUR-{get_saudi_now().year}-{(PurchaseInvoice.query.count()+1):04d}",
                 date=datetime.strptime(date_str, '%Y-%m-%d').date(),
                 supplier_name=supplier_name,
                 supplier_id=supplier_id,
@@ -1089,12 +1089,12 @@ def inventory():
 def expenses():
 	form = ExpenseInvoiceForm()
 	try:
-		form.date.data = datetime.utcnow().date()
+		form.date.data = get_saudi_now().date()
 	except Exception:
 		pass
 	if request.method == 'POST':
 		try:
-			date_str = request.form.get('date') or datetime.utcnow().date().isoformat()
+			date_str = request.form.get('date') or get_saudi_now().date().isoformat()
 			pm = (request.form.get('payment_method') or 'CASH').strip().upper()
 			if pm not in ('CASH','BANK','TRANSFER'):
 				pm = 'CASH'
@@ -1139,7 +1139,7 @@ def expenses():
 				idx += 1
 			# Create invoice with totals populated, then flush and add items
 			inv = ExpenseInvoice(
-				invoice_number=f"INV-EXP-{datetime.utcnow().year}-{(ExpenseInvoice.query.count()+1):04d}",
+				invoice_number=f"INV-EXP-{get_saudi_now().year}-{(ExpenseInvoice.query.count()+1):04d}",
 				date=datetime.strptime(date_str, '%Y-%m-%d').date(),
 				payment_method=pm,
 				total_before_tax=total_before,
@@ -1381,7 +1381,7 @@ def reports_print_payments():
                                settings=settings,
                                start_date=start_s, end_date=end_s,
                                payment_method=request.args.get('payment_method') or 'all',
-                               generated_at=_dt.now().strftime('%Y-%m-%d %H:%M'),
+                               generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
                                item_totals=supplier_totals,
                                item_totals_title=('Supplier Totals' if inv_type=='purchase' else 'Expense Totals'),
                                item_totals_name_label=('Supplier' if inv_type=='purchase' else 'Expense'),
@@ -1562,8 +1562,8 @@ def employees():
         employees=employees_vm,
         active_count=active_count,
         inactive_count=inactive_count,
-        current_year=datetime.utcnow().year,
-        current_month=datetime.utcnow().month,
+        current_year=get_saudi_now().year,
+        current_month=get_saudi_now().month,
     )
 
 
@@ -1638,7 +1638,7 @@ def add_employee():
 
             # Create current month salary row
             try:
-                today = datetime.utcnow()
+                today = get_saudi_now()
                 total = max(0.0, float(base or 0) + float(allow or 0) - float(ded or 0))
                 sal = Salary(
                     employee_id=e.id,
@@ -1795,8 +1795,8 @@ def employees_create_salary():
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     try:
         emp_id = int(request.form.get('employee_id') or 0)
-        year = int(request.form.get('year') or datetime.utcnow().year)
-        month = int(request.form.get('month') or datetime.utcnow().month)
+        year = int(request.form.get('year') or get_saudi_now().year)
+        month = int(request.form.get('month') or get_saudi_now().month)
         base = float(request.form.get('basic_salary') or 0)
         allow = float(request.form.get('allowances') or 0)
         ded = float(request.form.get('deductions') or 0)
@@ -1839,7 +1839,7 @@ def salaries_pay():
     if request.method == 'POST':
         try:
             emp_id_raw = request.form.get('employee_id')
-            month_str = (request.form.get('month') or request.form.get('pay_month') or datetime.utcnow().strftime('%Y-%m')).strip()
+            month_str = (request.form.get('month') or request.form.get('pay_month') or get_saudi_now().strftime('%Y-%m')).strip()
             y, m = month_str.split('-')
             year = int(y); month = int(m)
             amount = float(request.form.get('paid_amount') or 0)
@@ -2054,7 +2054,7 @@ def salaries_pay():
         employees = Employee.query.order_by(Employee.full_name.asc()).all()
     except Exception:
         employees = []
-    selected_month = request.args.get('month') or datetime.utcnow().strftime('%Y-%m')
+    selected_month = request.args.get('month') or get_saudi_now().strftime('%Y-%m')
     selected_employee = request.args.get('employee', type=int)
     # Build defaults map and previous due per employee for the selected month
     defaults_map = {}
@@ -2235,10 +2235,10 @@ def salaries_statements():
         try:
             y, m = month_param.split('-'); year = int(y); month = int(m)
         except Exception:
-            year = datetime.utcnow().year; month = datetime.utcnow().month
+            year = get_saudi_now().year; month = get_saudi_now().month
     else:
-        year = request.args.get('year', type=int) or datetime.utcnow().year
-        month = request.args.get('month', type=int) or datetime.utcnow().month
+        year = request.args.get('year', type=int) or get_saudi_now().year
+        month = request.args.get('month', type=int) or get_saudi_now().month
 
     from sqlalchemy import func
     rows = []
@@ -2400,10 +2400,10 @@ def reports_print_salaries_detailed():
         try:
             y, m = month_param.split('-'); year = int(y); month = int(m)
         except Exception:
-            year = datetime.utcnow().year; month = datetime.utcnow().month
+            year = get_saudi_now().year; month = get_saudi_now().month
     else:
-        year = request.args.get('year', type=int) or datetime.utcnow().year
-        month = request.args.get('month', type=int) or datetime.utcnow().month
+        year = request.args.get('year', type=int) or get_saudi_now().year
+        month = request.args.get('month', type=int) or get_saudi_now().month
 
     # header
     try:
@@ -2538,7 +2538,7 @@ def reports_print_salaries_detailed():
         'print/payroll_statement.html',
         company_name=company_name,
         period_label=period_label,
-        generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+        generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
         employees=employees_data
     )
 
@@ -2549,9 +2549,9 @@ def reports_print_salaries_detailed():
 def payroll():
     # Exact context and data shape per provided template
     from calendar import month_name
-    years = list(range(datetime.utcnow().year - 2, datetime.utcnow().year + 3))
-    year = request.args.get('year', type=int) or datetime.utcnow().year
-    month = request.args.get('month', type=int) or datetime.utcnow().month
+    years = list(range(get_saudi_now().year - 2, get_saudi_now().year + 3))
+    year = request.args.get('year', type=int) or get_saudi_now().year
+    month = request.args.get('month', type=int) or get_saudi_now().month
     status = (request.args.get('status') or 'all').strip().lower()
 
     # months as value/label pairs
@@ -2647,8 +2647,8 @@ def pay_salary(emp_id):
 
     # Support provided template shape and query params (employee_id, year, month)
     selected_employee_id = request.args.get('employee_id', type=int) or int(emp.id)
-    year = request.args.get('year', type=int) or datetime.utcnow().year
-    month = request.args.get('month', type=int) or datetime.utcnow().month
+    year = request.args.get('year', type=int) or get_saudi_now().year
+    month = request.args.get('month', type=int) or get_saudi_now().month
 
     if request.method == 'POST':
         amount = request.form.get('paid_amount', type=float) or 0.0
@@ -3016,8 +3016,8 @@ def employees_settings():
 def salary_receipt_bulk():
     from calendar import month_name as _month_name
     # Determine target period
-    year = request.form.get('year', type=int) or datetime.utcnow().year
-    month = request.form.get('month', type=int) or datetime.utcnow().month
+    year = request.form.get('year', type=int) or get_saudi_now().year
+    month = request.form.get('month', type=int) or get_saudi_now().month
     selected_ids = request.form.getlist('employee_ids') or []
     try:
         employee_ids = [int(i) for i in selected_ids if str(i).isdigit()]
@@ -3361,7 +3361,7 @@ def pos_table(branch_code, table_number):
         cat_map[c.name] = c.id
         cat_map[c.name.upper()] = c.id
     cat_map_json = json.dumps(cat_map)
-    today = datetime.utcnow().date().isoformat()
+    today = get_saudi_now().date().isoformat()
     # Load settings for currency icon, etc.
     try:
         s = Settings.query.first()
@@ -5363,9 +5363,9 @@ def vat_dashboard():
     branch = (request.args.get('branch') or 'all').strip()
 
     try:
-        y = request.args.get('year', type=int) or datetime.utcnow().year
+    y = request.args.get('year', type=int) or get_saudi_now().year
     except Exception:
-        y = datetime.utcnow().year
+        y = get_saudi_now().year
 
     start_date: date
     end_date: date
@@ -5381,13 +5381,13 @@ def vat_dashboard():
                 end_date = date(nm_y, nm_m, 1) - timedelta(days=1)
             else:
                 # Fallback to current month
-                today = datetime.utcnow().date()
+                today = get_saudi_now().date()
                 start_date = date(today.year, today.month, 1)
                 nm_y = today.year + (1 if today.month == 12 else 0)
                 nm_m = 1 if today.month == 12 else today.month + 1
                 end_date = date(nm_y, nm_m, 1) - timedelta(days=1)
         except Exception:
-            today = datetime.utcnow().date()
+            today = get_saudi_now().date()
             start_date = date(today.year, today.month, 1)
             nm_y = today.year + (1 if today.month == 12 else 0)
             nm_m = 1 if today.month == 12 else today.month + 1
@@ -5656,7 +5656,7 @@ def vat_print():
         except Exception:
             pass
     return render_template('print_report.html', report_title=report_title, settings=s,
-                           generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                           generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
                            start_date=start_date.isoformat(), end_date=end_date.isoformat(),
                            payment_method=None, branch=branch or 'all',
                            columns=columns, data=data_rows, totals=totals, totals_columns=['Amount'],
@@ -5669,7 +5669,7 @@ financials = Blueprint('financials', __name__, url_prefix='/financials')
 @login_required
 def income_statement():
     period = (request.args.get('period') or 'today').strip()
-    today = datetime.utcnow().date()
+    today = get_saudi_now().date()
     if period == 'today':
         start_date = end_date = today
     elif period == 'this_week':
@@ -5773,7 +5773,7 @@ def income_statement():
 def print_income_statement():
     # Period params
     period = (request.args.get('period') or 'today').strip()
-    today = datetime.utcnow().date()
+    today = get_saudi_now().date()
     if period == 'today':
         start_date = end_date = today
     elif period == 'this_week':
@@ -5878,7 +5878,7 @@ def print_income_statement():
     totals = {'Amount': float(net_profit_after_tax or 0.0)}
 
     return render_template('print_report.html', report_title=report_title, settings=settings,
-                           generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                           generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
                            start_date=start_date.isoformat(), end_date=end_date.isoformat(),
                            payment_method=None, branch=branch or 'all',
                            columns=columns, data=rows, totals=totals, totals_columns=['Amount'],
@@ -5931,7 +5931,7 @@ def print_balance_sheet():
     ]
     totals = {'Amount': float(equity or 0.0)}
     return render_template('print_report.html', report_title=f"Balance Sheet — {d}", settings=settings,
-                           generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                           generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
                            start_date=d, end_date=d,
                            payment_method=None, branch='all',
                            columns=columns, data=data_rows, totals=totals, totals_columns=['Amount'],
@@ -5956,7 +5956,7 @@ def print_trial_balance():
     ]
     totals = {'Debit': float(total_debit or 0.0), 'Credit': float(total_credit or 0.0)}
     return render_template('print_report.html', report_title=f"Trial Balance — {d}", settings=settings,
-                           generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                           generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
                            start_date=d, end_date=d,
                            payment_method=None, branch='all',
                            columns=columns, data=data_rows, totals=totals, totals_columns=['Debit','Credit'],
@@ -6317,7 +6317,7 @@ def reports_print_all_invoices_sales():
         'branch': (branch or 'all'),
         'start_date': request.args.get('start_date') or '',
         'end_date': request.args.get('end_date') or '',
-        'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+        'generated_at': get_saudi_now().strftime('%Y-%m-%d %H:%M')
     }
     # Use unified print_report.html like purchases/expenses
     columns = ['Branch','Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment']
@@ -6468,7 +6468,7 @@ def reports_print_daily_sales():
         'branch': branch or 'all',
         'start_date': start_dt.strftime('%Y-%m-%d %H:%M'),
         'end_date': end_dt.strftime('%Y-%m-%d %H:%M'),
-        'generated_at': now.strftime('%Y-%m-%d %H:%M')
+        'generated_at': get_saudi_now().strftime('%Y-%m-%d %H:%M')
     }
     inv_map = {}
     try:
@@ -6597,7 +6597,7 @@ def reports_print_daily_sales():
         except Exception:
             pass
     return render_template('print_report.html', report_title=meta['title'], settings=settings,
-                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
+                           generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'), start_date=meta['start_date'], end_date=meta['end_date'],
                            payment_method=meta['payment_method'], branch=meta['branch'],
                            columns=['Branch','Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment'], data=rows,
                            totals={'Amount': overall['amount'], 'Discount': overall['discount'], 'VAT': overall['vat'], 'Total': overall['total']},
@@ -6693,7 +6693,7 @@ def reports_print_all_invoices_purchases():
         'branch': branch or 'all',
         'start_date': start_date,
         'end_date': end_date,
-        'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+        'generated_at': get_saudi_now().strftime('%Y-%m-%d %H:%M')
     }
     columns = ['Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment']
     # CSV export
@@ -6804,7 +6804,7 @@ def reports_print_daily_items_summary():
         'print_report.html',
         report_title=meta_title,
         settings=settings,
-        generated_at=datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+        generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
         start_date=target_date.isoformat(),
         end_date=target_date.isoformat(),
         payment_method=source,
@@ -6887,7 +6887,7 @@ def reports_print_all_invoices_expenses():
         'branch': branch or 'all',
         'start_date': start_date,
         'end_date': end_date,
-        'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+        'generated_at': get_saudi_now().strftime('%Y-%m-%d %H:%M')
     }
     columns = ['Date','Expense No.','Description','Qty','Amount','Tax','Discount','Line Total','Payment']
     totals_columns = ['Amount','Tax','Discount','Line Total']
