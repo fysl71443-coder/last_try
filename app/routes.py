@@ -5459,6 +5459,53 @@ def vat_dashboard():
             .filter((SalesInvoice.branch == branch) if hasattr(SalesInvoice, 'branch') and branch in ('place_india','china_town') else True)
             .scalar() or 0.0))
 
+        # Optional split of zero-tax sales into exempt vs exports using keyword mapping (AppKV)
+        try:
+            m = kv_get('vat_category_map', {}) or {}
+            exempt_kw = [str(x).strip().lower() for x in (m.get('exempt_keywords') or []) if str(x).strip()]
+            export_kw = [str(x).strip().lower() for x in (m.get('exports_keywords') or []) if str(x).strip()]
+            zero_kw = [str(x).strip().lower() for x in (m.get('zero_keywords') or []) if str(x).strip()]
+            q_items = (
+                db.session.query(SalesInvoiceItem, SalesInvoice)
+                .join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id)
+                .filter(SalesInvoice.date.between(start_date, end_date))
+            )
+            if hasattr(SalesInvoice, 'branch') and branch in ('place_india','china_town'):
+                q_items = q_items.filter(SalesInvoice.branch == branch)
+            for it, inv_row in q_items.all():
+                name = (getattr(it, 'product_name', '') or '').strip().lower()
+                qty = float(getattr(it, 'quantity', 0) or 0)
+                price = float(getattr(it, 'price_before_tax', 0) or 0)
+                disc = float(getattr(it, 'discount', 0) or 0)
+                tax = float(getattr(it, 'tax', 0) or 0)
+                base = max(0.0, (price * qty) - disc)
+                if tax > 0:
+                    sales_standard_base += base
+                    sales_standard_vat += tax
+                    sales_standard_total += (base + tax)
+                else:
+                    cat = 'zero'
+                    if name and export_kw and any(kw in name for kw in export_kw):
+                        cat = 'exports'
+                    elif name and exempt_kw and any(kw in name for kw in exempt_kw):
+                        cat = 'exempt'
+                    elif name and zero_kw and any(kw in name for kw in zero_kw):
+                        cat = 'zero'
+                    if cat == 'exports':
+                        sales_exports_base += base
+                        sales_exports_vat += 0.0
+                        sales_exports_total += base
+                    elif cat == 'exempt':
+                        sales_exempt_base += base
+                        sales_exempt_vat += 0.0
+                        sales_exempt_total += base
+                    else:
+                        sales_zero_base += base
+                        sales_zero_vat += 0.0
+                        sales_zero_total += base
+        except Exception:
+            pass
+
     # PURCHASES & EXPENSES: combine into deductible vs non-deductible
     purchases_deductible_base = purchases_deductible_vat = purchases_deductible_total = 0.0
     purchases_non_deductible_base = purchases_non_deductible_vat = purchases_non_deductible_total = 0.0
@@ -7006,11 +7053,11 @@ def print_payroll():
         basic_sum = allow_sum = ded_sum = prev_sum = total_sum = paid_sum = 0.0
         months_rows = []
         unpaid_count = 0
-        for (yy, mm) in iter_months(y_from, m_from, y_to, m_to):
-            s = Salary.query.filter_by(employee_id=emp.id, year=int(yy), month=int(mm)).first()
-            if not s:
-                b, a, d = get_defaults(emp.id)
-                prev = 0.0
+    for (yy, mm) in iter_months(y_from, m_from, y_to, m_to):
+        s = Salary.query.filter_by(employee_id=emp.id, year=int(yy), month=int(mm)).first()
+        if not s:
+            b, a, d = get_defaults(emp.id)
+            prev = 0.0
                 tot = float(b + a - d + prev)
                 sal_id = None
             else:
@@ -7036,6 +7083,29 @@ def print_payroll():
                 'prev_due': prev, 'total': tot, 'paid': paid, 'remaining': remaining, 'status': status
             })
             basic_sum += b; allow_sum += a; ded_sum += d; prev_sum += prev; total_sum += tot; paid_sum += paid
+
+@main.route('/api/vat/categories-map', methods=['GET','POST'], endpoint='api_vat_categories_map')
+@login_required
+def api_vat_categories_map():
+    try:
+        default_map = {
+            'zero_keywords': [],
+            'exempt_keywords': [],
+            'exports_keywords': []
+        }
+        if request.method == 'GET':
+            m = kv_get('vat_category_map', default_map) or default_map
+            return jsonify({'ok': True, 'map': m})
+        data = request.get_json(silent=True) or {}
+        out = {
+            'zero_keywords': [str(x).strip() for x in (data.get('zero_keywords') or []) if str(x).strip()],
+            'exempt_keywords': [str(x).strip() for x in (data.get('exempt_keywords') or []) if str(x).strip()],
+            'exports_keywords': [str(x).strip() for x in (data.get('exports_keywords') or []) if str(x).strip()],
+        }
+        kv_set('vat_category_map', out)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
         emp_row = {
             'name': getattr(emp, 'full_name', '') or getattr(emp, 'employee_code', ''),
             'unpaid_months': unpaid_count,
