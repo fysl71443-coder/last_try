@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
-{% if current_user.is_authenticated %}{% set back_url = url_for('main.employees') %}{% else %}{% set back_url = '#' %}{% endif %}
+{% if current_user.is_authenticated %}{% set back_url = url_for('main.dashboard') %}{% else %}{% set back_url = '#' %}{% endif %}
 
-{% set back_url = url_for('main.employees') %}
+{% set back_url = url_for('main.dashboard') %}
 
 {% block title %}{{ _('Monthly Salaries / رواتب شهرية') }}{% endblock %}
 {% block content %}

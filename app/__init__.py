@@ -4,7 +4,17 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from flask_migrate import Migrate
-from flask_babel import Babel
+try:
+    from flask_babel import Babel
+except Exception:
+    class Babel:  # Fallback stub for environments without flask_babel
+        def __init__(self, *args, **kwargs):
+            pass
+        def init_app(self, app):
+            try:
+                app.jinja_env.globals.setdefault('_', lambda s, **kw: s.format(**kw) if kw else s)
+            except Exception:
+                pass
 from flask_wtf.csrf import CSRFProtect
 # Also support legacy extensions module models
 try:
@@ -150,21 +160,41 @@ def create_app(config_class=None):
         except Exception:
             return None
 
+    # Block legacy employee-related screens globally (allow new UVD and settings/pay)
+    @app.before_request
+    def _blk_emp_screens():
+        from flask import request
+        try:
+            p = (request.path or '').lower()
+        except Exception:
+            p = ''
+        legacy_prefixes = ('/employees/payroll', '/salaries', '/salary', '/print/salary')
+        if any(p.startswith(pref) for pref in legacy_prefixes):
+            return ('', 404)
+
 
 
     # تسجيل Blueprints
-    from app.routes import main, vat, financials
+    from app.routes import main, vat
     from app.reports.payroll_reports import reports_bp
     app.register_blueprint(main)
     app.register_blueprint(vat)
-    app.register_blueprint(financials)
     app.register_blueprint(reports_bp)
+    try:
+        from routes.journal import bp as journal_bp
+        app.register_blueprint(journal_bp)
+    except Exception:
+        pass
+    try:
+        from routes.financials import bp as financials_bp
+        app.register_blueprint(financials_bp)
+    except Exception:
+        pass
 
-    # Ensure tables exist on startup (useful for local SQLite runs)
+    # Ensure tables exist on startup (useful for local SQLite/Postgres runs)
     try:
         with app.app_context():
             db.create_all()
-            # Lightweight auto-migration for SQLite: add suppliers.payment_method if missing
             try:
                 from sqlalchemy import text
                 with db.engine.connect() as conn:
@@ -173,8 +203,36 @@ def create_app(config_class=None):
                     if 'payment_method' not in col_names:
                         conn.execute(text("ALTER TABLE suppliers ADD COLUMN payment_method VARCHAR(20) DEFAULT 'CASH'"))
                         conn.commit()
+                    cols_pi = conn.execute(text("PRAGMA table_info('purchase_invoices')")).fetchall()
+                    col_names_pi = {str(c[1]).lower() for c in cols_pi}
+                    if 'supplier_invoice_number' not in col_names_pi:
+                        conn.execute(text("ALTER TABLE purchase_invoices ADD COLUMN supplier_invoice_number VARCHAR(100)"))
+                        conn.commit()
+                    if 'notes' not in col_names_pi:
+                        conn.execute(text("ALTER TABLE purchase_invoices ADD COLUMN notes TEXT"))
+                        conn.commit()
             except Exception:
                 pass
+            # Lightweight auto-migration for Postgres: add purchase_invoices.supplier_invoice_number if missing
+        try:
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                if conn.dialect.name == 'postgresql':
+                    rows = conn.execute(text("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name='purchase_invoices'
+                    """)).fetchall()
+                    names = {str(r[0]).lower() for r in rows}
+                    if 'supplier_invoice_number' not in names:
+                        conn.execute(text("ALTER TABLE purchase_invoices ADD COLUMN supplier_invoice_number VARCHAR(100)"))
+                        conn.commit()
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_payments_type_invoice ON payments (invoice_type, invoice_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales_invoices (created_at)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON purchase_invoices (created_at)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON expense_invoices (created_at)"))
+                    conn.commit()
+        except Exception:
+            pass
             if ext_db is not None:
                 try:
                     ext_db.create_all()

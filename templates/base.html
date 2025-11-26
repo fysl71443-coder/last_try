@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" dir="ltr">
+<html lang="ar" dir="ltr">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -16,8 +16,11 @@
         --bg:#F8F9FA; /* Light */
         --success:#27AE60;
         --danger:#E74C3C;
+        --text:#212529;
+        --muted:#6c757d;
+        --link:#0d6efd;
       }
-      html,body{ background:var(--bg); font-family:'Tajawal', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; font-size:15px; }
+      html,body{ background:var(--bg); color:var(--text); font-family:'Tajawal', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; font-size:15px; }
       h1,h2,h3,h4{ font-weight:700; color:var(--secondary); }
       h3{ font-size:22px; }
       body[dir="rtl"] { text-align: right; }
@@ -70,6 +73,9 @@
       body.dark{
         --bg:#121212;
         --secondary:#E0E0E0;
+        --text:#ECECEC;
+        --muted:#BDBDBD;
+        --link:#64B5F6;
         color:#ECECEC;
         background:#121212;
       }
@@ -81,6 +87,23 @@
       body.dark .btn-outline-primary:hover{ background:#E67E22; color:#fff; }
       body.dark .btn-outline-danger{ color:#E74C3C; border-color:#E74C3C; }
       body.dark .btn-outline-danger:hover{ background:#E74C3C; color:#fff; }
+      body.dark a{ color:var(--link) }
+      body.dark .text-muted{ color:var(--muted) !important }
+      body.dark .text-dark{ color:var(--text) !important }
+      body.dark .card, body.dark .card *{ color:var(--text) !important }
+      body.dark .navbar, body.dark .navbar *{ color:var(--text) !important }
+      body.dark .section-header, body.dark .section-header *{ color:var(--text) !important }
+      body.dark .table, body.dark .table *{ color:var(--text) !important }
+      body.dark .form-label, body.dark .form-check-label{ color:var(--text) !important }
+      body.dark .badge{ color:var(--text) !important }
+      body.dark ::placeholder{ color:var(--muted) !important; opacity:.85 }
+      body.dark .input-group-text{ background:#2a2a2a; color:var(--text) !important; border-color:#3a3a3a }
+      body.dark .form-select option{ color:#121212; background:#ECECEC }
+      body.dark .form-check-input{ accent-color:#E67E22 }
+      body.dark .list-group-item{ background:#1E1E1E; color:var(--text); border-color:#2a2a2a }
+      body.dark .modal-content{ background:#1E1E1E; color:var(--text); border-color:#2a2a2a }
+      body.dark .form-control[disabled], body.dark .form-control[readonly]{ background:#2a2a2a; color:var(--text) !important; border-color:#3a3a3a }
+      body.dark .form-select[disabled]{ background:#2a2a2a; color:var(--muted) !important; border-color:#3a3a3a }
     </style>
 
       <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -88,7 +111,7 @@
     {% block head %}{% endblock %}
 
   </head>
-  <body class="{{ (session.get('theme') or (settings.default_theme if settings else 'light')) }}">
+  <body dir="ltr" class="{{ (session.get('theme') or (settings.default_theme if settings else 'light')) }}">
     {% if request.endpoint != 'main.login' %}
     <nav class="navbar navbar-expand-lg" style="background: var(--bg); border-bottom:1px solid #eee;">
       <div class="container-fluid">
@@ -140,11 +163,15 @@
     {% endif %}
 
     {% block content %}{% endblock %}
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/MotionPathPlugin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.9.6/lottie.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}?v={{ ASSET_VERSION }}"></script>
     <script src="{{ url_for('static', filename='js/modal-system.js') }}?v={{ ASSET_VERSION }}"></script>
     <script src="{{ url_for('static', filename='js/printInvoice.js') }}?v={{ ASSET_VERSION }}"></script>
     <script src="{{ url_for('static', filename='js/base-behavior.js') }}?v={{ ASSET_VERSION }}"></script>
+    <script src="{{ url_for('static', filename='js/motion.js') }}?v={{ ASSET_VERSION }}"></script>
 
     {% block scripts %}{% endblock %}
   </body>

@@ -229,6 +229,7 @@ class PurchaseInvoice(db.Model):
     date = db.Column(db.Date, default=lambda: get_saudi_now().date(), index=True)
     supplier_name = db.Column(db.String(200), nullable=True)
     supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
+    supplier_invoice_number = db.Column(db.String(100), nullable=True)
     payment_method = db.Column(db.String(20), nullable=False)  # مدى, فيزا, بنك, كاش, ...
     total_before_tax = db.Column(db.Numeric(12, 2), nullable=False)
     tax_amount = db.Column(db.Numeric(12, 2), nullable=False)
@@ -237,6 +238,7 @@ class PurchaseInvoice(db.Model):
     status = db.Column(db.String(20), default='unpaid')  # paid, partial, unpaid
     created_at = db.Column(db.DateTime, default=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    notes = db.Column(db.Text, nullable=True)
 
     supplier = db.relationship('Supplier', lazy=True)
     items = db.relationship('PurchaseInvoiceItem', backref='invoice', lazy=True)
@@ -744,3 +746,59 @@ class LedgerEntry(db.Model):
 
     def __repr__(self):
         return f'<LedgerEntry {self.date} acc={self.account_id} d={self.debit} c={self.credit}>'
+
+
+class JournalEntry(db.Model):
+    __tablename__ = 'journal_entries'
+    id = db.Column(db.Integer, primary_key=True)
+    entry_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False, default=lambda: get_saudi_now().date(), index=True)
+    branch_code = db.Column(db.String(20), nullable=True, index=True)
+    description = db.Column(db.String(500), nullable=False)
+    status = db.Column(db.String(20), default='draft', index=True)
+    total_debit = db.Column(db.Numeric(12, 2), default=0)
+    total_credit = db.Column(db.Numeric(12, 2), default=0)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    posted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+    updated_at = db.Column(db.DateTime, default=get_saudi_now, onupdate=get_saudi_now)
+    invoice_id = db.Column(db.Integer, nullable=True, index=True)
+    invoice_type = db.Column(db.String(20), nullable=True, index=True)
+    salary_id = db.Column(db.Integer, nullable=True, index=True)
+
+    lines = db.relationship('JournalLine', backref='journal', cascade='all, delete-orphan', lazy=True)
+
+    def __repr__(self):
+        return f'<JournalEntry {self.entry_number} {self.status}>'
+
+
+class JournalLine(db.Model):
+    __tablename__ = 'journal_lines'
+    id = db.Column(db.Integer, primary_key=True)
+    journal_id = db.Column(db.Integer, db.ForeignKey('journal_entries.id'), nullable=False, index=True)
+    line_no = db.Column(db.Integer, nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=False)
+    debit = db.Column(db.Numeric(12, 2), default=0)
+    credit = db.Column(db.Numeric(12, 2), default=0)
+    cost_center = db.Column(db.String(100), nullable=True)
+    description = db.Column(db.String(500), nullable=False)
+    attachment_path = db.Column(db.String(300), nullable=True)
+    line_date = db.Column(db.Date, nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=True)
+
+    account = db.relationship('Account')
+
+    def __repr__(self):
+        return f'<JournalLine {self.journal_id} #{self.line_no}>'
+
+
+class JournalAudit(db.Model):
+    __tablename__ = 'journal_audit'
+    id = db.Column(db.Integer, primary_key=True)
+    journal_id = db.Column(db.Integer, db.ForeignKey('journal_entries.id'), nullable=False, index=True)
+    action = db.Column(db.String(20), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    ts = db.Column(db.DateTime, default=get_saudi_now)
+    before_json = db.Column(db.Text, nullable=True)
+    after_json = db.Column(db.Text, nullable=True)

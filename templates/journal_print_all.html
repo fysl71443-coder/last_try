@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>طباعة قيود اليومية</title>
+  <style>
+    body{ font-family: Arial, sans-serif; }
+    .topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    .meta{ font-size:12px; color:#555; }
+    .entry-block{ border:1px solid #999; border-radius:8px; padding:10px; margin-bottom:16px; break-inside:avoid; page-break-inside:avoid; }
+    .header{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .header .left div{ margin-bottom:4px; }
+    table{ width:100%; border-collapse:collapse; margin-top:8px; }
+    th,td{ border:1px solid #333; padding:6px; font-size:12px; }
+    thead th{ background:#f0f0f0; }
+    tfoot th{ text-align:right; }
+    .badge{ padding:2px 6px; border-radius:4px; background:#eee; }
+  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <div class="topbar">
+    <h3 style="margin:0">📘 قيود اليومية</h3>
+    <div class="meta">
+      <div>الفرع: {{ branch or 'الكل' }}</div>
+      {% if q %}<div>بحث: {{ q }}</div>{% endif %}
+      {% if sd %}<div>من: {{ sd }}</div>{% endif %}
+      {% if ed %}<div>إلى: {{ ed }}</div>{% endif %}
+    </div>
+  </div>
+
+  {% for entry in entries %}
+  <div class="entry-block">
+    <div class="header">
+      <div class="left">
+        <div><strong>رقم القيد:</strong> {{ entry.entry_number }}</div>
+        <div><strong>التاريخ:</strong> {{ entry.date }}</div>
+        <div><strong>الفرع:</strong> {{ entry.branch_code or '-' }}</div>
+        <div><strong>الحالة:</strong> <span class="badge">{{ entry.status }}</span></div>
+      </div>
+      <div class="right">
+        <div><strong>الوصف:</strong> {{ entry.description }}</div>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>الحساب</th>
+          <th>الوصف</th>
+          <th>مركز تكلفة</th>
+          <th>تاريخ السطر</th>
+          <th>مدين</th>
+          <th>دائن</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ln in entry.lines %}
+        <tr>
+          <td>{{ ln.line_no }}</td>
+          <td>{{ ln.account.code }} – {{ ln.account.name }}</td>
+          <td>{{ ln.description }}</td>
+          <td>{{ ln.cost_center or '-' }}</td>
+          <td>{{ ln.line_date }}</td>
+          <td>{{ '%.2f'|format(ln.debit or 0) }}</td>
+          <td>{{ '%.2f'|format(ln.credit or 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th colspan="5">الإجمالي</th>
+          <th>{{ '%.2f'|format(entry.total_debit or 0) }}</th>
+          <th>{{ '%.2f'|format(entry.total_credit or 0) }}</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% endfor %}
+</body>
+</html>

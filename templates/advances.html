@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Advances / السلف') }}{% endblock %}
+{% block head %}
+<style>
+.page-rtl{direction:rtl}
+.btn-navy{background:linear-gradient(135deg,#1E40AF 0%,#4F46E5 100%);color:#fff;border:none;position:relative;overflow:hidden}
+.btn-navy:hover{filter:brightness(1.05);transform:scale(1.05)}
+.glass-card{background:rgba(255,255,255,.75);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.4);box-shadow:0 20px 40px rgba(30,64,175,.15);border-radius:16px}
+.kpi-card{display:flex;align-items:center;gap:12px;padding:16px;position:relative}
+.kpi-icon{width:40px;height:40px}
+.pill-tabs{display:flex;gap:8px;flex-wrap:wrap}
+.pill-tab{padding:8px 14px;border-radius:999px;background:#f1f3f5;color:#1E40AF;border:1px solid #e6e9ee;cursor:pointer;position:relative}
+.pill-tab.active{background:linear-gradient(135deg,#1E40AF,#4F46E5);color:#fff}
+.pill-tab.active::after{content:"";position:absolute;bottom:-2px;left:12px;right:12px;height:3px;background:linear-gradient(90deg,#06B6D4,#22D3EE);filter:drop-shadow(0 0 6px rgba(6,182,212,.6))}
+.table-hover-elevate tbody tr{transition:all .18s ease}
+.table-hover-elevate tbody tr:hover{background:linear-gradient(90deg, rgba(79,70,229,.06), rgba(79,70,229,.0));box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-1px)}
+.avatar{width:36px;height:36px;border-radius:50%;background:#e9eef5}
+.bottom-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;margin-top:12px;background:#fff;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.sticky-wrap{position:relative}
+.sticky-wrap .table thead th{position:sticky;top:0;background:#fff;z-index:2;box-shadow:0 2px 0 rgba(0,0,0,.06)}
+.sticky-wrap::before,.sticky-wrap::after{content:'';position:absolute;top:0;bottom:0;width:16px;pointer-events:none}
+.sticky-wrap::before{left:0;background:linear-gradient(90deg, rgba(0,0,0,.12), rgba(0,0,0,0));opacity:0}
+.sticky-wrap::after{right:0;background:linear-gradient(270deg, rgba(0,0,0,.12), rgba(0,0,0,0));opacity:0}
+.sticky-wrap.shadow-left::before{opacity:.35}
+.sticky-wrap.shadow-right::after{opacity:.35}
+.logo{transition:transform .18s ease;will-change:transform}
+.suggest-box{position:absolute;top:100%;right:0;left:0;z-index:30;background:#0b1020;border:1px solid #0ea5e9;border-top:none;border-radius:0 0 12px 12px;box-shadow:0 12px 20px rgba(0,0,0,.35);display:none;max-height:220px;overflow:auto}
+.suggest-item{padding:10px 12px;cursor:pointer;color:#e2f6ff}
+.suggest-item .hl{color:#22D3EE;text-shadow:0 0 8px rgba(34,211,238,.8)}
+.suggest-item:hover{background:#0b1a2e}
+.ripple::after{content:"";position:absolute;left:50%;top:50%;width:5px;height:5px;background:radial-gradient(circle, rgba(255,255,255,.8) 0%, rgba(255,255,255,0) 70%);transform:translate(-50%,-50%) scale(0);border-radius:50%;opacity:0;transition:transform .5s ease, opacity .8s ease}
+.ripple:active::after{transform:translate(-50%,-50%) scale(20);opacity:1}
+.toast-adv{position:fixed;top:16px;right:16px;background:#09122a;color:#e2f6ff;border:1px solid #22D3EE;border-radius:12px;box-shadow:0 12px 24px rgba(0,0,0,.35);padding:12px 16px;z-index:1055;animation:advPulse 2.5s infinite}
+@keyframes advPulse{0%{box-shadow:0 0 0 0 rgba(34,211,238,.5)}70%{box-shadow:0 0 0 12px rgba(34,211,238,0)}100%{box-shadow:0 0 0 0 rgba(34,211,238,0)}}
+.offcanvas.show .offcanvas-body{animation:advScale .25s ease}
+@keyframes advScale{0%{transform:scale(.96);opacity:.0}100%{transform:scale(1);opacity:1}}
+.spark{position:absolute;right:16px;bottom:10px;width:120px;height:28px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container py-4 page-rtl">
+  <div class="d-flex align-items-center justify-content-between mb-3" id="advHeader">
+    <div class="d-flex align-items-center gap-3">
+      <img src="/static/logo.svg" class="logo" style="width:32px;height:32px;border-radius:8px" id="advLogo">
+      <div>
+        <div class="fw-semibold" style="color:#0B2347">إدارة السلف</div>
+        <div class="text-muted small">الرئيسية › إدارة السلف</div>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2" style="min-width:360px">
+      <select class="form-select" id="advEmployee" style="max-width:240px">
+        <option value="">اختر الموظف</option>
+        {% for e in employees or [] %}
+        <option value="{{ e.id }}">{{ e.full_name }}</option>
+        {% endfor %}
+      </select>
+      <div class="avatar"></div>
+      <button class="btn btn-navy ripple" onclick="openNewAdvanceModal()">⊞ منح سلفة جديدة</button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-4"><div class="glass-card kpi-card"><div id="lottieWallet" class="kpi-icon"></div><div class="flex-grow-1"><div class="text-muted small">إجمالي السلف</div><div class="fs-5 fw-bold" id="kpiTotalAdv">—</div></div><canvas class="spark" id="advSpark"></canvas></div></div>
+    <div class="col-12 col-xl-4"><div class="glass-card kpi-card"><div id="lottieUnpaid" class="kpi-icon"></div><div class="flex-grow-1"><div class="text-muted small">سلف غير مسددة</div><div class="fs-5 fw-bold text-danger" id="kpiUnpaid">—</div></div></div></div>
+    <div class="col-12 col-xl-4"><div class="glass-card kpi-card"><div id="lottieDate" class="kpi-icon"></div><div class="flex-grow-1"><div class="text-muted small">آخر سلفة</div><div class="fs-6 fw-semibold" id="kpiLast">—</div></div></div></div>
+  </div>
+
+  <div class="pill-tabs mb-3" id="deptTabs">
+    <button class="pill-tab active" data-dept="all">الكل <span class="badge bg-light text-dark ms-1" id="count-all">0</span></button>
+    <button class="pill-tab" data-dept="kitchen">شيف <span class="badge bg-light text-dark ms-1" id="count-kitchen">0</span></button>
+    <button class="pill-tab" data-dept="hall">الصالة <span class="badge bg-light text-dark ms-1" id="count-hall">0</span></button>
+    <button class="pill-tab" data-dept="admin">إداري <span class="badge bg-light text-dark ms-1" id="count-admin">0</span></button>
+    <button class="pill-tab" data-dept="branches">كل الفروع <span class="badge bg-light text-dark ms-1" id="count-branches">0</span></button>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="table-responsive sticky-wrap" id="advGridWrap">
+        <table class="table table-borderless table-hover table-hover-elevate align-middle table-sm">
+          <thead class="table-light"><tr><th>#</th><th>الاسم</th><th>الفرع</th><th class="text-end">المبلغ الممنوح</th><th class="text-end">المدفوع</th><th class="text-end">المتبقي</th><th>آخر تاريخ</th><th>⚙</th></tr></thead>
+          <tbody id="advTableBody"></tbody>
+        </table>
+      </div>
+      <div class="bottom-toolbar"><div class="d-flex align-items-center gap-2"><button class="btn btn-outline-primary" id="btnExportAdv">تصدير CSV</button></div><div class="d-flex align-items-center gap-2"><label class="text-muted">الحجم</label><select class="form-select" id="advPageSize" style="width:90px"><option>10</option><option>25</option><option>50</option></select><div id="advPager" class="d-flex align-items-center gap-2"><button class="btn btn-outline-secondary" id="advPrev">‹</button><span id="advPageInfo" class="small text-muted">—</span><button class="btn btn-outline-secondary" id="advNext">›</button></div></div></div>
+    </div>
+  </div>
+
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="advanceCanvas" aria-labelledby="advanceCanvasLabel">
+    <div class="offcanvas-header" style="background:linear-gradient(135deg,#1E40AF,#4F46E5);color:#fff"><h5 id="advanceCanvasLabel">تفاصيل السلفة</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button></div>
+    <div class="offcanvas-body">
+      <div class="d-grid gap-2">
+        <div><span class="text-muted">الموظف:</span> <span id="aName"></span></div>
+        <div><span class="text-muted">السلفة:</span> <span id="aGrant"></span></div>
+        <div><span class="text-muted">المسدّد:</span> <span id="aPaid"></span></div>
+        <div><span class="text-muted">المتبقي:</span> <span id="aRemain"></span></div>
+        <div><span class="text-muted">آخر تاريخ:</span> <span id="aDate"></span></div>
+      </div>
+      <div class="mt-3 d-flex gap-2">
+        <button class="btn btn-navy ripple" id="btnRepay">💰 سداد جزئي</button>
+        <button class="btn btn-outline-secondary ripple" id="btnEditAdv">💾 تعديل</button>
+        <button class="btn btn-outline-dark ripple" id="btnPreviewAdv">📊 معاينة قيد</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="newAdvanceModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">منح سلفة جديدة</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <form id="newAdvanceForm" class="d-grid gap-2">
+            <div>
+              <label class="form-label">الموظف</label>
+              <select name="employee_id" class="form-select" required>
+                {% for e in employees or [] %}
+                <option value="{{ e.id }}">{{ e.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label">المبلغ</label>
+              <input name="amount" type="number" step="0.01" class="form-control" required>
+            </div>
+            <div>
+              <label class="form-label">طريقة الدفع</label>
+              <select name="method" class="form-select">
+                <option value="cash">نقدي</option>
+                <option value="bank">بنك</option>
+                <option value="card">بطاقة</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">التاريخ</label>
+              <input name="date" type="date" class="form-control" value="{{ get_saudi_now().strftime('%Y-%m-%d') if get_saudi_now else '' }}">
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+          <button type="button" class="btn btn-navy" id="submitNewAdvance">حفظ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+(async function(){ try{ const r = await fetch('/api/advances/metrics'); const j = await r.json(); if(j&&j.ok){ document.getElementById('kpiTotalAdv').textContent = '﷼'+Number(j.total||0).toFixed(2); document.getElementById('kpiUnpaid').textContent = '﷼'+Number(j.unpaid||0).toFixed(2); document.getElementById('kpiLast').textContent = j.last_date||'—'; const s=(j.series||[]); const cv=document.getElementById('advSpark'); if(cv&&s.length){ const ctx=cv.getContext('2d'); const w=cv.width=cv.clientWidth; const h=cv.height=cv.clientHeight; const vals=s.map(x=>Number(x.granted||0)); const max=Math.max.apply(null,vals.concat([1])); const min=Math.min.apply(null,vals.concat([0])); const pad=4; ctx.clearRect(0,0,w,h); ctx.strokeStyle='#22D3EE'; ctx.lineWidth=2; ctx.beginPath(); s.forEach((x,i)=>{ const vx=pad + (w-2*pad)*i/(s.length-1||1); const vy=h-pad - (h-2*pad)*(vals[i]-min)/(max-min||1); if(i===0) ctx.moveTo(vx,vy); else ctx.lineTo(vx,vy); }); ctx.stroke(); ctx.fillStyle='rgba(79,70,229,.15)'; ctx.beginPath(); s.forEach((x,i)=>{ const vx=pad + (w-2*pad)*i/(s.length-1||1); const vy=h-pad - (h-2*pad)*(vals[i]-min)/(max-min||1); if(i===0) ctx.moveTo(vx,vy); else ctx.lineTo(vx,vy); }); ctx.lineTo(w-pad,h-pad); ctx.lineTo(pad,h-pad); ctx.closePath(); ctx.fill(); } } }catch(e){} }());
+ (async function(){ try{ const r = await fetch('/api/advances/list'); const j = await r.json(); if(j&&j.ok){ const tbody = document.getElementById('advTableBody'); let idx=0; (j.rows||[]).forEach(x=>{ const status = (Number(x.remaining||0)>0? 'قيد التنفيذ' : 'منتهية'); const tr=document.createElement('tr'); tr.setAttribute('data-emp', String(x.employee_id||'')); tr.setAttribute('data-name', x.employee_name||''); tr.setAttribute('data-dept', (x.department||'').toLowerCase()); tr.innerHTML = `<td>${++idx}</td><td>${x.employee_name||''}</td><td>${x.branch||'-'}</td><td class='text-end'>${Number(x.granted||0).toFixed(2)}</td><td class='text-end'>${Number(x.paid||0).toFixed(2)}</td><td class='text-end'>${Number(x.remaining||0).toFixed(2)}</td><td>${x.last_date||'-'}</td><td><div class='dropdown'><button class='btn btn-sm btn-outline-secondary' data-bs-toggle='dropdown'>⋮</button><ul class='dropdown-menu'><li><button class='dropdown-item' data-adv='${encodeURIComponent(JSON.stringify(x))}' data-bs-toggle='offcanvas' data-bs-target='#advanceCanvas'>معاينة</button></li><li><button class='dropdown-item' data-act='repay' data-adv='${encodeURIComponent(JSON.stringify(x))}'>سداد جزئي</button></li><li><button class='dropdown-item' data-act='edit' data-adv='${encodeURIComponent(JSON.stringify(x))}'>تعديل</button></li><li><button class='dropdown-item' data-act='preview' data-adv='${encodeURIComponent(JSON.stringify(x))}'>معاينة القيد</button></li></ul></div></td>`; tbody.appendChild(tr); }); const cnt={all:0,kitchen:0,hall:0,admin:0,branches:0}; document.querySelectorAll('#advTableBody tr').forEach(tr=>{ cnt.all+=1; const dep=(tr.getAttribute('data-dept')||''); if(/kitchen|chef|شيف/i.test(dep)) cnt.kitchen+=1; if(/hall|floor|wait|صالة|الصالة/i.test(dep)) cnt.hall+=1; if(/admin|إداري/i.test(dep)) cnt.admin+=1; }); for(const k of Object.keys(cnt)){ const el=document.getElementById('count-'+k); if(el) el.textContent = cnt[k]; } document.querySelectorAll('[data-bs-target="#advanceCanvas"]').forEach(b=> b.addEventListener('click', function(){ const data = JSON.parse(decodeURIComponent(this.getAttribute('data-adv')||'%7B%7D')); document.getElementById('aName').textContent = data.employee_name||''; document.getElementById('aGrant').textContent = '﷼'+Number(data.granted||0).toFixed(2); document.getElementById('aPaid').textContent = '﷼'+Number(data.paid||0).toFixed(2); document.getElementById('aRemain').textContent = '﷼'+Number(data.remaining||0).toFixed(2); document.getElementById('aDate').textContent = data.last_date||'-'; document.getElementById('btnRepay').onclick = ()=> repayAdvance(data.employee_id); document.getElementById('btnPreviewAdv').onclick = ()=> showToast('معاينة القيد'); document.getElementById('btnEditAdv').onclick = ()=> showToast('فتح شاشة التعديل'); }); document.querySelectorAll('[data-act]').forEach(b=> b.addEventListener('click', function(){ const act=this.getAttribute('data-act'); const data = JSON.parse(decodeURIComponent(this.getAttribute('data-adv')||'%7B%7D')); if(act==='repay'){ repayAdvance(data.employee_id); } else if(act==='edit'){ showToast('فتح شاشة التعديل'); } else if(act==='preview'){ showToast('معاينة القيد'); } })); const overLimit=(j.rows||[]).some(r=> Number(r.granted||0) > 5000); if(overLimit){ showToast('السلفة تجاوزت الحد المسموح به'); } const anyUnapproved=(j.rows||[]).some(r=> Number(r.remaining||0)>0); if(anyUnapproved){ showToast('سلفة لم يتم اعتمادها بعد'); } } }catch(e){} }());
+document.getElementById('advSearch')?.addEventListener('input', function(){ const q=(this.value||'').trim(); const box=document.getElementById('advSuggest'); if(!q){ box.style.display='none'; box.innerHTML=''; return; } const list=EMPS.filter(x=> x && x.toLowerCase().includes(q.toLowerCase())).slice(0,8); box.innerHTML = list.map(t=>{ const idx=t.toLowerCase().indexOf(q.toLowerCase()); const pre=t.substring(0,idx); const mid=t.substring(idx, idx+q.length); const suf=t.substring(idx+q.length); return `<div class='suggest-item'>${pre}<span class='hl'>${mid}</span>${suf}</div>`; }).join(''); box.style.display = list.length?'block':'none'; Array.from(box.querySelectorAll('.suggest-item')).forEach(i=> i.addEventListener('click',()=>{ document.getElementById('advSearch').value=i.textContent; box.style.display='none'; })); });
+document.querySelectorAll('#deptTabs .pill-tab').forEach(b=> b.addEventListener('click', function(){ document.querySelectorAll('#deptTabs .pill-tab').forEach(x=> x.classList.remove('active')); this.classList.add('active'); const d=this.getAttribute('data-dept')||'all'; document.querySelectorAll('#advTableBody tr').forEach(tr=>{ const dep=(tr.getAttribute('data-dept')||''); const ok = d==='all' || (d==='kitchen'&&/kitchen|chef|شيف/i.test(dep)) || (d==='hall'&&/hall|floor|wait|صالة|الصالة/i.test(dep)) || (d==='admin'&&/admin|إداري/i.test(dep)); tr.style.display = ok? '' : 'none'; }); }));
+function openNewAdvance(){ const empId = prompt('اختر رقم الموظف'); const amount = prompt('أدخل قيمة السلفة'); if(!empId||!amount) return; const fd=new FormData(); fd.append('employee_id', empId); fd.append('amount', amount); fd.append('method','cash'); fetch('/api/advances', { method:'POST', body: fd }).then(r=> r.json()).then(j=>{ showToast(j&&j.ok?'تم تسجيل السلفة':'فشل التسجيل'); location.reload(); }).catch(()=> showToast('خطأ في الشبكة')); }
+function repayAdvance(empId){ const amount = prompt('قيمة السداد'); if(!amount) return; const fd=new FormData(); fd.append('employee_id', String(empId)); fd.append('amount', String(amount)); fd.append('method','cash'); fetch('/api/advances/pay', { method:'POST', body: fd }).then(r=> r.json()).then(j=>{ showToast(j&&j.ok?'تم تسجيل السداد':'فشل السداد'); location.reload(); }).catch(()=> showToast('خطأ في الشبكة')); }
+try{ lottie.loadAnimation({ container: document.getElementById('lottieWallet'), renderer:'svg', loop:true, autoplay:true, path:'https://lottie.host/7f8da2c2-money.json' }); lottie.loadAnimation({ container: document.getElementById('lottieUnpaid'), renderer:'svg', loop:true, autoplay:true, path:'https://lottie.host/b1c2a3d4-clock.json' }); lottie.loadAnimation({ container: document.getElementById('lottieDate'), renderer:'svg', loop:true, autoplay:true, path:'https://lottie.host/92b0a1f1-payroll.json' }); }catch(e){}
+function showToast(msg){ const el=document.createElement('div'); el.className='toast-adv'; el.textContent=msg||''; document.body.appendChild(el); setTimeout(()=>{ el.remove(); },5000); }
+function openNewAdvanceModal(){ const m=new bootstrap.Modal(document.getElementById('newAdvanceModal')); m.show(); }
+document.getElementById('submitNewAdvance')?.addEventListener('click', function(){ const f=document.getElementById('newAdvanceForm'); const fd=new FormData(f); fetch('/api/advances', { method:'POST', body: fd }).then(r=> r.json()).then(j=>{ showToast(j&&j.ok?'تم تسجيل السلفة':'فشل التسجيل'); const m=bootstrap.Modal.getInstance(document.getElementById('newAdvanceModal')); m?.hide(); location.reload(); }).catch(()=> showToast('خطأ في الشبكة')); });
+document.getElementById('advEmployee')?.addEventListener('change', function(){ const id=(this.value||''); document.querySelectorAll('#advTableBody tr').forEach(tr=>{ const tid=(tr.getAttribute('data-emp')||''); tr.style.display = (!id || tid===id) ? '' : 'none'; }); });
+const hdr=document.getElementById('advHeader'); const lg=document.getElementById('advLogo'); if(hdr&&lg){ hdr.addEventListener('mousemove', function(ev){ const r=hdr.getBoundingClientRect(); const cx=ev.clientX - r.left; const cy=ev.clientY - r.top; const rx=(cx/r.width - .5)*8; const ry=(cy/r.height - .5)*-8; lg.style.transform = `perspective(300px) rotateY(${rx}deg) rotateX(${ry}deg) scale(1.06)`; }); hdr.addEventListener('mouseleave', function(){ lg.style.transform='none'; }); }
+</script>
+</script>
+{% endblock %}

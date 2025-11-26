@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% if current_user.is_authenticated %}{% set back_url = url_for('main.employees') %}{% else %}{% set back_url = '#' %}{% endif %}
+{% if current_user.is_authenticated %}{% set back_url = url_for('main.dashboard') %}{% else %}{% set back_url = '#' %}{% endif %}
 
 {% block title %}{{ _('Payroll Statements / كشوفات الرواتب') }}{% endblock %}
 {% block content %}
@@ -7,7 +7,7 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">🧾 {{ _('Payroll Statements / كشوفات الرواتب') }}</h3>
     <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary" href="{{ url_for('main.employees') }}">👤 {{ _('Employees') }}</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.dashboard') }}">🏠 {{ _('Dashboard') }}</a>
       <a class="btn btn-outline-success" href="{{ url_for('main.salaries_pay', month='%04d-%02d' % (year, month)) }}">💵 {{ _('Pay Salaries') }}</a>
       <a class="btn btn-outline-primary" target="_blank" href="{{ url_for('main.reports_print_salaries_detailed', month='%04d-%02d' % (year, month), status=(status_f or '')) }}">📄 {{ _('Print Statement / طباعة الكشف') }}</a>
       <a class="btn btn-primary" href="{{ url_for('main.dashboard') }}">🏠 {{ _('Dashboard') }}</a>

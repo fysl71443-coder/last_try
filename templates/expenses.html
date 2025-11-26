@@ -273,20 +273,14 @@ body {
                                         {{ item_form.price_before_tax(class_='form-control', step='0.01') }}
                                     </div>
                                 </div>
-                                <div class="col-md-1">
-                                    {{ item_form.tax.label(class_='form-label fw-bold') }}
-                                    <div class="input-group">
-                                        <span class="input-group-text">﷼</span>
-                                        {{ item_form.tax(class_='form-control', step='0.01', value='0') }}
-                                    </div>
-                                </div>
-                                <div class="col-md-1">
-                                    {{ item_form.discount.label(class_='form-label fw-bold') }}
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">{{ _('Discount %% / نسبة الخصم %%') }}</label>
                                     <div class="input-group">
                                         <span class="input-group-text">﷼</span>
                                         {{ item_form.discount(class_='form-control', step='0.01', value='0') }}
                                     </div>
                                 </div>
+                                <div class="col-md-1"></div>
                                 <div class="col-md-1">
                                     <label class="form-label fw-bold">{{ _('Total / الإجمالي') }}</label>
                                     <div class="form-control bg-success text-white fw-bold item-total">﷼0.00</div>
@@ -305,7 +299,7 @@ body {
             <div class="card border-0 bg-light mb-4">
                 <div class="card-body">
                     <h6 class="card-title mb-3">💰 {{ _('Cost Summary / ملخص التكاليف') }}</h6>
-                    <div class="row g-3">
+                    <div class="row g-3 align-items-center">
                         <div class="col-md-3">
                             <label class="form-label fw-bold">{{ _('Subtotal / المجموع الفرعي') }}</label>
                             <div class="form-control bg-info text-white fw-bold" id="total-before-tax">﷼0.00</div>
@@ -315,10 +309,16 @@ body {
                             <div class="form-control bg-warning text-dark fw-bold" id="tax-amount">﷼0.00</div>
                         </div>
                         <div class="col-md-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="apply_vat_all" name="apply_vat_all">
+                                <label class="form-check-label" for="apply_vat_all">{{ _('Apply 15% VAT on subtotal / تطبيق ضريبة 15% على المجموع الفرعي') }}</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">{{ _('Discount / الخصم') }}</label>
                             <div class="form-control bg-secondary text-white fw-bold" id="total-discount">﷼0.00</div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-3 mt-3">
                             <label class="form-label fw-bold">{{ _('Final Total / الإجمالي النهائي') }}</label>
                             <div class="form-control bg-danger text-white fw-bold fs-5" id="final-total">﷼0.00</div>
                         </div>
@@ -380,16 +380,11 @@ body {
                             <span class="badge bg-light text-dark">{{ invoice.date.strftime('%Y-%m-%d') }}</span>
                         </td>
                         <td>
-                            {% if invoice.payment_method == 'cash' %}
+                            {% set pm = (invoice.payment_method or '')|lower %}
+                            {% if pm == 'cash' %}
                                 <span class="badge bg-success">💰 {{ _('Cash / نقداً') }}</span>
-                            {% elif invoice.payment_method == 'bank' %}
-                                <span class="badge bg-primary">🏦 {{ _('Bank / بنك') }}</span>
-                            {% elif invoice.payment_method == 'visa' %}
-                                <span class="badge bg-info">💳 {{ _('Visa / فيزا') }}</span>
-                            {% elif invoice.payment_method == 'mada' %}
-                                <span class="badge bg-warning">💳 {{ _('Mada / مدى') }}</span>
                             {% else %}
-                                <span class="badge bg-secondary">{{ invoice.payment_method }}</span>
+                                <span class="badge bg-primary">🏦 {{ _('Bank / بنك') }}</span>
                             {% endif %}
                         </td>
                         <td class="text-end">
@@ -458,24 +453,24 @@ body {
         document.querySelectorAll('.item-row').forEach(row => {
             const quantityInput = row.querySelector('input[name$="-quantity"]');
             const priceInput = row.querySelector('input[name$="-price_before_tax"]');
-            const taxInput = row.querySelector('input[name$="-tax"]');
             const discountInput = row.querySelector('input[name$="-discount"]');
             const totalDisplay = row.querySelector('.item-total');
 
             const quantity = parseFloat(quantityInput.value) || 0;
             const price = parseFloat(priceInput.value) || 0;
-            const tax = parseFloat(taxInput.value) || 0;
-            const discount = parseFloat(discountInput.value) || 0;
+            const discountPct = parseFloat(discountInput.value) || 0;
 
             const itemBeforeTax = quantity * price;
-            const itemTotal = itemBeforeTax + tax - discount;
+            const discountAmt = itemBeforeTax * (discountPct/100);
+            const itemTotal = itemBeforeTax - discountAmt;
 
             totalDisplay.textContent = '﷼' + itemTotal.toFixed(2);
             totalBeforeTax += itemBeforeTax;
-            totalTax += tax;
-            totalDiscount += discount;
+            totalDiscount += discountAmt;
         });
 
+        const applyAll = document.getElementById('apply_vat_all')?.checked;
+        totalTax = applyAll ? ((totalBeforeTax - totalDiscount) * 0.15) : 0;
         const finalTotal = totalBeforeTax + totalTax - totalDiscount;
 
         document.getElementById('total-before-tax').textContent = '﷼' + totalBeforeTax.toFixed(2);
@@ -486,8 +481,20 @@ body {
     }
 
     // Event listeners
+    function recalcRow(row){
+        const q = parseFloat(row.querySelector('input[name$="-quantity"]').value)||0;
+        const p = parseFloat(row.querySelector('input[name$="-price_before_tax"]').value)||0;
+        const d = parseFloat(row.querySelector('input[name$="-discount"]').value)||0;
+        const apply = !!row.querySelector('.apply-vat-toggle')?.checked;
+        const taxInput = row.querySelector('.tax-input');
+        const before = q*p;
+        const discAmt = before*(d/100);
+        const base = Math.max(before-discAmt,0);
+        const tax = apply ? (base*0.15) : 0;
+        if(taxInput){ taxInput.value = tax.toFixed(2); }
+    }
     document.addEventListener('change', e => {
-        if (e.target.matches('input[name$="-quantity"], input[name$="-price_before_tax"], input[name$="-tax"], input[name$="-discount"]')) {
+        if (e.target.matches('input[name$="-quantity"], input[name$="-price_before_tax"], input[name$="-discount"], #apply_vat_all')) {
             calculateTotals();
         }
     });

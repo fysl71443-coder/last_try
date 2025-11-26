@@ -128,7 +128,7 @@
         }
     </style>
 </head>
-<body onload="window.print()">
+<body>
     <div class="receipt">
         <!-- Header with Logo and Business Info -->
         <header class="r-header business-info">
@@ -160,7 +160,8 @@
             <div><strong>Table:</strong> {{ invoice.table_number }}</div>
             {% endif %}
             {% if invoice.payment_method or (invoice.status and invoice.status|lower == 'paid') %}
-            <div><strong>Payment:</strong> {{ (invoice.payment_method or 'Cash')|title }}</div>
+            {% set pm = (invoice.payment_method or '')|lower %}
+            <div><strong>Payment:</strong> {{ 'Cash' if pm == 'cash' else 'Bank' }}</div>
             {% endif %}
         </section>
 
@@ -252,10 +253,34 @@
 
         <!-- Print Actions (hidden in print) -->
         <div class="print-actions">
-            <button onclick="window.print()">🖨️ Print Receipt</button>
+            <label style="margin-right:8px">عدد النسخ:</label>
+            <input id="printCopies" type="number" min="1" value="2" style="width:70px;margin-right:12px" />
+            <button id="btnPrintNow">🖨️ Print Receipt</button>
             <button onclick="window.close()">❌ Close</button>
             <button onclick="location.href='/receipt/{{ invoice.id }}/pdf'">📄 Download PDF</button>
         </div>
     </div>
+    <script>
+    (function(){
+      function buildCopies(n){
+        n = parseInt(n||1,10); if(isNaN(n) || n<1) n=1;
+        const receipts = Array.from(document.querySelectorAll('.receipt'));
+        const first = receipts[0];
+        // Remove existing extra copies
+        receipts.slice(1).forEach(el=> el.remove());
+        // Duplicate before print actions container
+        const insertTarget = document.body;
+        for(let i=1;i<n;i++){
+          const clone = first.cloneNode(true);
+          insertTarget.insertBefore(clone, document.querySelector('.print-actions'));
+        }
+      }
+      const copiesInput = document.getElementById('printCopies');
+      const btn = document.getElementById('btnPrintNow');
+      if(btn){ btn.onclick = function(){ buildCopies(copiesInput && copiesInput.value ? copiesInput.value : 2); window.print(); }; }
+      window.addEventListener('load', function(){ buildCopies(copiesInput && copiesInput.value ? copiesInput.value : 2); setTimeout(function(){ try{ window.print(); }catch(e){} }, 300); });
+      window.onafterprint = function(){ try{ window.close(); }catch(e){} };
+    })();
+    </script>
 </body>
 </html>

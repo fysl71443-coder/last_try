@@ -3,7 +3,7 @@
 <div class="container py-3">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">🧾 اختيار الموظفين لطباعة التقرير</h3>
-    <a href="{{ url_for('main.employees') }}" class="btn btn-outline-primary btn-sm">⬅︎ رجوع للموظفين</a>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-primary btn-sm">⬅︎ رجوع للوحة التحكم</a>
   </div>
 
   <div class="card mb-3">
@@ -92,7 +92,7 @@
     </div>
 
     <div class="d-flex justify-content-between align-items-center gap-2 mt-3">
-      <a href="{{ url_for('main.employees') }}" class="btn btn-outline-primary btn-sm">⬅︎ رجوع</a>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-primary btn-sm">⬅︎ رجوع</a>
       <button type="button" class="btn btn-primary" onclick="submitSelected()" id="printBtn" disabled>🖨️ طباعة المحددين</button>
     </div>
   </form>

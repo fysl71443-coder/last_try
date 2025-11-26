@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-3">
+  {% if acc %}
+  <h4>{{ _('Account Statement / كشف حساب') }} — {{ acc.code }} — {{ acc.name }}</h4>
+  <form class="row g-3 mb-3" method="get">
+    <input type="hidden" name="code" value="{{ acc.code }}">
+    <div class="col-md-3">
+      <label class="form-label">{{ _('Start Date / تاريخ البداية') }}</label>
+      <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">{{ _('End Date / تاريخ النهاية') }}</label>
+      <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+      <button class="btn btn-primary" type="submit">{{ _('Filter / تصفية') }}</button>
+    </div>
+  </form>
+  <div class="mb-2">{{ _('Opening Balance / رصيد افتتاحي') }}: <strong>{{ '%.2f' % opening_balance }}</strong></div>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>{{ _('Date') }}</th>
+        <th>{{ _('Entry') }}</th>
+        <th>{{ _('Description') }}</th>
+        <th class="text-end">{{ _('Debit') }}</th>
+        <th class="text-end">{{ _('Credit') }}</th>
+        <th class="text-end">{{ _('Running Balance') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set running = opening_balance %}
+      {% for ln, entry_number, desc in entries %}
+      {% set change = (ln.debit - ln.credit) if acc.type != 'LIABILITY' else (ln.credit - ln.debit) %}
+      {% set running = running + change %}
+      <tr>
+        <td>{{ ln.line_date }}</td>
+        <td>{{ entry_number }}</td>
+        <td>{{ desc }}</td>
+        <td class="text-end">{{ '%.2f' % (ln.debit or 0) }}</td>
+        <td class="text-end">{{ '%.2f' % (ln.credit or 0) }}</td>
+        <td class="text-end">{{ '%.2f' % running }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="alert alert-danger">{{ _('Account not found / الحساب غير موجود') }}</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -44,16 +44,11 @@
                         <tr>
                             <td><strong>{{ _('Payment Method / طريقة الدفع') }}:</strong></td>
                             <td>
-                                {% if invoice.payment_method == 'cash' %}
-                                    💰 {{ _('Cash / نقداً') }}
-                                {% elif invoice.payment_method == 'bank' %}
-                                    🏦 {{ _('Bank / بنك') }}
-                                {% elif invoice.payment_method == 'visa' %}
-                                    💳 {{ _('Visa / فيزا') }}
-                                {% elif invoice.payment_method == 'mada' %}
-                                    💳 {{ _('Mada / مدى') }}
+                                {% set pm = (invoice.payment_method or '')|lower %}
+                                {% if pm == 'cash' %}
+                                  💰 {{ _('Cash / نقداً') }}
                                 {% else %}
-                                    {{ invoice.payment_method }}
+                                  🏦 {{ _('Bank / بنك') }}
                                 {% endif %}
                             </td>
                         </tr>

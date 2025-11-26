@@ -1,7 +1,11 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, DateField, DecimalField, FieldList, FormField, IntegerField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
-from flask_babel import lazy_gettext as _l
+try:
+    from flask_babel import lazy_gettext as _l
+except Exception:
+    def _l(s):
+        return s
 
 PAYMENT_METHODS = [
     ('MADA', 'مدى / MADA'),
@@ -110,10 +114,10 @@ class MealForm(FlaskForm):
 class PurchaseInvoiceItemForm(FlaskForm):
     class Meta:
         csrf = False
-    # نجعل الحقول اختيارية للسماح بصفوف فارغة في FieldList، وسنقوم بالتحقق في السيرفر لاحقاً
-    raw_material_id = SelectField(_l('Raw Material / المادة الخام'), coerce=int, validators=[Optional()])
-    quantity = DecimalField(_l('Quantity / الكمية'), validators=[Optional(), NumberRange(min=0.0001)], places=4)
-    price_before_tax = DecimalField(_l('Unit Price / سعر الوحدة'), validators=[Optional(), NumberRange(min=0)], places=4)
+    category = SelectField(_l('Category / الفئة'), choices=[], validators=[Optional()])
+    raw_material_id = SelectField(_l('Raw Material / المادة الخام'), coerce=int, validators=[DataRequired()])
+    quantity = DecimalField(_l('Quantity / الكمية'), validators=[DataRequired(), NumberRange(min=0.0001)], places=4)
+    price_before_tax = DecimalField(_l('Unit Price / سعر الوحدة'), validators=[DataRequired(), NumberRange(min=0)], places=4)
     discount = DecimalField(_l('Discount %% / نسبة الخصم %%'), validators=[Optional(), NumberRange(min=0, max=100)], places=2)
 
 # Purchase Invoice Form

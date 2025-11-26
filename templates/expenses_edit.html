@@ -49,8 +49,6 @@
                                 <select name="payment_method" class="form-select" required>
                                     <option value="cash" {% if invoice.payment_method == 'cash' %}selected{% endif %}>💰 {{ _('Cash / نقداً') }}</option>
                                     <option value="bank" {% if invoice.payment_method == 'bank' %}selected{% endif %}>🏦 {{ _('Bank / بنك') }}</option>
-                                    <option value="visa" {% if invoice.payment_method == 'visa' %}selected{% endif %}>💳 {{ _('Visa / فيزا') }}</option>
-                                    <option value="mada" {% if invoice.payment_method == 'mada' %}selected{% endif %}>💳 {{ _('Mada / مدى') }}</option>
                                 </select>
                             </div>
                         </div>

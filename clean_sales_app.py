@@ -477,9 +477,8 @@ buildCategories();
 
 </form>
 
-<!-- أزرار أسفل الفاتورة: طباعة قبل الدفع، دفع وطباعة، إلغاء الفاتورة -->
+<!-- أزرار أسفل الفاتورة: دفع وطباعة، إلغاء الفاتورة -->
 <div class=\"invoice-footer\" style=\"margin-top:20px;padding:12px;border-top:1px solid #ddd;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-start\">
-  <button type=\"button\" onclick=\"window.open('{{ url_for('preview_receipt', branch_code=branch.code, table_number=table.number) }}','_blank')\" style=\"padding:8px 12px;background:#007bff;color:#fff;border:none;border-radius:6px;cursor:pointer\">🖨️ Print before payment</button>
   <button type=\"submit\" form=\"payment-form\" style=\"padding:8px 12px;background:#28a745;color:#fff;border:none;border-radius:6px;cursor:pointer\">💳 Pay & Print</button>
   <button type=\"button\" onclick=\"document.getElementById('cancel-form').style.display='block'\" style=\"padding:8px 12px;background:#dc3545;color:#fff;border:none;border-radius:6px;cursor:pointer\">❌ Cancel invoice</button>
 </div>
@@ -957,4 +956,3 @@ def set_customer(branch_code, table_number):
 if __name__ == "__main__":
     # Run on all interfaces so you can open from this PC or others; use stable single-process server
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
-

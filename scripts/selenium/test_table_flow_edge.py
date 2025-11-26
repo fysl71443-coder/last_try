@@ -11,6 +11,7 @@ from webdriver_manager.microsoft import EdgeChromiumDriverManager
 BASE_URL = os.environ.get('POS_BASE_URL', 'http://127.0.0.1:5000')
 BRANCH = os.environ.get('POS_BRANCH', 'china_town')
 TABLE = os.environ.get('POS_TABLE', '16')  # الافتراضي الآن 16 طبقاً للمشكلة
+SELECTED_TABLE = TABLE
 USERNAME = os.environ.get('POS_USERNAME', 'admin')
 PASSWORDS = [os.environ.get('POS_PASSWORD', 'admin'), 'admin123']  # نجرب كليهما
 
@@ -47,11 +48,25 @@ def open_tables(driver):
 
 
 def select_table_button(driver):
-    sel = f"#tables-root a.btn[data-table='{TABLE}']"
-    WebDriverWait(driver, WAIT_SECONDS).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, sel))
-    )
-    return driver.find_element(By.CSS_SELECTOR, sel)
+    global SELECTED_TABLE
+    # حاول اختيار الطاولة المحددة، وإلا اختر أول طاولة متاحة في الصفحة
+    try:
+        sel = f"#tables-root a.btn[data-table='{SELECTED_TABLE}']"
+        WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, sel))
+        )
+        return driver.find_element(By.CSS_SELECTOR, sel)
+    except Exception:
+        # لا توجد الطاولة المطلوبة؛ اختر أول زر بطاولة متاحة
+        WebDriverWait(driver, WAIT_SECONDS).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "#tables-root a.btn[data-table]"))
+        )
+        first = driver.find_element(By.CSS_SELECTOR, "#tables-root a.btn[data-table]")
+        try:
+            SELECTED_TABLE = first.get_attribute('data-table') or SELECTED_TABLE
+        except Exception:
+            pass
+        return first
 
 
 def add_first_item(driver):
@@ -335,4 +350,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

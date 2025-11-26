@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-3">
+  <h4>{{ _('Backfill Result / نتيجة الترحيل') }}</h4>
+  <p>{{ _('Created journal entries') }}: <strong>{{ created }}</strong></p>
+  <p>{{ _('Period') }}: {{ start_date }} → {{ end_date }}</p>
+  <div class="mt-2">
+    <a class="btn btn-outline-primary" href="{{ url_for('financials.accounts', start_date=start_date, end_date=end_date) }}">{{ _('View Accounts / عرض الحسابات') }}</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('financials.backfill_journals') }}">{{ _('Back') }}</a>
+  </div>
+</div>
+{% endblock %}

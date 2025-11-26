@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}التقارير الشهرية{% endblock %}
+{% block content %}
+<style>
+:root{--p1:#1E40AF;--p2:#4F46E5;--s1:#06B6D4;--s2:#22D3EE;--bg:#f6f8fc}
+.wrap{padding:16px}
+.top{display:flex;align-items:center;justify-content:space-between;background:#ffffffd9;border:1px solid #eaeaea;border-radius:16px;padding:12px 16px;backdrop-filter:blur(10px)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800}
+.logo{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--p1),var(--p2));display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 8px 22px rgba(79,70,229,.25);will-change:transform}
+.search{position:relative;min-width:360px}
+.search input{border:1px solid #dfe3eb;border-radius:12px;padding:10px;width:100%;box-shadow:0 6px 14px rgba(0,0,0,.06)}
+.suggest{position:absolute;top:100%;left:0;right:0;background:#0b1020;color:#e2f6ff;border:1px solid #0ea5e9;border-radius:10px;box-shadow:0 12px 24px rgba(0,0,0,.35);display:none;z-index:60}
+.suggest .it{padding:8px 10px;cursor:pointer}
+.suggest .hl{color:#22D3EE;text-shadow:0 0 8px rgba(34,211,238,.8)}
+.btn-grad{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;border:none;border-radius:12px;padding:10px 14px;position:relative;overflow:hidden}
+.btn-grad:hover{transform:scale(1.06)}
+.ripple::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;background:rgba(255,255,255,.8);border-radius:50%;transform:translate(-50%,-50%) scale(0);opacity:0;transition:transform .5s ease, opacity .8s ease}
+.ripple:active::after{transform:translate(-50%,-50%) scale(20);opacity:1}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+.kpi{position:relative;background:#ffffffd9;border:1px solid #eaeaea;border-radius:18px;padding:14px;box-shadow:0 14px 34px rgba(0,0,0,.08);display:flex;align-items:center;gap:12px}
+.kpi .icon{width:46px;height:46px}
+.kpi .title{font-size:13px;color:#666}
+.kpi .val{font-size:22px;font-weight:800}
+.spark{height:36px;width:120px;position:absolute;right:12px;bottom:10px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.panel{background:#ffffffd9;border:1px solid #eaeaea;border-radius:16px;padding:12px}
+.table-wrap{position:relative;overflow:auto}
+table{width:100%;border-collapse:collapse}
+thead th{position:sticky;top:0;background:#f8f9fa;box-shadow:0 3px 6px rgba(0,0,0,.06);z-index:1}
+th,td{padding:10px;border:1px solid #eee;text-align:center;white-space:nowrap}
+tbody tr{transition:transform .2s ease, box-shadow .2s ease, background .2s ease}
+tbody tr:hover{background:linear-gradient(90deg,#f0f7ff,#ffffff);transform:translateY(-1px);box-shadow:0 6px 12px rgba(0,0,0,.06)}
+.slideover{position:fixed;top:0;right:-520px;width:480px;height:100vh;background:#fff;border-left:1px solid #eee;box-shadow:-8px 0 20px rgba(0,0,0,.1);z-index:1000;display:flex;flex-direction:column}
+.slh{padding:18px 16px;font-weight:800;background:linear-gradient(135deg,#eef4ff,#ffffff)}
+.slb{padding:14px;overflow:auto}
+.charts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.chart{background:#ffffffd9;border:1px solid #eaeaea;border-radius:16px;padding:12px}
+</style>
+
+<div class="container-fluid wrap">
+  <div class="top">
+    <div class="brand"><div id="rLogo" class="logo">🍽️</div><span>Logo Restaurant</span><strong>التقارير الشهرية</strong></div>
+    <div class="search">
+      <input id="repSearch" placeholder="🔎 بحث حسب الشهر/القسم">
+      <div id="repSuggest" class="suggest"></div>
+    </div>
+    <button class="btn-grad ripple" id="btnNewRep">➕ إنشاء تقرير جديد</button>
+    <div>👤 مرحباً {{ current_user.username }}</div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div id="kpiL1" class="icon"></div><div class="flex-grow-1"><div class="title">إجمالي الرواتب</div><div class="val" id="kPayroll">—</div></div><canvas class="spark" id="spPayroll"></canvas></div>
+    <div class="kpi"><div id="kpiL2" class="icon"></div><div class="flex-grow-1"><div class="title">إجمالي السلف</div><div class="val" id="kAdv">—</div></div><canvas class="spark" id="spAdv"></canvas></div>
+    <div class="kpi"><div id="kpiL3" class="icon"></div><div class="flex-grow-1"><div class="title">إجمالي الخصومات</div><div class="val" id="kDed">—</div></div><canvas class="spark" id="spDed"></canvas></div>
+    <div class="kpi"><div id="kpiL4" class="icon"></div><div class="flex-grow-1"><div class="title">عدد القيود المحاسبية</div><div class="val" id="kEntries">—</div></div></div>
+  </div>
+
+  <div class="filters">
+    <input type="month" class="form-control" style="max-width:180px" id="fMonth">
+    <select class="form-select" style="max-width:160px" id="fYear"></select>
+    <select class="form-select" style="max-width:180px" id="fBranch"><option value="all">كل الفروع</option><option value="place_india">Place India</option><option value="china_town">China Town</option></select>
+    <select class="form-select" style="max-width:180px" id="fDept"><option value="">القسم</option></select>
+    <select class="form-select" style="max-width:220px" id="fEmp"><option value="">الموظف</option>{% for e in employees %}<option value="{{ e.id }}">{{ e.full_name }}</option>{% endfor %}</select>
+    <div class="ms-auto d-flex gap-2"><button class="btn btn-outline-primary" id="btnExportPDF">PDF</button><button class="btn btn-outline-success" id="btnExportX">Excel</button><button class="btn btn-outline-secondary" id="btnExportCSV">CSV</button></div>
+  </div>
+
+  <div class="panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>الموظف</th><th>القسم</th><th>الأساسي</th><th>OT</th><th>Bonus</th><th>Total</th><th>السلف</th><th>الخصومات</th><th>صافي الدفع</th><th>الحالة</th><th>⚙</th></tr></thead>
+        <tbody id="repRows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart"><div class="text-muted">Payroll Trend</div><canvas id="chPayroll" height="120"></canvas></div>
+    <div class="chart"><div class="text-muted">Advances & Deductions</div><canvas id="chAD" height="120"></canvas></div>
+    <div class="chart"><div class="text-muted">Employee Distribution</div><canvas id="chDept" height="120"></canvas></div>
+  </div>
+
+  <div id="sl" class="slideover"><div class="slh" id="slHeader">تفاصيل</div><div class="slb" id="slBody"></div></div>
+</div>
+
+<script>
+function drawSpark(canvas, series){ if(!canvas||!series||!series.length) return; const ctx=canvas.getContext('2d'); const w=canvas.width=canvas.clientWidth; const h=canvas.height=canvas.clientHeight; const vals=series.map(v=>Number(v||0)); const min=Math.min(...vals,0); const max=Math.max(...vals,1); const pad=4; ctx.clearRect(0,0,w,h); ctx.strokeStyle='#22D3EE'; ctx.lineWidth=2; ctx.beginPath(); series.forEach((v,i)=>{ const x=pad + (w-2*pad)*(i/(series.length-1||1)); const y=h-pad - (h-2*pad)*((v-min)/(max-min||1)); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.stroke(); }
+function showSlide(o){ const p=document.getElementById('sl'); document.getElementById('slBody').innerHTML=o; if(window.gsap){ gsap.to(p,{duration:.5,x:-520,scale:1,ease:'power2.out'}) } else { p.style.transition='transform .5s ease'; p.style.transform='translateX(-520px)' } }
+function closeSlide(){ const p=document.getElementById('sl'); if(window.gsap){ gsap.to(p,{duration:.4,x:0,ease:'power2.in'}) } else { p.style.transition='transform .4s ease'; p.style.transform='translateX(0)' } }
+document.addEventListener('click',e=>{ if(e.target.id==='slHeader') closeSlide(); });
+
+async function loadMonthly(){ const m=document.getElementById('fMonth').value||''; const y=document.getElementById('fYear').value||''; const b=document.getElementById('fBranch').value||'all'; const d=document.getElementById('fDept').value||''; const emp=document.getElementById('fEmp').value||''; const u=new URL('/api/reports/monthly', location.origin); if(m) u.searchParams.set('month', m); if(y) u.searchParams.set('year', y); if(b&&b!=='all') u.searchParams.set('branch', b); if(d) u.searchParams.set('dept', d); if(emp) u.searchParams.set('emp', emp); const r=await fetch(u); const j=await r.json(); if(!j||!j.ok) return; document.getElementById('kPayroll').textContent='﷼'+Number(j.kpis.payroll_total||0).toFixed(2); document.getElementById('kAdv').textContent='﷼'+Number(j.kpis.advances_total||0).toFixed(2); document.getElementById('kDed').textContent='﷼'+Number(j.kpis.deductions_total||0).toFixed(2); document.getElementById('kEntries').textContent=Number(j.kpis.entries_count||0); drawSpark(document.getElementById('spPayroll'), (j.series||{}).payroll||[]); drawSpark(document.getElementById('spAdv'), (j.series||{}).advances||[]); drawSpark(document.getElementById('spDed'), (j.series||{}).deductions||[]); const tbody=document.getElementById('repRows'); tbody.innerHTML=''; let i=0; (j.rows||[]).forEach(x=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${++i}</td><td>${x.name||''}</td><td>${x.dept||''}</td><td>${Number(x.basic||0).toFixed(2)}</td><td>${Number(x.ot||0).toFixed(2)}</td><td>${Number(x.bonus||0).toFixed(2)}</td><td>${Number(x.total||0).toFixed(2)}</td><td>${Number(x.advances||0).toFixed(2)}</td><td>${Number(x.deductions||0).toFixed(2)}</td><td>${Number(x.net||0).toFixed(2)}</td><td>${x.status||''}</td><td><div class='dropdown'><button class='btn btn-sm btn-outline-secondary' data-bs-toggle='dropdown'>⋮</button><ul class='dropdown-menu'><li><button class='dropdown-item' data-row='${encodeURIComponent(JSON.stringify(x))}'>معاينة</button></li><li><button class='dropdown-item'>تعديل</button></li><li><button class='dropdown-item'>حذف</button></li><li><button class='dropdown-item'>تصدير</button></li></ul></div></td>`; tbody.appendChild(tr); }); document.querySelectorAll('[data-row]').forEach(b=> b.addEventListener('click', function(){ const x=JSON.parse(decodeURIComponent(this.getAttribute('data-row'))); showSlide(`<div class='d-grid gap-2'><div><span class='text-muted'>الموظف:</span> ${x.name||''}</div><div><span class='text-muted'>القسم:</span> ${x.dept||''}</div><div><span class='text-muted'>الأساسي:</span> ﷼${Number(x.basic||0).toFixed(2)}</div><div><span class='text-muted'>OT:</span> ﷼${Number(x.ot||0).toFixed(2)}</div><div><span class='text-muted'>Bonus:</span> ﷼${Number(x.bonus||0).toFixed(2)}</div><div><span class='text-muted'>السلف:</span> ﷼${Number(x.advances||0).toFixed(2)}</div><div><span class='text-muted'>الخصومات:</span> ﷼${Number(x.deductions||0).toFixed(2)}</div><div><span class='text-muted'>صافي الدفع:</span> ﷼${Number(x.net||0).toFixed(2)}</div><div><span class='text-muted'>الحالة:</span> ${x.status||''}</div><div class='mt-3 d-flex gap-2'><button class='btn btn-grad ripple'>💾 تعديل</button><button class='btn btn-outline-secondary ripple'>🖨️ طباعة</button><button class='btn btn-outline-dark ripple'>📊 معاينة قيد</button></div></div>`); })); }
+
+document.getElementById('fMonth').addEventListener('change', loadMonthly);
+document.getElementById('fYear').addEventListener('change', loadMonthly);
+document.getElementById('fBranch').addEventListener('change', loadMonthly);
+document.getElementById('fDept').addEventListener('change', loadMonthly);
+document.getElementById('fEmp').addEventListener('change', loadMonthly);
+
+;(function(){ const ySel=document.getElementById('fYear'); const cur=new Date().getFullYear(); for(let y=cur-2;y<=cur+1;y++){ const opt=document.createElement('option'); opt.value=String(y); opt.textContent=String(y); if(y===cur) opt.selected=true; ySel.appendChild(opt); } })();
+
+;(function(){ const hdr=document.querySelector('.top'); const lg=document.getElementById('rLogo'); if(hdr&&lg){ hdr.addEventListener('mousemove', function(ev){ const r=hdr.getBoundingClientRect(); const cx=ev.clientX - r.left; const cy=ev.clientY - r.top; const rx=(cx/r.width - .5)*8; const ry=(cy/r.height - .5)*-8; lg.style.transform = `perspective(300px) rotateY(${rx}deg) rotateX(${ry}deg) scale(1.06)`; }); hdr.addEventListener('mouseleave', function(){ lg.style.transform=''; }); } })();
+
+loadMonthly();
+try{ lottie.loadAnimation({ container: document.getElementById('kpiL1'), renderer:'svg', loop:true, autoplay:true, path:'https://assets8.lottiefiles.com/packages/lf20_3rwasyjy.json' }); lottie.loadAnimation({ container: document.getElementById('kpiL2'), renderer:'svg', loop:true, autoplay:true, path:'https://assets1.lottiefiles.com/packages/lf20_ujd3f9rs.json' }); lottie.loadAnimation({ container: document.getElementById('kpiL3'), renderer:'svg', loop:true, autoplay:true, path:'https://assets3.lottiefiles.com/packages/lf20_vfux7z1h.json' }); lottie.loadAnimation({ container: document.getElementById('kpiL4'), renderer:'svg', loop:true, autoplay:true, path:'https://assets9.lottiefiles.com/packages/lf20_udydk9.json' }); }catch(e){}
+</script>
+{% endblock %}

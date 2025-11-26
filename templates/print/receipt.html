@@ -265,7 +265,8 @@
     </table>
 
     {% if inv.payment_method %}
-    <div class="center small">{{ _('Payment') }}: {{ (inv.payment_method or 'CASH')|upper }}</div>
+    {% set pm = (inv.payment_method or '')|lower %}
+    <div class="center small">{{ _('Payment') }}: {{ 'CASH' if pm == 'cash' else 'BANK' }}</div>
     {% endif %}
 
     {% if qr_data_url %}

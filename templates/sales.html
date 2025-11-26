@@ -327,7 +327,7 @@ body {
     document.getElementById('add-item').addEventListener('click', function() {
         const itemsContainer = document.getElementById('items-container');
         const newItem = document.createElement('div');
-        newItem.className = 'row g-3 mb-2 item-row';
+        newItem.className = 'row g-3 mb-2 item-row fade-in';
         newItem.innerHTML = `
             <div class="col-md-3">
                 <label class="form-label">{{ _('Meal / الوجبة') }}</label>
@@ -361,13 +361,15 @@ body {
             </div>
         `;
         itemsContainer.appendChild(newItem);
+        requestAnimationFrame(()=>{ newItem.classList.add('show'); });
         itemIndex++;
     });
 
     // Remove item functionality
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('remove-item-btn')) {
-            e.target.closest('.item-row').remove();
+            const row = e.target.closest('.item-row');
+            if(row){ row.classList.remove('show'); setTimeout(()=>{ row.remove(); }, 180); }
         }
     });
 

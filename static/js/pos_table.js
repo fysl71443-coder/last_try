@@ -65,17 +65,17 @@
   function setTotals(){
     const taxPct = number(qs('#taxPct')?.value || VAT_RATE);
     const discountPct = number(qs('#discountPct')?.value || 0);
-    let subtotal = 0, tax = 0;
-    items.forEach(it=>{ const sub=it.unit*it.qty; subtotal+=sub; tax += sub*(taxPct/100); });
-    // Apply discount to subtotal only, then calculate tax on discounted amount
+    let subtotal = 0;
+    items.forEach(it=>{ const sub=it.unit*it.qty; subtotal+=sub; });
     const discountVal = subtotal * (discountPct/100);
     const discountedSubtotal = subtotal - discountVal;
     const taxOnDiscounted = discountedSubtotal * (taxPct/100);
     const grand = discountedSubtotal + taxOnDiscounted;
-    if(qs('#subtotal')) qs('#subtotal').textContent = subtotal.toFixed(2);
-    if(qs('#tax')) qs('#tax').textContent = taxOnDiscounted.toFixed(2);
-    if(qs('#discount')) qs('#discount').textContent = discountVal.toFixed(2);
-    if(qs('#grand')) qs('#grand').textContent = grand.toFixed(2);
+    const sb = qs('#subtotal'); const tx = qs('#tax'); const dc = qs('#discount'); const gr = qs('#grand');
+    if(sb){ if(window.animateNumber) window.animateNumber(sb, subtotal, 0.5); else sb.textContent = subtotal.toFixed(2); }
+    if(tx){ if(window.animateNumber) window.animateNumber(tx, taxOnDiscounted, 0.5); else tx.textContent = taxOnDiscounted.toFixed(2); }
+    if(dc){ if(window.animateNumber) window.animateNumber(dc, discountVal, 0.5); else dc.textContent = discountVal.toFixed(2); }
+    if(gr){ if(window.animateNumber) window.animateNumber(gr, grand, 0.6); else gr.textContent = grand.toFixed(2); if(window.gsap){ try{ gsap.fromTo(gr, { scale:1 }, { scale:1.05, duration:0.12, yoyo:true, repeat:1 }); }catch(_e){} } }
   }
 
   function renderItems(){
@@ -93,11 +93,18 @@
         const pwd = await (window.showPasswordPrompt ? window.showPasswordPrompt('أدخل كلمة سر المشرف / Enter supervisor password') : Promise.resolve(prompt('Enter supervisor password')));
         if(pwd===null) return; if(String(pwd).trim() !== VOID_PASSWORD){ if(window.showAlert) await window.showAlert('Incorrect password'); else alert('Incorrect password'); return; }
         if((it.qty||1) <= 1){
+          try{
+            if(window.MotionUI && typeof window.MotionUI.throwToTrash==='function'){
+              window.MotionUI.throwToTrash(tr, '.trash-target', {}, ()=>{ items.splice(idx,1); renderItems(); scheduleSave({ supervisor_password: pwd }); });
+              return;
+            }
+          }catch(_e){}
           items.splice(idx,1);
+          renderItems(); scheduleSave({ supervisor_password: pwd });
         } else {
           it.qty = (it.qty||1) - 1;
+          renderItems(); scheduleSave({ supervisor_password: pwd });
         }
-        renderItems(); scheduleSave({ supervisor_password: pwd });
       });
       plusBtn.addEventListener('click', async ()=>{
         it.qty = (it.qty||1) + 1; renderItems(); scheduleSave();
@@ -116,6 +123,12 @@
       rmBtn.addEventListener('click', async ()=>{
         const pwd = await window.showPasswordPrompt('أدخل كلمة سر المشرف / Enter supervisor password');
         if(pwd===null) return; if(String(pwd).trim() !== VOID_PASSWORD){ await window.showAlert('Incorrect password'); return; }
+        try{
+          if(window.MotionUI && typeof window.MotionUI.throwToTrash==='function'){
+            window.MotionUI.throwToTrash(tr, '.trash-target', {}, ()=>{ items.splice(idx,1); renderItems(); scheduleSave({ supervisor_password: pwd }); });
+            return;
+          }
+        }catch(_e){}
         items.splice(idx,1); renderItems(); scheduleSave({ supervisor_password: pwd });
       });
       rmTd.appendChild(rmBtn); tr.appendChild(rmTd);
@@ -150,12 +163,21 @@
     if(data.length === 0){ if(empty){ empty.classList.remove('d-none'); } }
     data.forEach(m=>{
       const col = document.createElement('div'); col.className = 'col-6 col-md-4 col-lg-3';
-      const card = document.createElement('div'); card.className = 'card meal-card h-100';
+      const card = document.createElement('div'); card.className = 'card meal-card item-card h-100';
       const body = document.createElement('div'); body.className = 'card-body d-flex flex-column justify-content-between';
       const nm = document.createElement('div'); nm.className='fw-bold'; nm.textContent = m.name || '';
       const pr = document.createElement('div'); pr.className='text-muted'; pr.textContent = 'Price: ' + number(m.price||0).toFixed(2);
       body.appendChild(nm); body.appendChild(pr); card.appendChild(body); col.appendChild(card);
-      card.addEventListener('click', ()=> addMenuItem(m.meal_id ?? m.id, m.name, number((m.price ?? m.unit ?? 0))) );
+      card.addEventListener('click', ()=>{
+        try{
+          const tgt = document.querySelector('#itemsList') || document.querySelector('#itemsBody') || document.body;
+          if(window.MotionUI && typeof window.MotionUI.flyToTarget==='function'){
+            window.MotionUI.flyToTarget(card, tgt, {}, null);
+          } else if(window.flyToTarget){ window.flyToTarget(card, '#itemsBody'); }
+        }catch(_e){}
+        addMenuItem(m.meal_id ?? m.id, m.name, number((m.price ?? m.unit ?? 0)));
+        try{ if(window.animateListEnter){ window.animateListEnter('#itemsBody tr'); } }catch(_e){}
+      });
       grid.appendChild(col);
     });
 
@@ -221,6 +243,7 @@
     if(items.length === 0){ await window.showAlert('Add at least one item'); return; }
     const pm = (qs('#payMethod')?.value || '').toUpperCase();
     if(!(pm==='CASH' || pm==='CARD')){ await window.showAlert('يرجى اختيار طريقة الدفع (CASH أو CARD)'); return; }
+    try{ const btn = qs('#btnPayPrint'); if(btn && window.triggerCelebration){ window.triggerCelebration(btn, 26); } }catch(_e){}
 
     // Ensure latest items are saved as draft and we have a draft id
     await flushPendingSave();

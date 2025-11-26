@@ -68,7 +68,14 @@ body {
               <div class="card-header bg-light fw-semibold">{{ _('Supplier Info / بيانات المورد') }}</div>
               <div class="card-body">
                 <div class="row g-3 align-items-end">
-                  <div class="col-md-4">
+                  <div class="col-md-3">
+                    <label class="form-label">{{ _('Invoice Type / نوع الفاتورة') }}</label>
+                    <select id="invoice_type" name="invoice_type" class="form-select">
+                      <option value="VAT">{{ _('VAT / ضريبة قيمة مضافة') }}</option>
+                      <option value="NO_VAT">{{ _('بدون VAT') }}</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
                     <label class="form-label">{{ _('Supplier / المورد') }}</label>
                     <select name="supplier_name" id="supplier_select" class="form-select">
                       <option value="">{{ _('Select Supplier / اختر المورد') }}</option>
@@ -76,6 +83,10 @@ body {
                         <option value="{{ s.name }}" data-id="{{ s.id }}">{{ s.name }}</option>
                       {% endfor %}
                     </select>
+                  </div>
+                  <div class="col-md-3" id="supplier_free_box" style="display:none;">
+                    <label class="form-label">{{ _('Supplier / المورد أو الجهة') }}</label>
+                    <input name="supplier_name_free" id="supplier_free" class="form-control" placeholder="{{ _('اكتب اسم المورد أو الجهة') }}">
                   </div>
                   <div class="col-md-4">
                     <label class="form-label">{{ _('Phone / رقم الهاتف') }}</label>
@@ -117,105 +128,122 @@ body {
                     {{ form.payment_method.label(class_='form-label') }}
                     {{ form.payment_method(class_='form-select') }}
                   </div>
-                  <div class="col-md-3">
-                    <label class="form-label">{{ _('Reference No / رقم المرجع') }}</label>
-                    <input name="reference_number" class="form-control" placeholder="PO/Ref if provided">
-                  </div>
+                  
                   <div class="col-md-3">
                     <label class="form-label">{{ _('Invoice No / رقم الفاتورة') }}</label>
                     <input class="form-control" value="{{ _('Auto on save (e.g. INV-PUR-YYYY-0001) / يُولّد تلقائياً عند الحفظ (مثال: INV-PUR-YYYY-0001)') }}" readonly>
                   </div>
                 </div>
-                  <div class="row g-3 mt-1">
-                    <div class="col-md-3">
-                      <label class="form-label">{{ _('Payment Status / حالة الدفع') }}</label>
-                      <select name="status" id="purchase-status" class="form-select">
-                        <option value="unpaid">{{ _('Unpaid / غير مدفوع') }}</option>
-                        <option value="partial">{{ _('Partial / مدفوع جزئياً') }}</option>
-                        <option value="paid">{{ _('Paid / مدفوع') }}</option>
-                      </select>
-                    </div>
-                    <div class="col-md-3" id="partial-paid-box" style="display:none;">
-                      <label class="form-label">{{ _('Paid Amount (Partial) / المبلغ المدفوع (جزئي)') }}</label>
-                      <input name="partial_paid_amount" id="partial-paid-amount" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
-                      <div class="form-text">{{ _('Max is Final Total / الحد الأقصى هو الإجمالي النهائي') }}: <span id="partial-max"></span></div>
-                    </div>
+                <div class="row g-3 align-items-end mb-2">
+                  <div class="col-md-3">
+                    <label class="form-label">{{ _('Supplier Invoice No / رقم فاتورة المورد') }}</label>
+                    <input name="supplier_invoice_number" class="form-control" placeholder="{{ _('إن وجد') }}">
                   </div>
+                  <div class="col-md-9">
+                    <label class="form-label">{{ _('Notes / ملاحظات') }}</label>
+                    <input name="notes" class="form-control" placeholder="{{ _('ملاحظات إضافية (اختياري)') }}">
+                  </div>
+                </div>
+                <div class="row g-3 mt-1">
+                  <div class="col-md-3">
+                    <label class="form-label">{{ _('Payment Status / حالة الدفع') }}</label>
+                    <select name="status" id="purchase-status" class="form-select">
+                      <option value="unpaid">{{ _('Unpaid / غير مدفوع') }}</option>
+                      <option value="partial">{{ _('Partial / مدفوع جزئياً') }}</option>
+                      <option value="paid">{{ _('Paid / مدفوع') }}</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3" id="partial-paid-box" style="display:none;">
+                    <label class="form-label">{{ _('Paid Amount (Partial) / المبلغ المدفوع (جزئي)') }}</label>
+                    <input name="partial_paid_amount" id="partial-paid-amount" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
+                    <div class="form-text">{{ _('Max is Final Total / الحد الأقصى هو الإجمالي النهائي') }}: <span id="partial-max"></span></div>
+                  </div>
+                </div>
 
 
-            <!-- عناصر الفاتورة -->
-            <h6 class="mb-3">{{ _('Invoice Items / أصناف الفاتورة') }}</h6>
-            <div id="items-container">
-                <datalist id="materials-datalist"></datalist>
+            <!-- عناصر الفاتورة (مواد خام تدخل في تكوين الوجبات) -->
+            <div class="card mb-3">
+              <div class="card-header bg-light fw-semibold">{{ _('Purchase Items / بنود الشراء') }}</div>
+              <div class="card-body" id="items-container">
                 {% for item_form in form.items %}
                 <div class="item-row">
-                    <div class="row">
-                        <div class="col-md-3">
-                            <label class="form-label">{{ _('Item / الصنف') }}</label>
-                            <input class="form-control item-name-input" name="items-{{ loop.index0 }}-item_name" list="materials-datalist" placeholder="{{ _('Type item name / اكتب اسم المادة') }}">
-                            <div class="stock-info" id="stock-info-{{ loop.index0 }}"></div>
-                        </div>
-                        <div class="col-md-1">
-                            <label class="form-label">{{ _('Unit / الوحدة') }}</label>
-                            <input class="form-control unit-input" name="items-{{ loop.index0 }}-unit" placeholder="{{ _('e.g., kg') }}">
-                        </div>
-                        <div class="col-md-2">
-                            {{ item_form.quantity.label(class_='form-label') }}
-                            {{ item_form.quantity(class_='form-control', step='0.0001') }}
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">{{ _('Price / السعر') }}</label>
-                            {{ item_form.price_before_tax(class_='form-control', step='0.0001') }}
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">{{ _('Discount %% / نسبة الخصم %%') }}</label>
-                            {{ item_form.discount(class_='form-control', step='0.01', min='0', max='100') }}
-                        </div>
-                        <div class="col-md-1">
-                            <label class="form-label">{{ _('Tax %% / الضريبة %%') }}</label>
-                            <input class="form-control" name="items-{{ loop.index0 }}-tax_pct" step="0.01" type="number" min="0" max="100" value="15">
-                        </div>
-                        <div class="col-md-1">
-                            <label class="form-label">{{ _('Total / الإجمالي') }}</label>
-                            <div class="form-control bg-light item-total">﷼0.00</div>
-                        </div>
-                        <div class="col-md-1 d-flex align-items-end">
-                            <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
-                        </div>
+                  <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                      {{ item_form.category.label(class_='form-label') }}
+                      {{ item_form.category(class_='form-select category-select') }}
                     </div>
+                    <div class="col-md-4">
+                      {{ item_form.raw_material_id.label(class_='form-label') }}
+                      {{ item_form.raw_material_id(class_='form-select material-select') }}
+                      <div class="stock-info"></div>
+                    </div>
+                    <div class="col-md-2">
+                      {{ item_form.quantity.label(class_='form-label') }}
+                      {{ item_form.quantity(class_='form-control', step='0.01') }}
+                    </div>
+                    <div class="col-md-2">
+                      {{ item_form.price_before_tax.label(class_='form-label') }}
+                      {{ item_form.price_before_tax(class_='form-control', step='0.01') }}
+                    </div>
+                    <div class="col-md-2">
+                      {{ item_form.discount.label(class_='form-label') }}
+                      {{ item_form.discount(class_='form-control', step='0.01') }}
+                    </div>
+                    <div class="col-md-1">
+                      <label class="form-label">VAT %</label>
+                      <input type="number" step="0.01" class="form-control" name="items-{{ loop.index0 }}-tax_pct" value="0">
+                    </div>
+                  </div>
                 </div>
                 {% endfor %}
+                <div class="d-flex justify-content-end">
+                  <button type="button" class="btn btn-outline-success" id="add-item-btn">{{ _('Add Item / إضافة بند') }}</button>
+                </div>
+              </div>
             </div>
 
-            <!-- ملخص التكاليف -->
-            <div class="row mb-3">
-                <div class="col-md-3">
-                    <label class="form-label">{{ _('Total Before Discount & Tax / الإجمالي قبل الخصم والضريبة') }}</label>
-                    <div class="form-control bg-light" id="total-before-tax">﷼0.00</div>
+            <!-- ملخص مبسط حسب المتطلبات الجديدة -->
+            <div class="card mb-3">
+              <div class="card-header bg-light fw-semibold">{{ _('Totals / الإجماليات') }}</div>
+              <div class="card-body">
+                <div class="row g-3">
+                  <div class="col-md-3">
+                    <label class="form-label">{{ _('Total Amount / المبلغ الإجمالي') }}</label>
+                    <input type="number" step="0.01" id="total_amount" name="total_amount" class="form-control" value="">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">{{ _('VAT Amount / مبلغ الضريبة') }}</label>
+                    <input type="number" step="0.01" id="vat_amount" name="vat_amount" class="form-control" value="">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">{{ _('Items Count / عدد الأصناف') }}</label>
+                    <input type="number" id="items_count" name="items_count" class="form-control" value="">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">{{ _('Inventory Kind / نوع المخزون') }}</label>
+                    <select id="inventory_kind" name="inventory_kind" class="form-select">
+                      <option value="">{{ _('None / بدون') }}</option>
+                      <option value="FOOD">{{ _('Food Materials / مواد غذائية') }}</option>
+                      <option value="OTHER">{{ _('Other Supplies / مستلزمات أخرى') }}</option>
+                    </select>
+                    <div class="form-check mt-2">
+                      <input class="form-check-input" type="checkbox" id="production_flag" name="production_flag">
+                      <label class="form-check-label" for="production_flag">{{ _('Goes to Production / تدخل الإنتاج') }}</label>
+                    </div>
+                  </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">{{ _('Tax / الضريبة') }}</label>
-                    <div class="form-control bg-light" id="tax-amount">﷼0.00</div>
+                <hr/>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div>{{ _('Purchases Total / إجمالي المشتريات') }}: <strong id="display_total"></strong></div>
+                        <div>{{ _('VAT Total / إجمالي الضريبة') }}: <strong id="display_vat"></strong></div>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-primary">{{ _('Save / حفظ') }}</button>
+                        <button type="reset" class="btn btn-outline-secondary">{{ _('Clear / مسح') }}</button>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">{{ _('Total Discount / إجمالي الخصم') }}</label>
-                    <div class="form-control bg-light" id="total-discount">﷼0.00</div>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">{{ _('Final Total / الإجمالي النهائي') }}</label>
-                    <div class="form-control bg-success text-white fw-bold" id="final-total">﷼0.00</div>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-md-6">
-                    <button type="button" class="btn btn-secondary" id="add-item">
-                        ➕ {{ _('Add Item / إضافة صنف') }}
-                    </button>
-                </div>
-                <div class="col-md-6 text-end">
-                    {{ form.submit(class_='btn btn-primary btn-lg') }}
-                </div>
+              </div>
             </div>
         </form>
     </div>
@@ -239,37 +267,24 @@ body {
     }
     function clamp(v, min, max){ v = parseFloat(v); if (isNaN(v)) v = 0; return Math.min(max, Math.max(min, v)); }
     function calculateTotals() {
-        const rows = Array.from(document.querySelectorAll('.item-row'));
-        let totalBefore = 0, totalDiscount = 0, totalTax = 0, finalTotal = 0;
-        rows.forEach(row => {
-            const qVal = row.querySelector('input[name$="-quantity"]')?.value;
-            const pVal = row.querySelector('input[name$="-price_before_tax"]')?.value;
-            const dVal = row.querySelector('input[name$="-discount"]')?.value;
-            const tVal = row.querySelector('input[name$="-tax_pct"]')?.value;
-            const q = parseFloat(toAsciiDigits(qVal)) || 0;
-            const p = parseFloat(toAsciiDigits(pVal)) || 0;
-            let dPct = parseFloat(toAsciiDigits(dVal)) || 0;
-            let tPct = parseFloat(toAsciiDigits(tVal)) || 0;
-            dPct = clamp(dPct, 0, 100);
-            tPct = clamp(tPct, 0, 100);
-            const before = q * p;
-            let discount = before * (dPct / 100.0);
-            if (discount > before) discount = before;
-            const base = Math.max(before - discount, 0);
-            const tax = base * (tPct / 100.0);
-            const lineTotal = base + tax;
-            totalBefore += before;
-            totalDiscount += discount;
-            totalTax += tax;
-            finalTotal += lineTotal;
-            const totalDisplay = row.querySelector('.item-total');
-            if (totalDisplay) totalDisplay.textContent = '﷼' + lineTotal.toFixed(2);
-
-        });
-        document.getElementById('total-before-tax').textContent = '﷼' + totalBefore.toFixed(2);
-        document.getElementById('tax-amount').textContent = '﷼' + totalTax.toFixed(2);
-        document.getElementById('total-discount').textContent = '﷼' + totalDiscount.toFixed(2);
-        document.getElementById('final-total').textContent = '﷼' + finalTotal.toFixed(2);
+        const totalInput = document.getElementById('total_amount');
+        const vatInput = document.getElementById('vat_amount');
+        const totalRaw = toAsciiDigits(totalInput?.value);
+        const vatRaw = toAsciiDigits(vatInput?.value);
+        const totalEl = document.getElementById('display_total');
+        const vatEl = document.getElementById('display_vat');
+        if (totalRaw && totalRaw.trim() !== '') {
+            const total = parseFloat(totalRaw) || 0;
+            totalEl.textContent = '﷼' + total.toFixed(2);
+        } else {
+            totalEl.textContent = '';
+        }
+        if (vatRaw && vatRaw.trim() !== '') {
+            const vat = parseFloat(vatRaw) || 0;
+            vatEl.textContent = '﷼' + vat.toFixed(2);
+        } else {
+            vatEl.textContent = '';
+        }
         try{ if(typeof updatePartialMax==='function') updatePartialMax(); }catch(e){}
     }
 
@@ -294,71 +309,68 @@ body {
 
 
     // Event listeners
-    document.addEventListener('change', e => {
-
-        if (e.target.matches('input[name$="-item_name"]')) {
-            updateStockInfoByName(e.target);
-            calculateTotals();
-        } else if (e.target.matches('input[name$="-quantity"], input[name$="-price_before_tax"], input[name$="-discount"], input[name$="-tax_pct"], input[name$="-unit"]')) {
+    document.addEventListener('input', e => {
+        if (e.target && (e.target.id==='total_amount' || e.target.id==='vat_amount')) {
             calculateTotals();
         }
     });
 
-    // Add new item functionality
-    let itemIndex = {{ form.items|length }};
-
-    document.getElementById('add-item').addEventListener('click', function() {
-        const container = document.getElementById('items-container');
-        const newItem = document.createElement('div');
-        newItem.className = 'item-row';
-        newItem.innerHTML = `
-            <div class="row">
-                <div class="col-md-3">
-                    <label class="form-label">{{ _('Item / الصنف') }}</label>
-                    <input class="form-control item-name-input" name="items-${itemIndex}-item_name" list="materials-datalist" placeholder="{{ _('Type item name / اكتب اسم المادة') }}">
-                    <div class="stock-info"></div>
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label">{{ _('Unit / الوحدة') }}</label>
-                    <input class="form-control unit-input" name="items-${itemIndex}-unit" placeholder="{{ _('e.g., kg') }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">{{ _('Quantity / الكمية') }}</label>
-                    <input class="form-control" name="items-${itemIndex}-quantity" step="0.0001" type="number">
-
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">{{ _('Price / السعر') }}</label>
-                    <input class="form-control" name="items-${itemIndex}-price_before_tax" step="0.0001" type="number">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">{{ _('Discount %% / نسبة الخصم %%') }}</label>
-                    <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" min="0" max="100" value="0">
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label">{{ _('Tax %% / الضريبة %%') }}</label>
-                    <input class="form-control" name="items-${itemIndex}-tax_pct" step="0.01" type="number" min="0" max="100" value="15">
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label">{{ _('Total / الإجمالي') }}</label>
-                    <div class="form-control bg-light item-total">﷼0.00</div>
-                </div>
-                <div class="col-md-1 d-flex align-items-end">
-                    <button type="button" class="btn btn-danger btn-sm remove-item-btn">−</button>
-                </div>
-            </div>
-        `;
-        container.appendChild(newItem);
-        itemIndex++;
-    });
+    (function(){
+      const container = document.getElementById('items-container');
+      const addBtn = document.getElementById('add-item-btn');
+      async function fetchMaterialsByCategory(cat){
+        try{
+          const url = cat ? (`/api/raw_materials?category=${encodeURIComponent(cat)}`) : '/api/raw_materials';
+          const resp = await fetch(url);
+          if(!resp.ok) throw new Error('HTTP '+resp.status);
+          return await resp.json();
+        }catch(e){ return []; }
+      }
+      function populateMaterialsSelect(sel, arr){
+        const current = sel.value;
+        sel.innerHTML = '';
+        const opt0 = document.createElement('option'); opt0.value = '0'; opt0.textContent = '{{ _('Select Raw Material / اختر المادة الخام') }}'; sel.appendChild(opt0);
+        arr.forEach(o=>{ const opt=document.createElement('option'); opt.value = o.id; opt.textContent = o.name; sel.appendChild(opt); });
+        if(current){ sel.value=current; }
+      }
+      async function onCategoryChange(e){
+        const row = e.target.closest('.item-row');
+        const matSel = row?.querySelector('.material-select');
+        const cat = e.target.value;
+        const arr = await fetchMaterialsByCategory(cat);
+        populateMaterialsSelect(matSel, arr);
+      }
+      function attachRowEvents(row){
+        const catSel = row.querySelector('.category-select');
+        const matSel = row.querySelector('.material-select');
+        catSel?.addEventListener('change', onCategoryChange);
+      }
+      function nextIndex(){
+        const rows = container.querySelectorAll('.item-row'); return rows.length;
+      }
+      function cloneLast(){
+        const rows = container.querySelectorAll('.item-row');
+        if (rows.length===0) return;
+        const last = rows[rows.length-1];
+        const clone = last.cloneNode(true);
+        const idx = nextIndex();
+        clone.querySelectorAll('select, input').forEach(el=>{
+          const n = el.getAttribute('name');
+          if(n && n.startsWith('items-')){
+            const parts = n.split('-'); parts[1] = String(idx); el.setAttribute('name', parts.join('-'));
+          }
+          if(el.tagName==='SELECT') el.selectedIndex=0; else el.value='';
+        });
+        container.insertBefore(clone, addBtn.parentElement);
+        attachRowEvents(clone);
+      }
+      addBtn?.addEventListener('click', cloneLast);
+      // Attach events for initial rows
+      container.querySelectorAll('.item-row').forEach(attachRowEvents);
+    })();
 
     // Remove item functionality
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('remove-item-btn')) {
-            e.target.closest('.item-row').remove();
-            calculateTotals();
-        }
-    });
+    // No per-item remove under the new design
 
     </script>
 
@@ -367,12 +379,15 @@ body {
 (function(){
   const SUPPLIERS = {{ (suppliers_json or '[]') | tojson | safe }};
   const input = document.getElementById('supplier_select');
+  const freeBox = document.getElementById('supplier_free_box');
+  const freeInput = document.getElementById('supplier_free');
   const hiddenId = document.getElementById('supplier_id');
   const phone = document.getElementById('s_phone');
   const tax = document.getElementById('s_tax');
   const address = document.getElementById('s_address');
   const cr = document.getElementById('s_cr');
   const iban = document.getElementById('s_iban');
+  const invType = document.getElementById('invoice_type');
 
   function renderSupplier(s){
     if(!s){
@@ -405,6 +420,26 @@ body {
     input.addEventListener('blur', update);
     update();
   }
+
+  function toggleSupplierMode(){
+    const t = (invType?.value||'VAT').toUpperCase();
+    if(t === 'NO_VAT'){
+      if(freeBox) freeBox.style.display='';
+    }else{
+      if(freeBox) freeBox.style.display='none';
+      if(freeInput) freeInput.value='';
+    }
+    setDefaultTaxByType();
+  }
+
+  function setDefaultTaxByType(){
+    const t = (invType?.value||'VAT').toUpperCase();
+        const vatInput = document.getElementById('vat_amount');
+        if(vatInput){ vatInput.value=''; }
+        calculateTotals();
+  }
+  invType?.addEventListener('change', toggleSupplierMode);
+  toggleSupplierMode();
 })();
 </script>
 
@@ -413,11 +448,6 @@ body {
 
     // Initialize stock info and calculations
     document.addEventListener('DOMContentLoaded', function() {
-        const dl = document.getElementById('materials-datalist');
-        if (dl) {
-            dl.innerHTML = materials.map(m => `<option value="${m.name}"></option>`).join('');
-        }
-        document.querySelectorAll('input[name$="-item_name"]').forEach(updateStockInfoByName);
         calculateTotals();
     });
 </script>

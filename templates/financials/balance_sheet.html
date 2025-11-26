@@ -3,8 +3,13 @@
 {% block content %}
 <div class="container py-4">
   <div class="d-flex justify-content-between align-items-center mb-2">
-    <h3 class="mb-0">قائمة المركز المالي (Balance Sheet)</h3>
-    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('main.dashboard') }}">⬅︎ رجوع للوحة التحكم</a>
+    <h3 class="mb-0">المركز المالي / Balance Sheet</h3>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="history.back()">رجوع / Back</button>
+      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('financials.income_statement') }}">قائمة الدخل / Income Statement</a>
+      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('financials.trial_balance') }}">ميزان المراجعة / Trial Balance</a>
+      <a target="_blank" class="btn btn-outline-secondary btn-sm" href="{{ url_for('financials.print_balance_sheet', date=data.date) }}">طباعة / Print</a>
+    </div>
   </div>
   <form method="get" class="row g-2 align-items-end mb-3">
     <div class="col-auto">
@@ -24,5 +29,140 @@
     <div class="col-md-4"><div class="card shadow-sm p-3 h-100"><h6>الخصوم</h6><h4>{{ '%.2f'|format(data.liabilities) }}</h4></div></div>
     <div class="col-md-4"><div class="card shadow-sm p-3 h-100"><h6>حقوق الملكية (محسوبة)</h6><h4>{{ '%.2f'|format(data.equity) }}</h4></div></div>
   </div>
+
+  <div class="row g-3 mt-3">
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold">الأصول / Assets</div>
+        <div class="card-body">
+          <table class="table table-sm">
+            <tbody>
+              <tr>
+                <td>أصول متداولة / Current Assets</td>
+                <td class="text-end">{{ '%.2f'|format(data.current_assets or 0) }}</td>
+              </tr>
+              <tr>
+                <td>أصول غير متداولة / Non-current Assets</td>
+                <td class="text-end">{{ '%.2f'|format(data.noncurrent_assets or 0) }}</td>
+              </tr>
+              <tr class="table-light">
+                <th>إجمالي الأصول</th>
+                <th class="text-end">{{ '%.2f'|format((data.assets or 0)) }}</th>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold">الخصوم وحقوق الملكية / Liabilities & Equity</div>
+        <div class="card-body">
+          <table class="table table-sm">
+            <tbody>
+              <tr>
+                <td>خصوم متداولة / Current Liabilities</td>
+                <td class="text-end">{{ '%.2f'|format(data.current_liabilities or 0) }}</td>
+              </tr>
+              <tr>
+                <td>خصوم غير متداولة / Non-current Liabilities</td>
+                <td class="text-end">{{ '%.2f'|format(data.noncurrent_liabilities or 0) }}</td>
+              </tr>
+              <tr>
+                <td>حقوق الملكية / Equity</td>
+                <td class="text-end">{{ '%.2f'|format(data.equity or 0) }}</td>
+              </tr>
+              <tr class="table-light">
+                <th>إجمالي الخصوم وحقوق الملكية</th>
+                <th class="text-end">{{ '%.2f'|format((data.liabilities or 0) + (data.equity or 0)) }}</th>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold">تفصيل حسب النوع / Totals by Type</div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th>النوع / Type</th>
+                  <th class="text-end">مدين / Debit</th>
+                  <th class="text-end">دائن / Credit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t, s in data.type_totals.items() %}
+                <tr>
+                  <td>{{ t }}</td>
+                  <td class="text-end">{{ '%.2f'|format(s.debit or 0) }}</td>
+                  <td class="text-end">{{ '%.2f'|format(s.credit or 0) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
+  <div class="row g-3 mt-3">
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold">تفصيل الأصول / Asset Details</div>
+        <div class="card-body">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>الحساب / Account</th>
+                <th>التصنيف / Class</th>
+                <th class="text-end">الرصيد / Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in data.asset_rows_detail %}
+              <tr>
+                <td>{{ r.code }} – {{ r.name }}</td>
+                <td>{{ 'متداول' if r.class=='Current' else 'غير متداول' }} / {{ r.class }}</td>
+                <td class="text-end">{{ '%.2f'|format(r.balance or 0) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold">تفصيل الخصوم / Liability Details</div>
+        <div class="card-body">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>الحساب / Account</th>
+                <th>التصنيف / Class</th>
+                <th class="text-end">الرصيد / Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in data.liability_rows_detail %}
+              <tr>
+                <td>{{ r.code }} – {{ r.name }}</td>
+                <td>{{ 'متداول' if r.class=='Current' else 'غير متداول' }} / {{ r.class }}</td>
+                <td class="text-end">{{ '%.2f'|format(r.balance or 0) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>

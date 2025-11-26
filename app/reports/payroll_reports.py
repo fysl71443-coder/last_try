@@ -188,7 +188,7 @@ def calc_grand_totals(employees):
 def payroll_report():
     if not Employee or not Salary or not Payment:
         flash('Payroll models not available', 'danger')
-        return redirect(url_for('main.employees'))
+        return redirect(url_for('main.dashboard'))
     # period params
     y_from = request.args.get('year_from', type=int) or 2025
     m_from = request.args.get('month_from', type=int) or 1
@@ -221,7 +221,7 @@ def payroll_report():
 def payroll_report_employee(emp_id):
     if not Employee or not Salary or not Payment:
         flash('Payroll models not available', 'danger')
-        return redirect(url_for('main.employees'))
+        return redirect(url_for('main.dashboard'))
     y_from = request.args.get('year_from', type=int) or 2025
     m_from = request.args.get('month_from', type=int) or 1
     y_to = request.args.get('year_to', type=int) or 2025
@@ -243,7 +243,7 @@ def payroll_report_employee(emp_id):
 def payroll_report_selected():
     if not Employee or not Salary or not Payment:
         flash('Payroll models not available', 'danger')
-        return redirect(url_for('main.employees'))
+        return redirect(url_for('main.dashboard'))
     ids_raw = (request.form.get("employee_ids") or '').strip()
     ids = []
     for i in (ids_raw.split(',') if ids_raw else []):

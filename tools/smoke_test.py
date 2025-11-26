@@ -181,6 +181,53 @@ def test_expenses_and_vat_pages(app):
     r = client.get('/vat/print')
     assert r.status_code == 200
 
+def test_payments_page_groupings(app):
+    client = app.test_client()
+    client.post('/login', data={'username': 'admin', 'password': 'admin123'}, follow_redirects=True)
+
+    # Seed sample purchase invoice for a supplier
+    inv = PurchaseInvoice(
+        invoice_number='PINV-GROUP-1',
+        payment_method='BANK',
+        total_before_tax=500.00,
+        tax_amount=75.00,
+        discount_amount=0.00,
+        total_after_tax_discount=575.00,
+        user_id=1,
+        supplier_name='Supplier A',
+    )
+    db.session.add(inv)
+    db.session.flush()
+    db.session.add(PurchaseInvoiceItem(invoice_id=inv.id, raw_material_id=1, raw_material_name='Rice', quantity=5, price_before_tax=50.00, tax=0, discount=0, total_price=0))
+    # Partial payment
+    from models import Payment as Pay
+    db.session.add(Pay(invoice_id=inv.id, invoice_type='purchase', amount_paid=200.00, payment_method='BANK'))
+    db.session.commit()
+
+    # Seed sales invoice for keeta
+    s_inv = SalesInvoice(
+        invoice_number='SINV-GROUP-1',
+        payment_method='CASH',
+        branch='china_town',
+        total_before_tax=300.00,
+        tax_amount=45.00,
+        discount_amount=0.00,
+        total_after_tax_discount=345.00,
+        user_id=1,
+        customer_name='Keeta Platform',
+    )
+    db.session.add(s_inv)
+    db.session.flush()
+    db.session.add(SalesInvoiceItem(invoice_id=s_inv.id, product_name='Fried Rice', quantity=2, price_before_tax=50.00, tax=0, discount=0, total_price=0))
+    db.session.add(Pay(invoice_id=s_inv.id, invoice_type='sales', amount_paid=100.00, payment_method='CASH'))
+    db.session.commit()
+
+    r = client.get('/payments')
+    assert r.status_code == 200
+    body = r.data.decode('utf-8')
+    assert 'Suppliers (Creditors)' in body or 'الموردون' in body
+    assert 'Sales Debtors' in body or 'مدينون من المبيعات' in body
+
 
 def test_users_permissions(app):
     client = app.test_client()
@@ -232,6 +279,7 @@ def main():
         test_purchase_report_alloc(app)
         test_expenses_and_vat_pages(app)
         test_users_permissions(app)
+        test_payments_page_groupings(app)
     print('SMOKE_OK')
 
 

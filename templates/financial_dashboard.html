@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Financial Statements / القوائم المالية') }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3>{{ _('Financial Control Center / مركز القوائم المالية') }}</h3>
+  <form class="row g-2 align-items-end mb-3" method="get">
+    <div class="col-auto">
+      <label class="form-label">{{ _('From / من') }}</label>
+      <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+    </div>
+    <div class="col-auto">
+      <label class="form-label">{{ _('To / إلى') }}</label>
+      <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+    </div>
+    <div class="col-auto">
+      <label class="form-label">{{ _('Branch / الفرع') }}</label>
+      <select class="form-select" name="branch">
+        <option value="all" {{ 'selected' if branch=='all' else '' }}>{{ _('All / جميع الفروع') }}</option>
+        <option value="place_india" {{ 'selected' if branch=='place_india' else '' }}>Place India</option>
+        <option value="china_town" {{ 'selected' if branch=='china_town' else '' }}>China Town</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary" type="submit">{{ _('Update / تحديث') }}</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.financial_dashboard', start_date=start_date, end_date=end_date, branch=branch) }}" target="_blank">{{ _('Print PDF / طباعة PDF') }}</a>
+    </div>
+  </form>
+
+  <div class="row g-3">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header bg-light">{{ _('Sales / المبيعات') }}</div>
+        <div class="card-body">
+          <div class="row text-center mb-3">
+            <div class="col">
+              <div>{{ _('Total / الإجمالي') }}</div>
+              <h5>﷼{{ '%.2f'|format(sales_summary.net_sales) }}</h5>
+            </div>
+            <div class="col">
+              <div>{{ _('Discounts / الخصومات') }}</div>
+              <h5>﷼{{ '%.2f'|format(sales_summary.discount) }}</h5>
+            </div>
+            <div class="col">
+              <div>{{ _('VAT Output / ضريبة المخرجات') }}</div>
+              <h5>﷼{{ '%.2f'|format(sales_summary.vat_out) }}</h5>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead class="table-dark"><tr><th>{{ _('Method / الطريقة') }}</th><th>{{ _('Count / العدد') }}</th><th>{{ _('Total / الإجمالي') }}</th></tr></thead>
+              <tbody>
+                {% for r in by_payment_sales %}
+                <tr><td>{{ r.method }}</td><td>{{ r.count }}</td><td>﷼{{ '%.2f'|format(r.total) }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header bg-light">{{ _('COGS / تكلفة البضاعة المباعة') }}</div>
+        <div class="card-body">
+          <div class="row text-center mb-3">
+            <div class="col">
+              <div>{{ _('Purchases for Production (NO VAT) / مشتريات للإنتاج بدون ضريبة') }}</div>
+              <h5>﷼{{ '%.2f'|format(purchases_summary.no_vat_amount) }}</h5>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header bg-light">{{ _('Purchases / المشتريات') }}</div>
+        <div class="card-body">
+          <div class="row text-center mb-3">
+            <div class="col">
+              <div>{{ _('Total / الإجمالي') }}</div>
+              <h5>﷼{{ '%.2f'|format(purchases_summary.total) }}</h5>
+            </div>
+            <div class="col">
+              <div>{{ _('VAT Input / ضريبة المدخلات') }}</div>
+              <h5>﷼{{ '%.2f'|format(purchases_summary.vat_in) }}</h5>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header bg-light">{{ _('Operating Expenses / المصروفات التشغيلية') }}</div>
+        <div class="card-body">
+          <div class="row text-center mb-3">
+            <div class="col">
+              <div>{{ _('Total / الإجمالي') }}</div>
+              <h5>﷼{{ '%.2f'|format(expenses_summary.total) }}</h5>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead class="table-dark"><tr><th>{{ _('Type / النوع') }}</th><th>{{ _('Amount / المبلغ') }}</th></tr></thead>
+              <tbody>
+                {% for it in expenses_summary.items %}
+                <tr><td>{{ it.label }}</td><td>﷼{{ '%.2f'|format(it.amount) }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header bg-light">{{ _('Liabilities / الالتزامات') }}</div>
+        <div class="card-body">
+          <div class="row text-center mb-3">
+            <div class="col">
+              <div>{{ _('Suppliers Due / مستحقات الموردين') }}</div>
+              <h5>﷼{{ '%.2f'|format(liabilities_summary.suppliers_due) }}</h5>
+            </div>
+            <div class="col">
+              <div>{{ _('Previous Owner / الالتزام تجاه المالك السابق') }}</div>
+              <h5>﷼{{ '%.2f'|format(liabilities_summary.prev_owner) }}</h5>
+            </div>
+            <div class="col">
+              <div>{{ _('Other Dues / مستحقات أخرى') }}</div>
+              <h5>﷼{{ '%.2f'|format(liabilities_summary.other_dues) }}</h5>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header bg-light">{{ _('VAT / ضريبة القيمة المضافة') }}</div>
+        <div class="card-body">
+          <div class="row text-center mb-3">
+            <div class="col">
+              <div>{{ _('VAT Output / ضريبة المخرجات') }}</div>
+              <h5>﷼{{ '%.2f'|format(vat_summary.vat_out) }}</h5>
+            </div>
+            <div class="col">
+              <div>{{ _('VAT Input / ضريبة المدخلات') }}</div>
+              <h5>﷼{{ '%.2f'|format(vat_summary.vat_in) }}</h5>
+            </div>
+            <div class="col">
+              <div>{{ _('Net VAT Due / صافي الضريبة المستحقة') }}</div>
+              <h5>﷼{{ '%.2f'|format(vat_summary.net_vat_due) }}</h5>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header bg-light">{{ _('Profit/Loss / صافي الربح/الخسارة') }}</div>
+        <div class="card-body">
+          <div class="row text-center mb-3">
+            <div class="col">
+              <div>{{ _('Gross Profit / الربح الإجمالي') }}</div>
+              <h5>﷼{{ '%.2f'|format(gross_profit) }}</h5>
+            </div>
+            <div class="col">
+              <div>{{ _('Net Profit / صافي الربح') }}</div>
+              <h5>﷼{{ '%.2f'|format(net_profit) }}</h5>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
