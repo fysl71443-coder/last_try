@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>فاتورة - {{ inv.invoice_number }}</title>
+  <style>
+    {% set pw = (settings.receipt_paper_width if settings and settings.receipt_paper_width else '80') %}
+    {% set fs = (settings.receipt_font_size if settings and settings.receipt_font_size else 12) %}
+    {% set logo_h = (settings.receipt_logo_height if settings and settings.receipt_logo_height else 100) %}
+    {% set extra_bottom = (settings.receipt_extra_bottom_mm if settings and (settings.receipt_extra_bottom_mm is not none) else 15) %}
+    {% set effective_logo_height = branch_settings.receipt_logo_height if branch_settings and branch_settings.receipt_logo_height else logo_h %}
+    
+    body{
+      font-family: 'Courier New', monospace; 
+      font-size: {{ fs }}px; 
+      line-height: 1.3;
+      margin: 0;
+      padding: 8px;
+      color: #000;
+      font-weight: 700;
+      direction: rtl;
+    }
+    body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i,
+    .muted, .small, .company-name, .grand-total { color: #000 !important; font-weight: 700 !important; }
+    .wrap{
+      width: {{ pw }}mm; 
+      max-width: {{ pw }}mm; 
+      margin: 0 auto;
+      padding: 0;
+    }
+    .center{text-align: center; margin-bottom: 8px;}
+    .muted{color: #000; font-size: {{ (fs|int - 1) if (fs|int > 8) else fs }}px;}
+    .small{font-size: {{ (fs|int - 2) if (fs|int > 8) else fs }}px; color: #000;}
+    .logo-img{
+      height: {{ effective_logo_height }}px; 
+      max-width: 90%; 
+      margin-bottom: 10px; 
+      object-fit: contain;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .company-name{
+      font-size: {{ (fs|int + 3) if fs else 15 }}px;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    table{
+      width: 100%; 
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: {{ (fs|int - 1) if (fs|int > 8) else fs }}px;
+    }
+    th{
+      padding: 4px 2px; 
+      border-bottom: 1px solid #000;
+      font-weight: 700;
+      font-size: {{ (fs|int + 1) if (fs|int > 8) else (fs|int) }}px;
+      color: #000;
+    }
+    td{
+      padding: 3px 2px; 
+      border-bottom: 1px solid #000;
+      vertical-align: top;
+      color: #000;
+    }
+    .total-row td{
+      font-weight: 700;
+      border-bottom: 1px solid #000;
+      padding: 4px 2px;
+      color: #000;
+    }
+    .grand-total{
+      border-top: 2px solid #000 !important;
+      border-bottom: 2px solid #000 !important;
+      font-size: {{ (fs|int + 3) if fs else 15 }}px;
+      font-weight: 700;
+      color: #000;
+    }
+    .right{text-align: right;}
+    .center-text{text-align: center;}
+    .left{text-align: left;}
+    hr{
+      margin: 8px 0;
+      border: none;
+      border-top: 2px solid #000;
+    }
+    .footer{
+      margin-top: 12px;
+      font-size: {{ (fs|int - 1) if (fs|int > 8) else fs }}px;
+    }
+    .page-layout{ display:flex; justify-content:center; align-items:center; padding-top:16px; }
+    .actions-row{ width: {{ pw }}mm; max-width: {{ pw }}mm; margin: 14px auto 0; display:flex; justify-content: space-between; align-items:center; gap:12px; }
+    .actions-row .action-btn{ flex: 1; text-align: center; padding: 14px 18px; font-size: 17px; }
+    .action-btn{ padding: 12px 18px; font-size: 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+    .btn-print{ background: #28a745; color: #fff; }
+    .btn-print:hover{ background: #218838; }
+    .btn-back{ background: #007bff; color: #fff; margin-top: 24px; }
+    .btn-back:hover{ background: #0069d9; }
+    @media print{
+      .no-print{display: none !important;}
+      .action-btn{display: none !important;}
+      body{
+        background: #fff; 
+        font-size: {{ (fs|int + 2) if (fs|int < 15) else fs }}px;
+        margin: 0;
+        padding: 4px;
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+        print-color-adjust: exact;
+        color: #000;
+        font-weight: 700;
+        direction: rtl;
+      }
+      body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i,
+      table, .company-name, .muted, .small, .grand-total { color: #000 !important; font-weight: 700 !important; }
+      .wrap{
+        width: {{ pw }}mm;
+        max-width: {{ pw }}mm;
+        margin: 0;
+        padding: 0;
+      }
+      .logo-img{
+        height: {{ effective_logo_height }}px;
+        max-width: 85%;
+        margin-bottom: 8px;
+      }
+      table{
+        page-break-inside: avoid;
+        margin: 6px 0;
+      }
+      hr{
+        margin: 4px 0;
+        page-break-after: avoid;
+      }
+      .footer{
+        margin-top: 8px;
+        page-break-inside: avoid;
+      }
+      @page{ 
+        margin: 2mm 2mm {{ extra_bottom }}mm 2mm; 
+        size: {{ pw }}mm auto;
+      }
+    }
+    {% if items and items|length <= 3 %}
+    .footer{margin-top: 15px;}
+    {% elif items and items|length <= 6 %}
+    .footer{margin-top: 12px;}
+    {% else %}
+    .footer{margin-top: 8px;}
+    {% endif %}
+  </style>
+</head>
+<body>
+  <div class="page-layout">
+    {% set currency_src = None %}
+  {% if settings and settings.currency_image %}
+    {% set currency_src = settings.currency_image %}
+  {% elif settings and settings.currency and (settings.currency.startswith('http') or settings.currency.startswith('/')) %}
+    {% set currency_src = settings.currency %}
+  {% endif %}
+    <div class="wrap">
+    <div class="center">
+      {% set branch_code_top = (inv.branch or inv.branch_code or '')|lower %}
+      {% set is_china_top = branch_code_top[0:5] == 'china' %}
+      {% set is_india_top = ('place' in branch_code_top) or ('india' in branch_code_top) %}
+      {% set branch_logo_url = None %}
+      {% if is_china_top and settings and settings.china_town_logo_url %}
+        {% set branch_logo_url = settings.china_town_logo_url %}
+      {% elif is_india_top and settings and settings.place_india_logo_url %}
+        {% set branch_logo_url = settings.place_india_logo_url %}
+      {% endif %}
+      {% if logo_data_url %}
+      <img src="{{ logo_data_url }}" alt="logo" class="logo-img"/>
+      {% elif branch_settings and branch_settings.receipt_show_logo and branch_settings.branch_data_url %}
+      <img src="{{ branch_settings.branch_data_url }}" alt="logo" class="logo-img"/>
+      {% elif branch_settings and branch_settings.receipt_show_logo and branch_settings.logo_url %}
+      <img src="{{ branch_settings.logo_url }}" alt="logo" class="logo-img"/>
+      {% elif branch_logo_url and (not settings or settings.receipt_show_logo) %}
+      <img src="{{ branch_logo_url }}" alt="logo" class="logo-img"/>
+      {% elif settings and settings.receipt_show_logo and settings.logo_url %}
+      <img src="{{ settings.logo_url }}" alt="logo" class="logo-img"/>
+      {% elif (not settings or settings.receipt_show_logo) and logo_url %}
+      <img src="{{ logo_url }}" alt="logo" class="logo-img"/>
+      {% endif %}
+      <div class="company-name">{{ settings.company_name if settings else company_name }}</div>
+      {% set show_vat = (not settings) or (settings and settings.receipt_show_tax_number) %}
+      {% if show_vat %}
+        {% if settings and settings.tax_number %}
+        <div class="small muted">{{ _('VAT No.') }}: {{ settings.tax_number }}</div>
+        {% elif tax_number %}
+        <div class="small muted">{{ _('VAT No.') }}: {{ tax_number }}</div>
+        {% endif %}
+      {% endif %}
+      {% set branch_code = (inv.branch or inv.branch_code or '')|lower %}
+      {% set is_china = branch_code[0:5] == 'china' %}
+      {% set is_india = ('place' in branch_code) or ('india' in branch_code) %}
+      {% if is_china %}
+        {% if settings and (settings.china_town_phone1 or settings.china_town_phone2) %}
+        <div class="small muted">
+          {{ _('Phone') }}: {{ (settings.china_town_phone1 or '') ~ ((' / ' ~ settings.china_town_phone2) if settings.china_town_phone2 else '') }}
+        </div>
+        {% endif %}
+      {% elif is_india %}
+        {% if settings and (settings.place_india_phone1 or settings.place_india_phone2) %}
+        <div class="small muted">
+          {{ _('Phone') }}: {{ (settings.place_india_phone1 or '') ~ ((' / ' ~ settings.place_india_phone2) if settings.place_india_phone2 else '') }}
+        </div>
+        {% endif %}
+      {% endif %}
+      <div class="small muted">{{ date_time }}</div>
+      {% if is_china %}
+      <div class="small muted">Branch: China Town / الفرع: China Town</div>
+      {% elif is_india %}
+      <div class="small muted">Branch: Place India / الفرع: Place India</div>
+      {% else %}
+      <div class="small muted">Branch: {{ inv.branch_code }} / الفرع: {{ inv.branch_code }}</div>
+      {% endif %}
+    </div>
+
+    <hr/>
+
+    <div class="center">
+      <div style="font-size: {{ (fs|int + 2) if fs else 14 }}px; font-weight: bold; margin-bottom: 8px;">
+        Invoice: {{ inv.invoice_number }} / الفاتورة: {{ inv.invoice_number }}
+      </div>
+      {% if inv.table_number %}
+      <div class="small muted">Table: {{ inv.table_number }} / الطاولة: {{ inv.table_number }}</div>
+      {% endif %}
+      {% if inv.customer_name %}
+      <div class="small muted">Customer: {{ inv.customer_name }} / العميل: {{ inv.customer_name }}</div>
+      {% endif %}
+      {% if inv.customer_phone %}
+      <div class="small muted">Phone: {{ inv.customer_phone }} / هاتف: {{ inv.customer_phone }}</div>
+      {% endif %}
+      {% if inv.payment_method %}
+      <div class="small muted">Payment: {{ inv.payment_method }} / طريقة الدفع: {{ inv.payment_method }}</div>
+      {% endif %}
+    </div>
+
+    <hr/>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="right">Item / المنتج</th>
+          <th class="center-text">Qty / الكمية</th>
+          <th class="right">Amount / المجموع</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="right">{{ item.product_name }}</td>
+          <td class="center-text">{{ item.quantity|int }}</td>
+          <td class="right">{{ item.total_price|round(2) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <hr/>
+
+    <table>
+      <tr class="total-row">
+        <td class="right">Subtotal / المجموع الفرعي:</td>
+        <td class="right">{{ inv.total_before_tax|round(2) }}</td>
+      </tr>
+      {% if inv.tax_amount > 0 %}
+      <tr class="total-row">
+        <td class="right">VAT / الضريبة:</td>
+        <td class="right">{{ inv.tax_amount|round(2) }}</td>
+      </tr>
+      {% endif %}
+      {% if inv.discount_amount > 0 %}
+      <tr class="total-row">
+        <td class="right">Discount / الخصم:</td>
+        <td class="right">-{{ inv.discount_amount|round(2) }}</td>
+      </tr>
+      {% endif %}
+      <tr class="grand-total">
+        <td class="right">Total / المجموع النهائي:</td>
+        <td class="right">{{ inv.total_after_tax_discount|round(2) }}</td>
+      </tr>
+    </table>
+
+    {% if qr_data_url %}
+    <hr/>
+    <div class="center">
+      <img src="{{ qr_data_url }}" alt="QR Code" style="width: 100px; height: 100px;"/>
+      <div class="small muted">QR Code / رمز QR</div>
+    </div>
+    {% endif %}
+
+    <hr/>
+    <div class="footer center">
+      <div class="small muted">شكراً لزيارتكم - Thank you for visiting</div>
+      <div class="small muted">نتمنى لكم وجبة شهية - Enjoy your meal</div>
+    </div>
+    </div>
+  
+  </div>
+  <div class="actions-row no-print">
+    <button class="action-btn btn-print" onclick="window.print()">Print / طباعة</button>
+    <button class="action-btn btn-back" onclick="goTables()">Back to Tables / العودة للطاولات</button>
+  </div>
+
+  <script>
+    function goTables(){ try{ location.href = '/sales/' + '{{ inv.branch_code }}' + '/tables'; }catch(_e){} }
+    window.addEventListener('load', function(){ try{ history.replaceState({p:'print'}, '', location.href); }catch(_e){} });
+    window.onpopstate = function(){ try{ location.href = '/sales/' + '{{ inv.branch_code }}' + '/tables'; }catch(_e){} };
+  </script>
+</body>
+</html>

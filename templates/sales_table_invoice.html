@@ -2,11 +2,57 @@
 {% block title %}Sales - Table #{{ table_number }} — {{ branch_label }}{% endblock %}
 {% block content %}
 <style>
+  :root{
+    --ui-primary:#1c2c58;
+    --ui-accent:#c9a34a;
+    --ui-bg:#0e1220;
+    --ui-card:rgba(255,255,255,0.08);
+    --ui-glass:rgba(255,255,255,0.12);
+    --ui-border:rgba(255,255,255,0.22);
+    --ui-text:#0d0d0d;
+    --ui-contrast:#ffffff;
+    --ui-radius:14px;
+    --ui-shadow:0 10px 28px rgba(12,18,32,.25);
+    --ui-ring:0 0 0 3px rgba(201,163,74,.35);
+    --ui-gradient: radial-gradient(1000px 600px at 10% -10%, rgba(28,44,88,.20), transparent 60%), radial-gradient(800px 400px at 90% 0%, rgba(201,163,74,.16), transparent 55%), linear-gradient(180deg, #f7f8fb, #eef0f6);
+  }
+  .premium-ui{ font-family: 'Tajawal', 'Inter', 'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: var(--ui-gradient); min-height: 100vh; }
   .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .cat-card { cursor: pointer; transition: transform .1s ease; }
-  .cat-card:hover { transform: translateY(-2px); }
-  .meal-card { cursor: pointer; }
   @media (max-width: 992px) { .split { grid-template-columns: 1fr; } }
+  .card{ border-radius: var(--ui-radius); box-shadow: var(--ui-shadow); backdrop-filter: saturate(120%) blur(6px); }
+  .glass-card{ background: linear-gradient(180deg, var(--ui-card), transparent); border: 1px solid var(--ui-border); }
+  .cat-card{ cursor: pointer; border-radius: 16px; background: linear-gradient(180deg, rgba(28,44,88,.08), rgba(28,44,88,.02)); transition: transform .14s ease, box-shadow .14s ease; will-change: transform; min-height: 110px; }
+  .cat-card:hover{ transform: translateY(-2px) scale(1.01); box-shadow: 0 8px 20px rgba(28,44,88,.18); }
+  .cat-card:active{ transform: translateY(0) scale(.98); }
+  .meal-card{ cursor: pointer; border-radius: 16px; background: linear-gradient(180deg, rgba(28,44,88,.06), rgba(28,44,88,.02)); transition: transform .12s ease, box-shadow .12s ease; }
+  .meal-card:hover{ transform: translateY(-1px) scale(1.01); box-shadow: 0 6px 16px rgba(28,44,88,.16); }
+  .meal-card:active{ transform: translateY(0) scale(.98); }
+  .thumb{ position: relative; }
+  .thumb::after{ content:''; position:absolute; inset:0; background: linear-gradient(180deg, rgba(0,0,0,.0), rgba(0,0,0,.06)); pointer-events:none; }
+  .thumb img{ image-rendering: -webkit-optimize-contrast; }
+  .thumb .cap{ position:absolute; left:0; right:0; bottom:0; padding:6px 8px; background: linear-gradient(180deg, rgba(0,0,0,.0), rgba(0,0,0,.25)); color:#fff; font-weight:600; font-size:.9rem; text-shadow:0 1px 2px rgba(0,0,0,.35); display:flex; justify-content:space-between; align-items:center; }
+  [dir="rtl"] .thumb .cap{ flex-direction:row-reverse; }
+  .elegant-title{ background: linear-gradient(90deg, #1c2c58, #2b3e78 40%, #c9a34a 90%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; letter-spacing:.3px; }
+  .lux-btn{ background: linear-gradient(135deg, var(--ui-primary), #0f1f44); color:#fff; border: 1px solid rgba(201,163,74,.45); box-shadow: 0 10px 24px rgba(12,18,32,.35), inset 0 0 0 1px rgba(255,255,255,.06); border-radius: 16px; padding: 12px 22px; font-weight:600; letter-spacing:.2px; transition: transform .15s ease, box-shadow .15s ease, filter .15s ease; }
+  .lux-btn:hover{ filter: brightness(1.06); box-shadow: 0 14px 32px rgba(12,18,32,.42), inset 0 0 0 1px rgba(255,255,255,.08); }
+  .lux-btn:active{ transform: translateY(1px) scale(.99); }
+  .form-control, .form-select{ border-radius: 12px; transition: box-shadow .18s ease, transform .12s ease; }
+  .form-control:focus, .form-select:focus{ box-shadow: var(--ui-ring), 0 10px 22px rgba(12,18,32,.18); border-color: var(--ui-accent); }
+  .table{ border-collapse: separate; border-spacing: 0 6px; }
+  .table thead th{ background: linear-gradient(180deg, rgba(12,18,32,.06), rgba(12,18,32,.0)); }
+  #itemsList .table tbody tr{ background: #fff; border-radius: 12px; }
+  #itemsList .table tbody tr td:first-child{ border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+  #itemsList .table tbody tr td:last-child{ border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+  .metrics{ display:flex; justify-content:end; gap:18px; }
+  .metrics div{ background: linear-gradient(180deg, rgba(12,18,32,.05), rgba(12,18,32,.0)); padding:8px 12px; border-radius: 12px; }
+  .reveal{ animation: fadeUp .35s ease both; }
+  @keyframes fadeUp{ 0%{ opacity:0; transform: translateY(8px) scale(.98); } 100%{ opacity:1; transform: translateY(0) scale(1); } }
+  .pressed3d{ transform: perspective(600px) translateZ(-2px) scale(.985); }
+  .trash-target{ opacity:.25; }
+  [dir="rtl"] .premium-ui .metrics{ justify-content:start; }
+  [dir="rtl"] .premium-ui .form-label{ text-align:right; }
+  .btn-outline-danger{ border-radius: 12px; }
+  .row.g-2 .col-6, .row.g-2 .col-md-4, .row.g-2 .col-lg-3{ will-change: transform; }
 </style>
 <style>
   /* Print only the injected invoice container */
@@ -25,10 +71,11 @@
 {% elif settings and settings.currency and (settings.currency.startswith('http') or settings.currency.startswith('/')) %}
   {% set currency_src = settings.currency %}
 {% endif %}
-<div class="container-fluid py-3">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<div class="container-fluid py-3 premium-ui">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-      <h4 class="mb-0">Table #{{ table_number }} — {{ branch_label }}</h4>
+      <h4 class="mb-0 elegant-title">Table #{{ table_number }} — {{ branch_label }}</h4>
       <small class="text-muted">Select category then meal to add to invoice</small>
     </div>
     <div>
@@ -63,7 +110,7 @@
 
     <!-- Left: Invoice Form -->
     <div>
-      <div class="card">
+      <div class="card glass-card">
         <div class="card-body">
           <div class="row g-2">
             <input type="hidden" id="csrfTokenPage" value="{{ csrf_token() }}">
@@ -100,7 +147,7 @@
               <select id="payMethod" class="form-select">
                 <option value="">-- اختر طريقة الدفع --</option>
                 <option value="CASH">CASH</option>
-                <option value="BANK">BANK</option>
+                <option value="CARD">CARD</option>
               </select>
             </div>
           </div>
@@ -125,7 +172,7 @@
             </div>
             <div class="trash-target"><i class="bi bi-trash"></i></div>
 
-            <div class="d-flex justify-content-end gap-3">
+            <div class="metrics">
               <div><strong>Subtotal</strong>: <span id="subtotal">0.00</span> {% if currency_src %}<img src="{{ currency_src }}" width="14" height="14" alt="currency">{% elif settings and settings.currency %} {{ settings.currency }}{% endif %}</div>
               <div><strong>Tax</strong>: <span id="tax">0.00</span> {% if currency_src %}<img src="{{ currency_src }}" width="14" height="14" alt="currency">{% elif settings and settings.currency %} {{ settings.currency }}{% endif %}</div>
               <div><strong>Discount</strong>: <span id="discount">0.00</span> {% if currency_src %}<img src="{{ currency_src }}" width="14" height="14" alt="currency">{% elif settings and settings.currency %} {{ settings.currency }}{% endif %}</div>
@@ -133,11 +180,9 @@
             </div>
           </div>
 
-          <div class="mt-3 d-flex justify-content-between align-items-center">
-            <div class="d-flex gap-2">
-              <button id="btnVoidInvoice" class="btn btn-outline-danger">Cancel Invoice</button>
-            </div>
-            <button id="btnPayPrint" class="btn btn-success">Pay & Print</button>
+          <div class="mt-3 d-flex justify-content-center align-items-center gap-3">
+            <button id="btnGenerateInvoice" class="btn btn-success btn-lg lux-btn">Issue Invoice / إصدار فاتورة</button>
+            <button id="btnVoidInvoice" class="btn btn-outline-danger">Cancel Invoice / إلغاء الفاتورة</button>
           </div>
         </div>
       </div>
@@ -170,7 +215,8 @@
      data-vat="{{ vat_rate }}"
      data-draft='{{ draft_items|safe }}'
      data-draft-id="{{ current_draft.id if current_draft else '' }}"
-     data-cat-map='{{ cat_map_json|safe }}'>
+     data-cat-map='{{ cat_map_json|safe }}'
+     data-cat-images='{{ cat_image_map_json|safe }}'>
 </div>
 
 <!-- Add Customer Modal (Table Invoice) -->

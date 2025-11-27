@@ -24,8 +24,7 @@
     <div class="sec-tabs">
       {% for s in sections %}
         <a class="sec-tab {% if current_section and s.id==current_section.id %}active{% endif %}"
-           href="{{ url_for('main.menu', cat_id=s.id) }}"
-           style="background:url('{{ section_image_for(s.name) }}') center/cover no-repeat">
+           href="{{ url_for('main.menu', cat_id=s.id) }}">
           <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.55),rgba(0,0,0,.05)); border-radius:14px"></div>
           <span style="position:relative;z-index:1">{{ s.name }}</span>
           <span class="sec-badge">{{ item_counts.get(s.id, 0) }}</span>

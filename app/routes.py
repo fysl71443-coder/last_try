@@ -91,6 +91,43 @@ def employee_uvd():
     except Exception:
         dept_counts = {}
 
+    emp_metrics = {}
+    try:
+        from models import EmployeeSalaryDefault, Salary, JournalLine, Account
+        from sqlalchemy import and_
+        sdefs = EmployeeSalaryDefault.query.filter(EmployeeSalaryDefault.employee_id.in_([int(getattr(e,'id',0) or 0) for e in employees])).all()
+        base_map = {int(d.employee_id): float(d.base_salary or 0) for d in sdefs}
+        for e in employees:
+            eid = int(getattr(e,'id',0) or 0)
+            last_total = 0.0
+            try:
+                s = Salary.query.filter_by(employee_id=eid).order_by(Salary.year.desc(), Salary.month.desc()).first()
+                if s:
+                    last_total = float(getattr(s,'total_salary',0) or 0)
+            except Exception:
+                last_total = 0.0
+            adv_total = 0.0
+            try:
+                adv_acc = Account.query.filter_by(code='1030').first()
+                if adv_acc:
+                    rows = JournalLine.query.filter_by(employee_id=eid, account_id=int(adv_acc.id)).all()
+                    dsum = sum([float(getattr(r,'debit',0) or 0) for r in rows])
+                    csum = sum([float(getattr(r,'credit',0) or 0) for r in rows])
+                    adv_total = max(dsum - csum, 0.0)
+            except Exception:
+                adv_total = 0.0
+            emp_metrics[eid] = {
+                'basic': float(base_map.get(eid, 0.0)),
+                'last_salary': float(last_total or 0.0),
+                'advance': float(adv_total or 0.0),
+            }
+    except Exception as ex:
+        # Log the error for debugging
+        import traceback
+        print(f"Error building emp_metrics: {ex}")
+        traceback.print_exc()
+        emp_metrics = {}
+
     auto_open_create = (str(request.args.get('mode') or '').lower() == 'create')
     return render_template('employee_uvd.html',
                            emp_count=emp_count,
@@ -103,6 +140,7 @@ def employee_uvd():
                            advances=advances,
                            ledgers=ledgers,
                            dept_counts=dept_counts,
+                           emp_metrics=emp_metrics,
                            auto_open_create=auto_open_create)
 
 
@@ -486,7 +524,11 @@ def dashboard():
             'total_earnings': total_earnings,
             'avg_order_value': avg_order_value,
         }
-    except Exception:
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        print(f"Error in dashboard function: {e}")
+        traceback.print_exc()
         stats = {'orders_count': 0, 'total_earnings': 0.0, 'avg_order_value': 0.0}
     return render_template('dashboard.html', stats=stats)
 
@@ -1841,10 +1883,16 @@ def salaries_pay():
                 pass
 
             db.session.commit()
-            flash('تم تسجيل السداد', 'success')
+            success_msg = 'تم تسجيل السداد'
+            if request.is_json or request.headers.get('Accept') == 'application/json':
+                return jsonify({'success': True, 'message': success_msg, 'payment_ids': created_payment_ids})
+            flash(success_msg, 'success')
         except Exception as e:
             db.session.rollback()
-            flash(f'Error saving salary/payment: {e}', 'danger')
+            error_msg = f'خطأ في حفظ الراتب/الدفع: {str(e)}'
+            if request.is_json or request.headers.get('Accept') == 'application/json':
+                return jsonify({'error': True, 'message': error_msg}), 400
+            flash(error_msg, 'danger')
         # Redirect back to logical screen
         try:
             if (emp_id_raw or '').strip().lower() != 'all' and str(emp_id_raw).isdigit():
@@ -3264,7 +3312,11 @@ def payments():
 
     try:
         current_app.logger.info(f"payments range sd={sd_dt} ed={ed_dt} built_counts={built_counts} final_count={len(invoices)} type_f={type_f} status_f={status_f} group_f={group_f}")
-    except Exception:
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        print(f"Error in payments logging: {e}")
+        traceback.print_exc()
         pass
 
     return render_template('payments.html', invoices=invoices, PAYMENT_METHODS=PAYMENT_METHODS, status_f=status_f, type_f=type_f,
@@ -4016,10 +4068,45 @@ def pos_table(branch_code, table_number):
             cats = MenuCategory.query.all()
     categories = [c.name for c in cats]
     cat_map = {}
+    def _slug(s):
+        try:
+            import re
+            s = (s or '').strip().lower()
+            s = re.sub(r"[^a-z0-9]+", "-", s)
+            s = re.sub(r"-+", "-", s).strip('-')
+            return s or 'category'
+        except Exception:
+            return 'category'
+    def _static_image_url(*candidates):
+        try:
+            import os
+            for rel in candidates:
+                if not rel:
+                    continue
+                fp = os.path.join(current_app.static_folder, rel.replace('/', os.sep))
+                if os.path.exists(fp):
+                    return '/static/' + rel
+        except Exception:
+            pass
+        return None
+    cat_image_map = {}
+    try:
+        _def_cat_img = kv_get('menu:default_category_image', None) or kv_get('menu:default_image', None) or '/static/logo.svg'
+    except Exception:
+        _def_cat_img = '/static/logo.svg'
     for c in cats:
         cat_map[c.name] = c.id
         cat_map[c.name.upper()] = c.id
+        try:
+            u = kv_get(f"menu:category_image:{c.id}", None) or kv_get(f"menu:category_image_by_name:{_slug(c.name)}", None)
+        except Exception:
+            u = None
+        if not u:
+            sslug = _slug(c.name)
+            u = _static_image_url(f"images/categories/{sslug}.webp", f"images/categories/{sslug}.jpg", f"images/categories/{sslug}.png") or _def_cat_img
+        cat_image_map[c.name] = u or _def_cat_img
     cat_map_json = json.dumps(cat_map)
+    cat_image_map_json = json.dumps(cat_image_map)
     today = get_saudi_now().date().isoformat()
     # Load settings for currency icon, etc.
     try:
@@ -4035,6 +4122,7 @@ def pos_table(branch_code, table_number):
                            current_draft=current_draft,
                            categories=categories,
                            cat_map_json=cat_map_json,
+                           cat_image_map_json=cat_image_map_json,
                            today=today,
                            settings=s)
 
@@ -4211,9 +4299,123 @@ def api_menu_items(cat_id):
             cat = MenuCategory.query.filter(db.func.lower(MenuCategory.name) == (cat_id or '').lower()).first()
         except Exception:
             cat = None
+    def _slug(s):
+        try:
+            import re
+            s = (s or '').strip().lower()
+            s = re.sub(r"[^a-z0-9]+", "-", s)
+            s = re.sub(r"-+", "-", s).strip('-')
+            return s or 'item'
+        except Exception:
+            return 'item'
+    def _static_image_url(*candidates):
+        try:
+            import os
+            for rel in candidates:
+                if not rel:
+                    continue
+                fp = os.path.join(current_app.static_folder, rel.replace('/', os.sep))
+                if os.path.exists(fp):
+                    return '/static/' + rel
+        except Exception:
+            pass
+        return None
+    def _uploads_image_url(kind, slug):
+        try:
+            if not slug:
+                return None
+            rels = [
+                f'uploads/{kind}/{slug}.webp',
+                f'uploads/{kind}/{slug}.jpg',
+                f'uploads/{kind}/{slug}.png',
+            ]
+            for r in rels:
+                u = _static_image_url(r)
+                if u:
+                    return u
+        except Exception:
+            pass
+        return None
+    def _default_image_url():
+        try:
+            u = kv_get('menu:default_image', None) or kv_get('menu:default_item_image', None) or kv_get('menu:default_category_image', None)
+            if isinstance(u, str) and u:
+                return u
+        except Exception:
+            pass
+        return 'https://also3odyah.com/wp-content/uploads/2024/08/Best-Asian-Restaurants-in-Riyadh-Yauatcha-1024x768-1.jpg'
+    def _remote_image_for_keywords(name, kind):
+        try:
+            n = (name or '').lower()
+            keys = {
+                'category': {
+                    'appetizers': 'https://images.unsplash.com/photo-1547592180-85f173990554?q=80&w=1600&auto=format&fit=crop',
+                    'biryani': 'https://images.unsplash.com/photo-1604908176997-2846b8dce8e7?q=80&w=1600&auto=format&fit=crop',
+                    'rice': 'https://images.unsplash.com/photo-1547592180-85f173990554?q=80&w=1600&auto=format&fit=crop',
+                    'noodles': 'https://images.unsplash.com/photo-1526318472351-c75fd2f0703d?q=80&w=1600&auto=format&fit=crop',
+                    'soup': 'https://images.unsplash.com/photo-1505577058444-a3dab90d4253?q=80&w=1600&auto=format&fit=crop',
+                    'salad': 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?q=80&w=1600&auto=format&fit=crop',
+                    'seafood': 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?q=80&w=1600&auto=format&fit=crop',
+                    'prawn': 'https://images.unsplash.com/photo-1611253135999-daddb98d97a2?q=80&w=1600&auto=format&fit=crop',
+                    'chicken': 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=1600&auto=format&fit=crop',
+                    'beef': 'https://images.unsplash.com/photo-1553163147-622ab57be1c7?q=80&w=1600&auto=format&fit=crop',
+                    'lamb': 'https://images.unsplash.com/photo-1625944521360-4f098c2e8a04?q=80&w=1600&auto=format&fit=crop',
+                    'kebab': 'https://images.unsplash.com/photo-1604908554043-3df28557f9a5?q=80&w=1600&auto=format&fit=crop',
+                    'grill': 'https://images.unsplash.com/photo-1558031239-aa4ae7329230?q=80&w=1600&auto=format&fit=crop',
+                    'drinks': 'https://images.unsplash.com/photo-1509228627152-72ae9ae6848d?q=80&w=1600&auto=format&fit=crop',
+                    'chinese': 'https://images.unsplash.com/photo-1544510808-8b0b0f7de841?q=80&w=1600&auto=format&fit=crop',
+                    'indian': 'https://images.unsplash.com/photo-1543352634-8730a9b5e570?q=80&w=1600&auto=format&fit=crop',
+                },
+                'item': {
+                    'biryani': 'https://images.unsplash.com/photo-1604908176997-2846b8dce8e7?q=80&w=1600&auto=format&fit=crop',
+                    'noodles': 'https://images.unsplash.com/photo-1526318472351-c75fd2f0703d?q=80&w=1600&auto=format&fit=crop',
+                    'samosa': 'https://images.unsplash.com/photo-1625944519087-2a9c7b0f1ff4?q=80&w=1600&auto=format&fit=crop',
+                    'hummus': 'https://images.unsplash.com/photo-1552332386-f8dd00dc2f85?q=80&w=1600&auto=format&fit=crop',
+                    'potato': 'https://images.unsplash.com/photo-1518806118471-f66f1e488eae?q=80&w=1600&auto=format&fit=crop',
+                    'naan': 'https://images.unsplash.com/photo-1601050693721-03bba7dd6e61?q=80&w=1600&auto=format&fit=crop',
+                    'tempura': 'https://images.unsplash.com/photo-1562967915-6a88f1f68047?q=80&w=1600&auto=format&fit=crop',
+                    'kebab': 'https://images.unsplash.com/photo-1604908554043-3df28557f9a5?q=80&w=1600&auto=format&fit=crop',
+                    'prawn': 'https://images.unsplash.com/photo-1611253135999-daddb98d97a2?q=80&w=1600&auto=format&fit=crop',
+                    'shrimp': 'https://images.unsplash.com/photo-1611253135999-daddb98d97a2?q=80&w=1600&auto=format&fit=crop',
+                    'chicken': 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=1600&auto=format&fit=crop',
+                    'fish': 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?q=80&w=1600&auto=format&fit=crop'
+                }
+            }[kind]
+            syn = {
+                'biryani': ['برياني','بريان','biryani'],
+                'noodles': ['noodles','نودلز','معكرونة','chow','mein','chopsuey'],
+                'samosa': ['سمبوسة','سمبوسا','سموسا','samosa','samusa'],
+                'hummus': ['حمص','homous','hummus','humus','homouse'],
+                'potato': ['بطاطس','بطاطا','potato','chips','chope','chop','choap','frenchfry','french fry','fries','finger chips'],
+                'naan': ['خبز نان','نان','naan','nan','garlic nan','garlic naan','plain nan','plain naan'],
+                'tempura': ['تمبورا','تيمبورا','tempura'],
+                'kebab': ['كباب','kebab'],
+                'prawn': ['روبيان','ربيان','ribyan','prawn','prwn','prawns','fried prawns','gold.fri.prawns','gold fried prawns','prwnballs','prawn balls','prwn balls'],
+                'shrimp': ['جمبري','shrimp','fried shrimp'],
+                'chicken': ['دجاج','chicken','kaichai'],
+                'appetizers': ['appetizers','starter','starters','مقبلات','مقبا','mixed app','mixeed app','mixed appetizer','mix app','mixeed app(l)','mixeed app(m)','platter','مقبلات مشكل'],
+                'seafood': ['seafood','مأكولات بحرية'],
+                'fish': ['fish','fish finger','finger fish','fishfinger','fish-finger','سمك','فيش'],
+                'salad': ['سلطة','salad'],
+                'soup': ['شوربة','soup']
+            }
+            for k, lst in syn.items():
+                for t in lst:
+                    if t and t in n and k in keys:
+                        url = keys.get(k)
+                        if url:
+                            return url
+            for k, url in keys.items():
+                if k in n:
+                    return url
+        except Exception:
+            pass
+        return None
+    def _item_image_url(m):
+        return _default_image_url()
     if cat:
         items = MenuItem.query.filter_by(category_id=cat.id).order_by(MenuItem.name).all()
-        return jsonify([{'id': m.id, 'name': m.name, 'price': float(m.price)} for m in items])
+        return jsonify([{'id': m.id, 'name': m.name, 'price': float(m.price), 'image_url': _item_image_url(m)} for m in items])
     # KV fallback
     data = kv_get(f'menu:items:{cat_id}', None)
     if isinstance(data, list):
@@ -4222,7 +4424,13 @@ def api_menu_items(cat_id):
     demo_items = [{'id': None, 'name': nm, 'price': float(pr)} for (nm, pr) in _DEF_MENU.get(cat_id, [])]
 
 
-    return jsonify(demo_items)
+    out = []
+    # Force default image for demo items as well
+    for d in demo_items:
+        dd = dict(d)
+        dd['image_url'] = _default_image_url()
+        out.append(dd)
+    return jsonify(out)
 
 # ---------- Branch Settings API used by POS ----------
 @main.route('/api/branch-settings/<branch_code>', methods=['GET'], endpoint='api_branch_settings')
@@ -4477,6 +4685,7 @@ def api_draft_checkout():
             discount_amount=round(discount_amount, 2),
             total_after_tax_discount=round(total_after, 2),
             user_id=int(getattr(current_user, 'id', 1) or 1),
+            status='issued',
         )
         db.session.add(inv)
         db.session.flush()
@@ -4642,6 +4851,7 @@ def api_sales_checkout():
             discount_amount=round(discount_amount, 2),
             total_after_tax_discount=round(total_after, 2),
             user_id=int(getattr(current_user, 'id', 1) or 1),
+            status='issued',
         )
         db.session.add(inv)
         db.session.flush()
@@ -4659,7 +4869,7 @@ def api_sales_checkout():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
-    return jsonify({'ok': True, 'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': table})
+    return jsonify({'ok': True, 'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.invoice_print', invoice_id=invoice_number), 'branch_code': branch, 'table_number': table})
 
 
 @main.route('/api/invoice/confirm-print', methods=['POST'], endpoint='api_invoice_confirm_print')
@@ -4739,10 +4949,30 @@ def api_invoice_confirm_print():
                     db.session.commit()
             except Exception:
                 db.session.rollback()
-        return jsonify({'success': True})
     except Exception as e:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return jsonify({'success': False, 'error': str(e)}), 400
+    return jsonify({'success': True})
+
+
+@main.route('/api/invoice/print-log', methods=['POST'], endpoint='api_invoice_print_log')
+@login_required
+def api_invoice_print_log():
+    try:
+        payload = request.get_json(force=True) or {}
+        invoice_id = (payload.get('invoice_id') or '').strip()
+        if not invoice_id:
+            return jsonify({'ok': False, 'error': 'missing_invoice_id'}), 400
+        key = f"print_log:{invoice_id}"
+        logs = kv_get(key, []) or []
+        logs.append({'ts': get_saudi_now().isoformat(), 'user_id': int(getattr(current_user, 'id', 0) or 0)})
+        kv_set(key, logs)
+        return jsonify({'ok': True, 'count': len(logs)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @main.route('/api/sales/void-check', methods=['POST'], endpoint='api_sales_void_check')
@@ -5188,6 +5418,109 @@ def print_order_preview(branch, table):
                            display_invoice_number=order_no,
                            qr_data_url=qr_data_url,
                            paid=False)
+
+
+@main.route('/invoice/print/<invoice_id>', methods=['GET'], endpoint='invoice_print')
+@login_required
+def invoice_print(invoice_id):
+    """
+    New standalone invoice print page for issued invoices
+    This is a read-only print view that opens in a new window
+    """
+    # Find invoice by ID or invoice number
+    inv = None
+    try:
+        inv = SalesInvoice.query.get(int(invoice_id))
+    except Exception:
+        inv = SalesInvoice.query.filter_by(invoice_number=str(invoice_id)).first()
+    
+    if not inv:
+        return 'Invoice not found', 404
+    
+    # Check if invoice is issued (status should be 'issued' or 'finalized')
+    if inv.status not in ['issued', 'finalized', 'paid']:
+        return 'Invoice not issued yet', 403
+    
+    items = SalesInvoiceItem.query.filter_by(invoice_id=inv.id).all()
+    
+    # Prepare items context
+    items_ctx = []
+    for it in items:
+        line = float(it.price_before_tax or 0) * float(it.quantity or 0)
+        items_ctx.append({
+            'product_name': it.product_name or '',
+            'quantity': float(it.quantity or 0),
+            'total_price': line,
+        })
+
+    inv_ctx = {
+        'invoice_number': inv.invoice_number,
+        'table_number': inv.table_number,
+        'customer_name': inv.customer_name,
+        'customer_phone': inv.customer_phone,
+        'payment_method': inv.payment_method,
+        'status': inv.status.upper(),
+        'total_before_tax': float(inv.total_before_tax or 0.0),
+        'tax_amount': float(inv.tax_amount or 0.0),
+        'discount_amount': float(inv.discount_amount or 0.0),
+        'total_after_tax_discount': float(inv.total_after_tax_discount or 0.0),
+        'branch': getattr(inv, 'branch', None),
+        'branch_code': getattr(inv, 'branch', None),
+    }
+    
+    try:
+        s = Settings.query.first()
+    except Exception:
+        s = None
+        
+    branch_name = BRANCH_LABELS.get(getattr(inv, 'branch', None) or '', getattr(inv, 'branch', ''))
+    dt_str = inv.created_at.strftime('%Y-%m-%d %H:%M:%S') if inv.created_at else get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Prepare embedded logo as data URL for thermal printing
+    logo_data_url = None
+    try:
+        if s and getattr(s, 'receipt_show_logo', False) and (s.logo_url or '').strip():
+            url = s.logo_url.strip()
+            import base64, mimetypes, os
+            fpath = None
+            # Static folder
+            if url.startswith('/static/'):
+                rel = url.split('/static/', 1)[1]
+                fpath = os.path.join(current_app.static_folder, rel)
+            # Persistent uploads folder
+            elif url.startswith('/uploads/'):
+                upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
+                rel = url.split('/uploads/', 1)[1]
+                fpath = os.path.join(upload_dir, rel)
+            if fpath and os.path.exists(fpath):
+                with open(fpath, 'rb') as f:
+                    b = f.read()
+                mime = mimetypes.guess_type(fpath)[0] or 'image/png'
+                logo_data_url = f'data:{mime};base64,' + base64.b64encode(b).decode('ascii')
+    except Exception:
+        logo_data_url = None
+    
+    # Generate ZATCA-compliant QR
+    qr_data_url = None
+    try:
+        from utils.qr import generate_zatca_qr_from_invoice
+        b64 = generate_zatca_qr_from_invoice(inv, s, None)
+        if b64:
+            qr_data_url = 'data:image/png;base64,' + b64
+    except Exception:
+        qr_data_url = None
+    
+    # Render standalone print template
+    return render_template('print/invoice_print.html', 
+                         inv=inv_ctx, 
+                         items=items_ctx,
+                         settings=s, 
+                         branch_name=branch_name, 
+                         date_time=dt_str,
+                         display_invoice_number=inv.invoice_number,
+                         qr_data_url=qr_data_url,
+                         logo_data_url=logo_data_url,
+                         paid=(inv.status in ['paid', 'finalized']))
 
 
 
@@ -9629,3 +9962,4 @@ def api_ledger_delete(jeid: int):
 @login_required
 def employees_create_page():
     return redirect(url_for('main.employee_uvd', mode='create'))
+
