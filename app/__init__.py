@@ -5,9 +5,32 @@ from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from flask_migrate import Migrate
 try:
-    from flask_babel import Babel
+    from flask_babel import Babel, gettext as _gettext
 except Exception:
     Babel = None
+    def _gettext(s, **kwargs):
+        try:
+            txt = s.format(**kwargs) if kwargs else s
+        except Exception:
+            txt = s
+        try:
+            buf = []
+            i = 0
+            while i < len(txt):
+                ch = txt[i]
+                if ch == '%':
+                    if i+1 < len(txt) and txt[i+1] == '%':
+                        buf.append('%%')
+                        i += 2
+                    else:
+                        buf.append('%%')
+                        i += 1
+                else:
+                    buf.append(ch)
+                    i += 1
+            return ''.join(buf)
+        except Exception:
+            return txt
 from flask_wtf.csrf import CSRFProtect
 
 # إنشاء كائنات db و login و bcrypt فقط مرة واحدة
@@ -70,6 +93,7 @@ def create_app(config_class=None):
             'can': can,
             'settings': None,
             'section_image_for': section_image_for,
+            '_': _gettext,
         }
 
 
