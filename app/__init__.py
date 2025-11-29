@@ -4,7 +4,10 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from flask_migrate import Migrate
-from flask_babel import Babel
+try:
+    from flask_babel import Babel
+except Exception:
+    Babel = None
 from flask_wtf.csrf import CSRFProtect
 
 # إنشاء كائنات db و login و bcrypt فقط مرة واحدة
@@ -16,7 +19,7 @@ db = SQLAlchemy()
 bcrypt = Bcrypt()
 login_manager = LoginManager()
 migrate = Migrate()
-babel = Babel()
+babel = Babel() if Babel else None
 csrf = CSRFProtect()
 
 def create_app(config_class=None):
@@ -75,7 +78,11 @@ def create_app(config_class=None):
     bcrypt.init_app(app)
     login_manager.init_app(app)
     migrate.init_app(app, db)
-    babel.init_app(app)
+    if babel:
+        try:
+            babel.init_app(app)
+        except Exception:
+            pass
     csrf.init_app(app)
     # Flask-Login setup: login view and user loader
     login_manager.login_view = 'main.login'

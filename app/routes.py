@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from forms import PurchaseInvoiceForm
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db
 from app.models import User, AppKV, MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem
@@ -138,10 +139,102 @@ def dashboard():
 def sales():
     return render_template('sales.html')
 
-@main.route('/purchases', endpoint='purchases')
+@main.route('/purchases', methods=['GET', 'POST'], endpoint='purchases')
 @login_required
 def purchases():
-    return render_template('purchases.html')
+    form = PurchaseInvoiceForm()
+    suppliers_list = kv_get('suppliers_list', []) or []
+    materials = kv_get('raw_materials_list', []) or []
+    if request.method == 'POST':
+        try:
+            date_s = request.form.get('date') or datetime.utcnow().date().isoformat()
+            pm = request.form.get('payment_method') or 'CASH'
+            supplier_name = request.form.get('supplier_name') or ''
+            supplier_id = request.form.get('supplier_id') or ''
+            items = []
+            total_before = 0.0
+            total_discount = 0.0
+            total_tax = 0.0
+            final_total = 0.0
+            idxs = set()
+            for k in request.form.keys():
+                if k.startswith('items-'):
+                    try:
+                        p = k.split('-')[1]
+                        idxs.add(int(p))
+                    except Exception:
+                        pass
+            for i in sorted(list(idxs)):
+                name = request.form.get(f'items-{i}-item_name') or ''
+                unit = request.form.get(f'items-{i}-unit') or ''
+                q = request.form.get(f'items-{i}-quantity') or '0'
+                pr = request.form.get(f'items-{i}-price_before_tax') or '0'
+                d = request.form.get(f'items-{i}-discount') or '0'
+                t = request.form.get(f'items-{i}-tax_pct') or '15'
+                try:
+                    qf = float(q)
+                except Exception:
+                    qf = 0.0
+                try:
+                    pf = float(pr)
+                except Exception:
+                    pf = 0.0
+                try:
+                    df = max(0.0, min(100.0, float(d)))
+                except Exception:
+                    df = 0.0
+                try:
+                    tf = max(0.0, min(100.0, float(t)))
+                except Exception:
+                    tf = 15.0
+                before = qf * pf
+                disc = before * (df/100.0)
+                base = max(0.0, before - disc)
+                tax = base * (tf/100.0)
+                line_total = base + tax
+                total_before += before
+                total_discount += disc
+                total_tax += tax
+                final_total += line_total
+                items.append({
+                    'item_name': name,
+                    'unit': unit,
+                    'quantity': qf,
+                    'price_before_tax': pf,
+                    'discount_pct': df,
+                    'tax_pct': tf,
+                    'line_total': line_total
+                })
+            year = datetime.utcnow().strftime('%Y')
+            seq_key = f'purchase_seq:{year}'
+            seq = int(kv_get(seq_key, 0) or 0) + 1
+            kv_set(seq_key, seq)
+            invoice_number = f'INV-PUR-{year}-{str(seq).zfill(4)}'
+            rec = {
+                'invoice_number': invoice_number,
+                'date': date_s,
+                'payment_method': pm,
+                'supplier_name': supplier_name,
+                'supplier_id': supplier_id,
+                'totals': {
+                    'total_before_tax': round(total_before, 2),
+                    'total_discount': round(total_discount, 2),
+                    'tax_amount': round(total_tax, 2),
+                    'final_total': round(final_total, 2)
+                },
+                'items': items,
+                'status': 'unpaid'
+            }
+            kv_set(f'purchase:{invoice_number}', rec)
+            index = kv_get('purchases:index', []) or []
+            index.append({'invoice_number': invoice_number, 'date': date_s, 'supplier_name': supplier_name, 'payment_method': pm, 'final_total': rec['totals']['final_total']})
+            kv_set('purchases:index', index)
+            flash('تم حفظ فاتورة الشراء بنجاح', 'success')
+            return redirect(url_for('main.purchases'))
+        except Exception as e:
+            flash(str(e), 'danger')
+            return redirect(url_for('main.purchases'))
+    return render_template('purchases.html', form=form, suppliers_list=suppliers_list, suppliers_json=json.dumps(suppliers_list), materials_json=json.dumps(materials))
 
 @main.route('/raw-materials', endpoint='raw_materials')
 @login_required

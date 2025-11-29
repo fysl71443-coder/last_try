@@ -1,7 +1,10 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, DateField, DecimalField, FieldList, FormField, IntegerField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
-from flask_babel import lazy_gettext as _l
+try:
+    from flask_babel import lazy_gettext as _l
+except Exception:
+    _l = lambda s: s
 
 PAYMENT_METHODS = [
     ('MADA', 'مدى / MADA'),

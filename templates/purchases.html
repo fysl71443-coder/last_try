@@ -198,7 +198,11 @@ body {
                     </button>
                 </div>
                 <div class="col-md-6 text-end">
+                    {% if form and form.submit %}
                     {{ form.submit(class_='btn btn-primary btn-lg') }}
+                    {% else %}
+                    <button type="submit" class="btn btn-primary btn-lg">{{ _('Save Purchase Invoice / حفظ فاتورة الشراء') }}</button>
+                    {% endif %}
                 </div>
             </div>
         </form>
