@@ -17,8 +17,10 @@ def open_browser():
 
 if __name__ == '__main__':
     try:
-        from app import app
-        
+        # Use application factory pattern
+        from app import create_app
+        app = create_app()
+
         print("🚀 Starting China Town & Palace India POS System")
         print("📍 Server URL: http://127.0.0.1:5000")
         print("🔐 Default login: admin / admin")
@@ -37,11 +39,11 @@ if __name__ == '__main__':
         print("\n" + "="*60)
         print("Press Ctrl+C to stop the server")
         print("="*60 + "\n")
-        
+
         # Start browser in background
         browser_thread = threading.Thread(target=open_browser, daemon=True)
         browser_thread.start()
-        
+
         # Start Flask server
         app.run(
             host='127.0.0.1',
@@ -49,7 +51,7 @@ if __name__ == '__main__':
             debug=False,
             use_reloader=False
         )
-        
+
     except ImportError as e:
         print(f"❌ Error importing Flask app: {e}")
         sys.exit(1)

@@ -281,7 +281,7 @@ class ExpenseInvoiceItem(db.Model):
 # Employees and Salaries
 class Employee(db.Model):
     __tablename__ = 'employees'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     employee_code = db.Column(db.String(20), unique=True, nullable=False)
     full_name = db.Column(db.String(100), nullable=False)
     national_id = db.Column(db.String(20), unique=True, nullable=False)
@@ -291,11 +291,51 @@ class Employee(db.Model):
     email = db.Column(db.String(100))
     hire_date = db.Column(db.Date)
     status = db.Column(db.String(20), default='active')  # active/inactive
+    active = db.Column(db.Boolean, default=True)
+    work_hours = db.Column(db.Integer, default=0)
 
     salaries = db.relationship('Salary', backref='employee', lazy=True)
+    # one-to-one default salary settings
+    employee_salary_default = db.relationship('EmployeeSalaryDefault', uselist=False, backref='employee')
 
     def __repr__(self):
         return f'<Employee {self.employee_code} - {self.full_name}>'
+
+    @staticmethod
+    def generate_code():
+        try:
+            last = Employee.query.order_by(Employee.id.desc()).first()
+            if last and last.id:
+                return f"{last.id + 1:04d}"
+        except Exception:
+            pass
+        return "0001"
+
+    def __init__(self, **kwargs):
+        # allow passing employee_code explicitly; generate if not provided or empty
+        code = kwargs.get('employee_code')
+        if not code:
+            kwargs['employee_code'] = Employee.generate_code()
+        super().__init__(**kwargs)
+
+
+# Ensure employee_code is deterministic and based on the final autoincrement id.
+# Using after_insert to set employee_code = formatted id (e.g., 0001) avoids
+# race conditions when multiple workers create employees concurrently.
+from sqlalchemy import event
+
+
+@event.listens_for(Employee, 'after_insert')
+def _set_employee_code(mapper, connection, target):
+    try:
+        if not target.employee_code and getattr(target, 'id', None):
+            code = f"{target.id:04d}"
+            # perform an UPDATE using the provided connection
+            connection.execute(
+                Employee.__table__.update().where(Employee.__table__.c.id == target.id).values(employee_code=code)
+            )
+    except Exception:
+        pass
 
 class Salary(db.Model):
     __tablename__ = 'salaries'

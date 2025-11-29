@@ -6214,14 +6214,19 @@ def employees():
     form = EmployeeForm()
     if form.validate_on_submit():
         try:
+            # Ensure national_id is set to a unique placeholder if empty (DB requires non-null & unique on some installs)
+            _nid_in = (form.national_id.data or '').strip()
+            if not _nid_in:
+                import uuid
+                _nid_in = f"TMP-{uuid.uuid4().hex[:10]}"
             emp = Employee(
-                employee_code=form.employee_code.data.strip(),
-                full_name=form.full_name.data.strip(),
-                national_id=form.national_id.data.strip(),
-                department=form.department.data.strip() if form.department.data else None,
-                position=form.position.data.strip() if form.position.data else None,
-                phone=form.phone.data.strip() if form.phone.data else None,
-                email=form.email.data.strip() if form.email.data else None,
+                employee_code=(form.employee_code.data or '').strip() or None,
+                full_name=(form.full_name.data or '').strip(),
+                national_id=_nid_in,
+                department=(form.department.data or '').strip() or None,
+                position=(form.position.data or '').strip() or None,
+                phone=(form.phone.data or '').strip() or None,
+                email=(form.email.data or '').strip() or None,
                 hire_date=form.hire_date.data,
                 status=form.status.data
             )
@@ -6244,7 +6249,7 @@ def employees():
             return redirect(url_for('employees'))
         except Exception as e:
             db.session.rollback()
-            flash(_('تعذرت إضافة الموظف. تحقق من أن رقم الموظف والهوية غير مكررين. / Could not add employee. Ensure code and national id are unique.'), 'danger')
+            flash(_('تعذرت إضافة الموظف. تأكد من صحة البيانات أو عدم التكرار. / Could not add employee. Check data or duplicates.'), 'danger')
 
     # Pre-fill from defaults when employee selected
     if request.method == 'POST' and not form.errors:
@@ -7008,18 +7013,41 @@ def edit_employee_defaults(emp_id):
 def edit_employee(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     form = EmployeeForm(obj=emp)
+    # load defaults
+    try:
+        from models import EmployeeSalaryDefault
+        defaults = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
+        if request.method == 'GET' and defaults:
+            form.base_salary.data = float(defaults.base_salary or 0)
+            form.allowances.data = float(defaults.allowances or 0)
+            form.deductions.data = float(defaults.deductions or 0)
+    except Exception:
+        defaults = None
     if form.validate_on_submit():
         try:
-            emp.employee_code = form.employee_code.data.strip()
-            emp.full_name = form.full_name.data.strip()
-            emp.national_id = form.national_id.data.strip()
-            emp.department = form.department.data.strip() if form.department.data else None
-            emp.position = form.position.data.strip() if form.position.data else None
-            emp.phone = form.phone.data.strip() if form.phone.data else None
-            emp.email = form.email.data.strip() if form.email.data else None
+            emp.employee_code = (form.employee_code.data or '').strip() or emp.employee_code
+            emp.full_name = (form.full_name.data or '').strip() or emp.full_name
+            emp.national_id = (form.national_id.data or '').strip() or emp.national_id
+            emp.department = (form.department.data or '').strip() or None
+            emp.position = (form.position.data or '').strip() or None
+            emp.phone = (form.phone.data or '').strip() or None
+            emp.email = (form.email.data or '').strip() or None
             emp.hire_date = form.hire_date.data
             emp.status = form.status.data
             safe_db_commit()
+            # upsert defaults
+            try:
+                from models import EmployeeSalaryDefault
+                d = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
+                if not d:
+                    d = EmployeeSalaryDefault(employee_id=emp.id)
+                    db.session.add(d)
+                d.base_salary = float(form.base_salary.data or 0)
+                d.allowances = float(form.allowances.data or 0)
+                d.deductions = float(form.deductions.data or 0)
+                safe_db_commit()
+            except Exception:
+                db.session.rollback()
             flash(_('تم تعديل بيانات الموظف / Employee updated'), 'success')
             return redirect(url_for('employees'))
         except Exception:

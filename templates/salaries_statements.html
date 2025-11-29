@@ -40,6 +40,7 @@
           <thead class="table-dark">
             <tr>
               <th>#</th>
+              <th>{{ _('Period / الفترة') }}</th>
               <th>{{ _('Employee / الموظف') }}</th>
               <th>{{ _('Basic / الأساسي') }}</th>
               <th>{{ _('Allowances / البدلات') }}</th>
@@ -55,6 +56,7 @@
             {% for r in rows %}
             <tr>
               <td>{{ loop.index }}</td>
+              <td>{{ r.period }}</td>
               <td>{{ r.employee_name }}</td>
               <td>{{ '%.2f'|format(r.basic) }}</td>
               <td>{{ '%.2f'|format(r.allow) }}</td>

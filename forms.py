@@ -137,9 +137,9 @@ class ExpenseInvoiceForm(FlaskForm):
 
 # Employee and Salary Forms
 class EmployeeForm(FlaskForm):
-    employee_code = StringField(_l('Employee Code / رقم الموظف'), validators=[DataRequired()])
+    employee_code = StringField(_l('Employee Code / رقم الموظف'), validators=[Optional()])
     full_name = StringField(_l('Full Name / الاسم الكامل'), validators=[DataRequired()])
-    national_id = StringField(_l('National ID / رقم الهوية'), validators=[DataRequired()])
+    national_id = StringField(_l('National ID / رقم الهوية'), validators=[Optional()])
     department = StringField(_l('Department / القسم'))
     position = StringField(_l('Position / الوظيفة'))
     phone = StringField(_l('Phone / الهاتف'))

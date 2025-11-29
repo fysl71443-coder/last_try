@@ -6,15 +6,36 @@ from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
 
-
 from app import db, csrf
-# Force single DB session usage across the app to avoid multiple SQLAlchemy instances
 ext_db = None
 from app.models import User, AppKV
 from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
 main = Blueprint('main', __name__)
+
+
+@main.route('/suppliers/edit/<int:sid>', methods=['GET', 'POST'], endpoint='suppliers_edit')
+@login_required
+def suppliers_edit(sid):
+    supplier = Supplier.query.get_or_404(sid)
+    if request.method == 'POST':
+        supplier.name = request.form.get('name', supplier.name)
+        supplier.contact_person = request.form.get('contact_person', supplier.contact_person)
+        supplier.phone = request.form.get('phone', supplier.phone)
+        supplier.email = request.form.get('email', supplier.email)
+        supplier.tax_number = request.form.get('tax_number', supplier.tax_number)
+        supplier.address = request.form.get('address', supplier.address)
+        supplier.notes = request.form.get('notes', supplier.notes)
+        supplier.active = True if str(request.form.get('active', supplier.active)).lower() in ['1','true','yes','on'] else False
+        try:
+            db.session.commit()
+            flash('✅ Supplier updated successfully', 'success')
+            return redirect(url_for('main.suppliers'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating supplier: {e}', 'danger')
+    return render_template('supplier_edit.html', supplier=supplier)
 
 # --- Simple helpers / constants ---
 BRANCH_LABELS = {
@@ -905,8 +926,10 @@ def employees():
     form = EmployeeForm()
     if request.method == 'POST':
         try:
+            # generate employee_code automatically if not provided
+            emp_code = form.employee_code.data if (form.employee_code.data and str(form.employee_code.data).strip()) else None
             e = Employee(
-                employee_code=form.employee_code.data,
+                employee_code=emp_code,
                 full_name=form.full_name.data,
                 national_id=form.national_id.data,
                 department=form.department.data,
@@ -959,6 +982,64 @@ def employees():
     except Exception:
         emps = []
     return render_template('employees.html', form=form, employees=emps)
+
+
+@main.route('/employees/edit/<int:emp_id>', methods=['GET', 'POST'], endpoint='edit_employee')
+@login_required
+def edit_employee(emp_id):
+    emp = Employee.query.get_or_404(emp_id)
+    if request.method == 'POST':
+        emp.employee_code = request.form.get('employee_code', emp.employee_code)
+        emp.full_name = request.form.get('full_name', emp.full_name)
+        emp.national_id = request.form.get('national_id', emp.national_id)
+        emp.department = request.form.get('department', emp.department)
+        emp.position = request.form.get('position', emp.position)
+        # active checkbox
+        try:
+            emp.active = bool(request.form.get('active'))
+        except Exception:
+            pass
+        # work hours
+        try:
+            wh = request.form.get('work_hours')
+            if wh is not None and wh != '':
+                emp.work_hours = int(wh)
+        except Exception:
+            pass
+        emp.phone = request.form.get('phone', emp.phone)
+        emp.email = request.form.get('email', emp.email)
+        # hire_date handled by form/input; attempt to parse if provided
+        try:
+            hd = request.form.get('hire_date')
+            if hd:
+                emp.hire_date = datetime.strptime(hd, '%Y-%m-%d').date()
+        except Exception:
+            pass
+        emp.status = request.form.get('status', emp.status)
+        # Salary default fields: base_salary, allowances, deductions
+        try:
+            base = float(request.form.get('base_salary') or 0)
+            allow = float(request.form.get('default_allowances') or 0)
+            ded = float(request.form.get('default_deductions') or 0)
+            # upsert EmployeeSalaryDefault
+            d = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
+            if d:
+                d.base_salary = base
+                d.allowances = allow
+                d.deductions = ded
+            else:
+                d = EmployeeSalaryDefault(employee_id=emp.id, base_salary=base, allowances=allow, deductions=ded)
+                db.session.add(d)
+        except Exception:
+            pass
+        try:
+            db.session.commit()
+            flash('✅ Employee updated successfully', 'success')
+            return redirect(url_for('main.employees'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating employee: {e}', 'danger')
+    return render_template('employee_edit.html', employee=emp)
 
 
 @main.route('/employees/<int:eid>/delete', methods=['POST'], endpoint='employee_delete')
@@ -1117,34 +1198,78 @@ def salaries_statements():
         month = request.args.get('month', type=int) or datetime.utcnow().month
     rows = []
     totals = {'basic': 0.0, 'allow': 0.0, 'ded': 0.0, 'prev': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0}
+
+    # We'll build statements from each employee.hire_date up to the selected year/month (inclusive)
     try:
-        sal_list = Salary.query.filter_by(year=year, month=month).all()
-        for s in sal_list:
-            paid = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).\
-                filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0
-            paid = float(paid or 0)
-            basic = float(s.basic_salary or 0)
-            allow = float(s.allowances or 0)
-            ded = float(s.deductions or 0)
-            prev = float(s.previous_salary_due or 0)
-            total = max(0.0, basic + allow - ded + prev)
-            remaining = max(0.0, total - paid)
-            emp = db.session.get(Employee, s.employee_id)
-            rows.append({
-                'employee_name': (emp.full_name if emp else f"#{s.employee_id}"),
-                'basic': basic,
-                'allow': allow,
-                'ded': ded,
-                'prev': prev,
-                'total': total,
-                'paid': paid,
-                'remaining': remaining,
-                'status': s.status or 'due'
-            })
-            totals['basic'] += basic; totals['allow'] += allow; totals['ded'] += ded
-            totals['prev'] += prev; totals['total'] += total; totals['paid'] += paid; totals['remaining'] += remaining
+        # build end date
+        end_year = int(year)
+        end_month = int(month)
+
+        employees = Employee.query.order_by(Employee.full_name).all()
+
+        def month_iter(start_y, start_m, end_y, end_m):
+            y, m = start_y, start_m
+            while (y < end_y) or (y == end_y and m <= end_m):
+                yield y, m
+                m += 1
+                if m > 12:
+                    m = 1; y += 1
+
+        for emp in employees:
+            # skip employees without hire_date
+            if not emp.hire_date:
+                continue
+            start_y = emp.hire_date.year
+            start_m = emp.hire_date.month
+            # if hire date is after selected end, skip
+            if (start_y > end_year) or (start_y == end_year and start_m > end_month):
+                continue
+
+            for y, m in month_iter(start_y, start_m, end_year, end_month):
+                # prefer an explicit Salary row for the period
+                s = Salary.query.filter_by(employee_id=emp.id, year=y, month=m).first()
+                if s:
+                    basic = float(s.basic_salary or 0)
+                    allow = float(s.allowances or 0)
+                    ded = float(s.deductions or 0)
+                    prev = float(s.previous_salary_due or 0)
+                    total = max(0.0, basic + allow - ded + prev)
+                    paid = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).\
+                        filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0
+                    paid = float(paid or 0)
+                    remaining = max(0.0, total - paid)
+                    status = s.status or ('paid' if remaining <= 0 else 'due')
+                else:
+                    # fallback to EmployeeSalaryDefault
+                    usd = EmployeeSalaryDefault.query.filter_by(employee_id=emp.id).first()
+                    basic = float(usd.base_salary or 0) if usd else 0.0
+                    allow = float(usd.allowances or 0) if usd else 0.0
+                    ded = float(usd.deductions or 0) if usd else 0.0
+                    prev = 0.0
+                    total = max(0.0, basic + allow - ded + prev)
+                    # no salary row -> cannot link payments reliably; assume none
+                    paid = 0.0
+                    remaining = total
+                    status = 'due' if remaining > 0 else 'paid'
+
+                rows.append({
+                    'period': f"{y:04d}-{m:02d}",
+                    'employee_name': emp.full_name,
+                    'basic': basic,
+                    'allow': allow,
+                    'ded': ded,
+                    'prev': prev,
+                    'total': total,
+                    'paid': paid,
+                    'remaining': remaining,
+                    'status': status
+                })
+
+                totals['basic'] += basic; totals['allow'] += allow; totals['ded'] += ded
+                totals['prev'] += prev; totals['total'] += total; totals['paid'] += paid; totals['remaining'] += remaining
     except Exception:
         pass
+
     return render_template('salaries_statements.html', year=year, month=month, rows=rows, totals=totals)
 
 
@@ -1351,14 +1476,57 @@ def sales_tables(branch_code):
     # Try to load grouped layout from saved sections; otherwise simple 1..20
     settings = kv_get('table_settings', {}) or {}
     default_count = 20
+    def _safe_int(value, fallback):
+        try:
+            v = value if value is not None else fallback
+            return int(v)
+        except Exception:
+            return int(fallback)
     if branch_code == 'china_town':
-        count = int((settings.get('china') or {}).get('count', default_count))
+        count = _safe_int((settings.get('china') or {}).get('count'), default_count)
     elif branch_code == 'place_india':
-        count = int((settings.get('india') or {}).get('count', default_count))
+        count = _safe_int((settings.get('india') or {}).get('count'), default_count)
     else:
         count = default_count
+    # Try to render using saved layout (sections/rows) if available
+    layout = kv_get(f'layout:{branch_code}', {}) or {}
+    grouped_tables = None
+    if layout and isinstance(layout.get('sections'), list):
+        # Build data structure the template understands
+        sections = layout.get('sections') or []
+        grouped = []
+        for sec in sections:
+            rows = []
+            for row in (sec.get('rows') or []):
+                row_out = []
+                for t in (row or []):
+                    try:
+                        tn = int(str(t).strip())
+                    except Exception:
+                        continue
+                    if tn < 1 or tn > 1000:
+                        continue
+                    row_out.append({
+                        'number': tn,
+                        'status': 'available'
+                    })
+                if row_out:
+                    rows.append(row_out)
+            grouped.append({'section': (sec.get('name') or '').strip() or 'Section', 'rows': rows})
+        grouped_tables = grouped
+
     tables = [{'number': i, 'status': 'available'} for i in range(1, count+1)]
-    return render_template('sales_tables.html', branch_code=branch_code, branch_label=branch_label, tables=tables, grouped_tables=None)
+    return render_template('sales_tables.html', branch_code=branch_code, branch_label=branch_label, tables=tables, grouped_tables=grouped_tables)
+
+
+@main.route('/table-manager/<branch_code>', endpoint='table_manager')
+@login_required
+def table_manager(branch_code):
+    if not user_can('sales','view', branch_code):
+        flash('لا تملك صلاحية الوصول لفرع المبيعات هذا', 'warning')
+        return redirect(url_for('main.sales'))
+    branch_label = BRANCH_LABELS.get(branch_code, branch_code)
+    return render_template('table_manager.html', branch_code=branch_code, branch_label=branch_label)
 
 @main.route('/sales/china_town', endpoint='sales_china')
 @login_required
@@ -1459,20 +1627,104 @@ def api_table_sections(branch_code):
     key = f'sections:{branch_code}'
     if not user_can('sales','view', branch_code):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
+
+    # Lazy import to avoid circulars
+    try:
+        from models import TableSection, TableSectionAssignment
+    except Exception:
+        TableSection = None
+        TableSectionAssignment = None
+
     if request.method == 'GET':
+        # Prefer DB if available; fallback to KV store
+        try:
+            if TableSection is not None:
+                sections_q = TableSection.query.filter_by(branch_code=branch_code).order_by(TableSection.sort_order, TableSection.id).all()
+                assigns_q = TableSectionAssignment.query.filter_by(branch_code=branch_code).all()
+                if sections_q:
+                    return jsonify({
+                        'success': True,
+                        'sections': [
+                            {'id': s.id, 'name': s.name, 'sort_order': s.sort_order}
+                            for s in sections_q
+                        ],
+                        'assignments': [
+                            {'table_number': a.table_number, 'section_id': a.section_id}
+                            for a in assigns_q
+                        ]
+                    })
+        except Exception:
+            db.session.rollback()
+            # continue to KV fallback
         data = kv_get(key, {}) or {}
         return jsonify({'success': True, 'sections': data.get('sections') or [], 'assignments': data.get('assignments') or []})
+
+    # POST: upsert both KV and DB for persistence
     try:
         payload = request.get_json(force=True) or {}
-        # Normalize and assign IDs to new sections if missing
         sections = payload.get('sections') or []
-        # Generate simple incremental IDs based on position
+        assignments = payload.get('assignments') or []
+
+        # Normalize IDs for KV
         for idx, s in enumerate(sections, start=1):
             if not s.get('id'):
                 s['id'] = idx
-        store = {'sections': sections, 'assignments': payload.get('assignments') or []}
-        kv_set(key, store)
-        return jsonify({'success': True, 'sections': sections})
+
+        # Save to KV for quick reads
+        kv_set(key, {'sections': sections, 'assignments': assignments})
+
+        # Save to DB (if models are available)
+        if TableSection is not None:
+            kept_ids = []
+            # Upsert sections
+            for idx, sd in enumerate(sections):
+                sid = sd.get('id')
+                name = (sd.get('name') or '').strip()
+                sort_order = int(sd.get('sort_order') or idx)
+                if sid:
+                    sec = TableSection.query.filter_by(id=sid, branch_code=branch_code).first()
+                    if sec:
+                        sec.name = name
+                        sec.sort_order = sort_order
+                        kept_ids.append(sec.id)
+                    else:
+                        sec = TableSection(branch_code=branch_code, name=name, sort_order=sort_order)
+                        db.session.add(sec)
+                        db.session.flush()
+                        kept_ids.append(sec.id)
+                else:
+                    existing = TableSection.query.filter_by(branch_code=branch_code, name=name).first()
+                    if existing:
+                        existing.sort_order = sort_order
+                        kept_ids.append(existing.id)
+                    else:
+                        sec = TableSection(branch_code=branch_code, name=name, sort_order=sort_order)
+                        db.session.add(sec)
+                        db.session.flush()
+                        kept_ids.append(sec.id)
+
+            # Remove deleted sections
+            if kept_ids:
+                TableSection.query.filter(
+                    TableSection.branch_code == branch_code,
+                    ~TableSection.id.in_(kept_ids)
+                ).delete(synchronize_session=False)
+
+            # Replace assignments
+            TableSectionAssignment.query.filter_by(branch_code=branch_code).delete()
+            for ad in (assignments or []):
+                table_number = str(ad.get('table_number') or '').strip()
+                section_id = ad.get('section_id')
+                if table_number and section_id:
+                    db.session.add(TableSectionAssignment(
+                        branch_code=branch_code,
+                        table_number=table_number,
+                        section_id=section_id
+                    ))
+
+            db.session.commit()
+
+        return jsonify({'success': True})
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
@@ -1501,6 +1753,39 @@ def api_tables_status(branch_code):
         items.append({'table_number': i, 'status': status})
     return jsonify(items)
 
+
+@main.route('/api/table-layout/<branch_code>', methods=['GET', 'POST'], endpoint='api_table_layout')
+@login_required
+def api_table_layout(branch_code):
+    """Persist arbitrary layout (sections -> rows -> tables) without hard DB migrations.
+    Stored in AppKV under layout:<branch> and used by sales_tables() to render.
+    """
+    if not user_can('sales','view', branch_code):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
+    key = f'layout:{branch_code}'
+    if request.method == 'GET':
+        data = kv_get(key, {}) or {}
+        return jsonify({'success': True, 'layout': data})
+    try:
+        payload = request.get_json(force=True) or {}
+        sections = payload.get('sections')
+        if not isinstance(sections, list):
+            return jsonify({'success': False, 'error': 'invalid payload'}), 400
+        # Normalize strings for tables and drop empties
+        norm_sections = []
+        for sec in sections:
+            name = (sec.get('name') or '').strip()
+            rows = []
+            for row in (sec.get('rows') or []):
+                r = [str(t).strip() for t in (row or []) if str(t or '').strip()]
+                if r:
+                    rows.append(r)
+            norm_sections.append({'name': name or 'Section', 'rows': rows})
+        kv_set(key, {'sections': norm_sections})
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
 
 @main.route('/api/menu/<cat_id>/items', methods=['GET'], endpoint='api_menu_items')
 @login_required
