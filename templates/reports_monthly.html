@@ -101,6 +101,18 @@ document.getElementById('fEmp').addEventListener('change', loadMonthly);
 ;(function(){ const hdr=document.querySelector('.top'); const lg=document.getElementById('rLogo'); if(hdr&&lg){ hdr.addEventListener('mousemove', function(ev){ const r=hdr.getBoundingClientRect(); const cx=ev.clientX - r.left; const cy=ev.clientY - r.top; const rx=(cx/r.width - .5)*8; const ry=(cy/r.height - .5)*-8; lg.style.transform = `perspective(300px) rotateY(${rx}deg) rotateX(${ry}deg) scale(1.06)`; }); hdr.addEventListener('mouseleave', function(){ lg.style.transform=''; }); } })();
 
 loadMonthly();
-try{ lottie.loadAnimation({ container: document.getElementById('kpiL1'), renderer:'svg', loop:true, autoplay:true, path:'https://assets8.lottiefiles.com/packages/lf20_3rwasyjy.json' }); lottie.loadAnimation({ container: document.getElementById('kpiL2'), renderer:'svg', loop:true, autoplay:true, path:'https://assets1.lottiefiles.com/packages/lf20_ujd3f9rs.json' }); lottie.loadAnimation({ container: document.getElementById('kpiL3'), renderer:'svg', loop:true, autoplay:true, path:'https://assets3.lottiefiles.com/packages/lf20_vfux7z1h.json' }); lottie.loadAnimation({ container: document.getElementById('kpiL4'), renderer:'svg', loop:true, autoplay:true, path:'https://assets9.lottiefiles.com/packages/lf20_udydk9.json' }); }catch(e){}
+  try{ lottie.loadAnimation({ container: document.getElementById('kpiL1'), renderer:'svg', loop:true, autoplay:true, path:'https://assets8.lottiefiles.com/packages/lf20_3rwasyjy.json' }); lottie.loadAnimation({ container: document.getElementById('kpiL2'), renderer:'svg', loop:true, autoplay:true, path:'https://assets1.lottiefiles.com/packages/lf20_ujd3f9rs.json' }); lottie.loadAnimation({ container: document.getElementById('kpiL3'), renderer:'svg', loop:true, autoplay:true, path:'https://assets3.lottiefiles.com/packages/lf20_vfux7z1h.json' }); lottie.loadAnimation({ container: document.getElementById('kpiL4'), renderer:'svg', loop:true, autoplay:true, path:'https://assets9.lottiefiles.com/packages/lf20_udydk9.json' }); }catch(e){}
+document.getElementById('btnNewRep')?.addEventListener('click', function(){
+  const m=(document.getElementById('fMonth').value||'').trim();
+  let y=(new Date()).getFullYear(); let mo=(new Date()).getMonth()+1;
+  if(/^\d{4}-\d{2}$/.test(m)){ const parts=m.split('-'); y=parseInt(parts[0],10)||y; mo=parseInt(parts[1],10)||mo; }
+  const u=new URL('/reports/payroll/report', location.origin);
+  u.searchParams.set('year_from', String(y));
+  u.searchParams.set('month_from', String(mo));
+  u.searchParams.set('year_to', String(y));
+  u.searchParams.set('month_to', String(mo));
+  u.searchParams.set('print', '1');
+  window.open(u.toString(), '_blank');
+});
 </script>
 {% endblock %}

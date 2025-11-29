@@ -44,6 +44,13 @@ except Exception as _db_init_err:
 app.secret_key = _app_secret
 app.config['SECRET_KEY'] = _app_secret
 app.config.setdefault('WTF_CSRF_SECRET_KEY', _app_secret)
+try:
+    os.environ.setdefault('TZ', 'Asia/Riyadh')
+    import time as _time
+    if hasattr(_time, 'tzset'):
+        _time.tzset()
+except Exception:
+    pass
 # Session settings - expire when browser closes
 app.config['PERMANENT_SESSION_LIFETIME'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -5020,8 +5027,19 @@ def sales_receipt(invoice_id):
     except Exception:
         qr_data_url = None  # Fallback to client-side QR if available
 
-    # Use unified thermal receipt template that already shows Payment method
-    return render_template('print/receipt.html', inv=invoice, items=items, settings=settings, qr_data_url=qr_data_url, paid=True)
+    try:
+        dt_obj = getattr(invoice, 'created_at', None)
+        if dt_obj:
+            dt_ksa = dt_obj.astimezone(KSA_TZ)
+        else:
+            dt_ksa = get_saudi_now()
+        date_time = dt_ksa.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        from datetime import datetime as _dt
+        import pytz as _pytz
+        date_time = _dt.now(_pytz.timezone('Asia/Riyadh')).strftime('%Y-%m-%d %H:%M:%S')
+
+    return render_template('print/receipt.html', inv=invoice, items=items, settings=settings, qr_data_url=qr_data_url, paid=True, date_time=date_time)
 @app.route('/purchases', methods=['GET', 'POST'])
 @login_required
 def purchases():

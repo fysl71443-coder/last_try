@@ -150,160 +150,164 @@ body {
         </div>
     </div>
 
-    <!-- إحصائيات سريعة -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="stats-card">
-                <h4>{{ raw_materials|length }}</h4>
-                <p class="mb-0">{{ _('Raw Materials / مواد خام') }}</p>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="stats-card">
-                <h4>{{ meals|length }}</h4>
-                <p class="mb-0">{{ _('Ready Meals / وجبات جاهزة') }}</p>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="stats-card">
-                <h4>﷼{{ "%.2f"|format(meals|sum(attribute='total_cost') or 0) }}</h4>
-                <p class="mb-0">{{ _('Total Investment / إجمالي الاستثمار') }}</p>
-            </div>
-        </div>
+    <style>
+    :root{ --intel-muted:#5c6773; --intel-ok:#28a745; --intel-warn:#ffc107; --intel-danger:#dc3545 }
+    .intel-grid{ display:grid; gap:12px; grid-template-columns:repeat(5, minmax(160px, 1fr)) }
+    .intel-card{ border-radius:16px; background:#fff; padding:16px; box-shadow:0 10px 26px rgba(18,22,33,.06); display:flex; align-items:center; gap:12px }
+    .intel-num{ font-weight:700; font-size:22px }
+    .intel-label{ color:var(--intel-muted); font-size:13px }
+    .intel-sec{ background:white; border-radius:12px; box-shadow:0 4px 8px rgba(0,0,0,0.05); padding:1rem; margin-bottom:1rem }
+    .bar-chart .bar{ display:flex; align-items:center; gap:8px }
+    .bar .name{ width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    .bar .val{ flex:1; background:linear-gradient(90deg,#0d6efd,#6610f2); height:10px; border-radius:6px; position:relative }
+    .spark{ display:flex; align-items:flex-end; gap:3px; height:42px }
+    .spark .pt{ width:12px; background:#0d6efd; border-radius:3px }
+    .risk.low{ color:var(--intel-danger); font-weight:700 }
+    .risk.excess{ color:#6610f2; font-weight:700 }
+    .risk.ok{ color:var(--intel-ok); font-weight:700 }
+    @media (max-width:1024px){ .intel-grid{ grid-template-columns:repeat(2,1fr) } }
+    </style>
+
+    <div class="intel-sec">
+      <h5 class="mb-3">{{ _('KPI Overview / المؤشرات الرئيسية') }}</h5>
+      <div class="intel-grid">
+        <div class="intel-card"><div>📦</div><div><div class="intel-label">{{ _('Total Inventory Cost / إجمالي تكلفة المخزون') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.total_inventory_cost or 0) }}</div></div></div>
+        <div class="intel-card"><div>🧾</div><div><div class="intel-label">{{ _('Ingredient Purchases (This Month) / مشتريات هذا الشهر') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.total_purchases_month or 0) }}</div></div></div>
+        <div class="intel-card"><div>🍽</div><div><div class="intel-label">{{ _('Meals Sold (This Month) / الوجبات المباعة') }}</div><div class="intel-num">{{ '{:,.0f}'.format(kpi.total_meals_sold_month or 0) }}</div></div></div>
+        <div class="intel-card"><div>💰</div><div><div class="intel-label">{{ _('Estimated Meal Cost / تكلفة الإنتاج التقديرية') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.estimated_total_meal_cost or 0) }}</div></div></div>
+        <div class="intel-card"><div>📊</div><div><div class="intel-label">{{ _('Total Profit / إجمالي الربح') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.total_profit_generated or 0) }}</div></div></div>
+      </div>
     </div>
 
-    <!-- أزرار الإجراءات الرئيسية -->
-    <div class="row mb-4">
+    <div class="intel-sec">
+      <h5 class="mb-2">{{ _('Purchases Summary / ملخص المشتريات') }}</h5>
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead class="table-light">
+            <tr>
+              <th>{{ _('Date / التاريخ') }}</th>
+              <th>{{ _('Invoice No / رقم الفاتورة') }}</th>
+              <th>{{ _('Supplier / المورد') }}</th>
+              <th>{{ _('Payment / الدفع') }}</th>
+              <th>{{ _('Status / الحالة') }}</th>
+              <th class="text-end">{{ _('Subtotal') }}</th>
+              <th class="text-end">{{ _('VAT') }}</th>
+              <th class="text-end">{{ _('Discount') }}</th>
+              <th class="text-end">{{ _('Final Total') }}</th>
+              <th class="text-center">{{ _('Items') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in purchases_summary %}
+            <tr>
+              <td>{{ r.date }}</td>
+              <td>{{ r.invoice_number }}</td>
+              <td>{{ r.supplier }}</td>
+              <td>{{ r.payment_method }}</td>
+              <td>{{ r.status }}</td>
+              <td class="text-end">{{ '{:,.2f}'.format(r.subtotal or 0) }}</td>
+              <td class="text-end">{{ '{:,.2f}'.format(r.vat or 0) }}</td>
+              <td class="text-end">{{ '{:,.2f}'.format(r.discount or 0) }}</td>
+              <td class="text-end">{{ '{:,.2f}'.format(r.final_total or 0) }}</td>
+              <td class="text-center">{{ r.items_count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="row mt-3">
         <div class="col-md-6">
-            <a href="{{ url_for('main.raw_materials') }}" class="text-decoration-none">
-                <div class="action-card">
-                    <div class="action-icon">🥘</div>
-                    <h5>{{ _('Manage Raw Materials / إدارة المواد الخام') }}</h5>
-                    <p class="text-muted">{{ _('Add and manage ingredients, spices, and raw materials with their costs / إضافة وإدارة المكونات والتوابل والمواد الخام مع تكاليفها') }}</p>
-                </div>
-            </a>
+          <h6 class="mb-2">{{ _('Top Purchased Ingredients / أكثر المكونات شراءً') }}</h6>
+          <div class="bar-chart">
+            {% for b in top_ingredients %}
+              <div class="bar">
+                <div class="name">{{ b.name }}</div>
+                {% set pct = (b.total / (top_ingredients[0].total or 1)) if top_ingredients %}
+                <div class="val" style="width: {{ (pct * 100)|round(1) }}%"></div>
+                <div class="intel-num">{{ '{:,.2f}'.format(b.total or 0) }}</div>
+              </div>
+            {% endfor %}
+          </div>
         </div>
         <div class="col-md-6">
-            <a href="{{ url_for('main.meals') }}" class="text-decoration-none">
-                <div class="action-card">
-                    <div class="action-icon">🍽️</div>
-                    <h5>{{ _('Create Meals / إنشاء الوجبات') }}</h5>
-                    <p class="text-muted">{{ _('Create meals from raw materials, calculate costs, and set selling prices / إنشاء الوجبات من المواد الخام وحساب التكاليف وتحديد أسعار البيع') }}</p>
-                </div>
-            </a>
+          <h6 class="mb-2">{{ _('Purchase Trend / اتجاه المشتريات') }}</h6>
+          <div class="spark">
+            {% for p in purchase_trend %}
+            {% set h = (p.total / (purchase_trend|map(attribute='total')|max if purchase_trend else 1)) * 38 %}
+            <div class="pt" title="{{ p.date }}" style="height: {{ h|round(1) }}px"></div>
+            {% endfor %}
+          </div>
         </div>
+      </div>
     </div>
 
-    <!-- ملخص المواد الخام -->
-    {% if raw_materials %}
-    <div class="inventory-card">
-        <h5 class="mb-3">{{ _('Raw Materials Summary / ملخص المواد الخام') }}</h5>
-
-        <div class="table-responsive">
-            <table class="table table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>{{ _('Material / المادة') }}</th>
-                        <th>{{ _('Unit / الوحدة') }}</th>
-                        <th>{{ _('Cost per Unit / التكلفة لكل وحدة') }}</th>
-                        <th>{{ _('Category / الفئة') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for material in raw_materials[:10] %}
-                    <tr>
-                        <td>{{ material.display_name }}</td>
-                        <td><span class="badge bg-secondary">{{ material.unit }}</span></td>
-                        <td class="cost-highlight">﷼{{ "%.4f"|format(material.cost_per_unit) }}</td>
-                        <td>{{ material.category or '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                    {% if raw_materials|length > 10 %}
-                    <tr>
-                        <td colspan="4" class="text-center text-muted">
-                            <em>{{ _('And') }} {{ raw_materials|length - 10 }} {{ _('more materials...') }}</em>
-                        </td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="text-end">
-            <a href="{{ url_for('main.raw_materials') }}" class="btn btn-outline-primary">
-                {{ _('View All Materials / عرض جميع المواد') }}
-            </a>
-        </div>
+    <div class="intel-sec">
+      <h5 class="mb-2">{{ _('Meal Cost & Sales Analysis / تحليل تكلفة الوجبات والمبيعات') }}</h5>
+      {% if outdated_meals and outdated_meals|length > 0 %}
+        <div class="alert alert-warning">⚠ {{ _('Meals using ingredients with outdated cost data / وجبات تحتوي مكونات بسعر قديم') }}: {{ outdated_meals|join(', ') }}</div>
+      {% endif %}
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead class="table-light">
+            <tr>
+              <th>{{ _('Meal / الوجبة') }}</th>
+              <th class="text-center">{{ _('Sales Count / عدد المبيعات') }}</th>
+              <th class="text-end">{{ _('Consumption Cost / تكلفة الاستهلاك') }}</th>
+              <th class="text-end">{{ _('Revenue / الإيراد') }}</th>
+              <th class="text-end">{{ _('Profit / الربح') }}</th>
+              <th class="text-end">{{ _('Margin % / الهامش %') }}</th>
+              <th>{{ _('Contribution / المساهمة') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set total_profit = meals_analysis|map(attribute='profit')|sum if meals_analysis else 0 %}
+            {% for m in meals_analysis %}
+            {% set margin = (100 * (m.profit / m.revenue)) if m.revenue else 0 %}
+            {% set contrib = (100 * (m.profit / total_profit)) if total_profit else 0 %}
+            <tr>
+              <td>{{ m.meal_name }}</td>
+              <td class="text-center">{{ '{:,.0f}'.format(m.sold_qty or 0) }}</td>
+              <td class="text-end">{{ '{:,.2f}'.format(m.consumption_cost or 0) }}</td>
+              <td class="text-end">{{ '{:,.2f}'.format(m.revenue or 0) }}</td>
+              <td class="text-end">{{ '{:,.2f}'.format(m.profit or 0) }}</td>
+              <td class="text-end">{{ '{:,.1f}'.format(margin) }}%</td>
+              <td>{{ '{:,.1f}'.format(contrib) }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-    {% endif %}
 
-    <!-- ملخص الوجبات -->
-    {% if meals %}
-    <div class="inventory-card">
-        <h5 class="mb-3">{{ _('Meals Summary / ملخص الوجبات') }}</h5>
-
-        <div class="table-responsive">
-            <table class="table table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>{{ _('Meal / الوجبة') }}</th>
-                        <th>{{ _('Ingredients / المكونات') }}</th>
-                        <th>{{ _('Total Cost / إجمالي التكلفة') }}</th>
-                        <th>{{ _('Profit Margin / هامش الربح') }}</th>
-                        <th>{{ _('Selling Price / سعر البيع') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for meal in meals[:10] %}
-                    <tr>
-                        <td><strong>{{ meal.display_name }}</strong></td>
-                        <td>{{ meal.ingredients|length }} {{ _('items / عناصر') }}</td>
-                        <td class="cost-highlight">﷼{{ "%.2f"|format(meal.total_cost) }}</td>
-                        <td>{{ "%.1f"|format(meal.profit_margin_percent) }}%</td>
-                        <td class="price-highlight">﷼{{ "%.2f"|format(meal.selling_price) }}</td>
-                    </tr>
-                    {% endfor %}
-                    {% if meals|length > 10 %}
-                    <tr>
-                        <td colspan="5" class="text-center text-muted">
-                            <em>{{ _('And') }} {{ meals|length - 10 }} {{ _('more meals...') }}</em>
-                        </td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="text-end">
-            <a href="{{ url_for('main.meals') }}" class="btn btn-outline-success">
-                {{ _('View All Meals / عرض جميع الوجبات') }}
-            </a>
-        </div>
+    <div class="intel-sec">
+      <h5 class="mb-2">{{ _('Dynamic Stock Analysis / تحليل المخزون الديناميكي') }}</h5>
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead class="table-light">
+            <tr>
+              <th>{{ _('Ingredient / المكون') }}</th>
+              <th class="text-end">{{ _('Opening Qty / الكمية الافتتاحية') }}</th>
+              <th class="text-end">{{ _('Purchases Qty / كمية المشتريات') }}</th>
+              <th class="text-end">{{ _('Estimated Usage / الاستهلاك التقديري') }}</th>
+              <th class="text-end">{{ _('Expected Stock / المخزون المتوقع') }}</th>
+              <th>{{ _('Risk / المخاطر') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in stock_rows %}
+            <tr>
+              <td>{{ r.ingredient }}</td>
+              <td class="text-end">{{ '{:,.3f}'.format(r.opening_qty or 0) }}</td>
+              <td class="text-end">{{ '{:,.3f}'.format(r.purchases_qty or 0) }}</td>
+              <td class="text-end">{{ '{:,.3f}'.format(r.estimated_usage or 0) }}</td>
+              <td class="text-end">{{ '{:,.3f}'.format(r.expected_stock or 0) }}</td>
+              <td><span class="risk {{ r.risk }}">{{ r.risk|capitalize }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-    {% endif %}
-
-    <!-- رسالة البداية -->
-    {% if not raw_materials and not meals %}
-    <div class="inventory-card text-center">
-        <div class="action-icon">🚀</div>
-        <h5>{{ _('Welcome to Cost Management / مرحباً بك في إدارة التكاليف') }}</h5>
-        <p class="text-muted mb-4">
-            {{ _('Start by adding raw materials, then create meals to calculate costs and set selling prices / ابدأ بإضافة المواد الخام، ثم أنشئ الوجبات لحساب التكاليف وتحديد أسعار البيع') }}
-        </p>
-        <div class="row">
-            <div class="col-md-6">
-                <a href="{{ url_for('main.raw_materials') }}" class="btn btn-primary btn-lg w-100">
-                    🥘 {{ _('Add Raw Materials / إضافة المواد الخام') }}
-                </a>
-            </div>
-            <div class="col-md-6">
-                <a href="{{ url_for('main.meals') }}" class="btn btn-success btn-lg w-100">
-                    🍽️ {{ _('Create Meals / إنشاء الوجبات') }}
-                </a>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 <script>
 (function(){

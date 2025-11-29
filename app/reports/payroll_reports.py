@@ -269,3 +269,74 @@ def payroll_report_selected():
                            auto_print=True,
                            close_after_print=True,
                            report_title='🧾 Detailed Payroll Report / تقرير الرواتب التفصيلي')
+
+
+@reports_bp.route("/payroll/employee/statement/<int:emp_id>", methods=["GET"])
+def employee_statement(emp_id):
+    if not Employee or not Salary or not Payment:
+        flash('Payroll models not available', 'danger')
+        return redirect(url_for('main.dashboard'))
+    emp = Employee.query.get_or_404(emp_id)
+    sd = (request.args.get('start_date') or '').strip()
+    ed = (request.args.get('end_date') or '').strip()
+    from datetime import date
+    today = date.today()
+    try:
+        start_dt = date.fromisoformat(sd) if sd else date(today.year, 1, 1)
+        end_dt = date.fromisoformat(ed) if ed else date(today.year, today.month, today.day)
+    except Exception:
+        start_dt = date(today.year, 1, 1)
+        end_dt = today
+
+    rows = []
+    try:
+        from sqlalchemy import and_, func
+        pays = db.session.query(Payment).join(Salary, and_(Payment.invoice_type=='salary', Payment.invoice_id==Salary.id)).\
+            filter(Salary.employee_id==emp_id).\
+            filter(func.date(Payment.payment_date).between(start_dt, end_dt)).all()
+        for p in pays:
+            rows.append({
+                'date': getattr(p, 'payment_date', None).date() if getattr(p, 'payment_date', None) else start_dt,
+                'kind': 'Payment',
+                'desc': f"Salary payment",
+                'amount': float(getattr(p, 'amount_paid', 0) or 0),
+                'notes': getattr(p, 'payment_method', '')
+            })
+    except Exception:
+        pass
+    try:
+        sals = Salary.query.filter_by(employee_id=emp_id).all()
+        for s in sals:
+            d = date(int(getattr(s,'year',today.year)), int(getattr(s,'month',today.month)), 1)
+            if d < start_dt or d > end_dt:
+                continue
+            rows.append({
+                'date': d,
+                'kind': 'Salary',
+                'desc': f"Salary components {s.year}-{s.month}",
+                'amount': float(getattr(s,'total_salary',0) or 0),
+                'notes': getattr(s,'status','')
+            })
+    except Exception:
+        pass
+    try:
+        jls = db.session.query(JournalLine).join(JournalEntry, JournalLine.journal_id==JournalEntry.id).\
+            filter(JournalLine.employee_id==emp_id).\
+            filter(JournalEntry.date.between(start_dt, end_dt)).\
+            order_by(JournalEntry.date.asc()).all()
+        for jl in jls:
+            amt = float(getattr(jl,'debit',0) or 0) if float(getattr(jl,'debit',0) or 0) > 0 else -float(getattr(jl,'credit',0) or 0)
+            rows.append({
+                'date': getattr(jl, 'line_date', None) or getattr(jl, 'journal', None).date if getattr(jl,'journal',None) else start_dt,
+                'kind': 'Journal',
+                'desc': getattr(jl,'description',''),
+                'amount': amt,
+                'notes': getattr(jl,'account',None).name if getattr(jl,'account',None) else ''
+            })
+    except Exception:
+        pass
+    try:
+        rows.sort(key=lambda r: r['date'])
+    except Exception:
+        pass
+    return render_template('employee_statement.html', employee=emp, rows=rows, start_date=start_dt.isoformat(), end_date=end_dt.isoformat())

@@ -1,0 +1,1258 @@
+<!doctype html>
+<html lang="ar" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="IjZhMjI5ZDE5ZjU1YmQ3ZTllYTBjYzRjNTM1MTY1NzkzYmQ0ZmI4ZjUi.aSdevQ.qVsvwAAW2APNhJle-m8NwoXoX5A">
+    <title>لوحة تحكم الموظفين</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="/static/css/style.css?v=" rel="stylesheet">
+    <style>
+      :root{
+        --primary:#D35400; /* Orange */
+        --secondary:#2C3E50; /* Dark Gray */
+        --bg:#F8F9FA; /* Light */
+        --success:#27AE60;
+        --danger:#E74C3C;
+        --text:#212529;
+        --muted:#6c757d;
+        --link:#0d6efd;
+      }
+      html,body{ background:var(--bg); color:var(--text); font-family:'Tajawal', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; font-size:15px; }
+      h1,h2,h3,h4{ font-weight:700; color:var(--secondary); }
+      h3{ font-size:22px; }
+      body[dir="rtl"] { text-align: right; }
+
+
+
+      /* Forms - improve input contrast */
+      input.form-control, select.form-select, textarea.form-control{
+        background:#fff; color:#212529; border-color:#ced4da;
+      }
+      body.dark input.form-control, body.dark select.form-select, body.dark textarea.form-control{
+        background:#1E1E1E; color:#ECECEC; border-color:#3a3a3a;
+      }
+
+      /* Navbar */
+      .navbar{ background:#fff !important; border-bottom:1px solid #eee; }
+      .navbar .navbar-brand{ color:var(--primary); font-weight:700; }
+
+      /* Buttons */
+      .btn{ border-radius:8px; font-weight:600; padding:10px 16px; transition: all .2s ease-in-out; }
+      .btn:hover{ transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+      .btn:focus{ box-shadow: 0 0 0 .2rem rgba(230,126,34,.25); }
+      .btn-primary{ background-color:var(--primary); border-color:var(--primary); }
+      .btn-primary:hover{ background-color:#E67E22; border-color:#E67E22; }
+      .btn-success{ background-color:var(--success); border-color:var(--success); }
+      .btn-success:hover{ background-color:#2ECC71; border-color:#2ECC71; }
+      .btn-danger{ background-color:var(--danger); border-color:var(--danger); }
+      .btn-danger:hover{ background-color:#C0392B; border-color:#C0392B; }
+
+      /* Cards */
+      .card { background:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
+      .card .card-header{ font-size:18px; font-weight:700; border-bottom:2px solid #f1f1f1; background:#fff; }
+
+      /* Tables */
+      .table-responsive{ max-height:70vh; }
+      table{ width:100%; border-collapse:collapse; }
+      table thead{ position: sticky; top: 0; z-index: 2; background-color:var(--primary); color:#fff; }
+      table th, table td{ padding:12px; border-bottom:1px solid #ddd; vertical-align: middle; }
+      table tbody tr:hover{ background:#f5f5f5; }
+
+      /* Form focus */
+      .form-control:focus, .form-select:focus{ border-color:#E67E22; box-shadow:0 0 0 .2rem rgba(230,126,34,.2); }
+
+      /* Section header helper */
+      .section-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+      .section-header h3{ margin:0; }
+    </style>
+    <style>
+      /* Theme variants via body classes */
+      body.dark{
+        --bg:#121212;
+        --secondary:#E0E0E0;
+        --text:#ECECEC;
+        --muted:#BDBDBD;
+        --link:#64B5F6;
+        color:#ECECEC;
+        background:#121212;
+      }
+      body.dark .navbar{ background:#1E1E1E !important; border-color:#2a2a2a !important; }
+      body.dark .card{ background:#1E1E1E; box-shadow:none; border:1px solid #2a2a2a; }
+      body.dark table thead{ background-color:#E67E22; }
+      body.dark table tbody tr:hover{ background:#1a1a1a; }
+      body.dark .btn-outline-primary{ color:#E67E22; border-color:#E67E22; }
+      body.dark .btn-outline-primary:hover{ background:#E67E22; color:#fff; }
+      body.dark .btn-outline-danger{ color:#E74C3C; border-color:#E74C3C; }
+      body.dark .btn-outline-danger:hover{ background:#E74C3C; color:#fff; }
+      body.dark a{ color:var(--link) }
+      body.dark .text-muted{ color:var(--muted) !important }
+      body.dark .text-dark{ color:var(--text) !important }
+      body.dark .card, body.dark .card *{ color:var(--text) !important }
+      body.dark .navbar, body.dark .navbar *{ color:var(--text) !important }
+      body.dark .section-header, body.dark .section-header *{ color:var(--text) !important }
+      body.dark .table, body.dark .table *{ color:var(--text) !important }
+      body.dark .form-label, body.dark .form-check-label{ color:var(--text) !important }
+      body.dark .badge{ color:var(--text) !important }
+      body.dark ::placeholder{ color:var(--muted) !important; opacity:.85 }
+      body.dark .input-group-text{ background:#2a2a2a; color:var(--text) !important; border-color:#3a3a3a }
+      body.dark .form-select option{ color:#121212; background:#ECECEC }
+      body.dark .form-check-input{ accent-color:#E67E22 }
+      body.dark .list-group-item{ background:#1E1E1E; color:var(--text); border-color:#2a2a2a }
+      body.dark .modal-content{ background:#1E1E1E; color:var(--text); border-color:#2a2a2a }
+      body.dark .form-control[disabled], body.dark .form-control[readonly]{ background:#2a2a2a; color:var(--text) !important; border-color:#3a3a3a }
+      body.dark .form-select[disabled]{ background:#2a2a2a; color:var(--muted) !important; border-color:#3a3a3a }
+    </style>
+
+      <meta name="csrf-token" content="IjZhMjI5ZDE5ZjU1YmQ3ZTllYTBjYzRjNTM1MTY1NzkzYmQ0ZmI4ZjUi.aSdevQ.qVsvwAAW2APNhJle-m8NwoXoX5A">
+
+    
+
+  </head>
+  <body dir="ltr" class="light">
+    
+    <nav class="navbar navbar-expand-lg" style="background: var(--bg); border-bottom:1px solid #eee;">
+      <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+          <img src="/static/logo.svg" alt="logo" style="width:32px;height:32px;"/>
+          <span>Company</span>
+        </a>
+        <div class="d-flex align-items-center gap-2">
+          
+            <span class="me-3 text-muted">Welcome admin</span>
+          
+        <a class="btn btn-outline-secondary" href="?lang=en">English</a>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnDensityToggle">📏</button>
+
+          
+          <button class="btn btn-sm btn-outline-dark" type="button" id="btnThemeToggle">🌙</button>
+          
+          
+            <a class="btn btn-outline-danger" href="/logout">Logout</a>
+          
+        </div>
+      </div>
+    </nav>
+    
+
+    
+    <div class="container mt-5">
+      
+        
+      
+
+      <!-- Back button -->
+
+      <!-- Generic back button with unsaved-changes protection -->
+      
+      <div class="mb-3 d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-secondary" id="global-back-button" data-back-url="/">⬅️ Back</button>
+      </div>
+      
+
+      
+      <div class="mb-3"></div>
+      
+    </div>
+    
+
+    
+<style>
+  :root{--p1:#1E40AF;--p2:#4F46E5;--s1:#06B6D4;--s2:#22D3EE;--accent:#00eaff;--bg:#f5f7fb}
+  .uvd-container{padding:16px}
+  .topbar{display:flex;align-items:center;gap:12px;justify-content:space-between;background:#ffffffd9;border:1px solid #eaeaea;border-radius:16px;padding:12px 16px;backdrop-filter:blur(10px)}
+  .topbar .left{display:flex;align-items:center;gap:12px}
+  .topbar .brand{display:flex;align-items:center;gap:8px;font-weight:800}
+  .brand-logo{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;box-shadow:0 8px 22px rgba(79,70,229,.25)}
+  .brand-logo:hover{filter:saturate(120%)}
+  .topbar input[type="search"]{min-width:300px;border:1px solid #dfe3eb;border-radius:12px;padding:10px;box-shadow:0 6px 14px rgba(0,0,0,.06)}
+  .suggest{position:absolute;background:#fff;border:1px solid #eaeaea;border-radius:10px;box-shadow:0 12px 24px rgba(0,0,0,.12);min-width:300px;display:none;overflow:hidden}
+  .suggest .item{padding:8px 12px;cursor:pointer}
+  .suggest .item:hover{background:#f0f7ff}
+  .add-btn{background:linear-gradient(135deg,var(--s1),var(--s2));color:#fff;border:none;border-radius:12px;padding:10px 14px;font-weight:700}
+  .add-btn:hover{transform:scale(1.1)}
+  .sidebar{position:sticky;top:12px;background:#ffffffcc;border:1px solid #eaeaea;border-radius:16px;padding:12px;backdrop-filter:blur(10px);box-shadow:0 10px 26px rgba(0,0,0,.06)}
+  .nav-item{padding:10px;border-radius:12px;cursor:pointer;display:flex;align-items:center;gap:8px}
+  .nav-item:hover{background:#f6f8ff}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .kpi{position:relative;background:#ffffffd9;border:1px solid #eaeaea;border-radius:18px;padding:14px;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.08)}
+  .kpi .title{font-size:13px;color:#666}
+  .kpi .value{font-size:22px;font-weight:800}
+  .kpi .lottie{position:absolute;right:10px;top:8px;width:48px;height:48px;opacity:.9}
+  .spark{height:40px;width:100%}
+  .dept-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+  .dept-tab{padding:10px 12px;border:1px solid #eaeaea;border-radius:12px;background:#fff;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .dept-tab.active{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;border-color:transparent;box-shadow:0 10px 24px rgba(30,64,175,.25)}
+  .badge{background:#1112;color:#0d6efd;border:1px solid #cfe3ff;border-radius:10px;padding:2px 8px;font-weight:700}
+  .panel{display:none}
+  .panel.active{display:block}
+  table{width:100%;border-collapse:collapse}
+  thead th{position:sticky;top:0;background:#f8f9fa;box-shadow:0 3px 6px rgba(0,0,0,.06);z-index:1}
+  th,td{padding:10px;border:1px solid #eee;text-align:center;white-space:nowrap}
+  tbody tr{transition:transform .2s ease, box-shadow .2s ease, background .2s ease}
+  tbody tr:hover{background:linear-gradient(90deg,#f0f7ff,#ffffff);transform:translateY(-1px);box-shadow:0 6px 12px rgba(0,0,0,.06)}
+  .ops-btn{position:relative}
+  .ops-menu{position:absolute;right:0;top:100%;background:#fff;border:1px solid #eaeaea;border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,.12);display:none;min-width:180px}
+  .ops-menu{ z-index: 2000; }
+  .ops-btn{ z-index: 2001; }
+  .ops-menu .it{padding:8px 12px;cursor:pointer}
+  .ops-menu .it:hover{background:#f6fbff}
+  .ripple-btn{position:relative;overflow:hidden}
+  .slideover{position:fixed;top:0;right:-520px;width:480px;height:100vh;background:#fff;border-left:1px solid #eee;box-shadow:-8px 0 20px rgba(0,0,0,.1);z-index:1000;display:flex;flex-direction:column}
+  .slideover-header{padding:18px 16px;font-weight:800;background:linear-gradient(135deg,#eef4ff,#ffffff)}
+  .slideover-body{padding:14px;overflow:auto}
+  .toast{position:fixed;top:-80px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.18);z-index:1100}
+</style>
+
+<div class="container-fluid uvd-container">
+  <div class="topbar">
+    <div class="left">
+      <div class="brand"><div class="brand-logo">🍽️</div><span>Logo Restaurant</span></div>
+      <strong>إدارة الموظفين</strong>
+    </div>
+    <div style="min-width:300px">
+      <select id="empSelect" class="form-select">
+        <option value="">اختر الموظف</option>
+        
+        <option value="1">موظف تجريبي 01</option>
+        
+        <option value="2">موظف تجريبي 02</option>
+        
+        <option value="3">موظف تجريبي 03</option>
+        
+        <option value="4">موظف تجريبي 04</option>
+        
+        <option value="5">موظف تجريبي 05</option>
+        
+        <option value="6">موظف تجريبي 06</option>
+        
+        <option value="7">موظف تجريبي 07</option>
+        
+        <option value="8">موظف تجريبي 08</option>
+        
+        <option value="9">موظف تجريبي 09</option>
+        
+        <option value="10">موظف تجريبي 10</option>
+        
+        <option value="11">موظف تجريبي 11</option>
+        
+        <option value="12">موظف تجريبي 12</option>
+        
+        <option value="13">موظف تجريبي 13</option>
+        
+        <option value="14">موظف تجريبي 14</option>
+        
+        <option value="15">موظف تجريبي 15</option>
+        
+      </select>
+    </div>
+    <div style="min-width:320px">
+      <select id="empSelect2" class="form-select">
+        <option value="">اختر الموظف</option>
+        
+        <option value="1">موظف تجريبي 01</option>
+        
+        <option value="2">موظف تجريبي 02</option>
+        
+        <option value="3">موظف تجريبي 03</option>
+        
+        <option value="4">موظف تجريبي 04</option>
+        
+        <option value="5">موظف تجريبي 05</option>
+        
+        <option value="6">موظف تجريبي 06</option>
+        
+        <option value="7">موظف تجريبي 07</option>
+        
+        <option value="8">موظف تجريبي 08</option>
+        
+        <option value="9">موظف تجريبي 09</option>
+        
+        <option value="10">موظف تجريبي 10</option>
+        
+        <option value="11">موظف تجريبي 11</option>
+        
+        <option value="12">موظف تجريبي 12</option>
+        
+        <option value="13">موظف تجريبي 13</option>
+        
+        <option value="14">موظف تجريبي 14</option>
+        
+        <option value="15">موظف تجريبي 15</option>
+        
+      </select>
+    </div>
+    <a id="btnAddEmp" class="add-btn ripple-btn" href="/employees/create">➕ إضافة موظف جديد</a>
+    <div class="right">👤 مرحباً admin</div>
+  </div>
+
+  <div class="row mt-3">
+    <div class="col-md-3">
+      <div class="sidebar">
+        <div class="nav-item" data-tab="employees">▪️ إدارة الموظفين</div>
+        <a class="nav-item" data-tab="prev" href="/payroll/previous">▪️ الرواتب السابقة</a>
+        <a class="nav-item" data-tab="adv" href="/advances">▪️ السلف</a>
+        <a class="nav-item" data-tab="ledger" href="/ledger">▪️ كشوفات الحساب</a>
+        <a class="nav-item" data-tab="reports" href="/reports/monthly">▪️ التقارير الشهرية</a>
+        <a class="nav-item" data-tab="settings" href="/employees/settings">▪️ إعدادات الموظفين</a>
+      </div>
+    </div>
+  <div class="col-md-9">
+      <div class="kpis">
+        <div class="kpi">
+          <div class="title">🧑‍🍳 إجمالي الموظفين</div>
+          <div class="value">15</div>
+          <div class="lottie" id="lottieEmp"></div>
+          <canvas class="spark" data-kind="emp"></canvas>
+        </div>
+        <div class="kpi">
+          <div class="title">💵 الرواتب الشهرية</div>
+          <div class="value">3100.00</div>
+          <div class="lottie" id="lottieSal"></div>
+          <canvas class="spark" data-kind="sal"></canvas>
+        </div>
+        <div class="kpi">
+          <div class="title">💳 السلف المستحقة</div>
+          <div class="value">0.00</div>
+          <div class="lottie" id="lottieAdv"></div>
+          <canvas class="spark" data-kind="adv"></canvas>
+        </div>
+        <div class="kpi">
+          <div class="title">📅 آخر صرف</div>
+          <div class="value">—</div>
+          <div class="lottie" id="lottiePay"></div>
+          <canvas class="spark" data-kind="pay"></canvas>
+        </div>
+        <div class="kpi">
+          <div class="title">🔔 عدد القيود لهذا الشهر</div>
+          <div class="value">27</div>
+          <canvas class="spark" data-kind="je"></canvas>
+        </div>
+      </div>
+
+      <div class="dept-tabs" id="quick-nav" style="margin-top:8px">
+        <a class="dept-tab" href="/employee-uvd">إدارة الموظفين</a>
+        <a class="dept-tab" href="/payroll/previous">الرواتب السابقة</a>
+        <a class="dept-tab" href="/advances">السلف</a>
+        <a class="dept-tab" href="/ledger">كشوف الحساب</a>
+        <a class="dept-tab" href="/reports/monthly">التقارير الشهرية</a>
+      </div>
+
+      <div class="dept-tabs">
+        <div class="dept-tab active" data-dept="all">كل الأقسام <span class="badge">15</span></div>
+        
+        <div class="dept-tab" data-dept="kitchen">kitchen <span class="badge">2</span></div>
+        
+        <div class="dept-tab" data-dept="admin">admin <span class="badge">9</span></div>
+        
+        <div class="dept-tab" data-dept="hall">hall <span class="badge">4</span></div>
+        
+      </div>
+
+      <div id="panel-employees" class="panel active">
+        <table>
+          <thead><tr><th>#</th><th>الاسم</th><th>الدور</th><th>الفرع</th><th>راتب أساسي</th><th>سلفة</th><th>آخر راتب</th><th>الحالة</th><th>⚙</th></tr></thead>
+          <tbody>
+            
+            <tr data-row="emp" data-id="1" data-dept="kitchen">
+              <td>1</td>
+              <td>موظف تجريبي 01</td>
+              <td>شيف</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="2" data-dept="admin">
+              <td>2</td>
+              <td>موظف تجريبي 02</td>
+              <td>إداري</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="3" data-dept="admin">
+              <td>3</td>
+              <td>موظف تجريبي 03</td>
+              <td>إداري</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="4" data-dept="hall">
+              <td>4</td>
+              <td>موظف تجريبي 04</td>
+              <td>طاولات</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="5" data-dept="admin">
+              <td>5</td>
+              <td>موظف تجريبي 05</td>
+              <td>إداري</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="6" data-dept="admin">
+              <td>6</td>
+              <td>موظف تجريبي 06</td>
+              <td>إداري</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="7" data-dept="admin">
+              <td>7</td>
+              <td>موظف تجريبي 07</td>
+              <td>إداري</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="8" data-dept="kitchen">
+              <td>8</td>
+              <td>موظف تجريبي 08</td>
+              <td>شيف</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="9" data-dept="admin">
+              <td>9</td>
+              <td>موظف تجريبي 09</td>
+              <td>إداري</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="10" data-dept="hall">
+              <td>10</td>
+              <td>موظف تجريبي 10</td>
+              <td>طاولات</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="11" data-dept="admin">
+              <td>11</td>
+              <td>موظف تجريبي 11</td>
+              <td>إداري</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="12" data-dept="hall">
+              <td>12</td>
+              <td>موظف تجريبي 12</td>
+              <td>طاولات</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="13" data-dept="admin">
+              <td>13</td>
+              <td>موظف تجريبي 13</td>
+              <td>إداري</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="14" data-dept="hall">
+              <td>14</td>
+              <td>موظف تجريبي 14</td>
+              <td>طاولات</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+            <tr data-row="emp" data-id="15" data-dept="admin">
+              <td>15</td>
+              <td>موظف تجريبي 15</td>
+              <td>إداري</td>
+              <td></td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>0.00</td>
+              <td>active</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
+                <div class="ops-menu">
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">منح سلفة</div>
+                  <div class="it" data-op="pay">دفع راتب</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
+                </div>
+              </td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+
+      <div id="panel-prev" class="panel" style="display:none">
+        <div class="dept-tabs mb-2">
+          <button class="dept-tab active" data-dept="all">الكل</button>
+          <button class="dept-tab" data-dept="kitchen">شيف</button>
+          <button class="dept-tab" data-dept="hall">الصالة</button>
+          <button class="dept-tab" data-dept="admin">إداري</button>
+        </div>
+        <table>
+          <thead><tr><th>السنة</th><th>الشهر</th><th>الموظف</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
+          <tbody>
+            
+            <tr data-row="sal" data-id="1" data-dept="kitchen">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 01</td>
+              <td>500.00</td>
+              <td>partial</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="2" data-dept="admin">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 02</td>
+              <td>50.00</td>
+              <td>partial</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="3" data-dept="admin">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 03</td>
+              <td>0.00</td>
+              <td>paid</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="4" data-dept="hall">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 04</td>
+              <td>500.00</td>
+              <td>due</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="5" data-dept="admin">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 05</td>
+              <td>50.00</td>
+              <td>paid</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="6" data-dept="admin">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 06</td>
+              <td>400.00</td>
+              <td>paid</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="7" data-dept="admin">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 07</td>
+              <td>0.00</td>
+              <td>partial</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="8" data-dept="kitchen">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 08</td>
+              <td>400.00</td>
+              <td>due</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="9" data-dept="admin">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 09</td>
+              <td>0.00</td>
+              <td>paid</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="10" data-dept="hall">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 10</td>
+              <td>300.00</td>
+              <td>due</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="11" data-dept="admin">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 11</td>
+              <td>50.00</td>
+              <td>paid</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="12" data-dept="hall">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 12</td>
+              <td>50.00</td>
+              <td>partial</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="13" data-dept="admin">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 13</td>
+              <td>150.00</td>
+              <td>partial</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="14" data-dept="hall">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 14</td>
+              <td>500.00</td>
+              <td>paid</td>
+            </tr>
+            
+            <tr data-row="sal" data-id="15" data-dept="admin">
+              <td>2025</td>
+              <td>11</td>
+              <td>موظف تجريبي 15</td>
+              <td>150.00</td>
+              <td>due</td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+
+      <div id="panel-adv" class="panel" style="display:none">
+        <div class="dept-tabs mb-2">
+          <button class="dept-tab active" data-dept="all">الكل</button>
+          <button class="dept-tab" data-dept="kitchen">شيف</button>
+          <button class="dept-tab" data-dept="hall">الصالة</button>
+          <button class="dept-tab" data-dept="admin">إداري</button>
+        </div>
+        <table>
+          <thead><tr><th>التاريخ</th><th>الوصف</th><th>مدين</th><th>دائن</th></tr></thead>
+          <tbody>
+            
+            <tr data-row="adv" data-id="92" data-emp="9">
+              <td>2025-11-25</td>
+              <td>منح سلفة</td>
+              <td>500.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="93" data-emp="9">
+              <td>2025-11-25</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>250.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="96" data-emp="11">
+              <td>2025-11-22</td>
+              <td>منح سلفة</td>
+              <td>200.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="97" data-emp="11">
+              <td>2025-11-22</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="106" data-emp="14">
+              <td>2025-11-22</td>
+              <td>منح سلفة</td>
+              <td>500.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="107" data-emp="14">
+              <td>2025-11-22</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>250.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="80" data-emp="4">
+              <td>2025-11-21</td>
+              <td>منح سلفة</td>
+              <td>350.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="81" data-emp="4">
+              <td>2025-11-21</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>175.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="104" data-emp="14">
+              <td>2025-11-05</td>
+              <td>منح سلفة</td>
+              <td>200.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="105" data-emp="14">
+              <td>2025-11-05</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>100.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="78" data-emp="4">
+              <td>2025-11-03</td>
+              <td>منح سلفة</td>
+              <td>350.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="79" data-emp="4">
+              <td>2025-11-03</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="68" data-emp="1">
+              <td>2025-10-31</td>
+              <td>منح سلفة</td>
+              <td>200.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="69" data-emp="1">
+              <td>2025-10-31</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="74" data-emp="2">
+              <td>2025-10-29</td>
+              <td>منح سلفة</td>
+              <td>350.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="75" data-emp="2">
+              <td>2025-10-29</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>175.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="72" data-emp="2">
+              <td>2025-10-28</td>
+              <td>منح سلفة</td>
+              <td>200.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="73" data-emp="2">
+              <td>2025-10-28</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="76" data-emp="3">
+              <td>2025-10-26</td>
+              <td>منح سلفة</td>
+              <td>500.00</td>
+              <td>0.00</td>
+            </tr>
+            
+            <tr data-row="adv" data-id="77" data-emp="3">
+              <td>2025-10-26</td>
+              <td>سداد جزء</td>
+              <td>0.00</td>
+              <td>250.00</td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+
+      <div id="panel-ledger" class="panel" style="display:none">
+        <table>
+          <thead><tr><th>رقم القيد</th><th>التاريخ</th><th>الوصف</th><th>الحالة</th></tr></thead>
+        <tbody>
+          
+          <tr data-row="je" data-id="38">
+            <td>ADV412965</td>
+            <td>2025-11-25</td>
+            <td>سلفة للموظف موظف تجريبي 09</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="25">
+            <td>JE-SAL-202510-3</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 3</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="24">
+            <td>JE-SAL-202508-3</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 3</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="23">
+            <td>JE-SAL-202507-3</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 3</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="22">
+            <td>JE-SAL-202506-3</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 3</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="21">
+            <td>JE-SAL-202505-3</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 3</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="20">
+            <td>JE-SAL-202504-3</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 3</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="19">
+            <td>JE-SAL-202503-3</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 3</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="18">
+            <td>JE-SAL-202509-3</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 3</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="17">
+            <td>JE-SAL-202510-2</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 2</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="16">
+            <td>JE-SAL-202504-2</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 2</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="15">
+            <td>JE-SAL-202503-2</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 2</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="14">
+            <td>JE-SAL-202502-2</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 2</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="13">
+            <td>JE-SAL-202501-2</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 2</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="12">
+            <td>JE-SAL-202509-2</td>
+            <td>2025-11-25</td>
+            <td>Salary accrual 2</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="45">
+            <td>ADV275656</td>
+            <td>2025-11-22</td>
+            <td>سلفة للموظف موظف تجريبي 14</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="40">
+            <td>ADV598422</td>
+            <td>2025-11-22</td>
+            <td>سلفة للموظف موظف تجريبي 11</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="32">
+            <td>ADV344804</td>
+            <td>2025-11-21</td>
+            <td>سلفة للموظف موظف تجريبي 04</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="7">
+            <td>JE-202511-0007</td>
+            <td>2025-11-21</td>
+            <td>Sales TEST-1763734791-2</td>
+            <td>posted</td>
+          </tr>
+          
+          <tr data-row="je" data-id="6">
+            <td>JE-202511-0006</td>
+            <td>2025-11-21</td>
+            <td>Sales TEST-1763734791-1</td>
+            <td>posted</td>
+          </tr>
+          
+        </tbody>
+        </table>
+      </div>
+      <div id="panel-ext" class="panel" style="height:70vh;border:1px solid #eaeaea;border-radius:16px;overflow:hidden;background:#ffffffd9">
+        <iframe id="panelIframe" src="" style="width:100%;height:100%;border:0;"> </iframe>
+      </div>
+    </div>
+  </div>
+
+  <div id="slideover" class="slideover">
+    <div class="slideover-header">تفاصيل</div>
+    <div class="slideover-body" id="slideoverBody"></div>
+  </div>
+  <div id="toast" class="toast">مرحباً! تم تحميل لوحة تحكم الموظفين</div>
+</div>
+
+<script>
+  window.AUTO_OPEN_CREATE = false;
+  const _csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  const CSRF = (window.csrfToken || ((_csrfMeta && _csrfMeta.content) || ''));
+  function showToast(msg){const t=document.getElementById('toast');t.textContent=msg||t.textContent;if(window.gsap){gsap.to(t,{duration:.4,y:100});setTimeout(()=>gsap.to(t,{duration:.4,y:-100}),5000)}else{t.style.transition='transform .4s ease, opacity .4s';t.style.transform='translateY(100px)';t.style.opacity='1';setTimeout(()=>{t.style.transform='translateY(-100px)';t.style.opacity='0';},5000)}}
+  function openSlideover(html){const p=document.getElementById('slideover');document.getElementById('slideoverBody').innerHTML=html;if(window.gsap){gsap.to(p,{duration:.5,x:-520,scale:1,ease:'power2.out'})}else{p.style.transition='transform .5s ease';p.style.transform='translateX(-520px)'}}
+  function closeSlideover(){const p=document.getElementById('slideover');if(window.gsap){gsap.to(p,{duration:.4,x:0,ease:'power2.in'})}else{p.style.transition='transform .4s ease';p.style.transform='translateX(0)'}}
+  document.addEventListener('click',function(ev){if(ev.target.id==='toast'){closeSlideover()}})
+  const empTab = document.querySelector('.nav-item[data-tab="employees"]');
+  if(empTab){ empTab.addEventListener('click',()=>{ const k='employees'; document.querySelectorAll('.panel').forEach(p=>{p.classList.toggle('active',p.id==='panel-'+k)}); if(window.gsap){ gsap.fromTo('#panel-'+k,{opacity:0,y:16},{opacity:1,y:0,duration:.3}); } else { const el=document.querySelector('#panel-'+k); if(el){ el.style.opacity='0'; el.style.transform='translateY(16px)'; setTimeout(()=>{ el.style.transition='all .3s ease'; el.style.opacity='1'; el.style.transform='translateY(0)'; }, 0); } } }); }
+  
+  document.querySelectorAll('.dept-tab').forEach(b=>{b.addEventListener('click',()=>{document.querySelectorAll('.dept-tab').forEach(bb=>bb.classList.remove('active'));b.classList.add('active');const dept=b.dataset.dept;document.querySelectorAll('tbody tr[data-row="emp"]').forEach(tr=>{const d=tr.dataset.dept||'other';tr.style.display=(dept==='all'||dept===d)?'':'none'})})})
+  ;(function(){ const map={}; try{  map['1']='kitchen';  map['2']='admin';  map['3']='admin';  map['4']='hall';  map['5']='admin';  map['6']='admin';  map['7']='admin';  map['8']='kitchen';  map['9']='admin';  map['10']='hall';  map['11']='admin';  map['12']='hall';  map['13']='admin';  map['14']='hall';  map['15']='admin';  }catch(err){} document.querySelectorAll('#panel-prev .dept-tab').forEach(b=>{ b.addEventListener('click', function(){ document.querySelectorAll('#panel-prev .dept-tab').forEach(x=>x.classList.remove('active')); this.classList.add('active'); const d=this.getAttribute('data-dept')||'all'; document.querySelectorAll('#panel-prev tbody tr[data-row="sal"]').forEach(tr=>{ const dd=(tr.getAttribute('data-dept')||''); const ok = d==='all' || (d==='kitchen'&&/kitchen|chef|شيف/i.test(dd)) || (d==='hall'&&/hall|floor|wait|صالة|الصالة/i.test(dd)) || (d==='admin'&&/admin|إداري/i.test(dd)); tr.style.display = ok? '' : 'none'; }); }); }); document.querySelectorAll('#panel-adv .dept-tab').forEach(b=>{ b.addEventListener('click', function(){ document.querySelectorAll('#panel-adv .dept-tab').forEach(x=>x.classList.remove('active')); this.classList.add('active'); const d=this.getAttribute('data-dept')||'all'; document.querySelectorAll('#panel-adv tbody tr[data-row="adv"]').forEach(tr=>{ const emp=(tr.getAttribute('data-emp')||''); const dd=map[emp]||''; const ok = d==='all' || (d==='kitchen'&&/kitchen|chef|شيف/i.test(dd)) || (d==='hall'&&/hall|floor|wait|صالة|الصالة/i.test(dd)) || (d==='admin'&&/admin|إداري/i.test(dd)); tr.style.display = ok? '' : 'none'; }); }); }); })()
+  document.querySelectorAll('tbody tr').forEach(r=>{r.addEventListener('click',()=>{const cells=[...r.children].map(td=>td.textContent);openSlideover('<div>'+cells.join(' | ')+'</div>')})})
+  ;(function(){
+    const sel = document.getElementById('empSelect2');
+    function scrollToEmp(id){
+      const tr = document.querySelector(`#panel-employees tbody tr[data-row="emp"][data-id="${id}"]`);
+      if(tr){ try{ tr.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){} tr.classList.add('table-warning'); setTimeout(()=> tr.classList.remove('table-warning'), 1200); }
+    }
+    if(sel){ sel.addEventListener('change', function(){ const id = this.value||''; if(id){ scrollToEmp(id); } }); }
+  })()
+  ;(function(){
+    function hideOps(){ document.querySelectorAll('.ops-menu').forEach(m=> m.style.display='none'); }
+    document.addEventListener('click', function(e){ if(!e.target.closest('.ops-btn') && !e.target.closest('.ops-menu')){ hideOps(); } });
+    document.querySelectorAll('.ops-btn').forEach(btn=>{
+      btn.addEventListener('click', function(ev){ ev.stopPropagation(); const menu = this.parentElement.querySelector('.ops-menu'); const vis = (menu.style.display==='block'); hideOps(); menu.style.display = vis? 'none' : 'block'; });
+    });
+    document.querySelectorAll('.ops-menu .it').forEach(it=>{
+      it.addEventListener('click', function(ev){ ev.stopPropagation(); const tr=this.closest('tr'); const id=(tr ? tr.getAttribute('data-id') : ''); const op=this.getAttribute('data-op'); hideOps(); if(!id) return; switch(op){
+        case 'edit':
+          (function(){ const cells=[...tr.children].map(td=>td.textContent); const html=`<form id='editEmpForm' class='d-grid gap-2'>
+            <div class='input-group'><span class='input-group-text'>الاسم</span><input name='full_name' class='form-control' value='${cells[1]||''}' required></div>
+            <div class='input-group'><span class='input-group-text'>الوظيفة</span><input name='position' class='form-control' value='${cells[2]||''}'></div>
+            <div class='input-group'><span class='input-group-text'>الفرع</span><input name='branch_code' class='form-control' value='${cells[3]||''}'></div>
+            <div class='input-group'><span class='input-group-text'>راتب أساسي</span><input name='base_salary' type='number' step='0.01' class='form-control' value='${parseFloat(cells[4]||'0')}'></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-navy' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelEdit'>إلغاء</button></div>
+          </form>`; openSlideover(html); const f=document.getElementById('editEmpForm'); document.getElementById('cancelEdit').onclick=closeSlideover; f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); const r=await fetch('/api/employees/'+id, { method:'PUT', headers:{'X-CSRFToken': CSRF}, body:fd }); const j=await r.json(); showToast(j&&j.ok?'تم التعديل':'فشل التعديل'); if(j&&j.ok){ tr.children[1].textContent = String(fd.get('full_name')||''); tr.children[2].textContent = String(fd.get('position')||''); tr.children[3].textContent = String(fd.get('branch_code')||''); tr.children[4].textContent = Number(fd.get('base_salary')||0).toFixed(2); closeSlideover(); } } })();
+          break;
+        case 'advance':
+          (function(){ const html=`<form id='advForm' class='d-grid gap-2'>
+            <div class='input-group'><span class='input-group-text'>المبلغ</span><input name='amount' type='number' step='0.01' class='form-control' required></div>
+            <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
+            <div class='input-group'><span class='input-group-text'>التاريخ</span><input name='date' type='date' class='form-control' value='${new Date().toISOString().slice(0,10)}'></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-navy' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelAdv'>إلغاء</button></div>
+          </form>`; openSlideover(html); const f=document.getElementById('advForm'); document.getElementById('cancelAdv').onclick=closeSlideover; f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', id); const r=await fetch('/api/advances', { method:'POST', headers:{'X-CSRFToken': CSRF}, body:fd }); const j=await r.json(); showToast(j&&j.ok?'تم تسجيل السلفة':'فشل تسجيل السلفة'); if(j&&j.ok){ closeSlideover(); } } })();
+          break;
+        case 'pay':
+          (function(){ const iframe=document.getElementById('panelIframe'); document.querySelectorAll('.panel').forEach(p=> p.classList.remove('active')); const ext=document.getElementById('panel-ext'); ext.classList.add('active'); iframe.src='/employees/'+id+'/pay'; showToast('فتح سداد راتب الموظف'); })();
+          break;
+        case 'journal':
+          (function(){ fetch('/api/employee-ledger?employee_id='+id).then(r=>r.json()).then(j=>{ const rows=(j.rows||[]); let html='<div><h6>قيود هذا الموظف</h6><table class="table"><thead><tr><th>التاريخ</th><th>الوصف</th><th>مدين</th><th>دائن</th></tr></thead><tbody>'; rows.forEach(x=>{ html+=`<tr><td>${x.date||'-'}</td><td>${x.description||''}</td><td class='text-end'>${Number(x.debit||0).toFixed(2)}</td><td class='text-end'>${Number(x.credit||0).toFixed(2)}</td></tr>`; }); html+='</tbody></table></div>'; openSlideover(html); }).catch(()=> showToast('تعذر تحميل القيود')); })();
+          break;
+        case 'delete':
+          (function(){ if(!confirm('تأكيد حذف الموظف؟')) return; fetch('/api/employees/'+id, { method:'DELETE', headers:{'X-CSRFToken': CSRF} }).then(r=> r.json()).then(j=>{ showToast(j&&j.ok?'تم حذف الموظف':'تعذر حذف الموظف'); if(j&&j.ok){ tr.remove(); } }).catch(()=> showToast('خطأ في الشبكة')); })();
+          break;
+      }
+    });
+    });
+    document.querySelectorAll('tbody tr').forEach(r=>{ r.addEventListener('click', function(ev){ if(ev.target.closest('button')||ev.target.closest('.ops-menu')) return; const cells=[...r.children].map(td=>td.textContent); openSlideover('<div>'+cells.join(' | ')+'</div>'); }); });
+  })();
+  ;(function(){ const btn=document.createElement('button'); btn.className='btn btn-outline-primary btn-sm'; btn.textContent='🖨️ طباعة كشف'; const cont=document.querySelector('#panel-ledger'); if(cont){ cont.insertBefore(btn, cont.firstChild); btn.addEventListener('click', function(){ const table=cont.querySelector('table'); if(!table) return; const w=window.open('', '_blank'); w.document.write('<html><head><title>كشف حساب</title></head><body>'+table.outerHTML+'<script>window.onload=function(){window.print();};<\/script></body></html>'); w.document.close(); }); } })()
+  document.querySelectorAll('.ripple-btn').forEach(btn=>{btn.addEventListener('click',e=>{const x=e.offsetX,y=e.offsetY;const s=document.createElement('span');s.style.position='absolute';s.style.left=x+'px';s.style.top=y+'px';s.style.width=s.style.height='8px';s.style.borderRadius='50%';s.style.background='rgba(255,255,255,.7)';btn.appendChild(s); if(window.gsap){ gsap.to(s,{duration:.5,scale:12,opacity:0,onComplete:()=>s.remove()}); } else { s.style.transition='transform .5s ease, opacity .5s ease'; requestAnimationFrame(()=>{ s.style.transform='scale(12)'; s.style.opacity='0'; }); setTimeout(()=>{ try{ s.remove(); }catch(e){} }, 520); } })})
+  ;(function(){document.querySelectorAll('.spark').forEach(c=>{const ctx=c.getContext('2d');const w=c.width=c.clientWidth;const h=c.height=c.clientHeight;ctx.clearRect(0,0,w,h);ctx.strokeStyle='#4c7cf5';ctx.lineWidth=2;const pts=Array.from({length:20},(_,i)=>({x:(i/(20-1))*w,y:h-((Math.sin(i*.5)+1)/2)*h*0.8-5}));ctx.beginPath();pts.forEach((p,i)=>{if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y)});ctx.stroke();ctx.fillStyle='rgba(76,124,245,.12)';ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fill()})})()
+  showToast('مرحباً! تم تحميل لوحة تحكم الموظفين')
+  document.getElementById('empSelect')?.addEventListener('change', function(){
+    const id = this.value || '';
+    if(!id){ document.querySelectorAll('tbody tr[data-row="emp"]').forEach(tr=> tr.style.display=''); return; }
+    const tr = document.querySelector(`#panel-employees tbody tr[data-row="emp"][data-id="${id}"]`);
+    if(tr){ try{ tr.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){} document.querySelectorAll('tbody tr[data-row="emp"]').forEach(r=> r.style.display=''); tr.classList.add('table-warning'); setTimeout(()=> tr.classList.remove('table-warning'), 1200); }
+  });
+  const slh=document.getElementById('slHeader'); if(slh){ document.addEventListener('mousemove',e=>{const r=slh.getBoundingClientRect();const dx=(e.clientX-(r.left+r.width/2))/r.width;const dy=(e.clientY-(r.top+r.height/2))/r.height; if(window.gsap){ gsap.to(slh,{duration:.2,transform:'translate3d('+dx*6+'px,'+dy*6+'px,0) rotate('+dx*2+'deg)'}); } else { slh.style.transition='transform .2s ease'; slh.style.transform='translate3d('+dx*6+'px,'+dy*6+'px,0) rotate('+dx*2+'deg)'; } }) }
+  document.querySelectorAll('.ops-btn').forEach(b=>{b.addEventListener('click',ev=>{ev.stopPropagation();const m=b.nextElementSibling;m.style.display=m.style.display==='block'?'none':'block'})})
+  document.querySelectorAll('tbody tr[data-row="emp"] .ops-menu .it').forEach(it=>{
+    it.addEventListener('click', async function(ev){ ev.stopPropagation(); const tr=this.closest('tr'); const id=parseInt(tr.getAttribute('data-id')); const op=this.getAttribute('data-op'); if(op==='edit'){ const name=tr.children[1].textContent.trim(); const pos=tr.children[2].textContent.trim(); const br=tr.children[3].textContent.trim(); const base=tr.children[4].textContent.trim(); const html=`<form id='empForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الاسم</span><input name='full_name' class='form-control' value='${name}' required></div>
+        <div class='input-group'><span class='input-group-text'>القسم</span><input name='department' class='form-control' value='${(tr.dataset.dept||'')}'></div>
+        <div class='input-group'><span class='input-group-text'>الوظيفة</span><input name='position' class='form-control' value='${pos}'></div>
+        <div class='input-group'><span class='input-group-text'>الفرع</span><input name='branch_code' class='form-control' value='${br}'></div>
+        <div class='input-group'><span class='input-group-text'>راتب أساسي</span><input name='base_salary' type='number' step='0.01' class='form-control' value='${base}'></div>
+        <div class='d-flex gap-2 mt-2'><button class='btn btn-navy ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelEdit'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelEdit').onclick=closeSlideover; const f=document.getElementById('empForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('id', String(id)); const r=await fetch('/api/employees/'+id, { method:'PUT', headers:{'X-CSRFToken': CSRF}, body:fd }); const j=await r.json(); if(j&&j.ok){ tr.children[1].textContent=fd.get('full_name'); tr.children[2].textContent=fd.get('position'); tr.children[3].textContent=fd.get('branch_code'); tr.children[4].textContent=parseFloat(fd.get('base_salary')||0).toFixed(2); tr.dataset.dept=(fd.get('department')||'').toLowerCase(); showToast('تم حفظ تعديل الموظف'); closeSlideover(); } else { showToast('فشل حفظ التعديل'); } } }
+    else if(op==='delete'){ const confirmHtml=`<div class='d-grid gap-2'><div>هل تريد حذف الموظف؟</div><div class='d-flex gap-2'><button id='doDel' class='btn btn-danger'>نعم، حذف</button><button class='btn btn-outline-secondary' id='noDel'>إلغاء</button></div></div>`; openSlideover(confirmHtml); document.getElementById('noDel').onclick=closeSlideover; document.getElementById('doDel').onclick=async function(){ const r=await fetch('/api/employees/'+id, { method:'DELETE' }); const j=await r.json(); if(j&&j.ok){ tr.remove(); showToast('تم حذف الموظف'); closeSlideover(); } else { showToast('تعذر الحذف'); } } }
+    else if(op==='advance'){ const html=`<form id='advForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>المبلغ</span><input name='amount' type='number' step='0.01' class='form-control' required></div>
+        <div class='input-group'><span class='input-group-text'>التاريخ</span><input name='date' type='date' class='form-control' value='${new Date().toISOString().slice(0,10)}'></div>
+        <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
+        <div class='d-flex gap-2 mt-2'><button class='btn btn-navy ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelAdv'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelAdv').onclick=closeSlideover; const f=document.getElementById('advForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', String(id)); const r=await fetch('/api/advances', { method:'POST', body:fd }); const j=await r.json(); if(j&&j.ok){ showToast('تم منح السلفة'); closeSlideover(); } else { showToast('فشل منح السلفة'); } } }
+    else if(op==='pay'){ const html=`<form id='payForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الشهر</span><input name='month' type='month' class='form-control' value='${new Date().toISOString().slice(0,7)}'></div>
+        <div class='input-group'><span class='input-group-text'>المبلغ المدفوع</span><input name='paid_amount' type='number' step='0.01' class='form-control' required></div>
+        <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='payment_method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
+        <div class='d-flex gap-2 mt-2'><button class='btn btn-navy ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelPay'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelPay').onclick=closeSlideover; const f=document.getElementById('payForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', String(id)); const r=await fetch('/salaries/pay', { method:'POST', body:fd }); const ok = r.status===200; if(ok){ showToast('تم تسجيل دفع الراتب'); closeSlideover(); } else { showToast('فشل دفع الراتب'); } } }
+    else if(op==='journal'){ const url=new URL('/api/employee-ledger', location.origin); url.searchParams.set('emp_id', String(id)); const r=await fetch(url); const j=await r.json(); if(j&&j.ok){ const rows=(j.rows||[]).map(x=>`<tr><td>${x.date}</td><td>${x.entry}</td><td>${x.desc}</td><td class='text-end'>${Number(x.debit||0).toFixed(2)}</td><td class='text-end'>${Number(x.credit||0).toFixed(2)}</td></tr>`).join(''); openSlideover(`<div class='table-responsive'><table class='table table-sm'><thead><tr><th>التاريخ</th><th>رقم القيد</th><th>الوصف</th><th>مدين</th><th>دائن</th></tr></thead><tbody>${rows}</tbody></table></div>`); } else { showToast('تعذر تحميل القيود'); } }
+  }); });
+  function openAddEmp(){ const html=`<form id='addEmpForm' class='d-grid gap-2'>
+      <div class='input-group'><span class='input-group-text'>الاسم</span><input name='full_name' class='form-control' required></div>
+      <div class='input-group'><span class='input-group-text'>الرقم الوطني</span><input name='national_id' class='form-control' required></div>
+      <div class='input-group'><span class='input-group-text'>القسم</span><input name='department' class='form-control'></div>
+      <div class='input-group'><span class='input-group-text'>الوظيفة</span><input name='position' class='form-control'></div>
+      <div class='input-group'><span class='input-group-text'>الهاتف</span><input name='phone' class='form-control'></div>
+      <div class='input-group'><span class='input-group-text'>البريد</span><input name='email' class='form-control'></div>
+      <div class='input-group'><span class='input-group-text'>تاريخ التعيين</span><input name='hire_date' type='date' class='form-control' value='${new Date().toISOString().slice(0,10)}'></div>
+      <div class='input-group'><span class='input-group-text'>الفرع</span><input name='branch_code' class='form-control'></div>
+      <div class='input-group'><span class='input-group-text'>راتب أساسي</span><input name='base_salary' type='number' step='0.01' class='form-control' value='0'></div>
+      <div class='d-flex gap-2 mt-2'><button class='btn btn-navy ripple' type='submit'>💾 حفظ</button><a class='btn btn-outline-primary' href='/employees/create'>فتح صفحة الإنشاء</a><button type='button' class='btn btn-outline-secondary' id='cancelAdd'>إلغاء</button></div>
+    </form>`; openSlideover(html); document.getElementById('cancelAdd').onclick=closeSlideover; const f=document.getElementById('addEmpForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); const r=await fetch('/api/employees', { method:'POST', headers:{'X-CSRFToken': CSRF}, body:fd }); const j=await r.json(); if(j&&j.ok){ const tbody=document.querySelector('#panel-employees tbody'); const idx=tbody.children.length+1; const d=(fd.get('department')||'').toLowerCase(); const tr=document.createElement('tr'); tr.setAttribute('data-row','emp'); tr.setAttribute('data-id', String(j.id)); tr.setAttribute('data-dept', d); tr.innerHTML=`<td>${idx}</td><td>${fd.get('full_name')||''}</td><td>${fd.get('position')||''}</td><td>${fd.get('branch_code')||''}</td><td>${parseFloat(fd.get('base_salary')||0).toFixed(2)}</td><td>${(0).toFixed(2)}</td><td>${(0).toFixed(2)}</td><td>active</td><td><button class='btn btn-sm btn-outline-primary ops-btn'>⋮</button><div class='ops-menu'><div class='it' data-op='edit'>تعديل</div><div class='it' data-op='advance'>منح سلفة</div><div class='it' data-op='pay'>دفع راتب</div><div class='it' data-op='journal'>معاينة قيد</div><div class='it text-danger' data-op='delete'>حذف</div></div></td>`; tbody.appendChild(tr); showToast('تم إضافة الموظف'); closeSlideover(); } else { showToast('فشل إضافة الموظف'); } } }
+  document.getElementById('btnAddEmp')?.addEventListener('click', function(ev){ ev.preventDefault(); openAddEmp(); });
+  if(window.AUTO_OPEN_CREATE){ openAddEmp(); }
+  try{lottie.loadAnimation({container:document.getElementById('lottieEmp'),renderer:'svg',loop:true,autoplay:true,path:'https://assets8.lottiefiles.com/packages/lf20_3rwasyjy.json'})}catch(e){}
+  try{lottie.loadAnimation({container:document.getElementById('lottieSal'),renderer:'svg',loop:true,autoplay:true,path:'https://assets1.lottiefiles.com/packages/lf20_ujd3f9rs.json'})}catch(e){}
+  try{lottie.loadAnimation({container:document.getElementById('lottieAdv'),renderer:'svg',loop:true,autoplay:true,path:'https://assets3.lottiefiles.com/packages/lf20_vfux7z1h.json'})}catch(e){}
+  try{lottie.loadAnimation({container:document.getElementById('lottiePay'),renderer:'svg',loop:true,autoplay:true,path:'https://assets9.lottiefiles.com/packages/lf20_udydk9.json'})}catch(e){}
+</script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/MotionPathPlugin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.9.6/lottie.min.js"></script>
+    <script src="/static/js/main.js?v="></script>
+    <script src="/static/js/modal-system.js?v="></script>
+    <script src="/static/js/printInvoice.js?v="></script>
+    <script src="/static/js/base-behavior.js?v="></script>
+    <script src="/static/js/motion.js?v="></script>
+
+    
+  </body>
+</html>

@@ -287,24 +287,25 @@ function sendPayment(id, type, amount){
   if (csrf) form.append('csrf_token', csrf.value);
   fetch('/api/payments/register', { method:'POST', body: form, credentials: 'same-origin' })
     .then(r=>r.json()).then(data=>{
-      if(data.status==='success') location.reload(); else alert(data.message || 'Error');
-    }).catch(()=>alert('Network error'));
+      if(data.status==='success') location.reload(); else showAlert(data.message || 'Error', 'danger');
+    }).catch(()=>showAlert('Network error', 'danger'));
 }
-function payFull(id, type, remaining){
+async function payFull(id, type, remaining){
   const amt = parseFloat(remaining || 0);
-  if (!amt || amt <= 0){ alert("{{ _('Nothing to pay / لا يوجد متبقي للدفع') }}"); return; }
-  if (!confirm("{{ _('Confirm full payment / تأكيد دفع كامل') }}: " + amt)) return;
+  if (!amt || amt <= 0){ showAlert("{{ _('Nothing to pay / لا يوجد متبقي للدفع') }}", 'warning'); return; }
+  const confirmed = await showConfirm("{{ _('Confirm full payment / تأكيد دفع كامل') }}: " + amt);
+  if (!confirmed) return;
   sendPayment(id, type, amt);
 }
-function openPaymentCustom(id, type, remaining){
+async function openPaymentCustom(id, type, remaining){
   const input = prompt("{{ _('Enter amount to pay / ادخل مبلغ الدفع') }}\n{{ _('Remaining / المتبقي') }}: " + remaining);
   if (!input) return;
   const amt = parseFloat((input || '').toString().replace(',', '.'));
-  if (!amt || isNaN(amt) || amt <= 0){ alert("{{ _('Invalid amount / مبلغ غير صالح') }}"); return; }
+  if (!amt || isNaN(amt) || amt <= 0){ showAlert("{{ _('Invalid amount / مبلغ غير صالح') }}", 'danger'); return; }
   sendPayment(id, type, amt);
 }
 function viewDetails(id, type){
-  alert(type + ' #' + id);
+  showAlert(type + ' #' + id, 'info');
 }
 
 async function paySupplier(name, idx){
@@ -312,7 +313,7 @@ async function paySupplier(name, idx){
   const pmEl = document.getElementById(`sup-pm-${idx}`);
   const amt = parseFloat((amtEl && amtEl.value) || '0');
   const pm = (pmEl && pmEl.value) || 'CASH';
-  if (!amt || amt <= 0){ await showAlert("{{ _('Invalid amount / مبلغ غير صالح') }}"); return; }
+  if (!amt || amt <= 0){ showAlert("{{ _('Invalid amount / مبلغ غير صالح') }}", 'warning'); return; }
   const form = new FormData();
   form.append('supplier', name);
   form.append('amount', String(amt));
@@ -327,8 +328,8 @@ async function paySupplier(name, idx){
     const r = await fetch('/api/payments/supplier/register', { method:'POST', body: form, credentials:'same-origin' });
     const data = await r.json();
     if (data.status === 'success') { location.reload(); }
-    else { await showAlert(data.message || 'Error'); }
-  }catch(e){ await showAlert('Network error'); }
+    else { showAlert(data.message || 'Error', 'danger'); }
+  }catch(e){ showAlert('Network error', 'danger'); }
 }
 
 async function deleteInvoice(id, type) {
@@ -376,7 +377,7 @@ async function deleteInvoice(id, type) {
     document.body.appendChild(form);
     form.submit();
   } catch (error) {
-    await showAlert('{{ _('Error deleting invoice / خطأ في حذف الفاتورة') }}');
+    showAlert('{{ _('Error deleting invoice / خطأ في حذف الفاتورة') }}', 'danger');
   }
 }
 </script>

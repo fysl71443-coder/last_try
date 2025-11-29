@@ -30,6 +30,25 @@ def get_console_logs(driver):
         pass
     return logs
 
+def js_click(driver, elem):
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", elem)
+    except Exception:
+        pass
+    try:
+        driver.execute_script("arguments[0].click();", elem)
+    except Exception:
+        try:
+            elem.click()
+        except Exception:
+            pass
+
+def wait_clickable(driver, by, sel, timeout=15):
+    return WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, sel)))
+
+def wait_present(driver, by, sel, timeout=15):
+    return WebDriverWait(driver, timeout).until(EC.presence_of_element_located((by, sel)))
+
 def write_report(results):
     with open(REPORT, 'w', encoding='utf-8') as f:
         f.write("# تقرير فحص شاشة الموظفين الجديدة\n\n")
@@ -79,19 +98,18 @@ def main():
         driver.get(BASE_URL + '/login')
         # login
         try:
-            user = wait.until(EC.presence_of_element_located((By.NAME, 'username')))
+            user = wait_present(driver, By.NAME, 'username')
             pwd = driver.find_element(By.NAME, 'password')
             user.clear(); user.send_keys(USERNAME)
             ok = False
             for p in PASSWORDS:
                 try:
                     pwd.clear(); pwd.send_keys(p)
-                    driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
-                    time.sleep(1.2)
-                    if '/dashboard' in driver.current_url or '/employee-uvd' in driver.current_url:
-                        ok = True; break
+                    js_click(driver, driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]'))
+                    WebDriverWait(driver, 10).until(lambda d: ('/dashboard' in d.current_url) or ('/employee-uvd' in d.current_url))
+                    ok = True; break
                 except Exception:
-                    continue
+                    pass
             results['Login'] = {'status': 'PASS' if ok else 'FAIL', 'note': driver.current_url}
         except Exception as e:
             results['Login'] = {'status':'FAIL','note':str(e)}
@@ -176,13 +194,13 @@ def main():
         # Open ops menu and Edit
         try:
             btns = driver.find_elements(By.CSS_SELECTOR, '.ops-btn')
-            btns[0].click()
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.ops-menu .it[data-op="edit"]')))
-            driver.find_element(By.CSS_SELECTOR, '.ops-menu .it[data-op="edit"]').click()
-            wait.until(EC.presence_of_element_located((By.ID, 'editEmpForm')))
-            nm = driver.find_element(By.NAME, 'full_name')
+            js_click(driver, btns[0])
+            wait_clickable(driver, By.CSS_SELECTOR, '.ops-menu .it[data-op="edit"]')
+            js_click(driver, driver.find_element(By.CSS_SELECTOR, '.ops-menu .it[data-op="edit"]'))
+            wait_present(driver, By.ID, 'editEmpForm')
+            nm = wait_clickable(driver, By.NAME, 'full_name')
             nm.clear(); nm.send_keys('موظف معدل')
-            driver.find_element(By.CSS_SELECTOR, '#editEmpForm button[type="submit"]').click()
+            js_click(driver, driver.find_element(By.CSS_SELECTOR, '#editEmpForm button[type="submit"]'))
             time.sleep(1.0)
             results['Edit Employee'] = {'status':'PASS','screenshot': screenshot(driver, 'edit_employee')}
         except Exception as e:
@@ -269,26 +287,35 @@ def main():
         except Exception as e:
             results['Grant Advance'] = {'status':'FAIL','note':str(e)}
 
-        # Pay salary (opens iframe)
+        # Pay salary (slideover form)
         try:
             btns = driver.find_elements(By.CSS_SELECTOR, '.ops-btn')
-            btns[0].click()
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.ops-menu .it[data-op="pay"]')))
-            driver.find_element(By.CSS_SELECTOR, '.ops-menu .it[data-op="pay"]').click()
+            js_click(driver, btns[0])
+            wait_clickable(driver, By.CSS_SELECTOR, '.ops-menu .it[data-op="pay"]')
+            js_click(driver, driver.find_element(By.CSS_SELECTOR, '.ops-menu .it[data-op="pay"]'))
+            wait_present(driver, By.ID, 'payForm')
+            try:
+                amt = driver.find_element(By.NAME, 'amount')
+                amt.clear(); amt.send_keys('100')
+            except Exception:
+                try:
+                    amt = driver.find_element(By.NAME, 'paid_amount')
+                    amt.clear(); amt.send_keys('100')
+                except Exception:
+                    pass
+            js_click(driver, driver.find_element(By.CSS_SELECTOR, '#payForm button[type="submit"]'))
             time.sleep(1.0)
-            iframe = driver.find_element(By.ID, 'panelIframe')
-            src = iframe.get_attribute('src')
-            results['Pay Salary'] = {'status':'PASS' if '/employees/' in src and '/pay' in src else 'FAIL', 'note': src, 'screenshot': screenshot(driver, 'pay_salary')}
+            results['Pay Salary'] = {'status':'PASS','note':'submitted', 'screenshot': screenshot(driver, 'pay_salary')}
         except Exception as e:
             results['Pay Salary'] = {'status':'FAIL','note':str(e)}
 
         # Preview journal
         try:
             btns = driver.find_elements(By.CSS_SELECTOR, '.ops-btn')
-            btns[0].click()
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.ops-menu .it[data-op="journal"]')))
-            driver.find_element(By.CSS_SELECTOR, '.ops-menu .it[data-op="journal"]').click()
-            time.sleep(0.8)
+            js_click(driver, btns[0])
+            wait_clickable(driver, By.CSS_SELECTOR, '.ops-menu .it[data-op="journal"]')
+            js_click(driver, driver.find_element(By.CSS_SELECTOR, '.ops-menu .it[data-op="journal"]'))
+            wait_present(driver, By.ID, 'slideoverBody')
             results['Preview Journal'] = {'status':'PASS','screenshot': screenshot(driver, 'preview_journal')}
         except Exception as e:
             results['Preview Journal'] = {'status':'FAIL','note':str(e)}
@@ -296,9 +323,9 @@ def main():
         # Delete employee (test on last row to reduce impact)
         try:
             btns = driver.find_elements(By.CSS_SELECTOR, '.ops-btn')
-            btns[-1].click()
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.ops-menu .it[data-op="delete"]')))
-            driver.find_element(By.CSS_SELECTOR, '.ops-menu .it[data-op="delete"]').click()
+            js_click(driver, btns[-1])
+            wait_clickable(driver, By.CSS_SELECTOR, '.ops-menu .it[data-op="delete"]')
+            js_click(driver, driver.find_element(By.CSS_SELECTOR, '.ops-menu .it[data-op="delete"]'))
             alert = driver.switch_to.alert
             alert.accept()
             time.sleep(1.0)

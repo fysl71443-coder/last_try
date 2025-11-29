@@ -62,6 +62,9 @@ body {
             <div class="col-md-4 text-end">
                 <div class="btn-group" role="group">
                   <a href="#" id="btnPrintAll" class="btn btn-success" target="_blank">📄 {{ _('Print All / طباعة الكل') }}</a>
+                  {% if current_type in ['sales','all'] %}
+                  <button class="btn btn-primary" id="btnMarkSalesPaid">✅ {{ _('Mark Sales Paid / ترحيل مبيعات كمدفوعة') }}</button>
+                  {% endif %}
                   <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">🗑️ {{ _('Delete / حذف') }}</button>
                 </div>
             </div>
@@ -99,10 +102,27 @@ body {
           </select>
         </div>
       </div>
-      <div class="mb-3 text-end">
-        <button id="btnApplyFilters" class="btn btn-primary btn-sm">Apply Filters</button>
-      </div>
-      <p class="text-muted">Sales are always shown as Paid. Purchases and Expenses reflect user-recorded payments.</p>
+        <div class="mb-3 text-end">
+          <button id="btnApplyFilters" class="btn btn-primary btn-sm">Apply Filters</button>
+        </div>
+        <p class="text-muted">Sales are auto-paid except platform orders (HUNGER/KEETA) which remain Unpaid. Purchases and Expenses reflect user-recorded payments.</p>
+        <div class="d-flex gap-2 mb-3">
+          <button id="btnNormalizePlatform" class="btn btn-sm btn-outline-warning">Normalize Platform Sales (set HUNGER/KEETA unpaid)</button>
+          <div class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0">Batch Pay Sales:</label>
+            <select id="bpCustomer" class="form-select form-select-sm" style="width:auto">
+              <option value="all">All</option>
+              <option value="hunger">HUNGER</option>
+              <option value="keeta">KEETA</option>
+            </select>
+            <select id="bpMethod" class="form-select form-select-sm" style="width:auto">
+              <option value="CASH">CASH</option>
+              <option value="CARD">CARD</option>
+              <option value="BANK">BANK</option>
+            </select>
+            <button id="btnBatchPaySales" class="btn btn-sm btn-success">Run Batch Pay</button>
+          </div>
+        </div>
 
       <!-- Sales Detailed -->
       <div class="mb-4">
@@ -245,23 +265,20 @@ body {
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
                                 {% if invoice.status != 'paid' %}
-                                <form method="post" action="#" class="d-flex">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <input type="number" step="0.01" name="payment_amount"
-                                           placeholder="Amount" class="form-control form-control-sm me-1"
-                                           max="{{ invoice.remaining_amount }}" required>
-                                    <button type="submit" class="btn btn-sm btn-primary">
-                                        {{ _('Pay') }}
-                                    </button>
-                                </form>
+                                    <input type="number" step="0.01" class="form-control form-control-sm me-1 rowPaymentAmount"
+                                           placeholder="Amount" max="{{ invoice.remaining_amount }}" value="{{ '%.2f'|format(invoice.remaining_amount) }}">
+                                    <button type="button" class="btn btn-sm btn-primary btn-row-pay" data-invoice-id="{{ invoice.id }}" data-method="CASH">{{ _('Pay') }}</button>
                                 {% else %}
-                                <span class="text-success">✓ {{ _('Paid') }}</span>
+                                    <span class="text-success">✓ {{ _('Paid') }}</span>
                                 {% endif %}
 
                                 </td>
-                                <td>
+                            <td>
                                   <a class="btn btn-sm btn-outline-secondary" href="#">{{ _('View / عرض') }}</a>
-                                </td>
+                            </td>
+                            <td>
+                              <button type="button" class="btn btn-sm btn-outline-danger btn-row-delete" data-invoice-id="{{ invoice.id }}" data-invoice-type="{{ invoice.invoice_type }}">🗑️ {{ _('Delete / حذف') }}</button>
+                            </td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -607,6 +624,45 @@ body {
         openPrint(base, dropBranch);
       });
 
+      // Normalize platform sales: mark HUNGER/KEETA unpaid and remove payments
+      document.getElementById('btnNormalizePlatform')?.addEventListener('click', async function(){
+        if(!confirm('تطبيع فواتير منصات HUNGER/KEETA كغير مدفوعة؟')) return;
+        try{
+          const r = await fetch('/api/sales/mark-platform-unpaid', { method:'POST', headers:{'Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'} });
+          const j = await r.json();
+          alert('تم تحديث '+(j.updated||0)+' فاتورة منصة');
+          location.reload();
+        }catch(e){ alert('فشل التطبيع: '+(e && e.message || e)); }
+      });
+
+      // Batch pay sales by customer filter
+      document.getElementById('btnBatchPaySales')?.addEventListener('click', async function(){
+        const cust = document.getElementById('bpCustomer')?.value || 'all';
+        const method = document.getElementById('bpMethod')?.value || 'CASH';
+        if(!confirm('تنفيذ دفع جماعي لفواتير المبيعات ('+cust+')؟')) return;
+        try{
+          const r = await fetch('/api/sales/batch-pay', {
+            method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'},
+            body: JSON.stringify({ customer: cust, payment_method: method })
+          });
+          const j = await r.json();
+          if(j && j.ok){ alert('تم دفع '+(j.updated||0)+' فاتورة'); location.reload(); }
+          else{ alert('فشل الدفع الجماعي: '+(j && j.error || 'خطأ غير معروف')); }
+        }catch(e){ alert('فشل الاتصال: '+(e && e.message || e)); }
+      });
+
+      // Mark all sales invoices as paid
+      document.getElementById('btnMarkSalesPaid')?.addEventListener('click', async function(ev){
+        ev.preventDefault();
+        try{
+          const r = await fetch('/api/sales/mark-unpaid-paid', { method:'POST', headers:{'Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'} });
+          const ct = (r.headers.get('content-type')||'').toLowerCase();
+          const j = ct.indexOf('application/json')!==-1 ? await r.json() : null;
+          if(j && j.ok){ alert('تم تحديث '+(j.updated||0)+' فاتورة مبيعات إلى مدفوعة'); location.reload(); }
+          else{ alert('تعذر التحديث: '+(j && j.error || (await r.text()) || 'خطأ غير معروف')); }
+        }catch(err){ alert('خطأ في الاتصال: '+err.message); }
+      });
+
 
       if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', reloadAll); } else { reloadAll(); }
     })();
@@ -696,6 +752,60 @@ body {
             }
         });
     });
+
+    document.querySelectorAll('.btn-row-delete').forEach(btn => {
+      btn.addEventListener('click', async function(){
+        const id = this.getAttribute('data-invoice-id');
+        const t = this.getAttribute('data-invoice-type');
+        const ok = confirm('هل تريد حذف هذه الفاتورة؟');
+        if(!ok) return;
+        const body = new URLSearchParams({ scope: 'selected', invoice_type: t || 'sales', invoice_ids: String(id||'') });
+        try{
+          const r = await fetch('{{ url_for('main.invoices_delete') }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token() }}' },
+            body
+          });
+          if(r.redirected){ location.href = r.url; }
+          else { location.reload(); }
+        }catch(e){ alert('فشل حذف الفاتورة: '+(e && e.message || e)); }
+      });
+    });
 </script>
 
 {% endblock %}
+      document.querySelectorAll('.btn-row-pay').forEach(btn=>{
+        btn.addEventListener('click', async function(){
+          const td = this.closest('td');
+          const input = td && td.querySelector('.rowPaymentAmount');
+          const amt = parseFloat(input && input.value || '0');
+          const id = this.getAttribute('data-invoice-id');
+          const method = this.getAttribute('data-method') || 'CASH';
+          if(!(amt>0)){ alert('أدخل مبلغاً صالحاً'); return; }
+          try{
+            const r = await fetch('/api/sales/pay', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'}, body: JSON.stringify({ invoice_id: id, amount: amt, payment_method: method }) });
+            const j = await r.json();
+            if(j && j.ok){ location.reload(); }
+            else{ alert('فشل الدفع: '+(j && j.error || 'خطأ غير معروف')); }
+          }catch(e){ alert('فشل الاتصال: '+(e && e.message || e)); }
+        });
+      });
+
+      // Event delegation fallback in case earlier JS errors prevented bindings
+      document.addEventListener('click', async function(ev){
+        const btn = ev.target && ev.target.closest && ev.target.closest('.btn-row-pay');
+        if(!btn) return;
+        ev.preventDefault();
+        try{
+          const td = btn.closest('td');
+          const input = td && td.querySelector('.rowPaymentAmount');
+          const amt = parseFloat(input && input.value || '0');
+          const id = btn.getAttribute('data-invoice-id');
+          const method = btn.getAttribute('data-method') || 'CASH';
+          if(!(amt>0)){ alert('أدخل مبلغاً صالحاً'); return; }
+          const r = await fetch('/api/sales/pay', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'}, body: JSON.stringify({ invoice_id: id, amount: amt, payment_method: method }) });
+          const j = await r.json();
+          if(j && j.ok){ location.reload(); }
+          else{ alert('فشل الدفع: '+(j && j.error || 'خطأ غير معروف')); }
+        }catch(e){ alert('فشل الاتصال: '+(e && e.message || e)); }
+      });

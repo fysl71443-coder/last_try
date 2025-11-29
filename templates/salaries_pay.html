@@ -125,7 +125,7 @@
               {% set ded_class = 'text-danger fw-semibold' if ded>0 else 'text-muted' %}
               {% set paid_class = 'text-success fw-semibold' if paid>0 else 'text-muted' %}
               {% set rem_class = 'text-danger fw-semibold' if remaining>0.01 else 'text-success fw-semibold' %}
-              {% set status_badge = 'bg-success' if (s.status or '').lower()=='paid' else ('bg-warning text-dark' if (s.status or '').lower()=='due' else 'bg-secondary') %}
+              {% set status_badge = 'bg-success' if (s.status or '').lower()=='paid' else ('bg-warning text-dark' if (s.status or '').lower()=='partial' else 'bg-danger') %}
               <tr>
                 <td>{{ loop.index }}</td>
                 <td>{{ s.employee_id }}</td>

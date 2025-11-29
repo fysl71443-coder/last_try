@@ -153,7 +153,7 @@
         <!-- Invoice Metadata -->
         <section class="invoice-meta">
             <div><strong>Invoice:</strong> {{ invoice.invoice_number or ('INV-' + invoice.id|string) }}</div>
-            <div><strong>Date:</strong> {{ invoice.created_at.astimezone().strftime('%Y-%m-%d %H:%M:%S') if invoice.created_at else 'N/A' }}</div>
+            <div><strong>Date:</strong> {{ receipt_dt or (invoice.created_at and invoice.created_at.strftime('%Y-%m-%d %H:%M:%S')) or 'N/A' }}</div>
             <div><strong>Location:</strong> {{ (settings.china_town_label if (settings and invoice.branch=='china_town') else (settings.place_india_label if settings else None)) or branch.name }}</div>
             <div><strong>Customer:</strong> {{ invoice.customer_name or invoice.customer_phone or 'Walk-in' }}</div>
             {% if invoice.table_number %}

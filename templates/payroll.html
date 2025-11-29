@@ -77,11 +77,33 @@
           {% endif %}
         </td>
         <td>
-          <a href="{{ url_for('main.pay_salary', emp_id=p.employee.id, month=month, year=year) }}" class="btn btn-sm btn-success">💵 سداد</a>
+          {% if p.status != 'paid' and p.remaining > 0 %}
+            <a href="{{ url_for('main.pay_salary', emp_id=p.employee.id, month=month, year=year) }}" class="btn btn-sm btn-success">💵 سداد</a>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  var form = document.querySelector('form.filters');
+  if(!form) return;
+  function submitWithSpinner(){
+    var btn = document.createElement('div');
+    btn.className = 'spinner-border text-primary';
+    btn.style.marginLeft = '8px';
+    form.appendChild(btn);
+    form.submit();
+  }
+  ['year','month','status'].forEach(function(name){
+    var el = form.querySelector('[name="'+name+'"]');
+    if(el){ el.addEventListener('change', submitWithSpinner); }
+  });
+})();
+</script>
 {% endblock %}

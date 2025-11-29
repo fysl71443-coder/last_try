@@ -13,9 +13,10 @@ def debug_login():
     print("🔍 Debugging login functionality...")
     
     try:
-        print("1. Importing app...")
-        from app import app
-        print("✅ App imported")
+        print("1. Creating app instance...")
+        from app import create_app
+        app = create_app()
+        print("✅ App created")
         
         print("2. Importing models...")
         from models import User, db
@@ -37,6 +38,9 @@ def debug_login():
             admin = User.query.filter_by(username='admin').first()
             if admin:
                 print(f"✅ Admin user found: {admin.username}")
+                # Ensure known password for local testing
+                admin.set_password('admin123')
+                db.session.commit()
             else:
                 print("❌ Admin user not found, creating...")
                 admin = User(
@@ -45,7 +49,7 @@ def debug_login():
                     role='admin',
                     active=True
                 )
-                admin.set_password('admin123', bcrypt)
+                admin.set_password('admin123')
                 db.session.add(admin)
                 db.session.commit()
                 print("✅ Admin user created")

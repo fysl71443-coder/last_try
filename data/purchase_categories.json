@@ -1,0 +1,314 @@
+{
+  "purchase_categories": [
+    {
+      "category": { "en": "Soups & Starters / شوربات ومقبلات", "ar": "شوربات ومقبلات" },
+      "subcategories": [
+        {
+          "name": { "en": "Soup Bases & Stocks", "ar": "قواعد شوربة ومرق" },
+          "items": [
+            { "en": "Chicken Stock", "ar": "مرق دجاج" },
+            { "en": "Vegetable Stock", "ar": "مرق خضار" },
+            { "en": "Beef Stock", "ar": "مرق لحم بقري" }
+          ]
+        },
+        {
+          "name": { "en": "Wrappers & Doughs", "ar": "عجائن وأغلفة" },
+          "items": [
+            { "en": "Spring Rolls Wrapper", "ar": "عجينة سبرينغ رول" },
+            { "en": "Dumpling Wrapper", "ar": "عجينة دمبلينغ" },
+            { "en": "Flatbread Dough", "ar": "عجينة خبز / شباتا" }
+          ]
+        },
+        {
+          "name": { "en": "Appetizer Ingredients", "ar": "مكونات مقبلات" },
+          "items": [
+            { "en": "Pre‑fried Spring Rolls", "ar": "لفائف سبرينغ رول مقلية مسبقاً" },
+            { "en": "Bread Crumbs", "ar": "فتات خبز للتغطية" },
+            { "en": "Batter Mix", "ar": "خليط قلي (باودر)" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Poultry / دواجن", "ar": "دواجن" },
+      "subcategories": [
+        {
+          "name": { "en": "Fresh / Frozen Chicken", "ar": "دجاج طازج / مجمد" },
+          "items": [
+            { "en": "Whole Chicken", "ar": "دجاجة كاملة" },
+            { "en": "Chicken Breast Fillet", "ar": "صدور دجاج" },
+            { "en": "Chicken Thighs / Legs", "ar": "أفخاذ / أرجل دجاج" },
+            { "en": "Boneless Chicken Pieces", "ar": "قطع دجاج بدون عظم" },
+            { "en": "Frozen Chicken Portions", "ar": "قطع دجاج مجمدة" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Meat / لحوم", "ar": "لحوم" },
+      "subcategories": [
+        {
+          "name": { "en": "Red Meat", "ar": "لحوم حمراء" },
+          "items": [
+            { "en": "Beef Whole / Cuts", "ar": "لحم بقري كامل / مقطّع" },
+            { "en": "Lamb / Mutton", "ar": "لحم غنم / ضأن" },
+            { "en": "Beef Mince / Ground Meat", "ar": "لحم مفروم بقري" }
+          ]
+        },
+        {
+          "name": { "en": "Marinated / Pre‑seasoned Meat", "ar": "لحم متبل / جاهز" },
+          "items": [
+            { "en": "Marinated Beef Cuts", "ar": "قطع لحم بقري متبّلة" },
+            { "en": "Marinated Lamb Cuts", "ar": "قطع لحم غنم متبّلة" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Seafood / مأكولات بحرية", "ar": "مأكولات بحرية" },
+      "subcategories": [
+        {
+          "name": { "en": "Fish & Seafood", "ar": "أسماك ومأكولات بحرية" },
+          "items": [
+            { "en": "Fresh Fish", "ar": "سمك طازج" },
+            { "en": "Frozen Fish", "ar": "سمك مجمد" },
+            { "en": "Shrimp / Prawns", "ar": "جمبري / روبيان" },
+            { "en": "Mixed Seafood Pack", "ar": "خلطة مأكولات بحرية" },
+            { "en": "Calamari / Squid", "ar": "كلاماري / حبار" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Vegetables & Fruits / خضروات وفواكه", "ar": "خضروات وفواكه" },
+      "subcategories": [
+        {
+          "name": { "en": "Fresh Vegetables", "ar": "خضروات طازجة" },
+          "items": [
+            { "en": "Tomatoes", "ar": "طماطم" },
+            { "en": "Onions", "ar": "بصل" },
+            { "en": "Garlic", "ar": "ثوم" },
+            { "en": "Bell Peppers", "ar": "فلفل رومي" },
+            { "en": "Leafy Greens", "ar": "خضروات ورقية" },
+            { "en": "Potatoes", "ar": "بطاطس" },
+            { "en": "Carrots", "ar": "جزر" }
+          ]
+        },
+        {
+          "name": { "en": "Frozen Vegetables / Mix", "ar": "خضروات مجمدة / خليط" },
+          "items": [
+            { "en": "Mixed Frozen Veggies", "ar": "خضروات مشكلة مجمدة" },
+            { "en": "Frozen Peas / Corn", "ar": "بازلاء/ذرة مجمدة" }
+          ]
+        },
+        {
+          "name": { "en": "Fruits & Garnish", "ar": "فواكه وتزيين" },
+          "items": [
+            { "en": "Lemons / Limes", "ar": "ليمون / حامض" },
+            { "en": "Oranges", "ar": "برتقال" },
+            { "en": "Pineapple (Canned/Fresh)", "ar": "أناناس (معلّب/طازج)" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Dairy & Eggs / ألبان وبيض", "ar": "ألبان وبيض" },
+      "subcategories": [
+        {
+          "name": { "en": "Dairy Products", "ar": "منتجات ألبان" },
+          "items": [
+            { "en": "Milk", "ar": "حليب" },
+            { "en": "Cheese (Mozzarella / Cheddar / etc)", "ar": "جبن (موزاريلا/شيدر/...)" },
+            { "en": "Yogurt / Labneh", "ar": "زبادي / لبن" },
+            { "en": "Cream / Cooking Cream", "ar": "كريمة طبخ / قشطة" }
+          ]
+        },
+        {
+          "name": { "en": "Eggs", "ar": "بيض" },
+          "items": [
+            { "en": "Chicken Eggs (carton)", "ar": "بيض دجاج (كرتون)" },
+            { "en": "Eggs (bulk / tray)", "ar": "بيض (جملة / صينية)" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Dry Goods & Staples / حبوب ومستلزمات أساسية", "ar": "حبوب ومستلزمات أساسية" },
+      "subcategories": [
+        {
+          "name": { "en": "Grains & Pasta", "ar": "حبوب ومعكرونة" },
+          "items": [
+            { "en": "Rice (bulk)", "ar": "أرز (بالجملة)" },
+            { "en": "White Rice", "ar": "أرز أبيض" },
+            { "en": "Brown/Wheat Rice", "ar": "أرز بني / قمح" },
+            { "en": "Pasta / Spaghetti", "ar": "معكرونة / سباغيتي" },
+            { "en": "Vermicelli / Noodles", "ar": "شعيرية / نودلز" }
+          ]
+        },
+        {
+          "name": { "en": "Flour & Baking Supplies", "ar": "دقيق ومواد خبز" },
+          "items": [
+            { "en": "All‑purpose Flour", "ar": "دقيق متعدد الاستخدام" },
+            { "en": "Bread Flour", "ar": "دقيق خبز" },
+            { "en": "Baking Powder / Yeast", "ar": "خميرة / بيكنغ بودر" }
+          ]
+        },
+        {
+          "name": { "en": "Legumes & Beans", "ar": "بقوليات وفاصولياء" },
+          "items": [
+            { "en": "Lentils", "ar": "عدس" },
+            { "en": "Beans (Kidney / White / etc)", "ar": "فاصولياء (حمرا / بيضاء / ...)" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Oils, Fats & Sauces / زيوت ودهون وصلصات", "ar": "زيوت ودهون وصلصات" },
+      "subcategories": [
+        {
+          "name": { "en": "Cooking Oils & Fats", "ar": "زيوت وشحوم طبخ" },
+          "items": [
+            { "en": "Vegetable Oil", "ar": "زيت نباتي" },
+            { "en": "Olive Oil", "ar": "زيت زيتون" },
+            { "en": "Butter / Ghee", "ar": "زبدة / سمن" }
+          ]
+        },
+        {
+          "name": { "en": "Sauces & Condiments", "ar": "صلصات وتوابل" },
+          "items": [
+            { "en": "Soy Sauce", "ar": "صلصة صويا" },
+            { "en": "Oyster Sauce", "ar": "صلصة محار" },
+            { "en": "Chili Sauce / Paste", "ar": "صلصة / معجون حار" },
+            { "en": "Vinegar (White / Black)", "ar": "خل (أبيض / أسود)" },
+            { "en": "Ketchup / Tomato Sauce", "ar": "كِتشب / صلصة طماطم" },
+            { "en": "Mayonnaise / Dressing Sauces", "ar": "مايونيز / صلصة تتبيل" }
+          ]
+        },
+        {
+          "name": { "en": "Spices & Seasonings", "ar": "بهارات وتوابل" },
+          "items": [
+            { "en": "Salt", "ar": "ملح" },
+            { "en": "Black Pepper", "ar": "فلفل أسود" },
+            { "en": "Mixed Spices", "ar": "بهارات مشكلة" },
+            { "en": "Garlic Powder", "ar": "ثوم بودر" },
+            { "en": "Chili Powder / Flakes", "ar": "فلفل حار / رقائق حارة" },
+            { "en": "Five‑Spice Powder", "ar": "بهار صيني (فايف سبايس)" },
+            { "en": "Herbs (Dried / Fresh)", "ar": "أعشاب (مجففة / طازجة)" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Beverages / مشروبات", "ar": "مشروبات" },
+      "subcategories": [
+        {
+          "name": { "en": "Cold Drinks", "ar": "مشروبات باردة" },
+          "items": [
+            { "en": "Bottled Water", "ar": "ماء معبأ" },
+            { "en": "Soft Drinks (Cans / Bottles)", "ar": "مشروبات غازية (علب / زجاجات)" },
+            { "en": "Juice (Bottled / Fresh)", "ar": "عصائر (معلبة / طازجة)" }
+          ]
+        },
+        {
+          "name": { "en": "Hot Drinks", "ar": "مشروبات ساخنة" },
+          "items": [
+            { "en": "Tea Bags / Loose Tea", "ar": "أكياس شاي / شاي سائب" },
+            { "en": "Coffee Beans / Powder", "ar": "قهوة (حبوب / مسحوق)" },
+            { "en": "Milk (for beverages)", "ar": "حليب (للمشروبات)" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Packaging & Takeaway / تغليف وطلبات خارجية", "ar": "تغليف وطلبات خارجية" },
+      "subcategories": [
+        {
+          "name": { "en": "Food Packaging Materials", "ar": "مواد تغليف الطعام" },
+          "items": [
+            { "en": "Plastic Bags", "ar": "أكياس بلاستيك" },
+            { "en": "Paper Boxes / Cartons", "ar": "صناديق ورقية / كرتون" },
+            { "en": "Aluminum Foil", "ar": "قصدير" },
+            { "en": "Takeaway Containers (Plastic / Cardboard)", "ar": "حاويات تيك‑أواي (بلاستيك / كرتون)" },
+            { "en": "Takeaway Paper Bags", "ar": "أكياس ورقية للطلبات الخارجية" }
+          ]
+        },
+        {
+          "name": { "en": "Disposable Serving Items", "ar": "أدوات تقديم استخدام مرة واحدة" },
+          "items": [
+            { "en": "Disposable Plates", "ar": "صحون ورقية / بلاستيكية استخدام مرة واحدة" },
+            { "en": "Disposable Cups", "ar": "أكواب استخدام مرة واحدة" },
+            { "en": "Disposable Cutlery (Fork/Knife/Spoon)", "ar": "أدوات طعام استخدام مرة واحدة" },
+            { "en": "Napkins / Paper Towels", "ar": "مناديل / مناشف ورقية" },
+            { "en": "Takeaway Bags (Insulated)", "ar": "أكياس عزل حراري للطلبات" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Kitchen Equipment & Utensils / أدوات ومعدات المطبخ", "ar": "أدوات ومعدات المطبخ" },
+      "subcategories": [
+        {
+          "name": { "en": "Cookware & Utensils", "ar": "أواني وأدوات طبخ" },
+          "items": [
+            { "en": "Pots & Pans", "ar": "قدور ومقالي" },
+            { "en": "Knives & Cutting Tools", "ar": "سكاكين وأدوات تقطيع" },
+            { "en": "Cutting Boards", "ar": "ألواح تقطيع" },
+            { "en": "Serving Utensils / Spoons / Spatulas", "ar": "أدوات تقديم / ملاعق / مغارف" },
+            { "en": "Mixing Bowls", "ar": "أوعية خلط" }
+          ]
+        },
+        {
+          "name": { "en": "Major Kitchen Appliances", "ar": "أجهزة مطبخ رئيسية" },
+          "items": [
+            { "en": "Refrigerator / Freezer", "ar": "ثلاجة / فريزر" },
+            { "en": "Stove / Burner", "ar": "موقد / شواية" },
+            { "en": "Oven / Grill", "ar": "فرن / مشواة" },
+            { "en": "Fryer / Deep Fryer", "ar": "قلاية / قلاية زيت" },
+            { "en": "Blender / Mixer", "ar": "خلاط / ماكنة خلط" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Cleaning & Sanitation / نظافة وتعقيم", "ar": "نظافة وتعقيم" },
+      "subcategories": [
+        {
+          "name": { "en": "Cleaning Materials", "ar": "مواد تنظيف" },
+          "items": [
+            { "en": "Detergents / Dish Soap", "ar": "منظفات / صابون غسل" },
+            { "en": "Disinfectants / Sanitizers", "ar": "معقمات" },
+            { "en": "Bleach / Sanitizing Agents", "ar": "مبيض / مواد تعقيم" }
+          ]
+        },
+        {
+          "name": { "en": "Cleaning Tools", "ar": "أدوات تنظيف" },
+          "items": [
+            { "en": "Mops & Buckets", "ar": "مماسح ودلاء" },
+            { "en": "Brooms & Brushes", "ar": "مكنس وفرش" },
+            { "en": "Gloves & Protective Gear", "ar": "قفازات ومعدات وقاية" }
+          ]
+        }
+      ]
+    },
+    {
+      "category": { "en": "Miscellaneous / متفرقات واحتياطي", "ar": "متفرقات واحتياطي" },
+      "subcategories": [
+        {
+          "name": { "en": "Spare Parts & Maintenance", "ar": "قطع غيار وصيانة" },
+          "items": [
+            { "en": "Spare Kitchen Parts", "ar": "قطع غيار معدات مطبخ" },
+            { "en": "Maintenance Supplies", "ar": "مستلزمات صيانة" }
+          ]
+        },
+        {
+          "name": { "en": "Seasonal or Special Items", "ar": "أصناف موسمية أو خاصة" },
+          "items": [
+            { "en": "Seasonal Ingredients", "ar": "مكونات موسمية" },
+            { "en": "Special Order Items", "ar": "أصناف حسب طلب خاص" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

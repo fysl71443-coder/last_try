@@ -5,66 +5,71 @@
 {% block content %}
 
 <style>
-body {
-  background: #f4f6f9;
-}
-.purchases-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
-.status-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: bold;
-}
-.status-unpaid { background: #ffeaa7; color: #2d3436; }
-.status-partial { background: #fab1a0; color: #2d3436; }
-.status-paid { background: #00b894; color: white; }
-.item-row {
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 0.5rem;
-  background: #f8f9fa;
-}
-.stock-info {
-  font-size: 0.8rem;
-  color: #6c757d;
-  font-style: italic;
-}
+  :root{--ui-bg:#f8fafc;--ui-primary:#1e3a8a;--ui-accent:#2563eb;--ui-soft:#eef2f7;--ui-border:#e5e9f2;--glass-bg:rgba(255,255,255,.7);--glass-border:rgba(226,232,240,.8);--shadow-1:0 6px 24px rgba(16,24,40,.06);--shadow-2:0 12px 40px rgba(16,24,40,.1);} 
+  body{background:var(--ui-bg);} 
+  .purchases-card{background:#ffffff;border-radius:16px;box-shadow:var(--shadow-1);padding:1rem;margin-bottom:1rem;border:1px solid var(--ui-border)}
+  .section-header h3{font-weight:800;background:linear-gradient(90deg,#1e293b,#2563eb);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .btn{border-radius:12px}
+  .btn-primary{background:var(--ui-primary);border:0;color:#fff}
+  .btn-outline-success,.btn-outline-info{border:1px solid var(--ui-border)}
+  .status-badge{padding:.25rem .75rem;border-radius:999px;font-size:.8rem;font-weight:700}
+  .status-unpaid{background:#ffeaa7;color:#2d3436}
+  .status-partial{background:#fab1a0;color:#2d3436}
+  .status-paid{background:#00b894;color:#fff}
+  .item-row{border:1px solid var(--ui-border);border-radius:16px;padding:1rem;margin-bottom:.75rem;background:#fbfcfe;box-shadow:0 2px 10px rgba(0,0,0,.04);animation:sectionIn .35s ease both}
+  .stock-info{font-size:.8rem;color:#6c757d;font-style:italic}
+  .card{border:1px solid #e6e9ef;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  .card-header{border-radius:12px 12px 0 0;background:#f1f3f5;border-bottom:1px solid #e6e9ef}
+  .form-control,.form-select{border-radius:10px;border:1px solid #d9dee7;background:#fff;transition:box-shadow .2s ease}
+  .form-control:focus,.form-select:focus{box-shadow:0 0 0 3px rgba(13,110,253,.15)}
+  .input-icon{position:relative}
+  .input-icon .icon{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);font-size:1rem;opacity:.55}
+  .input-icon .form-control{padding-left:2.25rem}
+  .floating-save{position:fixed;right:24px;bottom:24px;z-index:1000}
+  .ripple{position:absolute;border-radius:50%;transform:scale(0);animation:ripple .6s linear;background:rgba(255,255,255,.6)}
+  @keyframes ripple{to{transform:scale(4);opacity:0}}
+  .sticky-totals{position:sticky;bottom:0;z-index:900;background:var(--glass-bg);backdrop-filter:blur(10px);border:1px solid var(--glass-border);border-radius:18px;box-shadow:var(--shadow-2)}
+  .meter{height:8px;border-radius:999px;background:#e6ecf5;overflow:hidden}
+  .meter>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#2f3e7a,#0f172a);transition:width .4s ease}
+  .fade-in{animation:fadeIn .35s ease both}
+  .header-float{position:static;top:auto;padding:.5rem 0;z-index:auto;background:#ffffff}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes sectionIn{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+  .hint-vat{font-size:.85rem;color:#1f2937;background:#eef2f7;border:1px dashed #d1d8e6;border-radius:999px;padding:.25rem .6rem;display:inline-block}
+  .icon-float{transition:transform .18s ease}
+  .icon-float:hover{transform:scale(1.06)}
+  .hidden-adv{display:none}
 </style>
 
 <div class="container py-4">
-    <!-- شريط التنقل السريع -->
-    <div class="section-header mb-3">
+    <div class="section-header header-float mb-3">
         <h3 class="mb-0">🛒 {{ _('Purchases / المشتريات') }}</h3>
         <div class="d-flex flex-wrap gap-2">
             <a href="{{ url_for('main.raw_materials') }}" class="btn btn-outline-success">
-                🥘 {{ _('Raw Materials / المواد الخام') }}
+                <span class="icon-float">🥘</span> {{ _('Raw Materials / المواد الخام') }}
             </a>
             <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info">
-                💰 {{ _('Sales / المبيعات') }}
+                <span class="icon-float">💰</span> {{ _('Sales / المبيعات') }}
             </a>
             <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
-                🏠 {{ _('Dashboard / لوحة التحكم') }}
+                <span class="icon-float">🏠</span> {{ _('Dashboard / لوحة التحكم') }}
             </a>
         </div>
     </div>
 
     <!-- نموذج إنشاء فاتورة شراء جديدة -->
     <div class="purchases-card">
-        <h5 class="mb-3">{{ _('Create New Purchase Invoice / إنشاء فاتورة شراء جديدة') }}</h5>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0 fade-in">{{ _('Create New Purchase Invoice / إنشاء فاتورة شراء جديدة') }}</h5>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle-adv">{{ _('Show Advanced / إظهار الخيارات المتقدمة') }}</button>
+        </div>
 
         <form method="POST" id="purchase-form">
             {{ form.hidden_tag() }}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
             <!-- بيانات المورد -->
-            <div class="card mb-3">
+            <div class="card mb-3 fade-in">
               <div class="card-header bg-light fw-semibold">{{ _('Supplier Info / بيانات المورد') }}</div>
               <div class="card-body">
                 <div class="row g-3 align-items-end">
@@ -86,29 +91,29 @@ body {
                   </div>
                   <div class="col-md-3" id="supplier_free_box" style="display:none;">
                     <label class="form-label">{{ _('Supplier / المورد أو الجهة') }}</label>
-                    <input name="supplier_name_free" id="supplier_free" class="form-control" placeholder="{{ _('اكتب اسم المورد أو الجهة') }}">
+                    <div class="input-icon"><span class="icon">🧾</span><input name="supplier_name_free" id="supplier_free" class="form-control" placeholder="{{ _('اكتب اسم المورد أو الجهة') }}"></div>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-md-4 hidden-adv">
                     <label class="form-label">{{ _('Phone / رقم الهاتف') }}</label>
-                    <input id="s_phone" class="form-control" value="" readonly>
+                    <div class="input-icon"><span class="icon">📞</span><input id="s_phone" class="form-control" value="" readonly></div>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-md-4 hidden-adv">
                     <label class="form-label">{{ _('Tax Number / الرقم الضريبي') }}</label>
-                    <input id="s_tax" class="form-control" value="" readonly>
+                    <div class="input-icon"><span class="icon">📄</span><input id="s_tax" class="form-control" value="" readonly></div>
                   </div>
                 </div>
                 <div class="row g-3 align-items-end mt-1">
-                  <div class="col-md-6">
+                  <div class="col-md-6 hidden-adv">
                     <label class="form-label">{{ _('Address / الموقع') }}</label>
-                    <input id="s_address" class="form-control" value="" readonly>
+                    <div class="input-icon"><span class="icon">📍</span><input id="s_address" class="form-control" value="" readonly></div>
                   </div>
-                  <div class="col-md-3">
+                  <div class="col-md-3 hidden-adv">
                     <label class="form-label">{{ _('CR Number / السجل التجاري') }}</label>
-                    <input id="s_cr" class="form-control" value="" readonly>
+                    <div class="input-icon"><span class="icon">🏢</span><input id="s_cr" class="form-control" value="" readonly></div>
                   </div>
-                  <div class="col-md-3">
+                  <div class="col-md-3 hidden-adv">
                     <label class="form-label">{{ _('IBAN / الآيبان') }}</label>
-                    <input id="s_iban" class="form-control" value="" readonly>
+                    <div class="input-icon"><span class="icon">🏦</span><input id="s_iban" class="form-control" value="" readonly></div>
                   </div>
                 </div>
                 <input type="hidden" name="supplier_id" id="supplier_id" value="">
@@ -116,32 +121,33 @@ body {
             </div>
 
             <!-- بيانات الفاتورة -->
-            <div class="card mb-3">
+            <div class="card mb-3 fade-in">
               <div class="card-header bg-light fw-semibold">{{ _('Invoice Info / بيانات الفاتورة') }}</div>
               <div class="card-body">
                 <div class="row g-3 align-items-end mb-2">
                   <div class="col-md-3">
                     {{ form.date.label(class_='form-label') }}
-                    {{ form.date(class_='form-control') }}
+                    <div class="input-icon"><span class="icon">📅</span>{{ form.date(class_='form-control') }}</div>
+                    <div id="date-ar" class="form-text"></div>
                   </div>
                   <div class="col-md-3">
                     {{ form.payment_method.label(class_='form-label') }}
-                    {{ form.payment_method(class_='form-select') }}
+                    <div class="input-icon"><span class="icon">💳</span>{{ form.payment_method(class_='form-select') }}</div>
                   </div>
                   
-                  <div class="col-md-3">
+                  <div class="col-md-3 hidden-adv">
                     <label class="form-label">{{ _('Invoice No / رقم الفاتورة') }}</label>
                     <input class="form-control" value="{{ _('Auto on save (e.g. INV-PUR-YYYY-0001) / يُولّد تلقائياً عند الحفظ (مثال: INV-PUR-YYYY-0001)') }}" readonly>
                   </div>
                 </div>
                 <div class="row g-3 align-items-end mb-2">
-                  <div class="col-md-3">
+                  <div class="col-md-3 hidden-adv">
                     <label class="form-label">{{ _('Supplier Invoice No / رقم فاتورة المورد') }}</label>
-                    <input name="supplier_invoice_number" class="form-control" placeholder="{{ _('إن وجد') }}">
+                    <div class="input-icon"><span class="icon">🧾</span><input name="supplier_invoice_number" class="form-control" placeholder="{{ _('إن وجد') }}"></div>
                   </div>
-                  <div class="col-md-9">
+                  <div class="col-md-9 hidden-adv">
                     <label class="form-label">{{ _('Notes / ملاحظات') }}</label>
-                    <input name="notes" class="form-control" placeholder="{{ _('ملاحظات إضافية (اختياري)') }}">
+                    <div class="input-icon"><span class="icon">📝</span><input name="notes" class="form-control" placeholder="{{ _('ملاحظات إضافية (اختياري)') }}"></div>
                   </div>
                 </div>
                 <div class="row g-3 mt-1">
@@ -152,6 +158,7 @@ body {
                       <option value="partial">{{ _('Partial / مدفوع جزئياً') }}</option>
                       <option value="paid">{{ _('Paid / مدفوع') }}</option>
                     </select>
+                    <div class="meter mt-2"><span id="status-meter" style="width:10%"></span></div>
                   </div>
                   <div class="col-md-3" id="partial-paid-box" style="display:none;">
                     <label class="form-label">{{ _('Paid Amount (Partial) / المبلغ المدفوع (جزئي)') }}</label>
@@ -162,7 +169,7 @@ body {
 
 
             <!-- عناصر الفاتورة (مواد خام تدخل في تكوين الوجبات) -->
-            <div class="card mb-3">
+            <div class="card mb-3 fade-in">
               <div class="card-header bg-light fw-semibold">{{ _('Purchase Items / بنود الشراء') }}</div>
               <div class="card-body" id="items-container">
                 {% for item_form in form.items %}
@@ -189,37 +196,38 @@ body {
                       {{ item_form.discount.label(class_='form-label') }}
                       {{ item_form.discount(class_='form-control', step='0.01') }}
                     </div>
-                    <div class="col-md-1">
+                    <div class="col-md-1 hidden-adv">
                       <label class="form-label">VAT %</label>
-                      <input type="number" step="0.01" class="form-control" name="items-{{ loop.index0 }}-tax_pct" value="0">
+                      <input type="number" step="0.01" class="form-control" name="items-{{ loop.index0 }}-tax_pct" value="15" readonly>
+                      <div class="form-text hint-vat">{{ _('شامل ضريبة 15% تلقائياً') }}</div>
                     </div>
                   </div>
                 </div>
                 {% endfor %}
                 <div class="d-flex justify-content-end">
-                  <button type="button" class="btn btn-outline-success" id="add-item-btn">{{ _('Add Item / إضافة بند') }}</button>
+                  <button type="button" class="btn btn-outline-success hover-reflect" id="add-item-btn">{{ _('Add Item / إضافة بند') }}</button>
                 </div>
               </div>
             </div>
 
-            <!-- ملخص مبسط حسب المتطلبات الجديدة -->
-            <div class="card mb-3">
+            <div class="card mb-3 sticky-totals">
               <div class="card-header bg-light fw-semibold">{{ _('Totals / الإجماليات') }}</div>
               <div class="card-body">
                 <div class="row g-3">
-                  <div class="col-md-3">
+                  <div class="col-md-3 hidden-adv">
                     <label class="form-label">{{ _('Total Amount / المبلغ الإجمالي') }}</label>
-                    <input type="number" step="0.01" id="total_amount" name="total_amount" class="form-control" value="">
+                    <input type="number" step="0.01" id="total_amount" name="total_amount" class="form-control" value="" readonly>
                   </div>
-                  <div class="col-md-3">
+                  <div class="col-md-3 hidden-adv">
                     <label class="form-label">{{ _('VAT Amount / مبلغ الضريبة') }}</label>
-                    <input type="number" step="0.01" id="vat_amount" name="vat_amount" class="form-control" value="">
+                    <input type="number" step="0.01" id="vat_amount" name="vat_amount" class="form-control" value="" readonly>
+                    <div class="form-text hint-vat">{{ _('شامل ضريبة 15% تلقائياً') }}</div>
                   </div>
-                  <div class="col-md-3">
+                  <div class="col-md-3 hidden-adv">
                     <label class="form-label">{{ _('Items Count / عدد الأصناف') }}</label>
                     <input type="number" id="items_count" name="items_count" class="form-control" value="">
                   </div>
-                  <div class="col-md-3">
+                  <div class="col-md-3 hidden-adv">
                     <label class="form-label">{{ _('Inventory Kind / نوع المخزون') }}</label>
                     <select id="inventory_kind" name="inventory_kind" class="form-select">
                       <option value="">{{ _('None / بدون') }}</option>
@@ -237,9 +245,10 @@ body {
                     <div>
                         <div>{{ _('Purchases Total / إجمالي المشتريات') }}: <strong id="display_total"></strong></div>
                         <div>{{ _('VAT Total / إجمالي الضريبة') }}: <strong id="display_vat"></strong></div>
+                        <div class="meter mt-2"><span id="calc-meter" style="width:0%"></span></div>
                     </div>
                     <div>
-                        <button type="submit" class="btn btn-primary">{{ _('Save / حفظ') }}</button>
+                        <button type="submit" class="btn btn-primary btn-glow floating-save" id="save-btn">{{ _('Save / حفظ') }}</button>
                         <button type="reset" class="btn btn-outline-secondary">{{ _('Clear / مسح') }}</button>
                     </div>
                 </div>
@@ -256,7 +265,7 @@ body {
     const materials = {{ materials_json | safe }};
 
 
-    // Auto-calculation functionality with input normalization and safety clamps
+    // Auto-calculation
     function toAsciiDigits(str){
         let s = String(str || '');
         const ar = '٠١٢٣٤٥٦٧٨٩';
@@ -266,26 +275,37 @@ body {
         return s;
     }
     function clamp(v, min, max){ v = parseFloat(v); if (isNaN(v)) v = 0; return Math.min(max, Math.max(min, v)); }
+    function arDigits(s){const map={'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};return String(s||'').replace(/[0-9]/g,d=>map[d]);}
+    function fmtMoney(v){try{return '﷼'+Number(v||0).toFixed(2);}catch(e){return '﷼0.00';}}
+    function computeFromItems(){
+      const rows = document.querySelectorAll('#items-container .item-row');
+      let itemsCount = 0, baseSum = 0, vatSum = 0; const VAT_RATE = 0.15;
+      rows.forEach(r=>{
+        const qty = parseFloat(toAsciiDigits(r.querySelector('[name*="quantity"]').value||0))||0;
+        const price = parseFloat(toAsciiDigits(r.querySelector('[name*="price_before_tax"]').value||0))||0;
+        const disc = parseFloat(toAsciiDigits(r.querySelector('[name*="discount"]').value||0))||0;
+        const lineBase = Math.max(0,(qty*price) - disc);
+        const lineVat = lineBase * VAT_RATE;
+        const vatPct = r.querySelector('[name*="tax_pct"]'); if(vatPct){ vatPct.value = 15; }
+        if(qty>0 || price>0 || disc>0){ itemsCount++; }
+        baseSum += lineBase; vatSum += lineVat;
+      });
+      const total = baseSum + vatSum;
+      const totalInput = document.getElementById('total_amount');
+      const vatInput = document.getElementById('vat_amount');
+      const itemsInput = document.getElementById('items_count');
+      if(totalInput) totalInput.value = Number(total||0).toFixed(2);
+      if(vatInput) vatInput.value = Number(vatSum||0).toFixed(2);
+      if(itemsInput) itemsInput.value = itemsCount;
+      const totalEl = document.getElementById('display_total');
+      const vatEl = document.getElementById('display_vat');
+      if(totalEl) totalEl.textContent = fmtMoney(total);
+      if(vatEl) vatEl.textContent = fmtMoney(vatSum);
+      const calcMeter = document.getElementById('calc-meter'); if(calcMeter){ const pct = Math.min(100, Math.round((itemsCount/Math.max(rows.length,1))*100)); calcMeter.style.width = pct+'%'; }
+      try{ if(typeof updatePartialMax==='function') updatePartialMax(); }catch(e){}
+    }
     function calculateTotals() {
-        const totalInput = document.getElementById('total_amount');
-        const vatInput = document.getElementById('vat_amount');
-        const totalRaw = toAsciiDigits(totalInput?.value);
-        const vatRaw = toAsciiDigits(vatInput?.value);
-        const totalEl = document.getElementById('display_total');
-        const vatEl = document.getElementById('display_vat');
-        if (totalRaw && totalRaw.trim() !== '') {
-            const total = parseFloat(totalRaw) || 0;
-            totalEl.textContent = '﷼' + total.toFixed(2);
-        } else {
-            totalEl.textContent = '';
-        }
-        if (vatRaw && vatRaw.trim() !== '') {
-            const vat = parseFloat(vatRaw) || 0;
-            vatEl.textContent = '﷼' + vat.toFixed(2);
-        } else {
-            vatEl.textContent = '';
-        }
-        try{ if(typeof updatePartialMax==='function') updatePartialMax(); }catch(e){}
+        computeFromItems();
     }
 
     // Show stock info when material is selected
@@ -310,21 +330,45 @@ body {
 
     // Event listeners
     document.addEventListener('input', e => {
-        if (e.target && (e.target.id==='total_amount' || e.target.id==='vat_amount')) {
-            calculateTotals();
-        }
+        if (e.target && (e.target.name||'').includes('items-')) { calculateTotals(); }
     });
 
     (function(){
       const container = document.getElementById('items-container');
       const addBtn = document.getElementById('add-item-btn');
-      async function fetchMaterialsByCategory(cat){
+      const categoryData = { sections: [], itemsBySection: {} };
+      async function loadCategories(){
         try{
-          const url = cat ? (`/api/raw_materials?category=${encodeURIComponent(cat)}`) : '/api/raw_materials';
-          const resp = await fetch(url);
-          if(!resp.ok) throw new Error('HTTP '+resp.status);
-          return await resp.json();
-        }catch(e){ return []; }
+          const resp = await fetch('/api/purchase-categories', {credentials:'same-origin'});
+          const data = await resp.json();
+          const pcs = data.purchase_categories || [];
+          const itemsBySection = {};
+          const sections = [];
+          function biName(obj){
+            if(!obj) return '';
+            const en = (obj.en||'').trim(); const ar = (obj.ar||'').trim();
+            if(en && ar) return en+' / '+ar;
+            return en || ar;
+          }
+          pcs.forEach(cat=>{
+            (cat.subcategories || []).forEach(sub=>{
+              const secName = biName(sub.name);
+              if(!secName) return;
+              sections.push(secName);
+              const items = (sub.items || []).map(it=>{
+                if(typeof it === 'string') return it;
+                const en = (it && it.en) || ''; const ar = (it && it.ar) || '';
+                if(en && ar) return en+' / '+ar; return en || ar;
+              }).filter(Boolean);
+              itemsBySection[secName] = items;
+            });
+          });
+          categoryData.sections = sections;
+          categoryData.itemsBySection = itemsBySection;
+        }catch(e){
+          categoryData.sections = [];
+          categoryData.itemsBySection = {};
+        }
       }
       function populateMaterialsSelect(sel, arr){
         const current = sel.value;
@@ -332,22 +376,62 @@ body {
         const opt0 = document.createElement('option'); opt0.value = '0'; opt0.textContent = '{{ _('Select Raw Material / اختر المادة الخام') }}'; sel.appendChild(opt0);
         arr.forEach(o=>{ const opt=document.createElement('option'); opt.value = o.id; opt.textContent = o.name; sel.appendChild(opt); });
         if(current){ sel.value=current; }
+        sel.disabled = (arr.length === 0);
       }
-      async function onCategoryChange(e){
+      function populateCategorySelect(sel){
+        const current = sel.value;
+        sel.innerHTML = '';
+        const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = '{{ _('Select Section / اختر القسم') }}'; sel.appendChild(opt0);
+        categoryData.sections.forEach(name=>{ const opt=document.createElement('option'); opt.value = name; opt.textContent = name; sel.appendChild(opt); });
+        if(current){ sel.value=current; }
+      }
+      function matchMaterialByItemName(item){
+        const normalize=(s)=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+        const target = normalize(item);
+        const tEn = normalize(target.split('/')[0]||'');
+        const tAr = normalize(target.split('/')[1]||'');
+        for(const m of materials){
+          const nm = normalize(m.name);
+          const en = normalize(nm.split('/')[0]||'');
+          const ar = normalize(nm.split('/')[1]||'');
+          if(nm===target || en===target || ar===target || (tEn && en===tEn) || (tAr && ar===tAr)) return m;
+        }
+        return null;
+      }
+      function populateMaterialsFromSection(sel, section){
+        let arr = materials.filter(m => (m.category||'') === section);
+        if(arr.length === 0){
+          const items = categoryData.itemsBySection[section] || [];
+          arr = [];
+          items.forEach(it=>{ const m = matchMaterialByItemName(it); if(m) arr.push(m); });
+        }
+        populateMaterialsSelect(sel, arr);
+        sel.disabled = (arr.length === 0);
+      }
+      function onCategoryChange(e){
         const row = e.target.closest('.item-row');
         const matSel = row?.querySelector('.material-select');
-        const cat = e.target.value;
-        const arr = await fetchMaterialsByCategory(cat);
-        populateMaterialsSelect(matSel, arr);
+        const sec = e.target.value;
+        populateMaterialsFromSection(matSel, sec);
+        if(matSel){ matSel.disabled = false; matSel.selectedIndex = 0; }
       }
       function attachRowEvents(row){
         const catSel = row.querySelector('.category-select');
         const matSel = row.querySelector('.material-select');
         catSel?.addEventListener('change', onCategoryChange);
+        populateCategorySelect(catSel);
+        // Require selecting a section first
+        populateMaterialsSelect(matSel, []);
+        matSel.disabled = true;
+        // Guard: if material is focused without section, notify user
+        matSel?.addEventListener('focus', function(){
+          if(!catSel || !catSel.value){
+            alert('{{ _('اختر القسم أولًا ثم اختر الصنف/المادة') }}');
+            catSel && catSel.focus();
+          }
+        });
       }
-      function nextIndex(){
-        const rows = container.querySelectorAll('.item-row'); return rows.length;
-      }
+      function nextIndex(){ const rows = container.querySelectorAll('.item-row'); return rows.length; }
       function cloneLast(){
         const rows = container.querySelectorAll('.item-row');
         if (rows.length===0) return;
@@ -363,10 +447,32 @@ body {
         });
         container.insertBefore(clone, addBtn.parentElement);
         attachRowEvents(clone);
+        clone.style.opacity='0'; clone.style.transform='translateY(8px)'; requestAnimationFrame(()=>{ clone.style.transition='all .25s ease'; clone.style.opacity='1'; clone.style.transform='translateY(0)'; });
+        calculateTotals();
       }
       addBtn?.addEventListener('click', cloneLast);
-      // Attach events for initial rows
-      container.querySelectorAll('.item-row').forEach(attachRowEvents);
+      document.addEventListener('DOMContentLoaded', async function(){
+        await loadCategories();
+        container.querySelectorAll('.item-row').forEach(attachRowEvents);
+        // Block form submit if any row has material/quantity without section
+        const formEl = document.getElementById('purchase-form');
+        formEl?.addEventListener('submit', function(ev){
+          const rows = container.querySelectorAll('.item-row');
+          for(const row of rows){
+            const catSel = row.querySelector('.category-select');
+            const matSel = row.querySelector('.material-select');
+            const qtyIn = row.querySelector('[name*="quantity"]');
+            const matChosen = matSel && matSel.value && matSel.value !== '0';
+            const qtyVal = qtyIn && parseFloat(qtyIn.value||'0')>0;
+            if((matChosen || qtyVal) && (!catSel || !catSel.value)){
+              alert('{{ _('يجب اختيار القسم أولًا قبل اختيار الصنف/المادة') }}');
+              ev.preventDefault();
+              catSel && catSel.focus();
+              return;
+            }
+          }
+        });
+      });
     })();
 
     // Remove item functionality
@@ -434,9 +540,7 @@ body {
 
   function setDefaultTaxByType(){
     const t = (invType?.value||'VAT').toUpperCase();
-        const vatInput = document.getElementById('vat_amount');
-        if(vatInput){ vatInput.value=''; }
-        calculateTotals();
+    calculateTotals();
   }
   invType?.addEventListener('change', toggleSupplierMode);
   toggleSupplierMode();
@@ -447,9 +551,18 @@ body {
 
 
     // Initialize stock info and calculations
-    document.addEventListener('DOMContentLoaded', function() {
-        calculateTotals();
-    });
+  document.addEventListener('DOMContentLoaded', function() {
+    calculateTotals();
+        const dateInput = document.querySelector('[name="date"]');
+        const dateAr = document.getElementById('date-ar');
+        function toArDate(d){ if(!d) return ''; const parts = String(d).split('-'); if(parts.length===3){ return arDigits(parts[2]+'/'+parts[1]+'/'+parts[0]); } return ''; }
+        if(dateInput && dateAr){ dateAr.textContent = toArDate(dateInput.value); dateInput.addEventListener('change', ()=> dateAr.textContent = toArDate(dateInput.value)); }
+        const statusSel = document.getElementById('purchase-status'); const meter=document.getElementById('status-meter');
+        function updateMeter(){ const v=(statusSel.value||'unpaid').toLowerCase(); meter.style.width = v==='paid'? '100%' : (v==='partial'? '55%' : '15%'); }
+        statusSel?.addEventListener('change', updateMeter); updateMeter();
+    const saveBtn=document.getElementById('save-btn'); if(saveBtn){ saveBtn.addEventListener('click', function(e){ const rect=this.getBoundingClientRect(); const r=document.createElement('span'); const size=Math.max(rect.width,rect.height); r.className='ripple'; r.style.width=r.style.height=size+'px'; r.style.left=(e.offsetX-size/2)+'px'; r.style.top=(e.offsetY-size/2)+'px'; this.appendChild(r); setTimeout(()=>r.remove(),600); }); }
+    const toggle=document.getElementById('toggle-adv'); if(toggle){ toggle.addEventListener('click', function(){ const hidden=document.querySelectorAll('.hidden-adv'); const toShow = Array.from(hidden).some(el=> el.style.display==='none' || window.getComputedStyle(el).display==='none'); hidden.forEach(el=>{ el.style.display = toShow ? '' : 'none'; }); this.textContent = toShow ? '{{ _('Hide Advanced / إخفاء الخيارات المتقدمة') }}' : '{{ _('Show Advanced / إظهار الخيارات المتقدمة') }}'; }); }
+  });
 </script>
 
 <script>

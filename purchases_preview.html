@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="ar" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="ImZkNTc3NGM0NjAyZDYwOTBjMGYyNDg1MjU4NjQ2ZTVhNWI1OTAzMzUi.aSnG2A.3Art8D22se20bENWAmTnuQiwFA8">
+    <title>Login / ????? ??????</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="/static/css/style.css?v=" rel="stylesheet">
+    <style>
+      :root{
+        --primary:#D35400; /* Orange */
+        --secondary:#2C3E50; /* Dark Gray */
+        --bg:#F8F9FA; /* Light */
+        --success:#27AE60;
+        --danger:#E74C3C;
+        --text:#212529;
+        --muted:#6c757d;
+        --link:#0d6efd;
+      }
+      html,body{ background:var(--bg); color:var(--text); font-family:'Tajawal', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; font-size:15px; }
+      h1,h2,h3,h4{ font-weight:700; color:var(--secondary); }
+      h3{ font-size:22px; }
+      body[dir="rtl"] { text-align: right; }
+
+
+
+      /* Forms - improve input contrast */
+      input.form-control, select.form-select, textarea.form-control{
+        background:#fff; color:#212529; border-color:#ced4da;
+      }
+      body.dark input.form-control, body.dark select.form-select, body.dark textarea.form-control{
+        background:#1E1E1E; color:#ECECEC; border-color:#3a3a3a;
+      }
+
+      /* Navbar */
+      .navbar{ background:#fff !important; border-bottom:1px solid #eee; }
+      .navbar .navbar-brand{ color:var(--primary); font-weight:700; }
+
+      /* Buttons */
+      .btn{ border-radius:8px; font-weight:600; padding:10px 16px; transition: all .2s ease-in-out; }
+      .btn:hover{ transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+      .btn:focus{ box-shadow: 0 0 0 .2rem rgba(230,126,34,.25); }
+      .btn-primary{ background-color:var(--primary); border-color:var(--primary); }
+      .btn-primary:hover{ background-color:#E67E22; border-color:#E67E22; }
+      .btn-success{ background-color:var(--success); border-color:var(--success); }
+      .btn-success:hover{ background-color:#2ECC71; border-color:#2ECC71; }
+      .btn-danger{ background-color:var(--danger); border-color:var(--danger); }
+      .btn-danger:hover{ background-color:#C0392B; border-color:#C0392B; }
+
+      /* Cards */
+      .card { background:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
+      .card .card-header{ font-size:18px; font-weight:700; border-bottom:2px solid #f1f1f1; background:#fff; }
+
+      /* Tables */
+      .table-responsive{ max-height:70vh; }
+      table{ width:100%; border-collapse:collapse; }
+      table thead{ position: sticky; top: 0; z-index: 2; background-color:var(--primary); color:#fff; }
+      table th, table td{ padding:12px; border-bottom:1px solid #ddd; vertical-align: middle; }
+      table tbody tr:hover{ background:#f5f5f5; }
+
+      /* Form focus */
+      .form-control:focus, .form-select:focus{ border-color:#E67E22; box-shadow:0 0 0 .2rem rgba(230,126,34,.2); }
+
+      /* Section header helper */
+      .section-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+      .section-header h3{ margin:0; }
+    </style>
+    <style>
+      /* Theme variants via body classes */
+      body.dark{
+        --bg:#121212;
+        --secondary:#E0E0E0;
+        --text:#ECECEC;
+        --muted:#BDBDBD;
+        --link:#64B5F6;
+        color:#ECECEC;
+        background:#121212;
+      }
+      body.dark .navbar{ background:#1E1E1E !important; border-color:#2a2a2a !important; }
+      body.dark .card{ background:#1E1E1E; box-shadow:none; border:1px solid #2a2a2a; }
+      body.dark table thead{ background-color:#E67E22; }
+      body.dark table tbody tr:hover{ background:#1a1a1a; }
+      body.dark .btn-outline-primary{ color:#E67E22; border-color:#E67E22; }
+      body.dark .btn-outline-primary:hover{ background:#E67E22; color:#fff; }
+      body.dark .btn-outline-danger{ color:#E74C3C; border-color:#E74C3C; }
+      body.dark .btn-outline-danger:hover{ background:#E74C3C; color:#fff; }
+      body.dark a{ color:var(--link) }
+      body.dark .text-muted{ color:var(--muted) !important }
+      body.dark .text-dark{ color:var(--text) !important }
+      body.dark .card, body.dark .card *{ color:var(--text) !important }
+      body.dark .navbar, body.dark .navbar *{ color:var(--text) !important }
+      body.dark .section-header, body.dark .section-header *{ color:var(--text) !important }
+      body.dark .table, body.dark .table *{ color:var(--text) !important }
+      body.dark .form-label, body.dark .form-check-label{ color:var(--text) !important }
+      body.dark .badge{ color:var(--text) !important }
+      body.dark ::placeholder{ color:var(--muted) !important; opacity:.85 }
+      body.dark .input-group-text{ background:#2a2a2a; color:var(--text) !important; border-color:#3a3a3a }
+      body.dark .form-select option{ color:#121212; background:#ECECEC }
+      body.dark .form-check-input{ accent-color:#E67E22 }
+      body.dark .list-group-item{ background:#1E1E1E; color:var(--text); border-color:#2a2a2a }
+      body.dark .modal-content{ background:#1E1E1E; color:var(--text); border-color:#2a2a2a }
+      body.dark .form-control[disabled], body.dark .form-control[readonly]{ background:#2a2a2a; color:var(--text) !important; border-color:#3a3a3a }
+      body.dark .form-select[disabled]{ background:#2a2a2a; color:var(--muted) !important; border-color:#3a3a3a }
+    </style>
+
+      <meta name="csrf-token" content="ImZkNTc3NGM0NjAyZDYwOTBjMGYyNDg1MjU4NjQ2ZTVhNWI1OTAzMzUi.aSnG2A.3Art8D22se20bENWAmTnuQiwFA8">
+
+    
+
+  </head>
+  <body dir="ltr" class="light">
+    
+
+    
+
+    
+
+<style>
+  body {
+    background: linear-gradient(160deg, #ffb347 0%, #ffcc33 50%, #ff9a3c 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    animation: bgShift 18s ease-in-out infinite;
+  }
+  .autumn-scene {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .autumn-scene .shape {
+    position: absolute;
+    opacity: 0.25;
+    filter: blur(1px);
+    animation: float 12s linear infinite, drift 14s ease-in-out infinite;
+  }
+  .autumn-scene .shape.square { width: 24px; height: 24px; background: #8b5e3c; border-radius: 6px; }
+  .autumn-scene .shape.circle { width: 18px; height: 18px; background: #f2a65a; border-radius: 50%; }
+  .autumn-scene .tree { position: absolute; bottom: 24px; width: 60px; height: 80px; }
+  .autumn-scene .tree .trunk { position: absolute; bottom: 0; left: 24px; width: 12px; height: 30px; background: #6b3f22; border-radius: 3px; }
+  .autumn-scene .tree .crown { position: absolute; bottom: 28px; left: 8px; width: 44px; height: 44px; background: #ffb347; border-radius: 50%; box-shadow: 0 0 0 10px rgba(255,255,255,0.08) inset; animation: sway 5s ease-in-out infinite alternate; }
+  @keyframes float { 0% { transform: translateY(0) rotate(0deg) } 50% { transform: translateY(-20px) rotate(6deg) } 100% { transform: translateY(0) rotate(0deg) } }
+  @keyframes drift { 0% { transform: translateX(0) } 50% { transform: translateX(25px) } 100% { transform: translateX(0) } }
+  @keyframes sway { 0% { transform: translateY(0) scale(1) } 100% { transform: translateY(-2px) scale(1.02) } }
+  @keyframes bgShift { 0% { filter: hue-rotate(0deg) } 50% { filter: hue-rotate(12deg) } 100% { filter: hue-rotate(0deg) } }
+  .login-card {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 18px;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    padding: 2rem;
+    width: 100%;
+    max-width: 380px;
+    color: #43281c;
+    position: relative;
+    z-index: 1;
+    transform: translateY(10px) scale(0.98);
+    opacity: 0;
+    animation: cardEnter 600ms cubic-bezier(.2,.8,.2,1) forwards, cardPulse 9s ease-in-out infinite;
+  }
+  .form-control {
+    background: rgba(255, 255, 255, 0.75);
+    border: none;
+    color: #43281c;
+    border-radius: 12px;
+    padding-right: 12px;
+    transition: box-shadow .2s ease, transform .2s ease;
+  }
+  .form-control::placeholder {
+    color: rgba(67,40,28,0.6);
+  }
+  .form-control:focus { box-shadow: 0 0 0 4px rgba(139,94,60,0.2); transform: translateY(-1px); }
+  .btn-primary {
+    background: linear-gradient(180deg, #8b5e3c, #7a4e2f);
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 6px 12px rgba(139,94,60,0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-primary:hover {
+    background: linear-gradient(180deg, #6f482e, #5f3e28);
+  }
+  .lang-switch {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+  }
+  .input-group-text { background: transparent; border: none; color: #43281c; }
+  .brand-logo { width: 180px; margin: 0 auto 6px; }
+  .brand-logo .brand-svg { width: 100%; height: auto; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); }
+  .brand-logo .ring { animation: ringDraw 5s ease-in-out infinite; transform-origin: 50% 50%; }
+  .brand-logo .steam { animation: steamRise 4s ease-in-out infinite; transform-origin: 50% 35%; }
+  .brand-logo .spark { animation: sparkPulse 3.2s ease-in-out infinite; }
+  @keyframes ringDraw { 0% { stroke-dasharray: 0 440; } 40% { stroke-dasharray: 440 0; } 60% { stroke-dasharray: 440 0; transform: scale(1.02); } 100% { stroke-dasharray: 0 440; transform: scale(1); } }
+  @keyframes steamRise { 0% { opacity: .0; transform: translateY(6px) scale(.98); } 30% { opacity: .6; transform: translateY(-2px) scale(1.01); } 60% { opacity: .9; transform: translateY(-6px) scale(1.03); } 100% { opacity: .0; transform: translateY(6px) scale(.98); } }
+  @keyframes sparkPulse { 0% { opacity: .2; transform: scale(1); } 50% { opacity: .9; transform: scale(1.08); } 100% { opacity: .2; transform: scale(1); } }
+  .input-icon svg { width: 22px; height: 22px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); transition: transform .18s ease, filter .18s ease; }
+  .input-group:hover .input-icon svg { transform: scale(1.06) rotate(1deg); filter: drop-shadow(0 4px 8px rgba(255,153,0,.35)); }
+  .leaf { position: absolute; width: 16px; height: 10px; background: #c26a2f; border-radius: 10px 10px 2px 10px; transform-origin: center; opacity: .8; filter: drop-shadow(0 1px 2px rgba(0,0,0,.2)); animation: fall var(--dur) linear forwards, spin var(--spin) ease-in-out infinite; }
+  @keyframes fall { 0% { transform: translate(var(--x), -10%) rotate(0deg) } 100% { transform: translate(calc(var(--x) + var(--dx)), 110vh) rotate(360deg) } }
+  @keyframes spin { 0% { border-radius: 10px 10px 2px 10px } 50% { border-radius: 8px 2px 10px 10px } 100% { border-radius: 10px 10px 2px 10px } }
+  @keyframes cardEnter { 0% { transform: translateY(20px) scale(.97); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
+  @keyframes cardPulse { 0% { transform: translateY(0) } 50% { transform: translateY(-2px) } 100% { transform: translateY(0) } }
+</style>
+
+<div class="lang-switch">
+  <a href="?lang=en" class="btn btn-light btn-sm">EN</a>
+  <a href="?lang=ar" class="btn btn-light btn-sm">AR</a>
+</div>
+
+<div class="autumn-scene">
+  <div class="tree" style="left:60px"><div class="trunk"></div><div class="crown"></div></div>
+  <div class="tree" style="left:140px"><div class="trunk"></div><div class="crown" style="background:#ffc766"></div></div>
+  <div class="tree" style="right:80px"><div class="trunk"></div><div class="crown" style="background:#ff9a3c"></div></div>
+  <div class="shape square" style="left:20%; top:20%"></div>
+  <div class="shape circle" style="left:35%; top:40%"></div>
+  <div class="shape square" style="left:55%; top:25%"></div>
+  <div class="shape circle" style="left:70%; top:50%"></div>
+</div>
+
+<div class="login-card">
+  <div class="text-center mb-4">
+    <div class="brand-logo">
+      <svg class="brand-svg" viewBox="0 0 220 160" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="gWarm" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffcc66">
+              <animate attributeName="stop-color" values="#ffcc66;#ffd48a;#ffcc66" dur="6s" repeatCount="indefinite" />
+            </stop>
+            <stop offset="100%" stop-color="#ff9a3c">
+              <animate attributeName="stop-color" values="#ff9a3c;#ff7f2a;#ff9a3c" dur="6s" repeatCount="indefinite" />
+            </stop>
+          </linearGradient>
+          <radialGradient id="gGlow" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stop-color="rgba(255,255,255,.9)" />
+            <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+          </radialGradient>
+          <filter id="fSoft" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" />
+          </filter>
+        </defs>
+        <circle cx="110" cy="88" r="60" fill="none" stroke="url(#gWarm)" stroke-width="5" class="ring" />
+        <ellipse cx="110" cy="105" rx="68" ry="20" fill="url(#gGlow)" filter="url(#fSoft)" />
+        <g transform="translate(110,72)" filter="url(#fSoft)">
+          <path d="M-30,-6 C-12,-18 12,-18 30,-6 C26,8 -26,8 -30,-6 Z" fill="url(#gWarm)" />
+          <rect x="-8" y="-2" width="16" height="10" rx="5" fill="#fff5" />
+        </g>
+        <g transform="translate(110,100)">
+          <path d="M-34,0 L-18,0" stroke="#7a4e2f" stroke-width="4" />
+          <path d="M-18,-16 L-18,8" stroke="#7a4e2f" stroke-width="4" />
+          <circle cx="-34" cy="-10" r="2.5" fill="#7a4e2f" />
+          <circle cx="-34" cy="-4" r="2.5" fill="#7a4e2f" />
+          <circle cx="-34" cy="2" r="2.5" fill="#7a4e2f" />
+          <path d="M18,-2 C22,-12 32,-12 36,-2 L36,10 C30,12 24,12 18,10 Z" fill="#7a4e2f" />
+          <circle cx="28" cy="-8" r="3" fill="#7a4e2f" />
+        </g>
+        <g class="steam" transform="translate(110,60)">
+          <path d="M-10,8 C-6,2 -2,-2 0,-8" stroke="#fff" stroke-width="2" fill="none" opacity=".6" />
+          <path d="M6,8 C10,2 14,-2 16,-8" stroke="#fff" stroke-width="2" fill="none" opacity=".6" />
+        </g>
+        <circle cx="164" cy="46" r="4" fill="#fff" class="spark" />
+        <circle cx="46" cy="46" r="3" fill="#fff" class="spark" />
+      </svg>
+    </div>
+    <h5 style="margin-top:8px; font-weight:700;">Company</h5>
+    <h4>Login / ????? ??????</h4>
+    <p style="font-size:0.9rem; opacity:0.8;">Please sign in / ?????? ????? ??????</p>
+  </div>
+
+  
+    
+      
+        <div class="alert alert-message text-dark">Please log in to access this page.</div>
+      
+    
+  
+
+  <form id="login-form" method="POST" novalidate accept-charset="UTF-8" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="ImZkNTc3NGM0NjAyZDYwOTBjMGYyNDg1MjU4NjQ2ZTVhNWI1OTAzMzUi.aSnG2A.3Art8D22se20bENWAmTnuQiwFA8">
+    <div class="mb-3 input-group">
+      <span class="input-group-text input-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="gUser" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#ffcc66" />
+              <stop offset="100%" stop-color="#ff9a3c" />
+            </linearGradient>
+          </defs>
+          <circle cx="12" cy="8" r="4" fill="url(#gUser)" />
+          <path d="M4,20 C4,15 8,14 12,14 C16,14 20,15 20,20" fill="url(#gUser)" />
+        </svg>
+      </span>
+      <input type="text" name="username" class="form-control" placeholder="Username / ??? ????????"
+             value="" required autocomplete="username" inputmode="text" />
+    </div>
+
+    <div class="mb-3 input-group">
+      <span class="input-group-text input-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="gLock" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#8b5e3c" />
+              <stop offset="100%" stop-color="#5f3e28" />
+            </linearGradient>
+          </defs>
+          <rect x="6" y="11" width="12" height="9" rx="2" fill="url(#gLock)" />
+          <path d="M9,11 V8 C9,6.3 10.3,5 12,5 C13.7,5 15,6.3 15,8 V11" stroke="url(#gLock)" stroke-width="2" fill="none" />
+          <circle cx="12" cy="15" r="1.5" fill="#fff" />
+        </svg>
+      </span>
+      <!-- PASSWORD: always type=password, NO toggle, NO reveal -->
+      <input type="password" name="password" class="form-control" id="password"
+             placeholder="Password / ???? ??????" required autocomplete="current-password" inputmode="text" />
+    </div>
+
+    <div class="mb-3 form-check">
+      <input type="checkbox" name="remember" class="form-check-input" id="remember" >
+      <label for="remember" class="form-check-label">Remember Me / ??????</label>
+    </div>
+
+    <div class="d-grid">
+      <button type="submit" class="btn btn-primary btn-lg">Login / ????? ??????</button>
+    </div>
+
+    <div class="mt-3 text-center" style="font-size:0.9rem; opacity:0.8;">
+      <a href="#" class="me-2">Sign Up / ????? ????</a>
+      <a href="#">Forgot Password? / ???? ???? ???????</a>
+    </div>
+  </form>
+</div>
+
+
+<script>
+(function(){
+  const f = document.getElementById('login-form');
+  if(!f) return;
+  const clone = f.cloneNode(true);
+  f.parentNode.replaceChild(clone, f);
+  clone.addEventListener('submit', function(e){
+    const u = clone.querySelector('input[name="username"]');
+    const p = clone.querySelector('input[name="password"]');
+    if(!u || !p || !u.value.trim() || !p.value.trim()){
+      e.preventDefault();
+      alert('Please fill all required fields / ???? ??? ???? ?????? ????????');
+      return;
+    }
+  }, { once:false });
+})();
+(function(){
+  const scene = document.querySelector('.autumn-scene');
+  if(!scene) return;
+  let count = 0;
+  const maxLeaves = 30;
+  function spawnLeaf(){
+    if(count >= maxLeaves) return;
+    const el = document.createElement('div');
+    el.className = 'leaf';
+    const x = Math.random()*window.innerWidth;
+    const dx = (Math.random()*60-30)+'px';
+    const dur = (10+Math.random()*10)+'s';
+    const spin = (3+Math.random()*4)+'s';
+    el.style.setProperty('--x', x+'px');
+    el.style.setProperty('--dx', dx);
+    el.style.setProperty('--dur', dur);
+    el.style.setProperty('--spin', spin);
+    el.style.left = 0;
+    el.style.top = 0;
+    el.style.background = Math.random()>.5 ? '#c26a2f' : '#e08b3c';
+    scene.appendChild(el);
+    count++;
+    setTimeout(()=>{ el.remove(); count--; }, (parseFloat(dur)*1000)+500);
+  }
+  let ticker = setInterval(spawnLeaf, 350);
+  window.addEventListener('blur', ()=>{ clearInterval(ticker); ticker=null; });
+  window.addEventListener('focus', ()=>{ if(!ticker) ticker=setInterval(spawnLeaf,350); });
+  const card = document.querySelector('.login-card');
+  let cx = window.innerWidth/2, cy = window.innerHeight/2;
+  window.addEventListener('mousemove', (e)=>{
+    const dx = (e.clientX - cx)/window.innerWidth;
+    const dy = (e.clientY - cy)/window.innerHeight;
+    if(card){ card.style.transform = `translateY(${dy*-6}px) rotateX(${dy*3}deg) rotateY(${dx*3}deg)`; }
+  });
+  const btn = document.querySelector('.btn-primary');
+  if(btn){
+    btn.addEventListener('click', function(e){
+      const r = document.createElement('span');
+      const rect = this.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      r.style.position='absolute'; r.style.borderRadius='50%'; r.style.background='rgba(255,255,255,.25)'; r.style.pointerEvents='none';
+      r.style.width=r.style.height='6px'; r.style.left=x+'px'; r.style.top=y+'px';
+      this.appendChild(r);
+      r.animate([{transform:'scale(1)', opacity:1},{transform:'scale(22)', opacity:0}], {duration:600, easing:'ease-out'}).onfinish=()=>r.remove();
+    });
+  }
+})();
+</script>
+
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/MotionPathPlugin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.9.6/lottie.min.js"></script>
+    <script src="/static/js/main.js?v="></script>
+    <script src="/static/js/modal-system.js?v="></script>
+    <script src="/static/js/printInvoice.js?v="></script>
+    <script src="/static/js/base-behavior.js?v="></script>
+    <script src="/static/js/motion.js?v="></script>
+
+    
+<script>
+(function(){
+  const f = document.getElementById('login-form');
+  if(!f) return;
+  const clone = f.cloneNode(true);
+  f.parentNode.replaceChild(clone, f);
+  clone.addEventListener('submit', function(e){
+    const u = clone.querySelector('input[name="username"]');
+    const p = clone.querySelector('input[name="password"]');
+    if(!u || !p || !u.value.trim() || !p.value.trim()){
+      e.preventDefault();
+      alert('Please fill all required fields / ???? ??? ???? ?????? ????????');
+      return;
+    }
+  }, { once:false });
+})();
+(function(){
+  const scene = document.querySelector('.autumn-scene');
+  if(!scene) return;
+  let count = 0;
+  const maxLeaves = 30;
+  function spawnLeaf(){
+    if(count >= maxLeaves) return;
+    const el = document.createElement('div');
+    el.className = 'leaf';
+    const x = Math.random()*window.innerWidth;
+    const dx = (Math.random()*60-30)+'px';
+    const dur = (10+Math.random()*10)+'s';
+    const spin = (3+Math.random()*4)+'s';
+    el.style.setProperty('--x', x+'px');
+    el.style.setProperty('--dx', dx);
+    el.style.setProperty('--dur', dur);
+    el.style.setProperty('--spin', spin);
+    el.style.left = 0;
+    el.style.top = 0;
+    el.style.background = Math.random()>.5 ? '#c26a2f' : '#e08b3c';
+    scene.appendChild(el);
+    count++;
+    setTimeout(()=>{ el.remove(); count--; }, (parseFloat(dur)*1000)+500);
+  }
+  let ticker = setInterval(spawnLeaf, 350);
+  window.addEventListener('blur', ()=>{ clearInterval(ticker); ticker=null; });
+  window.addEventListener('focus', ()=>{ if(!ticker) ticker=setInterval(spawnLeaf,350); });
+  const card = document.querySelector('.login-card');
+  let cx = window.innerWidth/2, cy = window.innerHeight/2;
+  window.addEventListener('mousemove', (e)=>{
+    const dx = (e.clientX - cx)/window.innerWidth;
+    const dy = (e.clientY - cy)/window.innerHeight;
+    if(card){ card.style.transform = `translateY(${dy*-6}px) rotateX(${dy*3}deg) rotateY(${dx*3}deg)`; }
+  });
+  const btn = document.querySelector('.btn-primary');
+  if(btn){
+    btn.addEventListener('click', function(e){
+      const r = document.createElement('span');
+      const rect = this.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      r.style.position='absolute'; r.style.borderRadius='50%'; r.style.background='rgba(255,255,255,.25)'; r.style.pointerEvents='none';
+      r.style.width=r.style.height='6px'; r.style.left=x+'px'; r.style.top=y+'px';
+      this.appendChild(r);
+      r.animate([{transform:'scale(1)', opacity:1},{transform:'scale(22)', opacity:0}], {duration:600, easing:'ease-out'}).onfinish=()=>r.remove();
+    });
+  }
+})();
+</script>
+
+  </body>
+</html>

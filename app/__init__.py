@@ -41,6 +41,14 @@ def create_app(config_class=None):
         static_url_path='/static'
     )
 
+    try:
+        os.environ.setdefault('TZ', 'Asia/Riyadh')
+        import time as _time
+        if hasattr(_time, 'tzset'):
+            _time.tzset()
+    except Exception:
+        pass
+
     # Honor reverse proxy headers (Render), fix scheme/host/port
     try:
         from werkzeug.middleware.proxy_fix import ProxyFix
@@ -54,6 +62,11 @@ def create_app(config_class=None):
     # Ensure secrets
     app.config.setdefault('SECRET_KEY', os.getenv('SECRET_KEY', os.urandom(24)))
     app.config.setdefault('WTF_CSRF_SECRET_KEY', app.config['SECRET_KEY'])
+    # Feature flags (disabled by default for production control)
+    try:
+        app.config.setdefault('INVENTORY_INTEL_ENABLED', bool(int(os.getenv('INVENTORY_INTEL_ENABLED', '0'))))
+    except Exception:
+        app.config.setdefault('INVENTORY_INTEL_ENABLED', False)
     # Inject common template globals (asset version + CSRF token helper)
     from flask_wtf.csrf import generate_csrf
     @app.context_processor
@@ -150,6 +163,13 @@ def create_app(config_class=None):
     csrf.exempt('main.api_table_layout')
     # Exempt bulk salary receipt print (HTML POST not sensitive)
     csrf.exempt('main.salary_receipt_bulk')
+    # Exempt employee payment APIs to allow AJAX calls from UVD screen
+    try:
+        csrf.exempt('emp_pay.api_employee_pay_salary')
+        csrf.exempt('emp_pay.api_employee_pay_salary_bulk')
+        csrf.exempt('emp_pay.api_employee_pay_health')
+    except Exception:
+        pass
     # Flask-Login setup: login view and user loader
     login_manager.login_view = 'main.login'
     from models import User
@@ -176,10 +196,57 @@ def create_app(config_class=None):
 
     # تسجيل Blueprints
     from app.routes import main, vat
+    try:
+        from app.emp_pay import emp_pay_bp
+    except Exception:
+        emp_pay_bp = None
     from app.reports.payroll_reports import reports_bp
     app.register_blueprint(main)
     app.register_blueprint(vat)
     app.register_blueprint(reports_bp)
+    if emp_pay_bp:
+        app.register_blueprint(emp_pay_bp)
+    # Alias certain API endpoints without blueprint prefix to avoid template BuildError
+    try:
+        vf = app.view_functions
+        alias_map = {
+            'api_sales_mark_platform_unpaid': 'main.api_sales_mark_platform_unpaid',
+            'api_sales_mark_unpaid_paid': 'main.api_sales_mark_unpaid_paid',
+            'api_sales_batch_pay': 'main.api_sales_batch_pay',
+            'api_sales_pay': 'main.api_sales_pay',
+        }
+        for alias, orig in alias_map.items():
+            if orig in vf and alias not in vf:
+                app.add_url_rule(
+                    '/api/sales/mark-platform-unpaid' if alias=='api_sales_mark_platform_unpaid' else (
+                        '/api/sales/mark-unpaid-paid' if alias=='api_sales_mark_unpaid_paid' else (
+                            '/api/sales/batch-pay' if alias=='api_sales_batch_pay' else '/api/sales/pay'
+                        )
+                    ),
+                    endpoint=alias,
+                    view_func=vf[orig],
+                    methods=['GET','POST']
+                )
+    except Exception:
+        pass
+
+    # Override Jinja url_for with safe wrapper that tries blueprint fallback
+    try:
+        from flask import url_for as _flask_url_for
+        def url_for_safe(endpoint, *args, **kwargs):
+            try:
+                return _flask_url_for(endpoint, *args, **kwargs)
+            except Exception:
+                try:
+                    return _flask_url_for(f'main.{endpoint}', *args, **kwargs)
+                except Exception:
+                    # Known alias fallback for platform unpaid normalization
+                    if endpoint == 'api_sales_mark_platform_unpaid':
+                        return '/api/sales/mark-platform-unpaid'
+                    return '#'
+        app.jinja_env.globals['url_for'] = url_for_safe
+    except Exception:
+        pass
     try:
         from routes.journal import bp as journal_bp
         app.register_blueprint(journal_bp)
