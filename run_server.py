@@ -17,6 +17,13 @@ def open_browser():
 
 if __name__ == '__main__':
     try:
+        os.environ.setdefault('TZ', 'Asia/Riyadh')
+        try:
+            import time as _time
+            if hasattr(_time, 'tzset'):
+                _time.tzset()
+        except Exception:
+            pass
         from app import create_app
         app = create_app()
 
@@ -34,8 +41,8 @@ if __name__ == '__main__':
         app.run(
             host='127.0.0.1',
             port=5000,
-            debug=False,
-            use_reloader=False
+            debug=True,
+            use_reloader=True
         )
 
     except ImportError as e:

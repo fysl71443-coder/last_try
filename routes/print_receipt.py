@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, current_app, url_for, send_file
 from io import BytesIO
 import base64
-from models import SalesInvoice, SalesInvoiceItem, Settings  # عدّل حسب مشروعك
+from models import SalesInvoice, SalesInvoiceItem, Settings, KSA_TZ, get_saudi_now  # عدّل حسب مشروعك
 from utils.qr import generate_zatca_qr_from_invoice
 from datetime import datetime
 import pytz
@@ -49,13 +49,29 @@ def show_receipt(invoice_id):
     # جلب عناصر الفاتورة
     items = SalesInvoiceItem.query.filter_by(invoice_id=invoice.id).all()
 
+    try:
+        dt_obj = getattr(invoice, 'created_at', None)
+        if dt_obj:
+            if getattr(dt_obj, 'tzinfo', None):
+                receipt_dt = dt_obj.astimezone(KSA_TZ).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                try:
+                    receipt_dt = dt_obj.replace(tzinfo=pytz.UTC).astimezone(KSA_TZ).strftime('%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    receipt_dt = KSA_TZ.localize(dt_obj).strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            receipt_dt = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        receipt_dt = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
+
     return render_template('receipt.html',
                          invoice=invoice,
                          settings=settings,
                          branch=branch,
                          items=items,
                          currency_data_url=currency_data_url,
-                         zatca_b64=zatca_b64)
+                         zatca_b64=zatca_b64,
+                         receipt_dt=receipt_dt)
 
 @bp.route('/receipt/<int:invoice_id>/pdf')
 def receipt_pdf(invoice_id):
