@@ -39,44 +39,15 @@ def _normalize_short_aliases():
             except Exception:
                 pass
         num_map = {
-            # Cash/Bank legacy -> new
-            '1010': '1040',
-            '1110': '1040',
-            '1020': '1050',
-            '1120': '1050',
-            # VAT legacy -> new
+            # VAT legacy -> new unified
             '6100': '2060',
-            '6200': '1100',
             '6300': '6000',
-            # Revenue legacy -> new
-            '4100': '4000',
-            '4110': '4010',
-            '4120': '4020',
-            '4130': '4030',
-            # Bank commissions unify to 5090 per new chart
-            '5060': '5090',
-            '5190': '5090',
-            '4040': '5090',
-            # Misc merges kept
+            # Special legacy to standard
             '1.1.4.2': '1030',
-            '3010': '3000',
-            '3100': '3000',
-            '1025': '1210',
-            '5030': '5330',
-            '5320': '5330',
-            # Liabilities legacy -> new
-            '2000': '2110',
-            '2010': '2110',
-            '2020': '2130',
-            '2030': '2130',
-            '2040': '2120'
+            '2.1.2.1': '2130',
+            # Merge VAT due under payable if present
+            '2120': '2050'
         }
-        # User-approved merges
-        num_map.update({
-            '1025': '1210',
-            '5030': '5330',
-            '5320': '5330'
-        })
         for old_code, new_code in num_map.items():
             old = Account.query.filter(Account.code == old_code).first()
             new = Account.query.filter(Account.code == new_code).first()
@@ -88,6 +59,43 @@ def _normalize_short_aliases():
                     db.session.delete(old)
                 except Exception:
                     pass
+        # Name-based merges configured by user
+        try:
+            from app.routes import kv_get
+            rules = kv_get('chart_name_merge', []) or []
+            for r in rules:
+                tgt_code = (r.get('target_code') or '').strip()
+                pats = [p for p in (r.get('patterns') or []) if p]
+                ty = (r.get('type') or '').strip().upper() if r.get('type') else None
+                if not tgt_code or not pats:
+                    continue
+                target = Account.query.filter(Account.code == tgt_code).first()
+                if not target:
+                    # create placeholder under provided type or EXPENSE
+                    target = Account(code=tgt_code, name='Merged Account', type=(ty or 'EXPENSE'))
+                    db.session.add(target); db.session.flush()
+                q = Account.query
+                if ty:
+                    q = q.filter(Account.type == ty)
+                f = None
+                for p in pats:
+                    cond = Account.name.ilike(f"%{p}%")
+                    f = cond if f is None else (f | cond)
+                if f is None:
+                    continue
+                cand = q.filter(f).all()
+                for acc in cand:
+                    if acc.id == target.id:
+                        continue
+                    JournalLine.query.filter(JournalLine.account_id == acc.id).update({JournalLine.account_id: target.id})
+                    LedgerEntry.query.filter(LedgerEntry.account_id == acc.id).update({LedgerEntry.account_id: target.id})
+                    db.session.flush()
+                    try:
+                        db.session.delete(acc)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         try:
             target_comm = Account.query.filter(Account.code == '5190').first()
             if not target_comm:
@@ -110,6 +118,62 @@ def _normalize_short_aliases():
                     pass
         except Exception:
             pass
+        try:
+            import re
+            def _norm(n):
+                s = (n or '').strip().lower()
+                s = re.sub(r'[\u064B-\u065F]', '', s)
+                s = re.sub(r'\s+', ' ', s)
+                s = re.sub(r'[^0-9a-z\u0621-\u064A ]+', '', s)
+                return s
+            def _num_code(c):
+                m = re.sub(r'[^0-9]', '', (c or ''))
+                try:
+                    return int(m) if m else 0
+                except Exception:
+                    return 0
+            accs = Account.query.all()
+            groups = {}
+            for a in accs:
+                t = (getattr(a, 'type', '') or '').strip().upper()
+                nm = _norm(getattr(a, 'name', '') or '')
+                if not nm or not t:
+                    continue
+                k = f"{t}:{nm}"
+                arr = groups.get(k) or []
+                arr.append(a)
+                groups[k] = arr
+            try:
+                from app.routes import CHART_OF_ACCOUNTS
+            except Exception:
+                CHART_OF_ACCOUNTS = {}
+            for k, arr in groups.items():
+                if len(arr) < 2:
+                    continue
+                pref = None
+                for a in arr:
+                    if (CHART_OF_ACCOUNTS or {}).get(a.code):
+                        pref = a
+                        break
+                if pref is None:
+                    pref = sorted(arr, key=lambda x: _num_code(x.code))[0]
+                target = Account.query.filter(Account.id == pref.id).first()
+                for acc in arr:
+                    if acc.id == target.id:
+                        continue
+                    JournalLine.query.filter(JournalLine.account_id == acc.id).update({JournalLine.account_id: target.id})
+                    LedgerEntry.query.filter(LedgerEntry.account_id == acc.id).update({LedgerEntry.account_id: target.id})
+                    db.session.flush()
+                    try:
+                        db.session.delete(acc)
+                    except Exception:
+                        pass
+            db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
         db.session.commit()
     except Exception:
         try:
@@ -273,11 +337,11 @@ def income_statement():
 
     vat_out = float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0))
         .join(Account, JournalLine.account_id == Account.id)
-        .filter(Account.code == '6100')
+        .filter(Account.code == '2060')
         .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0)
     vat_in = float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
         .join(Account, JournalLine.account_id == Account.id)
-        .filter(Account.code == '6200')
+        .filter(Account.code == '1100')
         .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0)
     # Fallback to invoice aggregates if journals missing
     if (vat_out == 0.0) or (vat_in == 0.0):
@@ -591,17 +655,24 @@ def trial_balance():
     total_debit = float(sum([float(r.debit or 0) for r in rows]))
     total_credit = float(sum([float(r.credit or 0) for r in rows]))
     type_totals = {}
+    grouped = {}
+    order = ['ASSET','LIABILITY','EQUITY','REVENUE','EXPENSE','COGS','TAX']
     for r in rows:
         t = (getattr(r, 'type', None) or '').upper()
         d = float(r.debit or 0); c = float(r.credit or 0)
         if t not in type_totals:
             type_totals[t] = {'debit': 0.0, 'credit': 0.0}
+        if t not in grouped:
+            grouped[t] = []
         type_totals[t]['debit'] += d
         type_totals[t]['credit'] += c
+        grouped[t].append({'code': r.code, 'name': r.name, 'debit': d, 'credit': c})
 
     return render_template('financials/trial_balance.html', data={
         'date': asof, 'rows': rows, 'total_debit': total_debit, 'total_credit': total_credit,
-        'type_totals': type_totals
+        'type_totals': type_totals,
+        'grouped': grouped,
+        'order': order
     })
 
 
@@ -734,6 +805,74 @@ def print_income_statement():
         end_date=end_date,
         generated_at=_dt.now().strftime('%Y-%m-%d %H:%M')
     )
+
+@bp.route('/export/trial_balance')
+def export_trial_balance():
+    asof_str = request.args.get('date')
+    today = get_saudi_now().date()
+    try:
+        asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
+    except Exception:
+        asof = today
+    rows = db.session.query(
+        Account.code.label('code'),
+        Account.name.label('name'),
+        func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
+        func.coalesce(func.sum(JournalLine.credit), 0).label('credit'),
+    ).outerjoin(JournalLine, JournalLine.account_id == Account.id) \
+     .filter((JournalLine.line_date <= asof) | (JournalLine.id.is_(None))) \
+     .group_by(Account.id) \
+     .order_by(Account.code.asc()).all()
+    import csv
+    from io import StringIO
+    buf = StringIO()
+    w = csv.writer(buf)
+    w.writerow(['Code','Account','Debit','Credit'])
+    td = 0.0; tc = 0.0
+    for r in rows:
+        d = float(r.debit or 0); c = float(r.credit or 0);
+        td += d; tc += c
+        w.writerow([r.code, r.name, f"{d:.2f}", f"{c:.2f}"])
+    w.writerow(['TOTAL','','{:.2f}'.format(td), '{:.2f}'.format(tc)])
+    from flask import Response
+    return Response(buf.getvalue(), mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename=trial_balance_{asof}.csv'})
+
+@bp.route('/export/income_statement')
+def export_income_statement():
+    period = request.args.get('period', 'this_month')
+    start_arg = request.args.get('start_date')
+    end_arg = request.args.get('end_date')
+    start_date, end_date = period_range(period)
+    if period == 'custom' and start_arg and end_arg:
+        try:
+            start_date = datetime.strptime(start_arg, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_arg, '%Y-%m-%d').date()
+        except Exception:
+            pass
+    def sum_revenue():
+        return float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0))
+            .join(Account, JournalLine.account_id == Account.id)
+            .filter(Account.type.in_(['REVENUE', 'OTHER_INCOME']))
+            .filter(JournalLine.line_date.between(start_date, end_date))
+            .scalar() or 0)
+    def sum_expense(types):
+        return float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
+            .join(Account, JournalLine.account_id == Account.id)
+            .filter(Account.type.in_(types))
+            .filter(JournalLine.line_date.between(start_date, end_date))
+            .scalar() or 0)
+    revenue = sum_revenue(); cogs = sum_expense(['COGS']); operating_expenses = sum_expense(['EXPENSE']); other_income = 0.0; other_expenses = sum_expense(['OTHER_EXPENSE']); tax = sum_expense(['TAX'])
+    gross_profit = revenue - cogs
+    operating_profit = gross_profit - operating_expenses
+    net_profit_before_tax = operating_profit + other_income - other_expenses
+    net_profit_after_tax = net_profit_before_tax - tax
+    import csv
+    from io import StringIO
+    buf = StringIO(); w = csv.writer(buf)
+    w.writerow(['Line','Amount'])
+    w.writerow(['Revenue', f"{revenue:.2f}"]); w.writerow(['COGS', f"{cogs:.2f}"]); w.writerow(['Gross Profit', f"{gross_profit:.2f}"]); w.writerow(['Operating Expenses', f"{operating_expenses:.2f}"]); w.writerow(['Operating Profit', f"{operating_profit:.2f}"]); w.writerow(['Net Profit Before Tax', f"{net_profit_before_tax:.2f}"]); w.writerow(['Tax', f"{tax:.2f}"]); w.writerow(['Net Profit After Tax', f"{net_profit_after_tax:.2f}"])
+    from flask import Response
+    return Response(buf.getvalue(), mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename=income_statement_{start_date}_{end_date}.csv'})
 
 
 @bp.route('/print/balance_sheet')

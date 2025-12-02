@@ -1,0 +1,340 @@
+{% extends 'base.html' %}
+{% block title %}شجرة الحسابات{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h4 class="mb-0">شجرة الحسابات</h4>
+      <small class="text-muted">إدارة وإضافة وتفعيل/تعطيل الحسابات</small>
+    </div>
+    <div>
+      <button class="btn btn-outline-secondary me-2" id="btnRefresh">تحديث الشجرة</button>
+      <button class="btn btn-outline-primary me-2" id="btnOpening">إضافة رصيد افتتاحي</button>
+      <button class="btn btn-primary" id="btnAdd">إضافة حساب جديد</button>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <div class="input-group">
+      <span class="input-group-text">🔎</span>
+      <input type="text" class="form-control" id="search" placeholder="ابحث بالاسم أو الكود">
+      <button class="btn btn-outline-secondary" id="clearSearch">مسح</button>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header fw-semibold">الشجرة</div>
+        <div class="card-body">
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <div class="input-group input-group-sm" style="max-width:340px">
+              <span class="input-group-text">من</span>
+              <input type="date" class="form-control" id="fltStart">
+              <span class="input-group-text">إلى</span>
+              <input type="date" class="form-control" id="fltEnd">
+              <button class="btn btn-outline-secondary" id="applyPeriod">تطبيق</button>
+            </div>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-secondary" id="expandAll">توسيع الكل</button>
+              <button class="btn btn-outline-secondary" id="collapseAll">طي الكل</button>
+            </div>
+          </div>
+          <div id="tree"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header fw-semibold">تفاصيل الحساب</div>
+        <div class="card-body" id="accountDetails">
+          <div class="text-muted">اختر حسابًا لعرض التفاصيل</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header fw-semibold">دمج بالحروف (بالاسم)</div>
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label">كود الهدف</label>
+          <input type="text" class="form-control" id="mergeTarget" placeholder="مثال: 5190">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label">أنماط الاسم (مفصولة بفواصل)</label>
+          <input type="text" class="form-control" id="mergePatterns" placeholder="مثال: عمولات بنكية, مصاريف بنكية">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">النوع (اختياري)</label>
+          <select class="form-select" id="mergeType">
+            <option value="">بدون</option>
+            <option value="ASSET">ASSET</option>
+            <option value="LIABILITY">LIABILITY</option>
+            <option value="EQUITY">EQUITY</option>
+            <option value="REVENUE">REVENUE</option>
+            <option value="EXPENSE">EXPENSE</option>
+            <option value="COGS">COGS</option>
+            <option value="TAX">TAX</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-success w-100" id="btnAddMerge">إضافة قاعدة</button>
+        </div>
+      </div>
+      <div class="form-text mt-2">تطبيق قواعد الدمج يحدث تلقائياً عند فتح ميزان المراجعة. القاعدة ستنقل القيود إلى كود الهدف وتحذف الحسابات المطابقة غير الضرورية.</div>
+      <div class="mt-3" id="mergeRules"></div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="addModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">إضافة حساب</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">اسم الحساب</label>
+            <input type="text" class="form-control" id="accName">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">النوع</label>
+            <select class="form-select" id="accType">
+              <option value="ASSET">أصل (ASSET)</option>
+              <option value="LIABILITY">التزام (LIABILITY)</option>
+              <option value="EQUITY">حقوق ملكية (EQUITY)</option>
+              <option value="REVENUE">إيراد (REVENUE)</option>
+              <option value="EXPENSE">مصروف (EXPENSE)</option>
+              <option value="COGS">تكلفة (COGS)</option>
+              <option value="TAX">ضريبة (TAX)</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">الربط</label>
+            <select class="form-select" id="accRole">
+              <option value="">بدون</option>
+              <option value="platform_ar">ذمم منصة (AR)</option>
+              <option value="platform_revenue">إيراد منصة (Revenue)</option>
+              <option value="branch_rev_ct">إيراد China Town</option>
+              <option value="branch_rev_pi">إيراد Place India</option>
+              <option value="default_ar">ذمم افتراضي (AR)</option>
+            </select>
+          </div>
+          <div id="platformFields" class="border rounded p-2 d-none">
+            <div class="mb-2"><label class="form-label">Platform Key</label><input type="text" id="platKey" class="form-control" placeholder="مثال: jahez"></div>
+            <div class="mb-2"><label class="form-label">Keywords</label><input type="text" id="platKeywords" class="form-control" placeholder="مثال: jahez, جاهز"></div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">الحساب الأب</label>
+            <select class="form-select" id="accParent"></select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">رصيد افتتاحي</label>
+            <input type="number" class="form-control" id="accOpening" step="0.01" placeholder="0.00">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">ملاحظات</label>
+            <textarea class="form-control" id="accNotes" rows="2" placeholder="ملاحظات اختيارية"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+          <button class="btn btn-success" id="saveAcc">حفظ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="openingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">إضافة رصيد افتتاحي</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">الحساب</label>
+            <select class="form-select" id="obAccount"></select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">الطبيعة</label>
+            <select class="form-select" id="obSide">
+              <option value="debit">مدين</option>
+              <option value="credit">دائن</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">المبلغ</label>
+            <input type="number" step="0.01" class="form-control" id="obAmount" placeholder="0.00">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">التاريخ (اختياري)</label>
+            <input type="date" class="form-control" id="obDate">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">ملاحظات</label>
+            <textarea class="form-control" id="obNote" rows="2" placeholder="ملاحظات اختيارية"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+          <button class="btn btn-success" id="saveOpening">حفظ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+let ALL = [];
+let BAL = {};
+function nature(type){ const t=(type||'').toUpperCase(); return (t==='ASSET'||t==='EXPENSE'||t==='COGS')?'debit':'credit'; }
+function balanceInfo(code, type){ const b=BAL[code]||{debit_total:0,credit_total:0,net:0}; const n=nature(type); let cur=0; let label='';
+  if(n==='debit'){ cur = (Number(b.debit_total||0) - Number(b.credit_total||0)); label = (cur>=0)?'مدين':'دائن'; }
+  else { cur = (Number(b.credit_total||0) - Number(b.debit_total||0)); label = (cur>=0)?'دائن':'مدين'; }
+  return { current: cur, label, debit: Number(b.debit_total||0), credit: Number(b.credit_total||0), net: Number(b.net||0) };
+}
+function byCode(code){ return (ALL||[]).find(it=> String(it.code)===String(code)); }
+function buildTree(parent){
+  const ul = document.createElement('ul'); ul.className='list-unstyled ms-3';
+  const children = (ALL||[]).filter(a=> String(a.parent||'')===String(parent||''));
+  children.sort((a,b)=> String(a.code).localeCompare(String(b.code)));
+  children.forEach(a=>{
+    const li = document.createElement('li');
+    const span = document.createElement('span'); span.className = (a.type||'')+' fw-semibold'; span.textContent = `${a.code} · ${a.name}`;
+    span.style.cursor='pointer'; span.onclick = ()=>showDetails(a.code);
+    const controls = document.createElement('div'); controls.className='d-inline-flex gap-2 ms-2 align-items-center';
+    const toggleBtn = document.createElement('button'); toggleBtn.className='btn btn-sm btn-outline-primary'; toggleBtn.textContent='Toggle'; toggleBtn.onclick=()=>toggle(a.code);
+    const enabledBadge = document.createElement('span'); enabledBadge.className = 'badge '+(a.enabled?'bg-success':'bg-secondary'); enabledBadge.textContent = a.enabled?'Enabled':'Disabled';
+    const bi = balanceInfo(a.code, a.type);
+    const balBadge = document.createElement('span');
+    const positive = bi.current >= 0;
+    balBadge.className='badge '+(positive? (nature(a.type)==='debit'?'bg-success':'bg-primary') : 'bg-danger');
+    balBadge.textContent = `رصيد ${bi.label} ${Math.abs(bi.current).toFixed(2)} · D ${bi.debit.toFixed(2)} · C ${bi.credit.toFixed(2)}`;
+    controls.appendChild(toggleBtn); controls.appendChild(enabledBadge); controls.appendChild(balBadge);
+    const chevron = document.createElement('button'); chevron.className='btn btn-sm btn-outline-secondary'; chevron.textContent='▸';
+    li.appendChild(chevron);
+    li.appendChild(span); li.appendChild(controls);
+    const hasKids = (ALL||[]).some(c=> String(c.parent||'')===String(a.code));
+    if(hasKids){
+      const child = buildTree(a.code);
+      child.style.display = 'none';
+      chevron.onclick = function(){ if(child.style.display==='none'){ child.style.display='block'; chevron.textContent='▾'; } else { child.style.display='none'; chevron.textContent='▸'; } };
+      li.appendChild(child);
+    }else{
+      chevron.disabled = true; chevron.classList.add('disabled');
+    }
+    ul.appendChild(li);
+  });
+  return ul;
+}
+function renderTree(){
+  const root = document.getElementById('tree'); root.innerHTML='';
+  const top = buildTree('');
+  root.appendChild(top);
+  if(!root.hasChildNodes()) root.innerHTML = '<div class="text-muted">لا توجد حسابات</div>';
+}
+function showDetails(code){
+  const a = byCode(code); if(!a) return;
+  const bi = balanceInfo(a.code, a.type);
+  const el = document.getElementById('accountDetails');
+  el.innerHTML = `<div class="mb-2"><strong>اسم الحساب:</strong> ${a.name}</div>
+    <div class="mb-2"><strong>النوع:</strong> ${a.type||''}</div>
+    <div class="mb-2"><strong>الكود:</strong> ${a.code}</div>
+    <div class="mb-2"><strong>الحساب الأب:</strong> ${a.parent||'لا يوجد'}</div>
+    <div class="mb-2"><strong>رصيد افتتاحي:</strong> ${Number(a.balance||0).toFixed(2)}</div>
+    <div class="mb-2"><strong>الرصيد الحالي:</strong> ${bi.label} ${Math.abs(bi.current).toFixed(2)} (D ${bi.debit.toFixed(2)} · C ${bi.credit.toFixed(2)})</div>
+    <div class="mb-2"><strong>ملاحظات:</strong> ${a.notes||''}</div>`;
+}
+function load(){
+  fetch('/api/chart/list', {credentials:'same-origin'}).then(r=>r.json()).then(j=>{ if(j && j.ok){ ALL = j.items||[]; }}).then(()=>{
+    const s = document.getElementById('fltStart') && document.getElementById('fltStart').value;
+    const e = document.getElementById('fltEnd') && document.getElementById('fltEnd').value;
+    let url = '/api/chart/balances';
+    const qs = [];
+    if(s) qs.push('start_date='+encodeURIComponent(s));
+    if(e) qs.push('end_date='+encodeURIComponent(e));
+    if(qs.length>0) url += ('?'+qs.join('&'));
+    return fetch(url, {credentials:'same-origin'});
+  }).then(r=>r.json()).then(b=>{ if(b&&b.ok){ BAL={}; (b.items||[]).forEach(it=> BAL[it.code]=it); } renderTree(); });
+  fetch('/api/chart/merge_rules', {credentials:'same-origin'}).then(r=>r.json()).then(j=>{ if(j && j.ok){ renderRules(j.items||[]); }});
+}
+function toggle(code){
+  fetch(`/api/chart/toggle/${encodeURIComponent(code)}`, {method:'POST', credentials:'same-origin'}).then(r=>r.json()).then(()=>load());
+}
+function populateParentOptions(){
+  const sel = document.getElementById('accParent'); if(!sel) return; sel.innerHTML='';
+  const opt = document.createElement('option'); opt.value=''; opt.textContent='لا يوجد'; sel.appendChild(opt);
+  (ALL||[]).forEach(a=>{ const o=document.createElement('option'); o.value=String(a.code); o.textContent=`${a.code} · ${a.name}`; sel.appendChild(o); });
+}
+function populateOpeningAccounts(){
+  const sel = document.getElementById('obAccount'); if(!sel) return; sel.innerHTML='';
+  (ALL||[]).forEach(a=>{ const o=document.createElement('option'); o.value=String(a.code); o.textContent=`${a.code} · ${a.name}`; sel.appendChild(o); });
+}
+function openOpening(){ populateOpeningAccounts(); new bootstrap.Modal(document.getElementById('openingModal')).show(); }
+function saveOpening(){
+  const code = document.getElementById('obAccount').value;
+  const side = document.getElementById('obSide').value;
+  const amount = parseFloat(document.getElementById('obAmount').value||'0')||0;
+  const date = document.getElementById('obDate').value;
+  const note = document.getElementById('obNote').value.trim();
+  if(!code || amount<=0){ return; }
+  const payload = { code, side, amount, date, note };
+  fetch('/api/chart/opening_balance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), credentials:'same-origin' }).then(r=>r.json()).then(j=>{ if(j&&j.ok){ load(); bootstrap.Modal.getInstance(document.getElementById('openingModal')).hide(); } });
+}
+function openAdd(){ populateParentOptions(); new bootstrap.Modal(document.getElementById('addModal')).show(); }
+function save(){
+  const name = document.getElementById('accName').value.trim();
+  const type = document.getElementById('accType').value;
+  const role = document.getElementById('accRole').value;
+  const pk = document.getElementById('platKey').value.trim();
+  const kws = document.getElementById('platKeywords').value.trim();
+  const parent_code = document.getElementById('accParent').value;
+  const opening_balance = parseFloat(document.getElementById('accOpening').value||'0')||0;
+  const notes = document.getElementById('accNotes').value.trim();
+  const payload = { name, type, role, platform_key: pk, platform_keywords: kws, parent_code, opening_balance, notes };
+  fetch('/api/chart/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), credentials:'same-origin'}).then(r=>r.json()).then(j=>{ if(j && j.ok){ load(); bootstrap.Modal.getInstance(document.getElementById('addModal')).hide(); } });
+}
+function addMerge(){
+  const target = document.getElementById('mergeTarget').value.trim();
+  const patterns = document.getElementById('mergePatterns').value.trim();
+  const type = document.getElementById('mergeType').value;
+  if(!target || !patterns){ return; }
+  const payload = { target_code: target, patterns, type };
+  fetch('/api/chart/add_merge_rule', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), credentials:'same-origin' })
+    .then(r=>r.json()).then(j=>{ if(j && j.ok){ document.getElementById('mergeTarget').value=''; document.getElementById('mergePatterns').value=''; document.getElementById('mergeType').value=''; load(); }});
+}
+function renderRules(items){
+  const root = document.getElementById('mergeRules'); root.innerHTML='';
+  if(!items || items.length===0){ root.innerHTML='<div class="text-muted">لا توجد قواعد دمج بالاسم</div>'; return; }
+  const tbl = document.createElement('table'); tbl.className='table table-sm';
+  tbl.innerHTML = '<thead><tr><th>Target</th><th>Type</th><th>Patterns</th></tr></thead>';
+  const tb = document.createElement('tbody');
+  items.forEach(it=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${it.target_code}</td><td>${it.type||''}</td><td>${(it.patterns||[]).join(', ')}</td>`;
+    tb.appendChild(tr);
+  });
+  tbl.appendChild(tb); root.appendChild(tbl);
+}
+document.getElementById('btnAdd').addEventListener('click', openAdd);
+document.getElementById('saveAcc').addEventListener('click', save);
+document.getElementById('btnOpening').addEventListener('click', openOpening);
+document.getElementById('saveOpening').addEventListener('click', saveOpening);
+document.getElementById('btnAddMerge').addEventListener('click', addMerge);
+document.getElementById('btnRefresh').addEventListener('click', function(){ fetch('/api/chart/refresh', {method:'POST', credentials:'same-origin'}).then(r=>r.json()).then(j=>{ load(); }); });
+document.getElementById('accRole').addEventListener('change', function(){ const v = this.value; const box = document.getElementById('platformFields'); if(v==='platform_ar' || v==='platform_revenue'){ box.classList.remove('d-none'); } else { box.classList.add('d-none'); }});
+document.getElementById('search').addEventListener('input', function(){ const q = this.value.trim().toLowerCase(); if(!q){ renderTree(); return; } const before = ALL; ALL = (before||[]).filter(it=> String(it.code).toLowerCase().includes(q) || String(it.name||'').toLowerCase().includes(q)); renderTree(); ALL = before; });
+document.getElementById('clearSearch').addEventListener('click', function(){ const s = document.getElementById('search'); s.value=''; s.focus(); renderTree(); });
+document.getElementById('applyPeriod').addEventListener('click', function(){ load(); });
+document.getElementById('expandAll').addEventListener('click', function(){ document.querySelectorAll('#tree ul').forEach(function(ul){ ul.style.display='block'; }); document.querySelectorAll('#tree button.btn-outline-secondary').forEach(function(b){ if(b.textContent==='▸'){ b.textContent='▾'; } }); });
+document.getElementById('collapseAll').addEventListener('click', function(){ const top = document.querySelector('#tree > ul'); document.querySelectorAll('#tree ul').forEach(function(ul){ if(ul!==top){ ul.style.display='none'; } }); document.querySelectorAll('#tree button.btn-outline-secondary').forEach(function(b){ if(b.textContent==='▾'){ b.textContent='▸'; } }); });
+load();
+</script>
+{% endblock %}

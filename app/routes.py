@@ -1005,6 +1005,10 @@ def purchases():
                                 _post_ledger(inv.date, '1010', 'البنك', 'asset', 0.0, fee, f'BANK FEE {inv.invoice_number}')
                     except Exception:
                         pass
+        try:
+            _create_purchase_journal(inv)
+        except Exception:
+            pass
         flash('Purchase invoice saved', 'success')
         return redirect(url_for('main.purchases'))
 
@@ -1608,6 +1612,7 @@ def inventory():
             meals=meals,
             ledger_rows=ledger_rows,
             purchases=purchases,
+            _=(lambda s, **kw: s),
             kpi={
                 'total_inventory_cost': float(total_inventory_cost or 0),
                 'total_purchases_month': float(total_purchases_month or 0),
@@ -1623,7 +1628,27 @@ def inventory():
             stock_rows=stock_rows,
         )
     except Exception:
-        return render_template('inventory.html', raw_materials=raw_materials, meals=meals, ledger_rows=ledger_rows, purchases=purchases)
+        return render_template(
+            'inventory.html',
+            raw_materials=raw_materials,
+            meals=meals,
+            ledger_rows=ledger_rows,
+            purchases=purchases,
+            _=(lambda s, **kw: s),
+            kpi={
+                'total_inventory_cost': 0.0,
+                'total_purchases_month': 0.0,
+                'total_meals_sold_month': 0.0,
+                'estimated_total_meal_cost': 0.0,
+                'total_profit_generated': 0.0,
+            },
+            purchases_summary=[],
+            top_ingredients=[],
+            purchase_trend=[],
+            meals_analysis=[],
+            outdated_meals=[],
+            stock_rows=[],
+        )
 
 @main.route('/inventory-intelligence', methods=['GET'], endpoint='inventory_intelligence')
 @login_required
@@ -2380,13 +2405,17 @@ def expenses():
                     db.session.commit()
                     _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', pay_amt, 0.0, f'PAY EXP {inv.invoice_number}')
                     ca = _pm_account(pm)
-                    if ca:
-                        _post_ledger(inv.date, ca.code, ca.name, 'asset', 0.0, pay_amt, f'PAY EXP {inv.invoice_number}')
+                if ca:
+                    _post_ledger(inv.date, ca.code, ca.name, 'asset', 0.0, pay_amt, f'PAY EXP {inv.invoice_number}')
             except Exception:
                 try:
                     db.session.rollback()
                 except Exception:
                     pass
+            try:
+                _create_expense_journal(inv)
+            except Exception:
+                pass
             flash('Expense saved', 'success')
         except Exception as e:
             db.session.rollback()
@@ -2447,6 +2476,18 @@ def expense_delete(eid):
 				pass
 		try:
 			Payment.query.filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'expense').delete(synchronize_session=False)
+		except Exception:
+			pass
+		try:
+			from models import JournalEntry, JournalLine
+			rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
+			for je in (rows or []):
+				JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
+				db.session.delete(je)
+		except Exception:
+			pass
+		try:
+			db.session.query(LedgerEntry).filter(LedgerEntry.description.ilike('%{}%'.format(inv.invoice_number))).delete(synchronize_session=False)
 		except Exception:
 			pass
 		db.session.delete(inv)
@@ -2717,6 +2758,14 @@ def invoices_delete():
                     db.session.query(LedgerEntry).filter(LedgerEntry.description.ilike('%{}%'.format(inv.invoice_number))).delete(synchronize_session=False)
                 except Exception:
                     pass
+                try:
+                    from models import JournalEntry, JournalLine
+                    rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
+                    for je in (rows or []):
+                        JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
+                        db.session.delete(je)
+                except Exception:
+                    pass
                 db.session.delete(inv)
                 deleted += 1
         elif inv_type == 'purchases':
@@ -2737,6 +2786,14 @@ def invoices_delete():
                     db.session.query(LedgerEntry).filter(LedgerEntry.description.ilike('%{}%'.format(inv.invoice_number))).delete(synchronize_session=False)
                 except Exception:
                     pass
+                try:
+                    from models import JournalEntry, JournalLine
+                    rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
+                    for je in (rows or []):
+                        JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
+                        db.session.delete(je)
+                except Exception:
+                    pass
                 db.session.delete(inv)
                 deleted += 1
         elif inv_type == 'expenses':
@@ -2755,6 +2812,14 @@ def invoices_delete():
                     pass
                 try:
                     db.session.query(LedgerEntry).filter(LedgerEntry.description.ilike('%{}%'.format(inv.invoice_number))).delete(synchronize_session=False)
+                except Exception:
+                    pass
+                try:
+                    from models import JournalEntry, JournalLine
+                    rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
+                    for je in (rows or []):
+                        JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
+                        db.session.delete(je)
                 except Exception:
                     pass
                 db.session.delete(inv)
@@ -6726,20 +6791,13 @@ def api_draft_checkout():
             tax_amt = float(inv.tax_amount or 0.0)
             try:
                 cust = (customer_name or '').strip().lower()
-                def _norm_group(n: str):
-                    s = n.lower()
-                    if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s):
-                        return 'hunger'
-                    if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s):
-                        return 'keeta'
-                    return ''
-                grp = _norm_group(cust)
+                grp = _platform_group(cust)
                 if grp == 'keeta':
-                    ar_code = SHORT_TO_NUMERIC['AR_KEETA'][0]
+                    ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
                 elif grp == 'hunger':
-                    ar_code = SHORT_TO_NUMERIC['AR_HUNGER'][0]
+                    ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
                 else:
-                    ar_code = SHORT_TO_NUMERIC['AR_KEETA'][0]
+                    ar_code = _acc_override('AR', SHORT_TO_NUMERIC['AR_KEETA'][0])
             except Exception:
                 ar_code = SHORT_TO_NUMERIC['AR_KEETA'][0]
             _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', float(inv.total_after_tax_discount or 0.0), 0.0, f'SALE {inv.invoice_number}')
@@ -6747,25 +6805,18 @@ def api_draft_checkout():
                 pm = (payment_method or '').strip().upper()
                 # Prefer platform-specific revenue when customer matches
                 cust = (customer_name or '').strip().lower()
-                def _norm_group(n: str):
-                    s = n.lower()
-                    if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s):
-                        return 'hunger'
-                    if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s):
-                        return 'keeta'
-                    return ''
-                grp = _norm_group(cust)
+                grp = _platform_group(cust)
                 if grp == 'keeta':
-                    rev_code = SHORT_TO_NUMERIC['REV_KEETA'][0]
+                    rev_code = _acc_override('REV_KEETA', SHORT_TO_NUMERIC['REV_KEETA'][0])
                 elif grp == 'hunger':
-                    rev_code = SHORT_TO_NUMERIC['REV_HUNGER'][0]
+                    rev_code = _acc_override('REV_HUNGER', SHORT_TO_NUMERIC['REV_HUNGER'][0])
                 else:
                     if branch == 'place_india':
-                        rev_code = SHORT_TO_NUMERIC['REV_PI'][0]
+                        rev_code = _acc_override('REV_PI', SHORT_TO_NUMERIC['REV_PI'][0])
                     elif branch == 'china_town':
-                        rev_code = SHORT_TO_NUMERIC['REV_CT'][0]
+                        rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
                     else:
-                        rev_code = SHORT_TO_NUMERIC['REV_CT'][0]
+                        rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
                 _post_ledger(inv.date, rev_code, CHART_OF_ACCOUNTS[rev_code]['name'], 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
             except Exception:
                 _post_ledger(inv.date, rev_code, 'Revenue', 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
@@ -6781,25 +6832,18 @@ def api_draft_checkout():
                 pm = (payment_method or '').strip().upper()
                 # Prefer platform-specific revenue when customer matches
                 cust = (customer_name or '').strip().lower()
-                def _norm_group(n: str):
-                    s = n.lower()
-                    if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s):
-                        return 'hunger'
-                    if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s):
-                        return 'keeta'
-                    return ''
-                grp = _norm_group(cust)
+                grp = _platform_group(cust)
                 if grp == 'keeta':
-                    rev_code = SHORT_TO_NUMERIC['REV_KEETA'][0]
+                    rev_code = _acc_override('REV_KEETA', SHORT_TO_NUMERIC['REV_KEETA'][0])
                 elif grp == 'hunger':
-                    rev_code = SHORT_TO_NUMERIC['REV_HUNGER'][0]
+                    rev_code = _acc_override('REV_HUNGER', SHORT_TO_NUMERIC['REV_HUNGER'][0])
                 else:
                     if branch == 'place_india':
-                        rev_code = SHORT_TO_NUMERIC['REV_PI'][0]
+                        rev_code = _acc_override('REV_PI', SHORT_TO_NUMERIC['REV_PI'][0])
                     elif branch == 'china_town':
-                        rev_code = SHORT_TO_NUMERIC['REV_CT'][0]
+                        rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
                     else:
-                        rev_code = SHORT_TO_NUMERIC['REV_CT'][0]
+                        rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
                 _post_ledger(inv.date, rev_code, CHART_OF_ACCOUNTS[rev_code]['name'], 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
             except Exception:
                 _post_ledger(inv.date, rev_code, 'Revenue', 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
@@ -6811,14 +6855,7 @@ def api_draft_checkout():
         try:
             from models import Payment
             cust = (payload.get('customer_name') or '').strip().lower()
-            def _norm_group(n: str):
-                s = n.lower()
-                if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s):
-                    return 'hunger'
-                if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s):
-                    return 'keeta'
-                return ''
-            grp = _norm_group(cust)
+            grp = _platform_group(cust)
             amt = float(inv.total_after_tax_discount or 0.0)
             if grp in ('keeta','hunger'):
                 inv.status = 'unpaid'
@@ -6837,18 +6874,13 @@ def api_draft_checkout():
                 cash_acc = _pm_account(payment_method)
                 try:
                     cust = (getattr(inv, 'customer_name', '') or '').lower()
-                    def _norm_group(n: str):
-                        s = n.lower()
-                        if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s): return 'hunger'
-                        if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s): return 'keeta'
-                        return ''
-                    grp = _norm_group(cust)
+                    grp = _platform_group(cust)
                     if grp == 'keeta':
-                        ar_code = SHORT_TO_NUMERIC['AR_KEETA'][0]
+                        ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
                     elif grp == 'hunger':
-                        ar_code = SHORT_TO_NUMERIC['AR_HUNGER'][0]
+                        ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
                     else:
-                        ar_code = CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020')
+                        ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
                 except Exception:
                     ar_code = CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020')
                 _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', 0.0, amt, f'PAY SALE {inv.invoice_number}')
@@ -6934,20 +6966,12 @@ def api_sales_checkout():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
-    # Auto-mark paid for non Keeta/Hunger and create Payment record
     try:
         from models import Payment
         cust = (payload.get('customer_name') or '').strip().lower()
-        def _norm_group(n: str):
-            s = n.lower()
-            if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s):
-                return 'hunger'
-            if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s):
-                return 'keeta'
-            return ''
-        grp = _norm_group(cust)
+        grp = _platform_group(cust)
         amt = float(inv.total_after_tax_discount or 0.0)
-        if grp in ('keeta','hunger'):
+        if grp:
             inv.status = 'unpaid'
             db.session.commit()
         else:
@@ -6962,24 +6986,23 @@ def api_sales_checkout():
             db.session.commit()
             cash_acc = _pm_account(payment_method)
             try:
-                cust = (getattr(inv, 'customer_name', '') or '').lower()
-                def _norm_group(n: str):
-                    s = n.lower()
-                    if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s): return 'hunger'
-                    if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s): return 'keeta'
-                    return ''
-                grp = _norm_group(cust)
-                if grp == 'keeta':
-                    ar_code = SHORT_TO_NUMERIC['AR_KEETA'][0]
-                elif grp == 'hunger':
-                    ar_code = SHORT_TO_NUMERIC['AR_HUNGER'][0]
+                cust2 = (getattr(inv, 'customer_name', '') or '').lower()
+                grp2 = _platform_group(cust2)
+                if grp2 == 'keeta':
+                    ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
+                elif grp2 == 'hunger':
+                    ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
                 else:
-                    ar_code = CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020')
+                    ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
             except Exception:
-                ar_code = CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020')
+                ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
             _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', 0.0, amt, f'PAY SALE {inv.invoice_number}')
             if cash_acc:
                 _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', amt, 0.0, f'PAY SALE {inv.invoice_number}')
+    except Exception:
+        pass
+    try:
+        _create_sale_journal(inv)
     except Exception:
         pass
     return jsonify({'ok': True, 'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.invoice_print', invoice_id=invoice_number), 'branch_code': branch, 'table_number': table})
@@ -7011,15 +7034,7 @@ def api_invoice_confirm_print():
             return jsonify({'success': False, 'error': 'Invoice not found'}), 404
 
         if (inv.status or '').lower() != 'paid':
-            import re
-            def _norm_group(n: str):
-                s = re.sub(r'[^a-z]', '', (n or '').lower())
-                if s.startswith('hunger'):
-                    return 'hunger'
-                if s.startswith('keeta') or s.startswith('keet'):
-                    return 'keeta'
-                return ''
-            grp = _norm_group(inv.customer_name or '')
+            grp = _platform_group(inv.customer_name or '')
             if grp in ('keeta','hunger'):
                 pass
             else:
@@ -7034,6 +7049,13 @@ def api_invoice_confirm_print():
                 inv.status = 'paid'
                 db.session.commit()
             try:
+                key = f"pdf_path:sales:{inv.invoice_number}"
+                cur = kv_get(key, {}) or {}
+                if not (cur.get('saved_at')):
+                    kv_set(key, {'path': cur.get('path'), 'saved_at': get_saudi_now().isoformat()})
+            except Exception:
+                pass
+            try:
                 import re
                 s = re.sub(r'[^a-z]', '', (inv.customer_name or '').lower())
                 is_special = s.startswith('hunger') or s.startswith('keeta') or s.startswith('keet')
@@ -7042,20 +7064,15 @@ def api_invoice_confirm_print():
                     cash_acc = _pm_account(payment_method)
                     try:
                         cust = (getattr(inv, 'customer_name', '') or '').lower()
-                        def _norm_group(n: str):
-                            s = n.lower()
-                            if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s): return 'hunger'
-                            if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s): return 'keeta'
-                            return ''
-                        grp = _norm_group(cust)
+                        grp = _platform_group(cust)
                         if grp == 'keeta':
-                            ar_code = SHORT_TO_NUMERIC['AR_KEETA'][0]
+                            ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
                         elif grp == 'hunger':
-                            ar_code = SHORT_TO_NUMERIC['AR_HUNGER'][0]
+                            ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
                         else:
-                            ar_code = CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020')
+                            ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
                     except Exception:
-                        ar_code = CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020')
+                        ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
                     _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', 0.0, amt, f'PAY SALE {inv.invoice_number}')
                     if cash_acc:
                         _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', amt, 0.0, f'PAY SALE {inv.invoice_number}')
@@ -7148,13 +7165,6 @@ def api_sales_mark_unpaid_paid():
 def api_sales_mark_platform_unpaid():
     try:
         from models import SalesInvoice, Payment
-        def _norm_group(n: str):
-            s = (n or '').lower()
-            if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s):
-                return 'hunger'
-            if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s):
-                return 'keeta'
-            return ''
         q = SalesInvoice.query
         rows = q.order_by(SalesInvoice.date.desc()).limit(3000).all()
         updated = 0
@@ -7208,8 +7218,8 @@ def api_sales_batch_pay():
         rows = q.order_by(SalesInvoice.date.desc()).limit(limit).all()
         updated = 0
         for inv in (rows or []):
-            grp = _norm_group(getattr(inv, 'customer_name', '') or '')
-            if customer in ('keeta','hunger') and grp != customer:
+            grp = _platform_group(getattr(inv, 'customer_name', '') or '')
+            if customer not in ('all','') and grp != customer:
                 continue
             # Compute remaining
             total = float(getattr(inv, 'total_after_tax_discount', 0.0) or 0.0)
@@ -7239,20 +7249,15 @@ def api_sales_batch_pay():
                 cash_acc = _pm_account(method)
                 try:
                     cust = (getattr(inv, 'customer_name', '') or '').lower()
-                    def _norm_group(n: str):
-                        s = n.lower()
-                        if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s): return 'hunger'
-                        if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s): return 'keeta'
-                        return ''
-                    grp = _norm_group(cust)
+                    grp = _platform_group(cust)
                     if grp == 'keeta':
-                        ar_code = SHORT_TO_NUMERIC['AR_KEETA'][0]
+                        ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
                     elif grp == 'hunger':
-                        ar_code = SHORT_TO_NUMERIC['AR_HUNGER'][0]
+                        ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
                     else:
-                        ar_code = CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020')
+                        ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
                 except Exception:
-                    ar_code = CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020')
+                    ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
                 _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', 0.0, remaining, f'PAY SALE {inv.invoice_number}')
                 if cash_acc:
                     _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', remaining, 0.0, f'PAY SALE {inv.invoice_number}')
@@ -7553,7 +7558,58 @@ def print_receipt(invoice_number):
     except Exception:
         s = None
     branch_name = BRANCH_LABELS.get(getattr(inv, 'branch', None) or '', getattr(inv, 'branch', ''))
-    dt_str = get_saudi_now().strftime('%H:%M:%S %Y-%m-%d')
+    # Use first print timestamp if available; fallback to archive saved_at or invoice.created_at
+    dt_str = None
+    try:
+        logs = kv_get(f"print_log:{inv.invoice_number}", []) or []
+    except Exception:
+        logs = []
+    try:
+        if logs:
+            from datetime import datetime as _dti
+            def _p(x):
+                try:
+                    return _dti.fromisoformat((x or {}).get('ts') or '')
+                except Exception:
+                    return None
+            cand = [_p(x) for x in logs]
+            cand = [c for c in cand if c]
+            if cand:
+                dtp = min(cand)
+                dt_str = dtp.strftime('%H:%M:%S %Y-%m-%d')
+    except Exception:
+        dt_str = None
+    if not dt_str:
+        try:
+            meta = kv_get(f"pdf_path:sales:{inv.invoice_number}", {}) or {}
+            sa = meta.get('saved_at')
+            if sa:
+                from datetime import datetime as _dti
+                try:
+                    dtp = _dti.fromisoformat(sa)
+                    dt_str = dtp.strftime('%H:%M:%S %Y-%m-%d')
+                except Exception:
+                    dt_str = None
+        except Exception:
+            dt_str = None
+    if not dt_str:
+        try:
+            from models import Payment
+            dtp_row = db.session.query(Payment.payment_date).\
+                filter(Payment.invoice_type == 'sales', Payment.invoice_id == inv.id).\
+                order_by(Payment.payment_date.asc()).first()
+            if dtp_row and dtp_row[0]:
+                dt_str = dtp_row[0].strftime('%H:%M:%S %Y-%m-%d')
+        except Exception:
+            pass
+    if not dt_str:
+        try:
+            if getattr(inv, 'created_at', None):
+                dt_str = inv.created_at.strftime('%H:%M:%S %Y-%m-%d')
+            else:
+                dt_str = get_saudi_now().strftime('%H:%M:%S %Y-%m-%d')
+        except Exception:
+            dt_str = get_saudi_now().strftime('%H:%M:%S %Y-%m-%d')
     # Prepare embedded logo as data URL for more reliable thermal printing
     logo_data_url = None
     try:
@@ -8775,6 +8831,51 @@ def settings():
                             s.currency_image = f"{path_prefix}{fname}"
             except Exception:
                 # Ignore upload errors but continue saving other fields
+                pass
+
+            try:
+                acc_map = kv_get('acc_map', {}) or {}
+                def _set_acc(key_alias, form_key):
+                    val = (form_data.get(form_key) or '').strip()
+                    if val:
+                        acc_map[key_alias] = val
+                _set_acc('AR_KEETA', 'acc_ar_keeta')
+                _set_acc('AR_HUNGER', 'acc_ar_hunger')
+                _set_acc('AR', 'acc_ar_default')
+                _set_acc('REV_KEETA', 'acc_rev_keeta')
+                _set_acc('REV_HUNGER', 'acc_rev_hunger')
+                _set_acc('REV_CT', 'acc_rev_ct')
+                _set_acc('REV_PI', 'acc_rev_pi')
+                kv_set('acc_map', acc_map)
+            except Exception:
+                pass
+
+            try:
+                platforms = kv_get('platforms_map', []) or []
+                pk = (form_data.get('platform_key') or '').strip().lower()
+                if pk:
+                    kws_raw = (form_data.get('platform_keywords') or '').strip()
+                    keywords = [x.strip().lower() for x in kws_raw.split(',') if x.strip()]
+                    entry = {
+                        'key': pk,
+                        'keywords': keywords,
+                        'ar_code': (form_data.get('platform_ar_code') or '').strip(),
+                        'rev_code': (form_data.get('platform_rev_code') or '').strip(),
+                        'auto_unpaid': True
+                    }
+                    idx = None
+                    for i, e in enumerate(platforms):
+                        if (e.get('key') or '').strip().lower() == pk:
+                            idx = i; break
+                    if idx is not None:
+                        # merge update
+                        prev = platforms[idx]
+                        prev.update({k: v for k, v in entry.items() if v})
+                        platforms[idx] = prev
+                    else:
+                        platforms.append(entry)
+                    kv_set('platforms_map', platforms)
+            except Exception:
                 pass
 
             (ext_db.session.commit() if ext_db is not None else db.session.commit())
@@ -11151,6 +11252,8 @@ def api_archive_list():
             page_size = 500
         if page_size < 1:
             page_size = 100
+        if (not year) and (month or day or quarter):
+            year = get_saudi_now().year
         start_date = None
         end_date = None
         if year and (not quarter and not month and not day):
@@ -11186,27 +11289,86 @@ def api_archive_list():
         if branch:
             q = q.filter(SalesInvoice.branch == branch)
         if start_date and end_date:
-            q = q.filter(or_(SalesInvoice.created_at.between(start_date, end_date), SalesInvoice.date.between(start_date, end_date)))
-        q = q.order_by(SalesInvoice.created_at.desc(), SalesInvoice.date.desc())
+            q = q.filter(SalesInvoice.date.between(start_date.date(), end_date.date()))
+        q = q.order_by(SalesInvoice.date.desc(), SalesInvoice.created_at.desc())
         rows = q.offset((page - 1) * page_size).limit(page_size).all()
         keys = [f"pdf_path:sales:{r[0]}" for r in rows]
         meta_rows = AppKV.query.filter(AppKV.k.in_(keys)).all() if keys else []
+        log_keys = [f"print_log:{r[0]}" for r in rows]
+        log_rows = AppKV.query.filter(AppKV.k.in_(log_keys)).all() if log_keys else []
         meta_map = {}
         for kv in meta_rows:
             try:
                 meta_map[kv.k] = json.loads(kv.v) if kv.v else {}
             except Exception:
                 meta_map[kv.k] = {}
+        logs_map = {}
+        for kv in log_rows:
+            try:
+                logs_map[kv.k] = json.loads(kv.v) if kv.v else []
+            except Exception:
+                logs_map[kv.k] = []
         out = []
         for r in rows:
             inv_no, created_at, date_f, pm, total_amt, branch_code = r
-            dt = created_at or date_f or get_saudi_now()
-            m = int(dt.month)
-            qn = ((m - 1) // 3) + 1
+            # Use saved print timestamp if available
             meta = meta_map.get(f"pdf_path:sales:{inv_no}", {}) or {}
+            logs = logs_map.get(f"print_log:{inv_no}", []) or []
+            dt_print = None
+            try:
+                if logs:
+                    try:
+                        from datetime import datetime as _dti
+                        def _p(x):
+                            try:
+                                return _dti.fromisoformat((x or {}).get('ts') or '')
+                            except Exception:
+                                return None
+                        cand = [_p(x) for x in logs]
+                        cand = [c for c in cand if c]
+                        if cand:
+                            dt_print = min(cand)
+                    except Exception:
+                        dt_print = None
+                if (dt_print is None):
+                    sa = meta.get('saved_at')
+                    if sa:
+                        try:
+                            from datetime import datetime as _dti
+                            dt_print = _dti.fromisoformat(sa)
+                        except Exception:
+                            dt_print = None
+            except Exception:
+                dt_print = None
+            if dt_print is not None:
+                dt_date = dt_print.date()
+                tstr = dt_print.strftime('%H:%M:%S')
+            else:
+                try:
+                    from models import SalesInvoice as SI, Payment
+                    sid = db.session.query(SI.id).filter(SI.invoice_number == inv_no).scalar()
+                    dtp_row = None
+                    if sid:
+                        dtp_row = db.session.query(Payment.payment_date).\
+                            filter(Payment.invoice_type == 'sales', Payment.invoice_id == sid).\
+                            order_by(Payment.payment_date.asc()).first()
+                    if dtp_row and dtp_row[0]:
+                        dt_date = dtp_row[0].date()
+                        tstr = dtp_row[0].strftime('%H:%M:%S')
+                    else:
+                        raise Exception('no_payment_date')
+                except Exception:
+                    dt_date = (date_f or (created_at and created_at.date()) or get_saudi_now().date())
+                    try:
+                        tstr = created_at.strftime('%H:%M:%S') if created_at else '00:00:00'
+                    except Exception:
+                        tstr = '00:00:00'
+            m = int(dt_date.month)
+            qn = ((m - 1) // 3) + 1
             out.append({
                 'invoice_number': inv_no,
-                'date': dt.strftime('%Y-%m-%d'),
+                'date': dt_date.strftime('%Y-%m-%d'),
+                'time': tstr,
                 'payment_method': pm,
                 'total_amount': float(total_amt or 0.0),
                 'branch': branch_code,
@@ -11256,6 +11418,8 @@ def archive_download():
         day = request.args.get('day', type=int)
         branch = (request.args.get('branch') or '').strip()
         fmt = (request.args.get('fmt') or '').strip().lower() or 'zip'
+        if (not year) and (month or day or quarter):
+            year = get_saudi_now().year
         start_date = None
         end_date = None
         if year and (not quarter and not month and not day):
@@ -11290,29 +11454,77 @@ def archive_download():
         if branch:
             q = q.filter(SalesInvoice.branch == branch)
         if start_date and end_date:
-            q = q.filter(or_(SalesInvoice.created_at.between(start_date, end_date), SalesInvoice.date.between(start_date, end_date)))
-        rows = q.order_by(SalesInvoice.created_at.desc(), SalesInvoice.date.desc()).limit(2000).all()
+            q = q.filter(SalesInvoice.date.between(start_date.date(), end_date.date()))
+        rows = q.order_by(SalesInvoice.date.desc(), SalesInvoice.created_at.desc()).limit(2000).all()
         items = []
         keys = [f"pdf_path:sales:{r[0]}" for r in rows]
         meta_rows = AppKV.query.filter(AppKV.k.in_(keys)).all() if keys else []
+        log_keys = [f"print_log:{r[0]}" for r in rows]
+        log_rows = AppKV.query.filter(AppKV.k.in_(log_keys)).all() if log_keys else []
         meta_map = {}
         for kv in meta_rows:
             try:
                 meta_map[kv.k] = json.loads(kv.v) if kv.v else {}
             except Exception:
                 meta_map[kv.k] = {}
+        logs_map = {}
+        for kv in log_rows:
+            try:
+                logs_map[kv.k] = json.loads(kv.v) if kv.v else []
+            except Exception:
+                logs_map[kv.k] = []
         for r in rows:
             inv_no, created_at, date_f, pm, total_amt, branch_code = r
-            dt = created_at or date_f or get_saudi_now()
-            m = int(dt.month)
+            meta = meta_map.get(f"pdf_path:sales:{inv_no}", {}) or {}
+            logs = logs_map.get(f"print_log:{inv_no}", []) or []
+            dt_print = None
+            try:
+                if logs:
+                    from datetime import datetime as _dti
+                    def _p(x):
+                        try:
+                            return _dti.fromisoformat((x or {}).get('ts') or '')
+                        except Exception:
+                            return None
+                    cand = [_p(x) for x in logs]
+                    cand = [c for c in cand if c]
+                    if cand:
+                        dt_print = min(cand)
+                if (dt_print is None):
+                    sa = meta.get('saved_at')
+                    if sa:
+                        from datetime import datetime as _dti
+                        try:
+                            dt_print = _dti.fromisoformat(sa)
+                        except Exception:
+                            dt_print = None
+            except Exception:
+                dt_print = None
+            if dt_print is None:
+                try:
+                    from models import SalesInvoice as SI, Payment
+                    sid = db.session.query(SI.id).filter(SI.invoice_number == inv_no).scalar()
+                    dtp_row = None
+                    if sid:
+                        dtp_row = db.session.query(Payment.payment_date).\
+                            filter(Payment.invoice_type == 'sales', Payment.invoice_id == sid).\
+                            order_by(Payment.payment_date.asc()).first()
+                    if dtp_row and dtp_row[0]:
+                        dt_date = dtp_row[0].date()
+                    else:
+                        dt_date = (date_f or (created_at and created_at.date()) or get_saudi_now().date())
+                except Exception:
+                    dt_date = (date_f or (created_at and created_at.date()) or get_saudi_now().date())
+            else:
+                dt_date = dt_print.date()
+            m = int(dt_date.month)
             qn = ((m - 1) // 3) + 1
             if quarter in ('Q1','Q2','Q3','Q4') and f"Q{qn}" != quarter:
                 continue
-            meta = meta_map.get(f"pdf_path:sales:{inv_no}", {}) or {}
             p = meta.get('path')
             items.append({
                 'invoice_number': inv_no,
-                'date': dt.strftime('%Y-%m-%d'),
+                'date': dt_date.strftime('%Y-%m-%d'),
                 'payment_method': pm,
                 'total_amount': float(total_amt or 0.0),
                 'branch': branch_code,
@@ -11372,6 +11584,138 @@ def _pm_account(pm):
         tgt = _short.get('BANK') or ('1120','Bank','ASSET')
     return _account(tgt[0], tgt[1], tgt[2])
 
+def _acc_override(name: str, default_code: str) -> str:
+    try:
+        m = kv_get('acc_map', {}) or {}
+        code = (m.get(name) or '').strip()
+        if code:
+            return code
+    except Exception:
+        pass
+    return default_code
+
+def _platform_group(name: str) -> str:
+    try:
+        s = (name or '').strip().lower()
+        # Configured platforms from settings (AppKV)
+        platforms = kv_get('platforms_map', []) or []
+        for p in platforms:
+            key = (p.get('key') or '').strip().lower()
+            kws = p.get('keywords') or []
+            for kw in kws:
+                k = (kw or '').strip().lower()
+                if k and (k in s):
+                    return key
+        # Built-in fallback for known platforms
+        if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s):
+            return 'hunger'
+        if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s):
+            return 'keeta'
+        return ''
+    except Exception:
+        return ''
+
+def _create_sale_journal(inv):
+    try:
+        from models import JournalEntry, JournalLine
+        base_amt = float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0)
+        tax_amt = float(inv.tax_amount or 0.0)
+        total_inc_tax = round(max(base_amt, 0.0) + max(tax_amt, 0.0), 2)
+        cust = (getattr(inv, 'customer_name', '') or '').strip().lower()
+        grp = _platform_group(cust)
+        if grp == 'keeta':
+            rev_code = _acc_override('REV_KEETA', SHORT_TO_NUMERIC['REV_KEETA'][0])
+        elif grp == 'hunger':
+            rev_code = _acc_override('REV_HUNGER', SHORT_TO_NUMERIC['REV_HUNGER'][0])
+        else:
+            if (getattr(inv, 'branch', '') or '') == 'place_india':
+                rev_code = _acc_override('REV_PI', SHORT_TO_NUMERIC['REV_PI'][0])
+            elif (getattr(inv, 'branch', '') or '') == 'china_town':
+                rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
+            else:
+                rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
+        vat_out_code = SHORT_TO_NUMERIC.get('VAT_OUT', ('2060',))[0] if isinstance(SHORT_TO_NUMERIC.get('VAT_OUT'), tuple) else '2060'
+        paid = ((getattr(inv,'status','') or '').lower() == 'paid')
+        if paid:
+            ca = _pm_account(getattr(inv,'payment_method','CASH'))
+            je = JournalEntry(entry_number=f"JE-SAL-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=getattr(inv,'branch',None), description=f"Sales {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+            db.session.add(je); db.session.flush()
+            if ca:
+                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ca.id, debit=total_inc_tax, credit=0.0, description=f"Receipt {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+        else:
+            ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
+            from models import Account
+            ar_acc = _account(ar_code, CHART_OF_ACCOUNTS.get(ar_code, {'name':'Accounts Receivable','type':'ASSET'}).get('name','Accounts Receivable'), CHART_OF_ACCOUNTS.get(ar_code, {'name':'Accounts Receivable','type':'ASSET'}).get('type','ASSET'))
+            je = JournalEntry(entry_number=f"JE-SAL-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=getattr(inv,'branch',None), description=f"Sales {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+            db.session.add(je); db.session.flush()
+            if ar_acc:
+                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ar_acc.id, debit=total_inc_tax, credit=0.0, description=f"AR {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+        from models import Account
+        rev_acc = _account(rev_code, CHART_OF_ACCOUNTS.get(rev_code, {'name':'Revenue','type':'REVENUE'}).get('name','Revenue'), 'REVENUE')
+        vat_acc = _account(vat_out_code, CHART_OF_ACCOUNTS.get(vat_out_code, {'name':'VAT Output','type':'LIABILITY'}).get('name','VAT Output'), 'LIABILITY')
+        ln = 2
+        if rev_acc and base_amt > 0:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=rev_acc.id, debit=0.0, credit=base_amt, description=f"Revenue {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())));
+            ln += 1
+        if vat_acc and tax_amt > 0:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=vat_acc.id, debit=0.0, credit=tax_amt, description=f"VAT Output {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+def _create_purchase_journal(inv):
+    try:
+        from models import JournalEntry, JournalLine
+        total_before = float(inv.total_before_tax or 0.0)
+        tax_amt = float(inv.tax_amount or 0.0)
+        total_inc_tax = round(total_before + tax_amt, 2)
+        exp_acc = _account('1210', CHART_OF_ACCOUNTS.get('1210', {'name':'Inventory','type':'ASSET'}).get('name','Inventory'), CHART_OF_ACCOUNTS.get('1210', {'name':'Inventory','type':'ASSET'}).get('type','ASSET'))
+        vat_in_acc = _account('6200', CHART_OF_ACCOUNTS.get('6200', {'name':'VAT Input','type':'ASSET'}).get('name','VAT Input'), CHART_OF_ACCOUNTS.get('6200', {'name':'VAT Input','type':'ASSET'}).get('type','ASSET'))
+        ap_acc = _account('2110', CHART_OF_ACCOUNTS.get('2110', {'name':'Accounts Payable','type':'LIABILITY'}).get('name','Accounts Payable'), CHART_OF_ACCOUNTS.get('2110', {'name':'Accounts Payable','type':'LIABILITY'}).get('type','LIABILITY'))
+        je = JournalEntry(entry_number=f"JE-PUR-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=None, description=f"Purchase {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+        db.session.add(je); db.session.flush()
+        ln = 1
+        if exp_acc and total_before > 0:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=exp_acc.id, debit=total_before, credit=0.0, description="Purchase", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
+        if vat_in_acc and tax_amt > 0:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=vat_in_acc.id, debit=tax_amt, credit=0.0, description="VAT Input", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
+        if ap_acc:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ap_acc.id, debit=0.0, credit=total_inc_tax, description="Accounts Payable", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+def _create_expense_journal(inv):
+    try:
+        from models import JournalEntry, JournalLine
+        total_before = float(inv.total_before_tax or 0.0)
+        tax_amt = float(inv.tax_amount or 0.0)
+        total_inc_tax = round(total_before + tax_amt, 2)
+        exp_acc = _account('5100', CHART_OF_ACCOUNTS.get('5100', {'name':'رسوم حكومية','type':'EXPENSE'}).get('name','Expense'), 'EXPENSE')
+        vat_in_acc = _account('6200', CHART_OF_ACCOUNTS.get('6200', {'name':'VAT Input','type':'ASSET'}).get('name','VAT Input'), 'ASSET')
+        ap_acc = _account('2110', CHART_OF_ACCOUNTS.get('2110', {'name':'Accounts Payable','type':'LIABILITY'}).get('name','Accounts Payable'), 'LIABILITY')
+        je = JournalEntry(entry_number=f"JE-EXP-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=None, description=f"Expense {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+        db.session.add(je); db.session.flush()
+        ln = 1
+        if exp_acc and total_before > 0:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=exp_acc.id, debit=total_before, credit=0.0, description="Expense", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
+        if vat_in_acc and tax_amt > 0:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=vat_in_acc.id, debit=tax_amt, credit=0.0, description="VAT Input", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
+        if ap_acc:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ap_acc.id, debit=0.0, credit=total_inc_tax, description="Accounts Payable", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
 def _post_ledger(date_val, acc_code, acc_name, acc_type, debit_amt, credit_amt, ref_text):
     try:
         mc, mn, mt = _resolve_account(acc_code, acc_name, acc_type)
@@ -11421,109 +11765,74 @@ def _expense_account_for(desc):
                 return acc
     return ('EXP','Operating Expenses','EXPENSE')
 
-# ---- Chart of Accounts Integration (Arabic/English) ----
+# ---- Chart of Accounts (Clean Restaurant Chart 2025) ----
 CHART_OF_ACCOUNTS = {
-    '1010': {'name': 'النقدية', 'type': 'ASSET'},
-    '1020': {'name': 'الحسابات البنكية', 'type': 'ASSET'},
-    '1110': {'name': 'عملاء على الحساب', 'type': 'ASSET'},
-    '1210': {'name': 'المخزون – مواد وأدوات تشغيل', 'type': 'ASSET'},
-    '1220': {'name': 'هدر المواد', 'type': 'ASSET'},
-    '1310': {'name': 'مصروفات مدفوعة مسبقاً - إيجار', 'type': 'ASSET'},
-    '1320': {'name': 'مصروفات مدفوعة مسبقاً - تأمين', 'type': 'ASSET'},
+    # 1. ASSETS – الأصول
+    '1010': {'name': 'النقدية العامة', 'type': 'ASSET'},
+    '1040': {'name': 'نقد وصندوق (الصندوق العام)', 'type': 'ASSET'},
+    '1110': {'name': 'صندوق نقطة البيع (POS Cash Drawer)', 'type': 'ASSET'},
+    '1050': {'name': 'بنك – حساب رئيسي', 'type': 'ASSET'},
+    '1120': {'name': 'بنك – حساب إضافي', 'type': 'ASSET'},
+    '1020': {'name': 'المدينون / Accounts Receivable', 'type': 'ASSET'},
+    '1130': {'name': 'حسابات التحصيل – Keeta', 'type': 'ASSET'},
+    '1140': {'name': 'حسابات التحصيل – HungerStation', 'type': 'ASSET'},
+    '1070': {'name': 'مخزون مواد غذائية', 'type': 'ASSET'},
+    '1210': {'name': 'مخزون – مواد وأدوات تشغيل', 'type': 'ASSET'},
+    '1025': {'name': 'مخزون – مستلزمات أخرى', 'type': 'ASSET'},
+    '1220': {'name': 'هدر مواد – مراقب', 'type': 'ASSET'},
+    '1030': {'name': 'سلف الموظفين المستحقة', 'type': 'ASSET'},
+    '1090': {'name': 'مصروفات مدفوعة مسبقاً', 'type': 'ASSET'},
+    '1310': {'name': 'إيجار مدفوع مقدماً', 'type': 'ASSET'},
+    '1320': {'name': 'تأمين مدفوع مقدماً', 'type': 'ASSET'},
+    '1060': {'name': 'أصول ثابتة (معدات/أثاث/أجهزة)', 'type': 'ASSET'},
     '1510': {'name': 'معدات وتجهيزات المطعم', 'type': 'ASSET'},
     '1520': {'name': 'أثاث وديكور', 'type': 'ASSET'},
     '1530': {'name': 'أجهزة كمبيوتر وبرمجيات', 'type': 'ASSET'},
-    '1540': {'name': 'قيمة شراء المطعم من الفرد', 'type': 'ASSET'},
-    '2010': {'name': 'الموردون', 'type': 'LIABILITY'},
+    '1540': {'name': 'قيمة شراء المطعم من المالك السابق', 'type': 'ASSET'},
+
+    # 2. LIABILITIES – الالتزامات
+    '2000': {'name': 'الالتزامات العامة', 'type': 'LIABILITY'},
     '2020': {'name': 'التزامات أخرى', 'type': 'LIABILITY'},
+    '2010': {'name': 'الموردون', 'type': 'LIABILITY'},
+    '2110': {'name': 'الموردون – عام', 'type': 'LIABILITY'},
     '2030': {'name': 'الرواتب المستحقة', 'type': 'LIABILITY'},
+    '2130': {'name': 'رواتب مستحقة', 'type': 'LIABILITY'},
     '2040': {'name': 'سلف الموظفين', 'type': 'LIABILITY'},
     '2050': {'name': 'VAT المستحق', 'type': 'LIABILITY'},
-    '2110': {'name': 'الالتزام تجاه المالك السابق', 'type': 'LIABILITY'},
-    '3010': {'name': 'رأس المال عند التأسيس', 'type': 'EQUITY'},
-    '3020': {'name': 'المسحوبات الشخصية', 'type': 'EQUITY'},
-    '3030': {'name': 'صافي الربح/الخسارة', 'type': 'EQUITY'},
-    '4100': {'name': 'مبيعات China Town', 'type': 'REVENUE', 'auto': True},
-    '4110': {'name': 'مبيعات Place India', 'type': 'REVENUE', 'auto': True},
-    '4120': {'name': 'مبيعات Keeta (عبر الإنترنت)', 'type': 'REVENUE', 'auto': True},
-    '4130': {'name': 'مبيعات Hunger (عبر الإنترنت)', 'type': 'REVENUE', 'auto': True},
-    '4140': {'name': 'خصومات على المبيعات', 'type': 'EXPENSE', 'auto': True},
-    '4040': {'name': 'عمولات بنكية', 'type': 'REVENUE'},
-    '5010': {'name': 'كهرباء وماء وصيانة', 'type': 'EXPENSE'},
-    '5020': {'name': 'رواتب وأجور الموظفين', 'type': 'EXPENSE'},
-    '5030': {'name': 'سلف الموظفين', 'type': 'EXPENSE'},
-    '5040': {'name': 'مصاريف تسويق', 'type': 'EXPENSE'},
-    '5050': {'name': 'مصاريف حكومية', 'type': 'EXPENSE'},
-    '5060': {'name': 'عمولات بنكية', 'type': 'EXPENSE'},
-    '5070': {'name': 'مصروفات أخرى', 'type': 'EXPENSE'},
-    '6100': {'name': 'Output VAT (ضريبة المخرجات)', 'type': 'LIABILITY', 'auto': True},
-    '6200': {'name': 'Input VAT (ضريبة المدخلات)', 'type': 'ASSET', 'auto': True},
-    '6300': {'name': 'تسوية ضريبة المدخلات والمخرجات', 'type': 'TAX', 'auto': True},
-    '1100': {'name': 'أصول متداولة', 'type': 'ASSET'},
-    '1110': {'name': 'صندوق – نقد', 'type': 'ASSET', 'auto': True},
-    '1120': {'name': 'بنك – حساب رئيسي', 'type': 'ASSET', 'auto': True},
-    '1130': {'name': 'حسابات التحصيل (عميل – Keeta)', 'type': 'ASSET', 'auto': True},
-    '1140': {'name': 'حسابات التحصيل (عميل – Hunger)', 'type': 'ASSET', 'auto': True},
-    '1150': {'name': 'أصول متداولة أخرى', 'type': 'ASSET'},
-    '1200': {'name': 'أصول غير متداولة', 'type': 'ASSET'},
-    '1050': {'name': 'المدينون / Accounts Receivable', 'type': 'ASSET'},
-    '1025': {'name': 'المخزون – مستلزمات أخرى', 'type': 'ASSET'},
-    '1030': {'name': 'السلف المستحقة للموظفين', 'type': 'ASSET'},
-    '2100': {'name': 'التزامات قصيرة الأجل', 'type': 'LIABILITY'},
-    '2110': {'name': 'الموردون – عام', 'type': 'LIABILITY', 'auto': True},
-    '2120': {'name': 'ضريبة القيمة المضافة مستحقة', 'type': 'LIABILITY', 'auto': True},
-    '2130': {'name': 'رواتب مستحقة', 'type': 'LIABILITY'},
+    '2060': {'name': 'ضريبة المخرجات (Output VAT)', 'type': 'LIABILITY'},
+    '2120': {'name': 'ضريبة القيمة المضافة مستحقة', 'type': 'LIABILITY'},
     '2200': {'name': 'الالتزامات طويلة الأجل', 'type': 'LIABILITY'},
-    '3000': {'name': 'رأس المال', 'type': 'EQUITY'},
-    '3100': {'name': 'رأس المال', 'type': 'EQUITY'},
-    '3200': {'name': 'أرباح / خسائر محتجزة', 'type': 'EQUITY'},
-    # Operating expenses (5xxxx)
-    '5100': {'name': 'مصروفات تشغيلية', 'type': 'EXPENSE'},
-    '5110': {'name': 'إيجار', 'type': 'EXPENSE'},
-    '5120': {'name': 'كهرباء', 'type': 'EXPENSE'},
-    '5130': {'name': 'ديزل', 'type': 'EXPENSE'},
-    '5140': {'name': 'إنترنت', 'type': 'EXPENSE'},
-    '5150': {'name': 'صيانة', 'type': 'EXPENSE'},
-    '5160': {'name': 'أدوات مكتبية', 'type': 'EXPENSE'},
-    '5170': {'name': 'مواد تنظيف', 'type': 'EXPENSE'},
-    '5180': {'name': 'غسيل ملابس', 'type': 'EXPENSE'},
-    '5190': {'name': 'عمولات بنكية', 'type': 'EXPENSE'},
-    '5200': {'name': 'رسوم حكومية', 'type': 'EXPENSE'},
-    '5300': {'name': 'رواتب ومكافآت', 'type': 'EXPENSE'},
-    '5310': {'name': 'مصروف رواتب', 'type': 'EXPENSE', 'auto': True},
-    '5320': {'name': 'سلف موظفين', 'type': 'EXPENSE'},
-    '5330': {'name': 'تسوية سلف رواتب', 'type': 'EXPENSE'},
- '5400': {'name': 'مصروفات غير تشغيلية', 'type': 'EXPENSE'},
- '5005': {'name': 'تكلفة المواد المباشرة', 'type': 'COGS'}
-}
-CHART_OF_ACCOUNTS.update({
-    '2.1.2.1': {'name': 'مستحقات رواتب الموظفين', 'type': 'LIABILITY'},
-    '1.1.4.2': {'name': 'سلف للموظفين', 'type': 'ASSET'},
-    '4.1.2.1': {'name': 'مبيعات – عميل Keeta', 'type': 'REVENUE'},
-    '4.1.2.2': {'name': 'مبيعات – عميل HungerStation', 'type': 'REVENUE'}
-})
 
-# Additional accounts per provided chart (Arabic/English structure)
-CHART_OF_ACCOUNTS.update({
-    '1000': {'name': 'الأصول / ASSETS', 'type': 'ASSET'},
-    '1020': {'name': 'المدينون / Accounts Receivable', 'type': 'ASSET'},
-    '1040': {'name': 'نقد وصندوق', 'type': 'ASSET'},
-    '1050': {'name': 'بنك – حساب رئيسي', 'type': 'ASSET'},
-    '1060': {'name': 'أصول ثابتة (معدات، أثاث، أجهزة)', 'type': 'ASSET'},
-    '1070': {'name': 'مخزون مواد غذائية', 'type': 'ASSET'},
-    '1080': {'name': 'هدر المواد', 'type': 'ASSET'},
-    '1090': {'name': 'مصروفات مدفوعة مسبقاً (إيجار، تأمين)', 'type': 'ASSET'},
-    '1100': {'name': 'Input VAT (ضريبة المدخلات)', 'type': 'ASSET'},
-    '2000': {'name': 'الالتزامات / LIABILITIES', 'type': 'LIABILITY'},
-    '2060': {'name': 'Output VAT (ضريبة المخرجات)', 'type': 'LIABILITY'},
-    '3000': {'name': 'حقوق الملكية / EQUITY', 'type': 'EQUITY'},
-    '4000': {'name': 'مبيعات China Town', 'type': 'REVENUE'},
-    '4010': {'name': 'مبيعات Place India', 'type': 'REVENUE'},
-    '4020': {'name': 'مبيعات Keeta (عبر الإنترنت)', 'type': 'REVENUE'},
-    '4030': {'name': 'مبيعات Hunger (عبر الإنترنت)', 'type': 'REVENUE'},
-    '5000': {'name': 'مصروفات تشغيلية (تجميع جميع المصروفات التشغيلية الأخرى)', 'type': 'EXPENSE'},
-    '5010': {'name': 'رواتب وأجور (مصروف رواتب + سلف الموظفين + استقطاعات الراتب)', 'type': 'EXPENSE'},
+    # 3. EQUITY – حقوق الملكية
+    '3000': {'name': 'حقوق الملكية', 'type': 'EQUITY'},
+    '3010': {'name': 'رأس المال عند التأسيس', 'type': 'EQUITY'},
+    '3100': {'name': 'رأس المال', 'type': 'EQUITY'},
+    '3020': {'name': 'المسحوبات الشخصية', 'type': 'EQUITY'},
+    '3200': {'name': 'الأرباح/الخسائر المحتجزة', 'type': 'EQUITY'},
+    '3030': {'name': 'صافي الربح/الخسارة', 'type': 'EQUITY'},
+
+    # 4. REVENUE – الإيرادات
+    '4000': {'name': 'مبيعات China Town – رئيسي', 'type': 'REVENUE'},
+    '4100': {'name': 'مبيعات China Town – فرعي', 'type': 'REVENUE'},
+    '4010': {'name': 'مبيعات Place India – رئيسي', 'type': 'REVENUE'},
+    '4110': {'name': 'مبيعات Place India – فرعي', 'type': 'REVENUE'},
+    '4020': {'name': 'مبيعات Keeta – عبر الإنترنت', 'type': 'REVENUE'},
+    '4120': {'name': 'مبيعات Keeta – فرعي', 'type': 'REVENUE'},
+    '4030': {'name': 'مبيعات HungerStation – عبر الإنترنت', 'type': 'REVENUE'},
+    '4040': {'name': 'عمولات بنكية مستلمة', 'type': 'REVENUE'},
+    '4140': {'name': 'خصومات على المبيعات', 'type': 'EXPENSE'},
+
+    # 5. COGS – تكلفة البضاعة المباعة
+    '5005': {'name': 'تكلفة المواد الغذائية المباشرة', 'type': 'COGS'},
+
+    # 6. EXPENSES – المصروفات التشغيلية
+    '5010': {'name': 'رواتب وأجور الموظفين', 'type': 'EXPENSE'},
+    '5300': {'name': 'رواتب ومكافآت', 'type': 'EXPENSE'},
+    '5310': {'name': 'مصروف رواتب', 'type': 'EXPENSE'},
+    '5320': {'name': 'سلف موظفين (مصروف)', 'type': 'EXPENSE'},
+    '5330': {'name': 'تسوية سلف رواتب', 'type': 'EXPENSE'},
     '5020': {'name': 'كهرباء وماء وصيانة', 'type': 'EXPENSE'},
+    '5150': {'name': 'صيانة عامة', 'type': 'EXPENSE'},
     '5030': {'name': 'إيجار', 'type': 'EXPENSE'},
     '5040': {'name': 'ديزل', 'type': 'EXPENSE'},
     '5050': {'name': 'إنترنت', 'type': 'EXPENSE'},
@@ -11532,12 +11841,21 @@ CHART_OF_ACCOUNTS.update({
     '5080': {'name': 'غسيل ملابس', 'type': 'EXPENSE'},
     '5090': {'name': 'عمولات بنكية', 'type': 'EXPENSE'},
     '5100': {'name': 'رسوم حكومية', 'type': 'EXPENSE'},
-    '5110': {'name': 'مصاريف تسويق', 'type': 'EXPENSE'},
+    '5110': {'name': 'تسويق', 'type': 'EXPENSE'},
     '5120': {'name': 'مصاريف حكومية', 'type': 'EXPENSE'},
     '5130': {'name': 'مصروفات أخرى', 'type': 'EXPENSE'},
     '5140': {'name': 'مصروفات غير تشغيلية', 'type': 'EXPENSE'},
-    '6000': {'name': 'تسوية ضريبة المدخلات والمخرجات', 'type': 'TAX'}
-})
+    '5160': {'name': 'أدوات مكتبية (مكرر)', 'type': 'EXPENSE'},
+    '5170': {'name': 'مواد تنظيف (مكرر)', 'type': 'EXPENSE'},
+    '5180': {'name': 'غسيل ملابس (مكرر)', 'type': 'EXPENSE'},
+    '5190': {'name': 'عمولات بنكية (مكرر)', 'type': 'EXPENSE'},
+    '5200': {'name': 'رسوم حكومية (مكرر)', 'type': 'EXPENSE'},
+
+    # 7. TAX – الضرائب
+    '6000': {'name': 'تسوية ضريبة المدخلات والمخرجات', 'type': 'TAX'},
+    '6300': {'name': 'تسوية ضريبة القيمة المضافة', 'type': 'TAX'},
+    '1100': {'name': 'Input VAT (ضريبة المدخلات)', 'type': 'ASSET'}
+}
 
 SHORT_TO_NUMERIC = {
     'CASH': ('1040', CHART_OF_ACCOUNTS.get('1040', {'name':'نقد وصندوق','type':'ASSET'})['name'], CHART_OF_ACCOUNTS.get('1040', {'type':'ASSET'})['type']),
@@ -11568,7 +11886,7 @@ SHORT_TO_NUMERIC = {
     'SAL_EXP': ('5310', CHART_OF_ACCOUNTS['5310']['name'], CHART_OF_ACCOUNTS['5310']['type']),
     'EMP_ADV_EXP': ('5330', CHART_OF_ACCOUNTS['5330']['name'], CHART_OF_ACCOUNTS['5330']['type']),
     'SAL_DED': ('5330', CHART_OF_ACCOUNTS['5330']['name'], CHART_OF_ACCOUNTS['5330']['type']),
-    'EXP_NONOP': ('5400', CHART_OF_ACCOUNTS['5400']['name'], CHART_OF_ACCOUNTS['5400']['type']),
+    'EXP_NONOP': ('5400', CHART_OF_ACCOUNTS.get('5400', {'name':'مصروفات غير تشغيلية','type':'EXPENSE'})['name'], CHART_OF_ACCOUNTS.get('5400', {'type':'EXPENSE'})['type']),
     # payroll liabilities and asset advances
     'PAYROLL': ('2030', CHART_OF_ACCOUNTS['2030']['name'], CHART_OF_ACCOUNTS['2030']['type']),
     'PAYROLL_LIAB': ('2130', CHART_OF_ACCOUNTS['2130']['name'], CHART_OF_ACCOUNTS['2130']['type']),
@@ -12446,6 +12764,319 @@ def ledger_page():
     except Exception:
         employees = []
     return render_template('ledger.html', employees=employees)
+
+@main.route('/chart-of-accounts', methods=['GET'], endpoint='chart_of_accounts')
+@login_required
+def chart_of_accounts():
+    return render_template('chart.html')
+
+def _gen_code_for_type(acc_type: str) -> str:
+    try:
+        import re
+        t = (acc_type or '').strip().upper()
+        ranges = {
+            'ASSET': (1000, 1999),
+            'LIABILITY': (2000, 2999),
+            'EQUITY': (3000, 3999),
+            'REVENUE': (4000, 4999),
+            'EXPENSE': (5000, 5999),
+            'TAX': (6000, 6999),
+            'COGS': (5000, 5999)
+        }
+        base, end = ranges.get(t, (7000, 7999))
+        seq_key = f"chart_code_seq:{t}"
+        last = kv_get(seq_key, None)
+        if isinstance(last, int):
+            cand = min(last + 10, end)
+        else:
+            codes = []
+            for k in CHART_OF_ACCOUNTS.keys():
+                try:
+                    x = int(re.sub(r'[^0-9]', '', str(k)))
+                except Exception:
+                    x = 0
+                if x >= base and x <= end:
+                    codes.append(x)
+            extra = kv_get('chart_accounts', []) or []
+            for e in extra:
+                try:
+                    x = int(re.sub(r'[^0-9]', '', str(e.get('code'))))
+                except Exception:
+                    x = 0
+                if x >= base and x <= end:
+                    codes.append(x)
+            cand = max(codes) + 10 if codes else base
+        if cand > end:
+            cand = end
+        kv_set(seq_key, cand)
+        return str(cand)
+    except Exception:
+        return str(int(datetime.utcnow().timestamp()) % 10000)
+
+@main.route('/api/chart/list', methods=['GET'], endpoint='api_chart_list')
+@login_required
+def api_chart_list():
+    try:
+        overrides = kv_get('chart_overrides', {}) or {}
+        extra = kv_get('chart_accounts', []) or []
+        out = []
+        for code, info in CHART_OF_ACCOUNTS.items():
+            parent_guess = ''
+            if code in ('1000','2000','3000','4000','5000','6000'): parent_guess=''
+            else:
+                t = (info.get('type') or '').upper()
+                parent_guess = {'ASSET':'1000','LIABILITY':'2000','EQUITY':'3000','REVENUE':'4000','EXPENSE':'5000','TAX':'6000','COGS':'5000'}.get(t,'')
+            out.append({
+                'code': code,
+                'name': info.get('name'),
+                'type': info.get('type'),
+                'enabled': bool((overrides.get(code) or {}).get('enabled', True)),
+                'parent': parent_guess,
+                'balance': 0.0,
+                'notes': ''
+            })
+        for e in extra:
+            out.append({
+                'code': e.get('code'),
+                'name': e.get('name'),
+                'type': e.get('type'),
+                'enabled': bool(e.get('enabled', True)),
+                'parent': e.get('parent') or '',
+                'balance': float(e.get('balance') or 0.0),
+                'notes': e.get('notes') or ''
+            })
+        try:
+            from models import Account
+            rows = Account.query.all()
+            known = {x['code'] for x in out}
+            for a in rows:
+                c = (a.code or '').strip()
+                if not c or c in known:
+                    continue
+                out.append({
+                    'code': c,
+                    'name': a.name,
+                    'type': (a.type or 'EXPENSE'),
+                    'enabled': True,
+                    'parent': ({'ASSET':'1000','LIABILITY':'2000','EQUITY':'3000','REVENUE':'4000','EXPENSE':'5000','TAX':'6000','COGS':'5000'}).get((a.type or '').upper(), ''),
+                    'balance': 0.0,
+                    'notes': ''
+                })
+        except Exception:
+            pass
+        return jsonify({'ok': True, 'items': out})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/api/chart/balances', methods=['GET'], endpoint='api_chart_balances')
+@login_required
+def api_chart_balances():
+    try:
+        from models import JournalLine, Account, JournalEntry
+        start_arg = (request.args.get('start_date') or '').strip()
+        end_arg = (request.args.get('end_date') or '').strip()
+        branch = (request.args.get('branch') or '').strip()
+        q = db.session.query(Account.code.label('code'), func.coalesce(func.sum(JournalLine.debit), 0.0).label('debit_total'), func.coalesce(func.sum(JournalLine.credit), 0.0).label('credit_total')).join(Account, JournalLine.account_id == Account.id).join(JournalEntry, JournalLine.journal_id == JournalEntry.id)
+        if start_arg and end_arg:
+            try:
+                from datetime import datetime as _dt
+                sd = _dt.strptime(start_arg, '%Y-%m-%d').date()
+                ed = _dt.strptime(end_arg, '%Y-%m-%d').date()
+                q = q.filter(JournalLine.line_date.between(sd, ed))
+            except Exception:
+                pass
+        if branch in ('china_town','place_india'):
+            q = q.filter(JournalEntry.branch_code == branch)
+        rows = q.group_by(Account.code).all()
+        items = []
+        for code, d, c in rows:
+            dd = float(d or 0.0); cc = float(c or 0.0)
+            items.append({'code': code, 'debit_total': dd, 'credit_total': cc, 'net': round(dd - cc, 2)})
+        return jsonify({'ok': True, 'items': items})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@main.route('/api/chart/opening_balance', methods=['POST'], endpoint='api_chart_opening_balance')
+@login_required
+@csrf.exempt
+def api_chart_opening_balance():
+    try:
+        data = request.get_json(force=True) or {}
+        code = (data.get('code') or '').strip()
+        side = (data.get('side') or 'debit').strip().lower()
+        amount = float(data.get('amount') or 0.0)
+        date_str = (data.get('date') or '').strip()
+        note = (data.get('note') or '').strip()
+        if not code or amount <= 0:
+            return jsonify({'ok': False, 'error': 'invalid_input'}), 400
+        # Resolve date
+        try:
+            if date_str:
+                from datetime import datetime as _dt
+                je_date = _dt.strptime(date_str, '%Y-%m-%d').date()
+            else:
+                today = get_saudi_now().date()
+                je_date = today.replace(month=1, day=1)
+        except Exception:
+            je_date = get_saudi_now().date()
+        from models import Account, JournalEntry, JournalLine
+        # Ensure main account exists
+        acc = Account.query.filter(Account.code == code).first()
+        if not acc:
+            info = CHART_OF_ACCOUNTS.get(code, {'name': 'Account', 'type': 'EXPENSE'})
+            acc = Account(code=code, name=info.get('name'), type=info.get('type'))
+            db.session.add(acc); db.session.flush()
+        # Ensure offset account (Owners’ Equity) exists
+        off_code = '3000'
+        off = Account.query.filter(Account.code == off_code).first()
+        if not off:
+            info = CHART_OF_ACCOUNTS.get(off_code, {'name':'حقوق الملكية','type':'EQUITY'})
+            off = Account(code=off_code, name=info.get('name'), type=info.get('type'))
+            db.session.add(off); db.session.flush()
+        # Create journal entry
+        entry_no = f"JE-OPEN-{code}-{int(get_saudi_now().timestamp())}"
+        je = JournalEntry(entry_number=entry_no, date=je_date, branch_code=None, description=f"Opening Balance {code}", status='posted', total_debit=amount, total_credit=amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+        db.session.add(je); db.session.flush()
+        # Lines
+        if side == 'debit':
+            db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=acc.id, debit=amount, credit=0.0, description=note or f"Opening {code}", line_date=je_date))
+            db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=off.id, debit=0.0, credit=amount, description=note or f"Opening offset", line_date=je_date))
+        else:
+            db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=acc.id, debit=0.0, credit=amount, description=note or f"Opening {code}", line_date=je_date))
+            db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=off.id, debit=amount, credit=0.0, description=note or f"Opening offset", line_date=je_date))
+        db.session.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@main.route('/api/chart/toggle/<code>', methods=['POST'], endpoint='api_chart_toggle')
+@login_required
+@csrf.exempt
+def api_chart_toggle(code):
+    try:
+        overrides = kv_get('chart_overrides', {}) or {}
+        cur = overrides.get(code) or {}
+        cur['enabled'] = not bool(cur.get('enabled', True))
+        overrides[code] = cur
+        kv_set('chart_overrides', overrides)
+        return jsonify({'ok': True, 'enabled': cur['enabled']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/api/chart/add', methods=['POST'], endpoint='api_chart_add')
+@login_required
+@csrf.exempt
+def api_chart_add():
+    try:
+        data = request.get_json(force=True) or {}
+        name = (data.get('name') or '').strip()
+        acc_type = (data.get('type') or '').strip().upper()
+        role = (data.get('role') or '').strip().lower()
+        enabled = bool(data.get('enabled', True))
+        parent = (data.get('parent_code') or '').strip()
+        opening_balance = float(data.get('opening_balance') or 0.0)
+        notes = (data.get('notes') or '').strip()
+        if not name or not acc_type:
+            return jsonify({'ok': False, 'error': 'missing_fields'}), 400
+        code = _gen_code_for_type(acc_type)
+        cur = kv_get('chart_accounts', []) or []
+        cur.append({'code': code, 'name': name, 'type': acc_type, 'enabled': enabled, 'parent': parent, 'balance': opening_balance, 'notes': notes})
+        kv_set('chart_accounts', cur)
+        if role in ('platform_ar','platform_revenue'):
+            pk = (data.get('platform_key') or '').strip().lower()
+            if pk:
+                platforms = kv_get('platforms_map', []) or []
+                kws_raw = (data.get('platform_keywords') or '').strip()
+                keywords = [x.strip().lower() for x in kws_raw.split(',') if x.strip()]
+                entry = {'key': pk, 'keywords': keywords, 'auto_unpaid': True}
+                if role == 'platform_ar':
+                    entry['ar_code'] = code
+                else:
+                    entry['rev_code'] = code
+                idx = None
+                for i, e in enumerate(platforms):
+                    if (e.get('key') or '').strip().lower() == pk:
+                        idx = i; break
+                if idx is not None:
+                    prev = platforms[idx]
+                    prev.update(entry)
+                    if keywords:
+                        prev['keywords'] = keywords
+                    platforms[idx] = prev
+                else:
+                    platforms.append(entry)
+                kv_set('platforms_map', platforms)
+        elif role in ('branch_rev_ct','branch_rev_pi','default_ar'):
+            acc_map = kv_get('acc_map', {}) or {}
+            if role == 'branch_rev_ct':
+                acc_map['REV_CT'] = code
+            elif role == 'branch_rev_pi':
+                acc_map['REV_PI'] = code
+            elif role == 'default_ar':
+                acc_map['AR'] = code
+            kv_set('acc_map', acc_map)
+        return jsonify({'ok': True, 'code': code})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/api/chart/refresh', methods=['POST'], endpoint='api_chart_refresh')
+@login_required
+@csrf.exempt
+def api_chart_refresh():
+    try:
+        overrides = kv_get('chart_overrides', {}) or {}
+        cur = kv_get('chart_accounts', []) or []
+        try:
+            from models import Account
+            rows = Account.query.all()
+        except Exception:
+            rows = []
+        existing_codes = set([str(x.get('code')) for x in cur if x.get('code')])
+        default_codes = set(list(CHART_OF_ACCOUNTS.keys()))
+        added = 0
+        for a in rows:
+            c = (a.code or '').strip()
+            if not c or c in existing_codes or c in default_codes:
+                continue
+            cur.append({'code': c, 'name': a.name, 'type': (a.type or 'EXPENSE'), 'enabled': bool((overrides.get(c) or {}).get('enabled', True))})
+            existing_codes.add(c)
+            added += 1
+        kv_set('chart_accounts', cur)
+        return jsonify({'ok': True, 'added': added, 'total': len(cur)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/api/chart/merge_rules', methods=['GET'], endpoint='api_chart_merge_rules')
+@login_required
+def api_chart_merge_rules():
+    try:
+        rules = kv_get('chart_name_merge', []) or []
+        return jsonify({'ok': True, 'items': rules})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/api/chart/add_merge_rule', methods=['POST'], endpoint='api_chart_add_merge_rule')
+@login_required
+@csrf.exempt
+def api_chart_add_merge_rule():
+    try:
+        data = request.get_json(force=True) or {}
+        target_code = (data.get('target_code') or '').strip()
+        patterns_raw = (data.get('patterns') or '').strip()
+        acc_type = (data.get('type') or '').strip().upper() if data.get('type') else None
+        if not target_code or not patterns_raw:
+            return jsonify({'ok': False, 'error': 'missing_fields'}), 400
+        patterns = [x.strip() for x in patterns_raw.split(',') if x.strip()]
+        rules = kv_get('chart_name_merge', []) or []
+        rules.append({'target_code': target_code, 'patterns': patterns, 'type': acc_type})
+        kv_set('chart_name_merge', rules)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
 
 @main.route('/api/ledger/metrics', methods=['GET'], endpoint='api_ledger_metrics')
 @login_required

@@ -179,11 +179,11 @@ body {
                     </div>
                     <div class="col-md-2">
                       {{ item_form.quantity.label(class_='form-label') }}
-                      {{ item_form.quantity(class_='form-control', step='0.01') }}
+                      {{ item_form.quantity(class_='form-control', step='0.01', type='text', inputmode='decimal', dir='ltr', pattern='[0-9٠-٩۰-۹.,٫،]+' ) }}
                     </div>
                     <div class="col-md-2">
                       {{ item_form.price_before_tax.label(class_='form-label') }}
-                      {{ item_form.price_before_tax(class_='form-control', step='0.01') }}
+                      {{ item_form.price_before_tax(class_='form-control', step='0.01', type='text', inputmode='decimal', dir='ltr', pattern='[0-9٠-٩۰-۹.,٫،]+' ) }}
                     </div>
                     <!-- إخفاء حقول الخصم والضريبة لكل بند لتبسيط الإدخال -->
                     <div class="col-md-2" style="display:none;">
@@ -303,6 +303,7 @@ body {
     // Event listeners
     document.addEventListener('input', e => {
         if (e.target && /items-\d+-(quantity|price_before_tax|discount)/.test(e.target.name||'')) {
+            try{ e.target.value = toAsciiDigits(e.target.value); }catch(err){}
             calculateTotals();
         }
     });

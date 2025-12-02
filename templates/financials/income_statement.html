@@ -9,6 +9,7 @@
       <a class="btn btn-outline-primary btn-sm" href="{{ url_for('financials.balance_sheet') }}">المركز المالي / Balance Sheet</a>
       <a class="btn btn-outline-primary btn-sm" href="{{ url_for('financials.trial_balance') }}">ميزان المراجعة / Trial Balance</a>
       <a target="_blank" class="btn btn-outline-secondary btn-sm" href="/financials/print/income_statement?period={{ data.period }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}&branch={{ data.branch or 'all' }}">طباعة / Print</a>
+      <a target="_blank" class="btn btn-outline-success btn-sm" href="/financials/export/income_statement?period={{ data.period }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}">تصدير CSV</a>
     </div>
   </div>
 

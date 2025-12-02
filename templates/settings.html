@@ -240,8 +240,64 @@
             <div class="form-check">
               <input class="form-check-input" type="checkbox" name="receipt_show_tax_number" id="recTax" {% if s.receipt_show_tax_number %}checked{% endif %}>
               <label class="form-check-label" for="recTax">إظهار الرقم الضريبي</label>
-            </div>
+        </div>
+        <div class="row g-3 mt-4">
+          <div class="col-12"><h5>Accounting Mapping (override)</h5></div>
+          <div class="col-md-4">
+            <label class="form-label">AR (Keeta)</label>
+            <input type="text" name="acc_ar_keeta" class="form-control" placeholder="e.g. 1130">
           </div>
+          <div class="col-md-4">
+            <label class="form-label">AR (Hunger)</label>
+            <input type="text" name="acc_ar_hunger" class="form-control" placeholder="e.g. 1140">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">AR (Default)</label>
+            <input type="text" name="acc_ar_default" class="form-control" placeholder="e.g. 1050">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Revenue (Keeta)</label>
+            <input type="text" name="acc_rev_keeta" class="form-control" placeholder="e.g. 4120">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Revenue (Hunger)</label>
+            <input type="text" name="acc_rev_hunger" class="form-control" placeholder="e.g. 4130">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Revenue (China Town)</label>
+            <input type="text" name="acc_rev_ct" class="form-control" placeholder="e.g. 4100">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Revenue (Place India)</label>
+            <input type="text" name="acc_rev_pi" class="form-control" placeholder="e.g. 4110">
+          </div>
+          <div class="col-12">
+            <div class="form-text">If left blank, system defaults are used. Use valid account codes present in your chart of accounts.</div>
+          </div>
+        </div>
+        <div class="row g-3 mt-4">
+          <div class="col-12"><h5>Online Sales Platforms</h5></div>
+          <div class="col-md-3">
+            <label class="form-label">Platform Key</label>
+            <input type="text" name="platform_key" class="form-control" placeholder="e.g. jahez">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Keywords (comma-separated)</label>
+            <input type="text" name="platform_keywords" class="form-control" placeholder="e.g. jahez, جاهز">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">AR Code</label>
+            <input type="text" name="platform_ar_code" class="form-control" placeholder="e.g. 1150">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Revenue Code</label>
+            <input type="text" name="platform_rev_code" class="form-control" placeholder="e.g. 4125">
+          </div>
+          <div class="col-12">
+            <div class="form-text">Adding a platform here lets the system detect it by keywords and use the provided AR/Revenue accounts. Platforms default to Unpaid on auto-checkout.</div>
+          </div>
+        </div>
+      </div>
           <div class="col-md-6">
             <label class="form-label">نص تذييل الإيصال</label>
             <input type="text" name="receipt_footer_text" class="form-control" value="{{ s.receipt_footer_text or '' }}">

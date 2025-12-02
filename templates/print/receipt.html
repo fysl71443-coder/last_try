@@ -12,16 +12,16 @@
     {% set effective_logo_height = branch_settings.receipt_logo_height if branch_settings and branch_settings.receipt_logo_height else logo_h %}
     
     body{
-      font-family: 'Courier New', monospace; 
+      font-family: Arial, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
       font-size: {{ fs }}px; 
-      line-height: 1.3;
+      line-height: 1.35;
       margin: 0;
       padding: 8px;
       color: #000;
-      font-weight: 700;
+      font-weight: 500;
     }
     body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i,
-    .muted, .small, .company-name, .grand-total { color: #000 !important; font-weight: 700 !important; }
+    .muted, .small, .company-name, .grand-total { color: #000 !important; font-weight: 500 !important; }
     .wrap{
       width: {{ pw }}mm; 
       max-width: {{ pw }}mm; 
@@ -41,8 +41,8 @@
       margin-right: auto;
     }
     .company-name{
-      font-size: {{ (fs|int + 3) if fs else 15 }}px;
-      font-weight: bold;
+      font-size: {{ (fs|int + 4) if fs else 16 }}px;
+      font-weight: 600;
       margin-bottom: 6px;
     }
     table{
@@ -50,23 +50,24 @@
       border-collapse: collapse;
       margin: 8px 0;
       font-size: {{ (fs|int - 1) if (fs|int > 8) else fs }}px;
+      table-layout: fixed;
     }
     th{
       padding: 4px 2px; 
-      border-bottom: 1px solid #000;
-      font-weight: 700;
+      border-bottom: 1px solid #333;
+      font-weight: 600;
       font-size: {{ (fs|int + 1) if (fs|int > 8) else (fs|int) }}px;
       color: #000;
     }
     td{
       padding: 3px 2px; 
-      border-bottom: 1px solid #000;
+      border-bottom: 1px solid #333;
       vertical-align: top;
       color: #000;
     }
     .total-row td{
-      font-weight: 700;
-      border-bottom: 1px solid #000;
+      font-weight: 600;
+      border-bottom: 1px solid #333;
       padding: 4px 2px;
       color: #000;
     }
@@ -93,17 +94,17 @@
       .no-print{display: none !important;}
       body{
         background: #fff; 
-        font-size: {{ (fs|int + 2) if (fs|int < 15) else fs }}px;
+        font-size: {{ (fs|int + 1) if (fs|int < 15) else fs }}px;
         margin: 0;
         padding: 4px;
         -webkit-print-color-adjust: exact;
         color-adjust: exact;
         print-color-adjust: exact;
         color: #000;
-        font-weight: 700;
+        font-weight: 500;
       }
       body, h1, h2, h3, h4, h5, h6, p, span, div, td, th, small, strong, em, b, i,
-      table, .company-name, .muted, .small, .grand-total { color: #000 !important; font-weight: 700 !important; }
+      table, .company-name, .muted, .small, .grand-total { color: #000 !important; font-weight: 500 !important; }
       .wrap{
         width: {{ pw }}mm;
         max-width: {{ pw }}mm;
@@ -139,6 +140,9 @@
     {% else %}
     .footer{margin-top: 8px;}
     {% endif %}
+    thead tr th:nth-child(1), tbody tr td:nth-child(1){ width: 55%; }
+    thead tr th:nth-child(2), tbody tr td:nth-child(2){ width: 15%; }
+    thead tr th:nth-child(3), tbody tr td:nth-child(3){ width: 30%; }
   </style>
 </head>
 <body>

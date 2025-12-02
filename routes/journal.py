@@ -269,6 +269,16 @@ def create_missing_journal_entries():
             pass
     return created, errors
 
+@bp.route('/latest_meta', methods=['GET'])
+@login_required
+def latest_meta():
+    try:
+        last = JournalEntry.query.order_by(JournalEntry.id.desc()).first()
+        cnt = JournalEntry.query.count()
+        return jsonify({'ok': True, 'latest_id': int(getattr(last,'id',0) or 0), 'count': int(cnt or 0)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 @csrf.exempt
 @bp.route('/backfill_missing', methods=['GET','POST'])
 @login_required

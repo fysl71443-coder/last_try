@@ -7,6 +7,7 @@
       <a href="{{ url_for('journal.new_entry') }}" class="btn btn-primary">➕ قيد جديد</a>
       <a href="{{ url_for('journal.list_entries') }}" class="btn btn-outline-secondary">📄 القائمة</a>
       <a href="{{ url_for('journal.backfill_missing_all') }}" class="btn btn-outline-dark">⚙️ إنشاء قيود الفترة السابقة</a>
+      <a href="{{ url_for('main.chart_of_accounts') }}" class="btn btn-outline-dark">🌳 شجرة الحسابات</a>
       <a href="{{ url_for('journal.print_all_pdf') }}?branch={{ branch }}&q={{ request.args.get('q') or '' }}&start_date={{ request.args.get('start_date') or '' }}&end_date={{ request.args.get('end_date') or '' }}" target="_blank" class="btn btn-success">🖨️ طباعة كل القيود (PDF)</a>
       <a href="{{ url_for('journal.export_all') }}?branch={{ branch }}&q={{ request.args.get('q') or '' }}&start_date={{ request.args.get('start_date') or '' }}&end_date={{ request.args.get('end_date') or '' }}" class="btn btn-outline-success">📥 تصدير XLS</a>
     </div>
@@ -76,6 +77,9 @@
       </select>
     </div>
   </form>
+  <div class="d-flex gap-2 mb-3">
+    <a href="{{ url_for('main.chart_of_accounts') }}" class="btn btn-outline-dark">🌳 شجرة الحسابات</a>
+  </div>
 
   <div class="table-responsive">
     <table class="table table-striped">
@@ -118,6 +122,7 @@
   <div class="d-flex justify-content-between align-items-center mt-2">
     <div>صفحة {{ page }} / {{ pages }} — إجمالي {{ total }}</div>
     <div class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-dark" href="{{ url_for('main.chart_of_accounts') }}">🌳 شجرة الحسابات</a>
       {% if page > 1 %}
       <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('journal.list_entries', page=page-1, branch=branch, q=request.args.get('q') or '', start_date=request.args.get('start_date') or '', end_date=request.args.get('end_date') or '', per_page=request.args.get('per_page') or '50') }}">السابق</a>
       {% endif %}
@@ -274,4 +279,28 @@ let _dirty=false; if({{ 'true' if mode in ['new','edit'] else 'false' }}){
 }
 document.addEventListener('DOMContentLoaded', recalcTotals);
 </script>
+
+{% if mode == 'list' %}
+<script>
+(function(){
+  let lastId = 0;
+  try{
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(r=>{ const t=r.querySelector('td'); const v=parseInt((t&&t.textContent)||'0'); if(!isNaN(v)&&v>lastId) lastId=v; });
+  }catch(e){ lastId = 0; }
+  async function ping(){
+    try{
+      const r = await fetch('/journal/latest_meta', { credentials:'same-origin' });
+      const j = await r.json();
+      if(j && j.ok){
+        if(parseInt(j.latest_id||0) > lastId || parseInt(j.count||0) !== document.querySelectorAll('tbody tr').length){
+          window.location.reload();
+        }
+      }
+    }catch(e){}
+  }
+  setInterval(ping, 8000);
+})();
+</script>
+{% endif %}
 {% endblock %}
