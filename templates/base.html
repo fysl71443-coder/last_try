@@ -11,14 +11,14 @@
     <link href="{{ url_for('static', filename='css/style.css') }}?v={{ ASSET_VERSION }}" rel="stylesheet">
     <style>
       :root{
-        --primary:#3B82F6;
-        --secondary:#1E40AF;
-        --bg:#F5F7FB;
-        --success:#16A34A;
-        --danger:#DC2626;
-        --text:#0F172A;
-        --muted:#6b7280;
-        --link:#0ea5e9;
+        --primary:#004D40;
+        --secondary:#F9A825;
+        --bg:#F8F9FA;
+        --success:#27AE60;
+        --danger:#E74C3C;
+        --text:#212529;
+        --muted:#6c757d;
+        --link:#0d6efd;
       }
       html,body{ background:var(--bg); color:var(--text); font-family:'Tajawal', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; font-size:15px; }
       h1,h2,h3,h4{ font-weight:700; color:var(--secondary); }
@@ -36,33 +36,33 @@
       }
 
       /* Navbar */
-      .navbar{ background:#ffffffcc !important; border-bottom:1px solid #eaeaea; backdrop-filter: blur(8px); }
+      .navbar{ background:#fff !important; border-bottom:1px solid #eee; }
       .navbar .navbar-brand{ color:var(--primary); font-weight:700; }
 
       /* Buttons */
-      .btn{ border-radius:12px; font-weight:700; padding:10px 16px; transition: all .2s ease-in-out; }
-      .btn:hover{ transform: translateY(-1px); box-shadow: 0 6px 14px rgba(30,64,175,0.15); }
-      .btn:focus{ box-shadow: 0 0 0 .2rem rgba(59,130,246,.25); }
-      .btn-primary{ background: linear-gradient(135deg, #60A5FA, #3B82F6); border-color: #3B82F6; }
-      .btn-primary:hover{ background: linear-gradient(135deg, #3B82F6, #2563EB); border-color:#2563EB; }
-      .btn-success{ background: linear-gradient(135deg, #34D399, #16A34A); border-color:#16A34A; }
-      .btn-success:hover{ background: linear-gradient(135deg, #16A34A, #15803D); border-color:#15803D; }
-      .btn-danger{ background: linear-gradient(135deg, #F87171, #DC2626); border-color:#DC2626; }
-      .btn-danger:hover{ background: linear-gradient(135deg, #DC2626, #B91C1C); border-color:#B91C1C; }
+      .btn{ border-radius:8px; font-weight:600; padding:10px 16px; transition: all .2s ease-in-out; }
+      .btn:hover{ transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+      .btn:focus{ box-shadow: 0 0 0 .2rem rgba(230,126,34,.25); }
+      .btn-primary{ background-color:var(--primary); border-color:var(--primary); }
+      .btn-primary:hover{ background-color:#E67E22; border-color:#E67E22; }
+      .btn-success{ background-color:var(--success); border-color:var(--success); }
+      .btn-success:hover{ background-color:#2ECC71; border-color:#2ECC71; }
+      .btn-danger{ background-color:var(--danger); border-color:var(--danger); }
+      .btn-danger:hover{ background-color:#C0392B; border-color:#C0392B; }
 
       /* Cards */
-      .card { background:#ffffff; border-radius:16px; box-shadow:0 12px 28px rgba(30,64,175,0.12); border:1px solid #eaeaea; }
+      .card { background:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
       .card .card-header{ font-size:18px; font-weight:700; border-bottom:2px solid #f1f1f1; background:#fff; }
 
       /* Tables */
       .table-responsive{ max-height:70vh; }
       table{ width:100%; border-collapse:collapse; }
-      table thead{ position: sticky; top: 0; z-index: 2; background: linear-gradient(90deg, #E8F2FF, #FFFFFF); color:#1E40AF; }
-      table th, table td{ padding:12px; border-bottom:1px solid #e5e7eb; vertical-align: middle; }
-      table tbody tr:hover{ background:linear-gradient(90deg, #F0F7FF, #FFFFFF); }
+      table thead{ position: sticky; top: 0; z-index: 2; background-color:var(--primary); color:#fff; }
+      table th, table td{ padding:12px; border-bottom:1px solid #ddd; vertical-align: middle; }
+      table tbody tr:hover{ background:#f5f5f5; }
 
       /* Form focus */
-      .form-control:focus, .form-select:focus{ border-color:#60A5FA; box-shadow:0 0 0 .2rem rgba(96,165,250,.25); }
+      .form-control:focus, .form-select:focus{ border-color:#E67E22; box-shadow:0 0 0 .2rem rgba(230,126,34,.2); }
 
       /* Section header helper */
       .section-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
@@ -123,14 +123,14 @@
           {% if current_user.is_authenticated %}
             <span class="me-3 text-muted">{{ _('Welcome') }} {{ current_user.username }}</span>
           {% endif %}
-        <a class="btn btn-outline-secondary" href="?lang=en">English</a>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnDensityToggle">📏</button>
+        <a class="btn btn-outline-secondary" href="?lang=en" title="English"><i class="fa-solid fa-language"></i></a>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnDensityToggle" title="Density"><i class="fa-solid fa-ruler-vertical"></i></button>
 
           {% if current_user.is_authenticated and (current_user.role|default('') != 'user') %}
-          <button class="btn btn-sm btn-outline-dark" type="button" id="btnThemeToggle">🌙</button>
+          <button class="btn btn-sm btn-outline-dark" type="button" id="btnThemeToggle" title="Toggle Theme"><i class="fa-solid fa-moon"></i></button>
           {% endif %}
-          {% if current_user.is_authenticated and not (hide_logout_button|default(False)) %}
-            <a class="btn btn-outline-danger" href="{{ url_for('main.logout') }}">{{ _('Logout') }}</a>
+          {% if current_user.is_authenticated %}
+            <a class="btn btn-outline-danger" href="{{ url_for('main.logout') }}" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></a>
           {% endif %}
         </div>
       </div>
@@ -152,7 +152,7 @@
       <!-- Generic back button with unsaved-changes protection -->
       {% if not hide_back_button %}
       <div class="mb-3 d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-outline-secondary" id="global-back-button" data-back-url="{{ back_url or url_for('main.home') }}">⬅️ {{ _('Back') }}</button>
+        <button type="button" class="btn btn-outline-secondary" id="global-back-button" data-back-url="{{ back_url or url_for('main.home') }}" title="Back"><i class="fa-solid fa-arrow-left"></i> {{ _('Back') }}</button>
       </div>
       {% endif %}
 

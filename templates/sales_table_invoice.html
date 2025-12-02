@@ -183,6 +183,7 @@
           <div class="mt-3 d-flex justify-content-center align-items-center gap-3">
             <button id="btnGenerateInvoice" class="btn btn-success btn-lg lux-btn">Issue Invoice / إصدار فاتورة</button>
             <button id="btnVoidInvoice" class="btn btn-outline-danger">Cancel Invoice / إلغاء الفاتورة</button>
+            <button id="btnPrintOrder" class="btn btn-outline-secondary">PRINT ORDER-طباعة الطلب</button>
           </div>
         </div>
       </div>
@@ -285,6 +286,21 @@
       try{ bootstrap.Modal.getInstance(document.getElementById('addCustomerTableModal')).hide(); }catch(_){ }
     }catch(e){ alert(String(e.message||e)); }
   }
+</script>
+
+<script>
+  (function(){
+    const el = document.getElementById('btnPrintOrder');
+    if(!el) return;
+    const url = '{{ url_for('main.print_order_slip', branch=branch_code, table=table_number) }}';
+    el.addEventListener('click', function(){
+      try{
+        window.open(url, 'order_print', 'width=520,height=800');
+      }catch(_){
+        window.location.href = url;
+      }
+    });
+  })();
 </script>
 
 <script src="{{ url_for('static', filename='js/pos_table.js') }}?v={{ ASSET_VERSION }}"></script>

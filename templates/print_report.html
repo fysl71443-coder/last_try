@@ -103,10 +103,10 @@
             <td>{{ inv.invoice_number }}</td>
             <td class="text-end monospace-numbers">{{ (inv.item_count or (inv['items']|length)) }}</td>
             <td>{{ inv.payment_method }}</td>
-            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.subtotal) }}</td>
-            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.discount) }}</td>
-            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.vat) }}</td>
-            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.total) }}</td>
+            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.subtotal) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</td>
+            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.discount) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</td>
+            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.vat) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</td>
+            <td class="text-end monospace-numbers">{{ "%.2f"|format(inv.total) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</td>
             <td><button type="button" class="btn btn-sm btn-link p-0" data-target="#{{ _id }}">🔽</button></td>
           </tr>
           <tr class="table-row-details">
@@ -118,10 +118,10 @@
                     <div class="item-name">{{ it.item_name }}</div>
                     <div class="item-meta">
                       <div>Qty: <span class="monospace-numbers">{{ "%.2f"|format(it.quantity) }}</span></div>
-                      <div>Amt: <span class="monospace-numbers">{{ "%.2f"|format(it.amount) }}</span></div>
-                      {% if it.discount and it.discount > 0 %}<div>Disc: <span class="monospace-numbers">{{ "%.2f"|format(it.discount) }}</span></div>{% endif %}
-                      <div>VAT: <span class="monospace-numbers">{{ "%.2f"|format(it.vat) }}</span></div>
-                      <div>Total: <span class="monospace-numbers">{{ "%.2f"|format(it.total) }}</span></div>
+                      <div>Amt: <span class="monospace-numbers">{{ "%.2f"|format(it.amount) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</span></div>
+                      {% if it.discount and it.discount > 0 %}<div>Disc: <span class="monospace-numbers">{{ "%.2f"|format(it.discount) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</span></div>{% endif %}
+                      <div>VAT: <span class="monospace-numbers">{{ "%.2f"|format(it.vat) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</span></div>
+                      <div>Total: <span class="monospace-numbers">{{ "%.2f"|format(it.total) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</span></div>
                     </div>
                   </div>
                   {% endfor %}
@@ -148,7 +148,9 @@
           <tr>
             {% for col in columns %}
               {% if row[col] is number %}
-                <td class="text-end monospace-numbers">{{ "%.2f"|format(row[col]) }}</td>
+                {% set _cname = (col|string).lower() %}
+                {% set _is_money = _cname in ['amount','discount','vat','total','line total'] %}
+                <td class="text-end monospace-numbers">{{ "%.2f"|format(row[col]) }}{% if _is_money %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</td>
               {% else %}
                 <td>{{ row[col] }}</td>
               {% endif %}
@@ -161,7 +163,7 @@
           <tr class="table-secondary fw-bold">
             <td colspan="{{ totals_colspan or 1 }}" class="text-end">Totals:</td>
             {% for col in totals_columns %}
-              <td>{{ "%.2f"|format(totals[col] or 0) }}</td>
+              <td>{{ "%.2f"|format(totals[col] or 0) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</td>
             {% endfor %}
           </tr>
         </tfoot>
@@ -225,10 +227,10 @@
         <thead class="table-light"><tr><th class="text-end">Amount</th><th class="text-end">Discount</th><th class="text-end">VAT</th><th class="text-end">Total</th></tr></thead>
         <tbody>
           <tr>
-            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.amount or 0) }}</td>
-            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.discount or 0) }}</td>
-            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.vat or 0) }}</td>
-            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.total or 0) }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.amount or 0) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.discount or 0) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.vat or 0) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</td>
+            <td class="text-end monospace-numbers">{{ '%.2f'|format(overall.total or 0) }} {{ settings.currency if settings and settings.currency else 'SAR' }}</td>
           </tr>
         </tbody>
       </table>

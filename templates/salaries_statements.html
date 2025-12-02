@@ -15,40 +15,29 @@
   </div>
 
   <!-- Filters -->
-  <form method="GET" class="row g-2 align-items-end mb-3" id="statementsForm">
+  <form method="GET" class="row g-2 align-items-end mb-3" id="statementsFilters">
     <div class="col-auto">
       <label class="form-label">{{ _('Year / السنة') }}</label>
-      <div class="input-group">
-        <span class="input-group-text">📅</span>
-        <input type="number" class="form-control" name="year" value="{{ year }}">
-      </div>
+      <input type="number" class="form-control" name="year" value="{{ year }}">
     </div>
     <div class="col-auto">
       <label class="form-label">{{ _('Month / الشهر') }}</label>
-      <div class="input-group">
-        <span class="input-group-text">🗓️</span>
-        <select name="month" class="form-select">
-          {% for m in range(1,13) %}
-          <option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      <select name="month" class="form-select">
+        {% for m in range(1,13) %}
+        <option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
     </div>
     <div class="col-auto">
       <label class="form-label">{{ _('Status / الحالة') }}</label>
-      <div class="input-group">
-        <span class="input-group-text">🏷️</span>
-        <select name="status" class="form-select">
-          <option value="">{{ _('All / الكل') }}</option>
-          <option value="paid" {% if status_f=='paid' %}selected{% endif %}>{{ _('Paid / مدفوعة') }}</option>
-          <option value="due" {% if status_f=='due' %}selected{% endif %}>{{ _('Due / مستحقة') }}</option>
-          <option value="partial" {% if status_f=='partial' %}selected{% endif %}>{{ _('Partial / مدفوعة جزئياً') }}</option>
-        </select>
-      </div>
+      <select name="status" class="form-select">
+        <option value="">{{ _('All / الكل') }}</option>
+        <option value="paid" {% if status_f=='paid' %}selected{% endif %}>{{ _('Paid / مدفوعة') }}</option>
+        <option value="due" {% if status_f=='due' %}selected{% endif %}>{{ _('Due / مستحقة') }}</option>
+        <option value="partial" {% if status_f=='partial' %}selected{% endif %}>{{ _('Partial / مدفوعة جزئياً') }}</option>
+      </select>
     </div>
-    <div class="col-auto">
-      <button class="btn btn-secondary">{{ _('Show / عرض') }}</button>
-    </div>
+    
   </form>
 
   <div class="card">
@@ -111,15 +100,7 @@
               <td>{{ '%.2f'|format(r.total) }}</td>
               <td class="{{ paid_cls }}">{{ '%.2f'|format(r.paid) }}</td>
               <td class="{{ rem_cls }}">{{ '%.2f'|format(r.remaining) }}</td>
-              <td>
-                {% if (r.status or '') == 'paid' %}
-                  <span class="badge bg-success">مدفوعة</span>
-                {% elif (r.status or '') == 'partial' %}
-                  <span class="badge bg-warning text-dark">جزئي</span>
-                {% else %}
-                  <span class="badge bg-danger">مستحقة</span>
-                {% endif %}
-              </td>
+              <td>{{ r.status }}</td>
               <td>
                 <button type="button" class="btn btn-sm btn-outline-info" onclick="togglePrevDetails({{ r.employee_id }})">{{ _('Show Details / عرض التفاصيل') }}</button>
               </td>
@@ -157,11 +138,6 @@
               </td>
             </tr>
             {% endfor %}
-            {% if not rows or rows|length == 0 %}
-            <tr>
-              <td colspan="11" class="text-center text-muted">📝 لا توجد بيانات مطابقة للفلتر المحدد</td>
-            </tr>
-            {% endif %}
           </tbody>
           {% if totals %}
           <tfoot>
@@ -183,21 +159,31 @@
       </div>
     </div>
   </div>
+</div>
 <script>
 (function(){
-  var f = document.getElementById('statementsForm');
+  const f = document.getElementById('statementsFilters');
   if(!f) return;
-  function auto(){
-    var sp = document.createElement('div');
-    sp.className = 'spinner-border text-primary';
-    sp.style.marginLeft = '8px';
-    f.appendChild(sp);
-    f.submit();
+  const y = f.querySelector('[name="year"]');
+  const m = f.querySelector('[name="month"]');
+  const s = f.querySelector('[name="status"]');
+  function apply(){
+    const params = new URLSearchParams(window.location.search);
+    if(y) params.set('year', y.value);
+    if(m) params.set('month', m.value);
+    if(s) params.set('status', s.value);
+    try{
+      const store = { year: y?.value||'', month: m?.value||'', status: s?.value||'' };
+      localStorage.setItem('sal_stat_filters', JSON.stringify(store));
+    }catch(e){}
+    window.location.search = params.toString();
   }
-  ['year','month','status'].forEach(function(n){ var el=f.querySelector('[name="'+n+'"]'); if(el){ el.addEventListener('change', auto); } });
+  (function(){ try{ const raw = localStorage.getItem('sal_stat_filters'); if(raw){ const st = JSON.parse(raw); if(y && st.year) y.value = st.year; if(m && st.month) m.value = st.month; if(s && st.status) s.value = st.status; } }catch(e){} })();
+  y && y.addEventListener('change', apply);
+  m && m.addEventListener('change', apply);
+  s && s.addEventListener('change', apply);
 })();
 </script>
-</div>
 <script>
   function togglePrevDetails(empId){
     var row = document.getElementById('prev-details-' + empId);

@@ -1,46 +1,128 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container">
-  <div class="d-flex justify-content-between align-items-center">
-    <h2 class="mb-2">🧾 Payroll Statements / كشوفات الرواتب</h2>
-    <a class="btn btn-outline-primary" href="{{ url_for('main.dashboard') }}">⬅︎ رجوع للوحة التحكم</a>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex align-items-center gap-3">
+      <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" style="height:48px;">
+      <div>
+        <div class="fw-bold">{{ (settings.company_name if settings and settings.company_name else 'Company') }}</div>
+        {% if current_user.is_authenticated %}<div class="text-muted small">{{ _('Welcome') }} {{ current_user.username }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="text-end">
+      <h2 class="mb-1">🧾 Payroll Statements / كشوفات الرواتب</h2>
+      <a class="btn btn-outline-primary" href="{{ url_for('main.dashboard') }}">⬅︎ رجوع للوحة التحكم</a>
+    </div>
   </div>
 
-  <form method="GET" class="filters d-flex gap-2 align-items-end flex-wrap">
-    <label>Year / السنة</label>
-    <select name="year">
+  <form method="GET" class="filters d-flex gap-2 align-items-end flex-wrap" id="filtersForm">
+    <label class="form-label">Year / السنة</label>
+    <select name="year" class="form-select">
       {% for y in years %}
         <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
       {% endfor %}
     </select>
 
-    <label>Month / الشهر</label>
-    <select name="month">
+    <label class="form-label">Month / الشهر</label>
+    <select name="month" class="form-select">
       {% for m in months %}
         <option value="{{ m.value }}" {% if m.value == month %}selected{% endif %}>{{ m.label }}</option>
       {% endfor %}
     </select>
 
-    <label>Status / الحالة</label>
-    <select name="status">
+    <label class="form-label">Status / الحالة</label>
+    <select name="status" class="form-select">
       <option value="all" {% if status=="all" %}selected{% endif %}>كل الحالات</option>
       <option value="due" {% if status=="due" %}selected{% endif %}>مستحقة</option>
       <option value="partial" {% if status=="partial" %}selected{% endif %}>جزئي</option>
       <option value="paid" {% if status=="paid" %}selected{% endif %}>مدفوعة</option>
     </select>
-    <button class="btn btn-primary">🔍 بحث</button>
-    <button type="button" class="btn btn-outline-secondary" onclick="openPrintModal('{{ url_for('main.payroll_print', year=year, month=month) }}')">🖨️ طباعة كشف هذا الشهر</button>
-    <button type="button" class="btn btn-outline-dark" onclick="openPrintModal('{{ url_for('reports.payroll_report', year_from=year, month_from=month, year_to=year, month_to=month, print=1) }}')">🖨️ تقرير تفصيلي للفترة</button>
+    <label class="form-label">Department / القسم</label>
+    <select name="dept" class="form-select">
+      <option value="">الكل</option>
+      {% for d in (dept_options or []) %}
+        <option value="{{ d }}" {% if d == (dept_selected or '') %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+    
+    <button type="button" class="btn btn-outline-secondary" id="btnPrintMonth">🖨️ طباعة كشف هذا الشهر</button>
+    <button type="button" class="btn btn-outline-dark" id="btnPrintDetailed">🖨️ تقرير تفصيلي للفترة</button>
   </form>
 
   <div class="small text-muted mb-2">
-    <span class="me-2">Paid/المدفوع = <span class="text-success fw-bold">أخضر</span></span>
-    <span class="me-2">Remaining/المتبقي = <span class="text-danger fw-bold">أحمر</span> إذا > 0</span>
-    <span class="me-2">Status = <span class="badge bg-success">مدفوعة</span> / <span class="badge bg-warning text-dark">جزئي</span> / <span class="badge bg-danger">مستحقة</span></span>
+    Year / السنة {{ year }} • Month / الشهر {{ month }} • Status / الحالة {{ 'الكل' if status=='all' else ('مستحقة' if status=='due' else ('جزئي' if status=='partial' else 'مدفوعة')) }}
   </div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-3">
+      <div class="p-3 border rounded bg-light">
+        <div class="text-muted small mb-1">إجمالي الخصومات</div>
+        {% set total_ded = payrolls|sum(attribute='deductions') %}
+        <div class="fw-bold">{{ '%.2f'|format(total_ded or 0) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="p-3 border rounded bg-light">
+        <div class="text-muted small mb-1">إجمالي السلف المستحقة</div>
+        <div class="fw-bold">{{ '%.2f'|format(emp_adv_total or 0) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="p-3 border rounded bg-light">
+        <div class="text-muted small mb-1">عدد القيود لهذا الشهر</div>
+        <div class="fw-bold">{{ journal_count or 0 }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="p-3 border rounded bg-light">
+        <div class="text-muted small mb-1">دليل الحالة</div>
+        <div>
+          <span class="badge bg-success">مدفوعة</span>
+          <span class="badge bg-warning text-dark">جزئي</span>
+          <span class="badge bg-danger">مستحقة</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-  <table class="styled-table">
-    <thead>
+<script>
+(function(){
+  const f = document.getElementById('filtersForm');
+  if(!f) return;
+  const y = f.querySelector('[name="year"]');
+  const m = f.querySelector('[name="month"]');
+  const s = f.querySelector('[name="status"]');
+  const dept = f.querySelector('[name="dept"]');
+  function apply(){
+    const params = new URLSearchParams(window.location.search);
+    if(y) params.set('year', y.value);
+    if(m) params.set('month', m.value);
+    if(s) params.set('status', s.value);
+    if(dept) params.set('dept', dept.value);
+    try{
+      const store = { year: y?.value||'', month: m?.value||'', status: s?.value||'', dept: dept?.value||'' };
+      localStorage.setItem('payroll_filters', JSON.stringify(store));
+    }catch(e){}
+    window.location.search = params.toString();
+  }
+  (function(){ try{ const raw = localStorage.getItem('payroll_filters'); if(raw){ const st = JSON.parse(raw); if(y && st.year) y.value = st.year; if(m && st.month) m.value = st.month; if(s && st.status) s.value = st.status; if(dept && st.dept !== undefined) dept.value = st.dept; } }catch(e){} })();
+  y && y.addEventListener('change', apply);
+  m && m.addEventListener('change', apply);
+  s && s.addEventListener('change', apply);
+  dept && dept.addEventListener('change', apply);
+  const btnMonth = document.getElementById('btnPrintMonth');
+  const btnDet = document.getElementById('btnPrintDetailed');
+  if(btnMonth){ btnMonth.addEventListener('click', function(){ openPrintModal('{{ url_for('main.payroll_print', year=year, month=month) }}'); }); }
+  if(btnDet){ btnDet.addEventListener('click', function(){ openPrintModal('{{ url_for('reports.payroll_report', year_from=year, month_from=month, year_to=year, month_to=month, print=1) }}'); }); }
+})();
+</script>
+
+  <div class="small text-muted mb-2"></div>
+
+  {% set ns = namespace(basic=0, allowances=0, deductions=0, prev_due=0, total=0, paid=0, remaining=0) %}
+  <div class="table-responsive">
+  <table class="table table-bordered table-sm align-middle">
+    <thead class="table-light">
       <tr>
         <th>#</th>
         <th>Employee / الموظف</th>
@@ -82,9 +164,31 @@
           {% endif %}
         </td>
       </tr>
+      {% set ns.basic = ns.basic + (p.basic or 0) %}
+      {% set ns.allowances = ns.allowances + (p.allowances or 0) %}
+      {% set ns.deductions = ns.deductions + (p.deductions or 0) %}
+      {% set ns.prev_due = ns.prev_due + (p.prev_due or 0) %}
+      {% set ns.total = ns.total + (p.total or 0) %}
+      {% set ns.paid = ns.paid + (p.paid or 0) %}
+      {% set ns.remaining = ns.remaining + (p.remaining or 0) %}
       {% endfor %}
     </tbody>
+    <tfoot class="table-light">
+      <tr>
+        <th colspan="2" class="text-end">الإجماليات</th>
+        <th class="text-end">{{ '%.2f'|format(ns.basic) }}</th>
+        <th class="text-end">{{ '%.2f'|format(ns.allowances) }}</th>
+        <th class="text-end">{{ '%.2f'|format(ns.deductions) }}</th>
+        <th class="text-end">{{ '%.2f'|format(ns.prev_due) }}</th>
+        <th class="text-end">{{ '%.2f'|format(ns.total) }}</th>
+        <th class="text-end text-success">{{ '%.2f'|format(ns.paid) }}</th>
+        <th class="text-end {% if ns.remaining>0 %}text-danger{% else %}text-success{% endif %}">{{ '%.2f'|format(ns.remaining) }}</th>
+        <th></th>
+        <th></th>
+      </tr>
+    </tfoot>
   </table>
+  </div>
 </div>
 {% endblock %}
 

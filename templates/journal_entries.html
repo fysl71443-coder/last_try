@@ -13,7 +13,7 @@
   </div>
 
   {% if mode == 'list' %}
-  <form method="get" class="row g-2 align-items-end mb-3">
+  <form method="get" class="row g-2 align-items-end mb-3" id="journalFilters">
     <div class="col-auto">
       <label class="form-label mb-0">الفرع</label>
       <select class="form-select" name="branch" style="min-width:180px">
@@ -46,7 +46,35 @@
         <option value="all" {% if _pp=='all' %}selected{% endif %}>عرض الكل</option>
       </select>
     </div>
-    <div class="col-auto"><button class="btn btn-outline-primary">بحث</button></div>
+    <div class="col-auto">
+      <label class="form-label mb-0">نوع القيد</label>
+      {% set _type = (request.args.get('type') or '').lower() %}
+      <select class="form-select" name="type" style="min-width:160px">
+        <option value="">الكل</option>
+        <option value="sales" {% if _type=='sales' %}selected{% endif %}>مبيعات</option>
+        <option value="purchase" {% if _type=='purchase' %}selected{% endif %}>مشتريات</option>
+        <option value="expense" {% if _type=='expense' %}selected{% endif %}>مصروفات</option>
+        <option value="salary" {% if _type=='salary' %}selected{% endif %}>رواتب</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label mb-0">الحالة</label>
+      {% set _status = (request.args.get('status') or '').lower() %}
+      <select class="form-select" name="status" style="min-width:140px">
+        <option value="">الكل</option>
+        <option value="posted" {% if _status=='posted' %}selected{% endif %}>مرحّل</option>
+        <option value="draft" {% if _status=='draft' %}selected{% endif %}>مسودة</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label mb-0">الموظف</label>
+      <select class="form-select" name="emp_id" style="min-width:200px">
+        <option value="">الكل</option>
+        {% for e in employees %}
+        <option value="{{ e.id }}" {% if (request.args.get('emp_id')|int) == e.id %}selected{% endif %}>{{ e.full_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
   </form>
 
   <div class="table-responsive">
@@ -198,6 +226,24 @@
   </form>
   {% endif %}
 </div>
+
+<script>
+(function(){
+  const f = document.getElementById('journalFilters');
+  if(!f) return;
+  function apply(){
+    const params = new URLSearchParams(window.location.search);
+    ['branch','q','start_date','end_date','per_page','type','status','emp_id'].forEach(name=>{
+      const el = f.querySelector(`[name="${name}"]`);
+      if(el){ params.set(name, el.value || ''); }
+    });
+    window.location.search = params.toString();
+  }
+  f.querySelectorAll('select,input').forEach(el=>{
+    el.addEventListener('change', apply);
+  });
+})();
+</script>
 
 <script>
 function removeRow(btn){ const tr = btn.closest('tr'); tr.parentNode.removeChild(tr); recalcTotals(); }

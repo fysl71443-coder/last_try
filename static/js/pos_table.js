@@ -508,8 +508,7 @@
     CURRENT_DRAFT_ID = (init?.getAttribute('data-draft-id') || '').trim() || null;
     const catMapRaw = init?.getAttribute('data-cat-map') || '{}';
     try{ CAT_MAP = JSON.parse(catMapRaw) || {}; }catch(e){ CAT_MAP = {}; }
-    const catImagesRaw = init?.getAttribute('data-cat-images') || '{}';
-    let CAT_IMAGES = {}; try{ CAT_IMAGES = JSON.parse(catImagesRaw) || {}; }catch(e){ CAT_IMAGES = {}; }
+    let CAT_IMAGES = {};
 
     // Bind category cards (no inline)
     qsa('.cat-card').forEach(card=>{

@@ -1,9 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container py-3">
-  <div class="d-flex justify-content-between align-items-center mb-2">
-    <h3 class="mb-0">🧾 تقرير الرواتب التفصيلي</h3>
-    <a class="btn btn-outline-primary" href="{{ url_for('main.dashboard') }}">⬅︎ رجوع للوحة التحكم</a>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex align-items-center gap-3">
+      <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" style="height:48px;">
+      <div>
+        <div class="fw-bold">{{ (settings.company_name if settings and settings.company_name else 'Company') }}</div>
+        {% if current_user.is_authenticated %}<div class="text-muted small">{{ _('Welcome') }} {{ current_user.username }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="text-end">
+      <h3 class="mb-1">🧾 تقرير الرواتب التفصيلي</h3>
+      <a class="btn btn-outline-primary" href="{{ url_for('main.dashboard') }}">⬅︎ رجوع للوحة التحكم</a>
+    </div>
+  </div>
+  <div class="small text-muted mb-2">
+    من {{ year_from }}/{{ month_from }} إلى {{ year_to }}/{{ month_to }} • الموظفون {{ (selected_employee_ids|length) if selected_employee_ids else 'الكل' }}
   </div>
   <form method="GET" class="row g-2 align-items-end mb-3">
     <div class="col-sm-2">

@@ -1,109 +1,59 @@
 {% extends 'base.html' %}
 {% block title %}لوحة تحكم الموظفين{% endblock %}
 {% block content %}
-<!--
-  تم تحديث شاشة الموظفين بتاريخ: 2025-11-26
-  التحديثات الجديدة:
-  - ✅ تحسين معالجة الأخطاء في JavaScript
-  - ✅ إضافة رسائل توضيحية واضحة للمستخدم
-  - ✅ زر تحديث الصفحة (Refresh)
-  - ✅ زر تصدير CSV مع دعم كامل
-  - ✅ زر طباعة مع CSS مخصص للطباعة
-  - ✅ تحسين تأكيد الحذف مع رسائل تحذير
-  - ✅ معالجة الأخطاء في الاتصال بالخادم
-  - ✅ تحسين تجربة المستخدم مع أزرار التحميل
-  - ✅ دعم CSS للطباعة مع إخفاء العناصر غير الضرورية
--->
 <style>
-  :root{--p1:#1E40AF;--p2:#4F46E5;--s1:#06B6D4;--s2:#22D3EE;--accent:#00eaff;--bg:#f5f7fb}
+  :root{--p1: var(--primary); --p2:#E67E22; --s1: var(--link); --s2:#64B5F6; --accent: var(--primary); --bg: var(--bg)}
   .uvd-container{padding:16px}
-  .topbar{display:flex;align-items:center;gap:12px;justify-content:space-between;background:#ffffffd9;border:1px solid #eaeaea;border-radius:16px;padding:12px 16px;backdrop-filter:blur(10px)}
+  .topbar{display:flex;align-items:center;gap:12px;justify-content:space-between;background:#fff;border:1px solid #eaeaea;border-radius:16px;padding:12px 16px}
   .topbar .left{display:flex;align-items:center;gap:12px}
-  .topbar .brand{display:flex;align-items:center;gap:8px;font-weight:800}
-  .brand-logo{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;box-shadow:0 8px 22px rgba(79,70,229,.25)}
+  .topbar .brand{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--secondary)}
+  .brand-logo{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--p2));color:#fff;box-shadow:0 8px 22px rgba(230,126,34,.25)}
   .brand-logo:hover{filter:saturate(120%)}
-  .topbar input[type="search"]{min-width:300px;border:1px solid #dfe3eb;border-radius:12px;padding:10px;box-shadow:0 6px 14px rgba(0,0,0,.06)}
+  .topbar input[type="search"]{min-width:300px;border:1px solid #ced4da;border-radius:12px;padding:10px;box-shadow:0 6px 14px rgba(0,0,0,.06)}
   .suggest{position:absolute;background:#fff;border:1px solid #eaeaea;border-radius:10px;box-shadow:0 12px 24px rgba(0,0,0,.12);min-width:300px;display:none;overflow:hidden}
   .suggest .item{padding:8px 12px;cursor:pointer}
-  .suggest .item:hover{background:#f0f7ff}
-  .add-btn{background:linear-gradient(135deg,var(--s1),var(--s2));color:#fff;border:none;border-radius:12px;padding:10px 14px;font-weight:700}
-  .add-btn:hover{transform:scale(1.1)}
-  .sidebar{position:sticky;top:12px;background:#ffffffcc;border:1px solid #eaeaea;border-radius:16px;padding:12px;backdrop-filter:blur(10px);box-shadow:0 10px 26px rgba(0,0,0,.06)}
+  .suggest .item:hover{background:#f5f5f5}
+  .add-btn{background-color:var(--primary);color:#fff;border:1px solid var(--primary);border-radius:12px;padding:10px 14px;font-weight:700}
+  .add-btn:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(0,0,0,.08)}
+  .sidebar{position:sticky;top:12px;background:#fff;border:1px solid #eaeaea;border-radius:16px;padding:12px;box-shadow:0 10px 26px rgba(0,0,0,.06)}
   .nav-item{padding:10px;border-radius:12px;cursor:pointer;display:flex;align-items:center;gap:8px}
   .nav-item:hover{background:#f6f8ff}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-  .kpi{position:relative;background:#ffffffd9;border:1px solid #eaeaea;border-radius:18px;padding:14px;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.08)}
+  .kpi{position:relative;background:#fff;border:1px solid #eaeaea;border-radius:18px;padding:14px;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.08)}
   .kpi .title{font-size:13px;color:#666}
-  .kpi .value{font-size:22px;font-weight:800}
+  .kpi .value{font-size:22px;font-weight:800;color:var(--secondary)}
   .kpi .lottie{position:absolute;right:10px;top:8px;width:48px;height:48px;opacity:.9}
   .spark{height:40px;width:100%}
   .dept-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
   .dept-tab{padding:10px 12px;border:1px solid #eaeaea;border-radius:12px;background:#fff;cursor:pointer;display:flex;align-items:center;gap:6px}
-  .dept-tab.active{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;border-color:transparent;box-shadow:0 10px 24px rgba(30,64,175,.25)}
-  /* Reports improvements */
-  .report-spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(0,0,0,0.08);border-top-color:var(--secondary);border-radius:50%;animation:spin .8s linear infinite;margin-left:8px;vertical-align:middle}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .kpi-updated{animation: kpiPulse .7s ease; background: linear-gradient(90deg, rgba(96,165,250,0.12), rgba(255,255,255,0)); border-radius:6px; padding:4px 8px;}
-  @keyframes kpiPulse{0%{transform:scale(1)}50%{transform:scale(1.03)}100%{transform:scale(1)}}
-  .report-table tbody tr{transition:transform .18s ease, box-shadow .18s ease, background .18s ease; cursor:pointer}
-  .report-table tbody tr:hover{transform:translateY(-4px);box-shadow:0 12px 26px rgba(30,64,175,0.08);background:linear-gradient(90deg,#F8FBFF,#FFFFFF)}
-  .report-table tbody tr:active{transform:translateY(-1px) scale(0.995)}
-  .status-badge{display:inline-block;padding:.35em .6em;border-radius:.45rem;font-weight:700;color:#fff}
-  .status-paid{background:linear-gradient(135deg,#34D399,#16A34A)}
-  .status-due{background:linear-gradient(135deg,#F87171,#DC2626)}
-  .status-partial{background:linear-gradient(135deg,#FBBF24,#F59E0B);color:#222}
-  .badge{background:#1112;color:#0d6efd;border:1px solid #cfe3ff;border-radius:10px;padding:2px 8px;font-weight:700}
+  .dept-tab.active{background:var(--primary);color:#fff;border-color:transparent;box-shadow:0 10px 24px rgba(230,126,34,.25)}
+  .badge{background:#fff;color:var(--link);border:1px solid #cfe3ff;border-radius:10px;padding:2px 8px;font-weight:700}
   .panel{display:none}
   .panel.active{display:block}
   table{width:100%;border-collapse:collapse}
-  thead th{position:sticky;top:0;background:#f8f9fa;box-shadow:0 3px 6px rgba(0,0,0,.06);z-index:1}
-  th,td{padding:10px;border:1px solid #eee;text-align:center;white-space:nowrap;color:#000}
-  td.status-column{font-weight:600}
+  thead th{position:sticky;top:0;background:var(--primary);color:#fff;z-index:1}
+  th,td{padding:10px;border:1px solid #eee;text-align:center;white-space:nowrap}
   tbody tr{transition:transform .2s ease, box-shadow .2s ease, background .2s ease}
-  tbody tr{position:relative;overflow:visible}
-  tbody tr.menu-open{z-index:3001}
-  tbody tr:hover{background:linear-gradient(90deg,#f0f7ff,#ffffff);transform:translateY(-1px);box-shadow:0 6px 12px rgba(0,0,0,.06)}
+  tbody tr:hover{background:#f5f5f5;transform:translateY(-1px);box-shadow:0 6px 12px rgba(0,0,0,.06)}
   .ops-btn{position:relative}
-  #panel-employees td:last-child{position:relative}
-  .ops-menu{position:absolute;right:8px;top:calc(100% + 4px);background:#fff;border:1px solid #eaeaea;border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,.12);display:none;min-width:200px;z-index:3002}
-  #toast{position:fixed;left:50%;bottom:-100px;transform:translate(-50%,-100px);background:linear-gradient(135deg,#60A5FA,#3B82F6);color:#fff;padding:10px 16px;border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.18);z-index:4000;opacity:0;}
-  td:last-child{position:relative}
-  .ops-btn{position:relative;z-index:10000;background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;transition:all 0.3s ease}
-  .ops-btn:hover{transform:scale(1.05);box-shadow:0 4px 12px rgba(0,0,0,.15)}
-  .ops-menu .it{padding:10px 14px;cursor:pointer;font-size:13px;font-weight:500;border-bottom:1px solid #f0f0f0;transition:all 0.2s ease}
-  .ops-menu .it:hover{background:#f6fbff;transform:translateX(2px)}
-  .ops-menu .it:last-child{border-bottom:none;border-radius:0 0 10px 10px}
-  .ops-menu .it:first-child{border-radius:10px 10px 0 0}
+  .ops-menu{position:absolute;right:0;top:100%;background:#fff;border:1px solid #eaeaea;border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,.12);display:none;min-width:180px;z-index:1000}
+  .ops-fly{position:fixed;background:#fff;border:1px solid #eaeaea;border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.18);min-width:180px;z-index:2000}
+  .ops-menu .it{padding:8px 12px;cursor:pointer}
+  .ops-menu .it:hover{background:#f6fbff}
   .ripple-btn{position:relative;overflow:hidden}
-  .slideover{position:fixed;top:0;right:-520px;width:480px;height:100vh;background:#fff;border-left:1px solid #eee;box-shadow:-8px 0 20px rgba(0,0,0,.1);z-index:1001;display:flex;flex-direction:column}
-  .slideover-header{padding:14px 12px;font-weight:800;background:linear-gradient(135deg,#eef4ff,#ffffff);display:flex;align-items:center;justify-content:space-between}
+  .slideover{position:fixed;top:0;right:-520px;width:480px;height:100vh;background:#fff;border-left:1px solid #eee;box-shadow:-8px 0 20px rgba(0,0,0,.1);z-index:1000;display:flex;flex-direction:column}
+  .slideover-header{padding:18px 16px;font-weight:800;background:#fff;border-bottom:1px solid #eee;color:var(--secondary)}
   .slideover-body{padding:14px;overflow:auto}
-  .slideover-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:1000;display:none;opacity:0;transition:opacity .3s ease}
-  .toast{position:fixed;top:-80px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.18);z-index:1100}
-  .toast{pointer-events:none}
-  @media print {
-    .topbar, .sidebar, .ops-btn, .ops-menu, #btnAddEmp, #btnRefresh, #btnRefreshData, #btnPrint, #btnExportCsv, #btnBulkActions { display: none !important; }
-    .uvd-container { padding: 0; }
-    table { font-size: 12px; }
-    .kpi { break-inside: avoid; }
-  }
-  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-  .ops-menu { z-index: 3002; }
-  .ops-btn { z-index: 3003; }
+  .toast{position:fixed;top:-80px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.18);z-index:1100}
 </style>
 
 <div class="container-fluid uvd-container">
   <div class="topbar">
     <div class="left">
-      <div class="brand"><div class="brand-logo">🍽️</div><span>Logo Restaurant</span></div>
+      <div class="brand"><div class="brand-logo"><i class="fa-solid fa-building"></i></div><span>Logo Restaurant</span></div>
       <strong>إدارة الموظفين</strong>
     </div>
-    <div style="position:relative">
-      <input type="search" id="empSearch" class="form-control" placeholder="بحث بالاسم/القسم/الوظيفة">
-      <button type="button" id="empSearchBtn" class="btn btn-outline-primary btn-sm">🔎 بحث</button>
-      <div class="suggest" id="empSuggest"></div>
-    </div>
-    <div style="min-width:300px">
+    <div style="min-width:300px" title="اختيار الموظف">
       <select id="empSelect" class="form-select">
         <option value="">اختر الموظف</option>
         {% for e in employees %}
@@ -111,72 +61,49 @@
         {% endfor %}
       </select>
     </div>
-    <div style="min-width:320px">
-      <select id="empSelect2" class="form-select">
-        <option value="">اختر الموظف</option>
-        {% for e in employees %}
-        <option value="{{ e.id }}">{{ e.full_name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <button id="btnRefresh" class="add-btn ripple-btn" style="background:linear-gradient(135deg,#28a745,#20c997)">🔄 تحديث</button>
     <a id="btnAddEmp" class="add-btn ripple-btn" href="/employees/create">➕ إضافة موظف جديد</a>
     <div class="right">👤 مرحباً {{ current_user.username }}</div>
   </div>
 
-  <div class="row mt-3">
-    <div class="col-md-3">
-      <div class="sidebar">
-        <div class="nav-item" data-tab="employees">▪️ إدارة الموظفين</div>
-        <a class="nav-item" data-tab="prev" href="#prev" onclick="try{openPanel('prev')}catch(e){} return false;">▪️ الرواتب السابقة</a>
-        <a class="nav-item" data-tab="adv" href="#adv" onclick="try{openAdvPanel()}catch(e){} return false;">▪️ السلف</a>
-        <a class="nav-item" data-tab="ledger" href="#ledger" onclick="try{openPanel('ledger')}catch(e){} return false;">▪️ كشوفات الحساب</a>
-        <a class="nav-item" data-tab="reports" href="#reports" onclick="try{openPanel('reports')}catch(e){} return false;">▪️ التقارير الشهرية</a>
-        <a class="nav-item" data-tab="settings" href="#settings" onclick="try{openEmpSettingsFromSidebar()}catch(e){} return false;">▪️ إعدادات الموظف</a>
-        <button id="btnDiagPanels" class="btn btn-outline-info btn-sm" style="margin-top:8px">تشخيص النقر</button>
-      </div>
-    </div>
-  <div class="col-md-9">
+  <div class="mt-3">
       <div class="kpis">
         <div class="kpi">
-          <div class="title">🧑‍🍳 إجمالي الموظفين</div>
+          <div class="title"><i class="fa-solid fa-users"></i> إجمالي الموظفين</div>
           <div class="value">{{ emp_count }}</div>
           <div class="lottie" id="lottieEmp"></div>
           <canvas class="spark" data-kind="emp"></canvas>
         </div>
         <div class="kpi">
-          <div class="title">💵 الرواتب الشهرية</div>
+          <div class="title"><i class="fa-solid fa-money-bill"></i> الرواتب الشهرية</div>
           <div class="value">{{ '%.2f'|format(sal_sum) }}</div>
           <div class="lottie" id="lottieSal"></div>
           <canvas class="spark" data-kind="sal"></canvas>
         </div>
         <div class="kpi">
-          <div class="title">💳 السلف المستحقة</div>
+          <div class="title"><i class="fa-solid fa-credit-card"></i> السلف المستحقة</div>
           <div class="value">{{ '%.2f'|format(adv_out) }}</div>
           <div class="lottie" id="lottieAdv"></div>
           <canvas class="spark" data-kind="adv"></canvas>
         </div>
         <div class="kpi">
-          <div class="title">📅 آخر صرف</div>
+          <div class="title"><i class="fa-solid fa-calendar-day"></i> آخر صرف</div>
           <div class="value">{{ (last_pay_dt.strftime('%d/%m/%Y') if last_pay_dt else '—') }}</div>
           <div class="lottie" id="lottiePay"></div>
           <canvas class="spark" data-kind="pay"></canvas>
         </div>
         <div class="kpi">
-          <div class="title">🔔 عدد القيود لهذا الشهر</div>
+          <div class="title"><i class="fa-solid fa-bell"></i> عدد القيود لهذا الشهر</div>
           <div class="value">{{ je_cnt }}</div>
           <canvas class="spark" data-kind="je"></canvas>
         </div>
       </div>
 
       <div class="dept-tabs" id="quick-nav" style="margin-top:8px">
-        <a class="dept-tab" href="#employees" data-tab="employees" onclick="try{openPanel('employees')}catch(e){} return false;">إدارة الموظفين</a>
-        <a class="dept-tab" href="#prev" data-tab="prev" onclick="try{openPanel('prev')}catch(e){} return false;">الرواتب السابقة</a>
-        <a class="dept-tab" href="#adv" data-tab="adv" onclick="try{openAdvPanel()}catch(e){} return false;">السلف</a>
-        <a class="dept-tab" href="#ledger" data-tab="ledger" onclick="try{openPanel('ledger')}catch(e){} return false;">كشوف الحساب</a>
-        <a class="dept-tab" href="#reports" data-tab="reports" onclick="try{openPanel('reports')}catch(e){} return false;">التقارير الشهرية</a>
-        <a class="dept-tab" href="#pay" data-tab="pay" onclick="try{openPanel('pay')}catch(e){} return false;">السداد</a>
-        <a class="dept-tab" href="#settings" data-tab="settings" onclick="try{openEmpSettingsFromSidebar()}catch(e){} return false;">إعدادات الموظف</a>
+        <a class="dept-tab" href="/employee-uvd">إدارة الموظفين</a>
+        <a class="dept-tab" href="/payroll/previous">الرواتب السابقة</a>
+        <a class="dept-tab" href="/advances">السلف</a>
+        <a class="dept-tab" href="/ledger">كشوف الحساب</a>
+        <a class="dept-tab" href="/reports/monthly">التقارير الشهرية</a>
       </div>
 
       <div class="dept-tabs">
@@ -187,17 +114,24 @@
       </div>
 
       <div id="panel-employees" class="panel active">
-        <div class="mb-2 d-flex gap-2 flex-wrap">
-          <button type="button" id="btnExportCsv" class="btn btn-outline-primary btn-sm">📊 تصدير CSV</button>
-          <button type="button" id="btnPrint" class="btn btn-outline-secondary btn-sm">🖨️ طباعة</button>
-          <button type="button" id="btnRefreshData" class="btn btn-outline-success btn-sm">🔄 تحديث البيانات</button>
-          <button type="button" id="btnBulkPay" class="btn btn-outline-info btn-sm">💰 سداد رواتب جماعي</button>
-          <button type="button" id="btnBulkAdv" class="btn btn-outline-warning btn-sm">💸 منح سلف جماعي</button>
-          <button type="button" id="btnBulkActions" class="btn btn-outline-dark btn-sm">⚡ إجراءات جماعية</button>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <label class="form-label mb-0">ترتيب</label>
+          <select id="empSort" class="form-select" style="width:200px">
+            <option value="name">الاسم</option>
+            <option value="basic">الراتب الأساسي</option>
+            <option value="advance">السلف</option>
+            <option value="last_salary">آخر راتب</option>
+            <option value="status">الحالة</option>
+          </select>
+          <label class="form-label mb-0">عدد لكل صفحة</label>
+          <select id="empPageSize" class="form-select" style="width:120px">
+            <option>10</option>
+            <option selected>20</option>
+            <option>50</option>
+          </select>
         </div>
-        <div id="empEmpty" class="alert alert-info" style="display:none">لا توجد نتائج مطابقة</div>
-        <table id="empTable">
-          <thead><tr><th data-key="idx">#</th><th data-key="name">الاسم</th><th data-key="pos">الدور</th><th data-key="branch">الفرع</th><th data-key="basic">راتب أساسي</th><th data-key="adv">سلفة</th><th data-key="last">آخر راتب</th><th data-key="status">الحالة</th><th>⚙</th></tr></thead>
+        <table>
+          <thead><tr><th>#</th><th>الاسم</th><th>الدور</th><th>الفرع</th><th>راتب أساسي</th><th>سلفة</th><th>آخر راتب</th><th>الحالة</th><th>⚙</th></tr></thead>
           <tbody>
             {% for e in employees %}
             <tr data-row="emp" data-id="{{ e.id }}" data-dept="{{ (e.department or 'other')|lower }}">
@@ -205,22 +139,21 @@
               <td>{{ e.full_name }}</td>
               <td>{{ e.position or '' }}</td>
               <td>{{ e.branch_code or '' }}</td>
-              <td>{{ '%.2f'|format((emp_metrics.get(e.id, {}).get('basic', 0))) }}{% if not emp_metrics.get(e.id, {}).get('basic', 0) and not emp_metrics.get(e.id, {}) %} <span class="text-muted" title="No salary data found">⚠️</span>{% endif %}</td>
-              <td>{{ '%.2f'|format((emp_metrics.get(e.id, {}).get('advance', 0))) }}</td>
-              <td>{{ '%.2f'|format((emp_metrics.get(e.id, {}).get('last_salary', 0))) }}{% if not emp_metrics.get(e.id, {}).get('last_salary', 0) %} <span class="text-muted" title="No previous salary found">⚠️</span>{% endif %}</td>
-              <td class="status-column">{{ e.status }}</td>
+              <td>{{ '%.2f'|format((emp_metrics.get(e.id, {}).get('basic') or 0)) }}</td>
+              <td>{{ '%.2f'|format((emp_metrics.get(e.id, {}).get('advance') or 0)) }}</td>
+              <td>{{ '%.2f'|format((emp_metrics.get(e.id, {}).get('last_salary') or 0)) }}</td>
+              <td>{{ e.status }}</td>
               <td>
-                <button class="btn btn-sm btn-outline-primary ops-btn" title="إجراءات">⚙️ إجراءات</button>
+                <button class="btn btn-sm btn-outline-primary ops-btn">⋮</button>
                 <div class="ops-menu">
-                  <div class="it" data-op="edit">✏️ تعديل</div>
-                  <div class="it" data-op="advance">💰 منح سلفة</div>
-                  <div class="it" data-op="pay">💳 دفع راتب</div>
-                  <div class="it" data-op="details">🧾 التفاصيل</div>
-                  <div class="it" data-op="components">🧮 مكونات الشهر</div>
-                  <div class="it" data-op="statement">🖨️ كشف الموظف للطباعة</div>
-                  <div class="it" data-op="journal">📊 معاينة قيد</div>
-                  <div class="it" data-op="settings">⚙ إعدادات</div>
-                  <div class="it text-danger" data-op="delete">🗑️ حذف</div>
+                  <div class="it" data-op="view">عرض</div>
+                  <div class="it" data-op="edit">تعديل</div>
+                  <div class="it" data-op="advance">سلفة</div>
+                  <div class="it" data-op="deduct">خصم</div>
+                  <div class="it" data-op="pay">سداد راتب</div>
+                  <div class="it" data-op="accrual">حساب مستحق</div>
+                  <div class="it" data-op="journal">معاينة قيد</div>
+                  <div class="it text-danger" data-op="delete">حذف</div>
                 </div>
               </td>
             </tr>
@@ -230,1051 +163,215 @@
       </div>
 
       <div id="panel-prev" class="panel" style="display:none">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-          <div class="fw-semibold">الرواتب السابقة</div>
-          <div class="d-flex align-items-center gap-2"><input type="month" class="form-control" id="prevMonthInline" style="max-width:160px"><select class="form-select" id="prevEmpInline" style="max-width:220px"><option value="">الموظف</option>{% for e in employees %}<option value="{{ e.id }}">{{ e.full_name }}</option>{% endfor %}</select><select class="form-select" id="prevStatusInline" style="max-width:180px"><option value="">الحالة</option><option value="paid">مدفوع</option><option value="due">غير مدفوع</option><option value="partial">جزئي</option></select><button class="btn btn-outline-primary" id="prevReloadInline">تحديث</button><div class="input-group" style="max-width:320px"><span class="input-group-text">🔎</span><input type="text" class="form-control" id="prevSearchInline" placeholder="ابحث باسم الموظف"></div><button class="btn btn-outline-primary" id="prevExportInline">تصدير CSV</button></div>
+        <div class="dept-tabs mb-2">
+          <button class="dept-tab active" data-dept="all">الكل</button>
+          <button class="dept-tab" data-dept="kitchen">شيف</button>
+          <button class="dept-tab" data-dept="hall">الصالة</button>
+          <button class="dept-tab" data-dept="admin">إداري</button>
         </div>
-        <div class="table-responsive">
-          <table class="table table-sm table-hover align-middle">
-            <thead class="table-light"><tr><th>السنة</th><th>الشهر</th><th>الموظف</th><th class="text-end">سابقة</th><th class="text-end">إجمالي</th><th class="text-end">مدفوع</th><th class="text-end">متبقي</th><th>الحالة</th></tr></thead>
-            <tbody id="prevBodyInline"></tbody>
-            <tfoot><tr class="table-info"><td colspan="3"><strong>الإجماليات</strong></td><td class="text-end" id="prevSumPrev">—</td><td class="text-end" id="prevSumTotal">—</td><td class="text-end" id="prevSumPaid">—</td><td class="text-end" id="prevSumRemaining">—</td><td></td></tr></tfoot>
-          </table>
-        </div>
+        <table>
+          <thead><tr><th>السنة</th><th>الشهر</th><th>الموظف</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
+          <tbody>
+            {% for s in prev_salaries %}
+            <tr data-row="sal" data-id="{{ s.id }}" data-dept="{{ (s.employee.department if s.employee else '')|lower }}">
+              <td>{{ s.year }}</td>
+              <td>{{ s.month }}</td>
+              <td>{{ s.employee.full_name if s.employee else s.employee_id }}</td>
+              <td>{{ '%.2f'|format(s.total_salary or 0) }}</td>
+              <td>{{ s.status }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
 
       <div id="panel-adv" class="panel" style="display:none">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-          <div class="d-flex align-items-center gap-3"><div class="fw-semibold">إدارة السلف</div></div>
-          <div class="d-flex align-items-center gap-2" style="min-width:280px"><select class="form-select" id="advEmpFilter" style="max-width:220px"><option value="">اختر الموظف</option>{% for e in employees %}<option value="{{ e.id }}">{{ e.full_name }}</option>{% endfor %}</select><button class="btn btn-outline-primary" id="advReload">تحديث</button></div>
+        <div class="dept-tabs mb-2">
+          <button class="dept-tab active" data-dept="all">الكل</button>
+          <button class="dept-tab" data-dept="kitchen">شيف</button>
+          <button class="dept-tab" data-dept="hall">الصالة</button>
+          <button class="dept-tab" data-dept="admin">إداري</button>
         </div>
-        <div class="row g-2 mb-3">
-          <div class="col-12 col-xl-4"><div class="glass-card kpi-card"><div class="flex-grow-1"><div class="text-muted small">إجمالي السلف</div><div class="fs-5 fw-bold" id="advKpiTotal">—</div></div></div></div>
-          <div class="col-12 col-xl-4"><div class="glass-card kpi-card"><div class="flex-grow-1"><div class="text-muted small">غير مسددة</div><div class="fs-5 fw-bold text-danger" id="advKpiUnpaid">—</div></div></div></div>
-          <div class="col-12 col-xl-4"><div class="glass-card kpi-card"><div class="flex-grow-1"><div class="text-muted small">آخر سلفة</div><div class="fs-6 fw-semibold" id="advKpiLast">—</div></div></div></div>
-        </div>
-        <div class="mb-2 d-flex align-items-center gap-2"><div class="input-group" style="max-width:360px"><span class="input-group-text">🔎</span><input type="text" class="form-control" id="advSearchInline" placeholder="ابحث باسم الموظف"></div></div>
-        <div class="table-responsive">
-          <table class="table table-borderless table-hover align-middle table-sm">
-            <thead class="table-light"><tr><th>#</th><th>الاسم</th><th>الفرع</th><th class="text-end">الممنوح</th><th class="text-end">المدفوع</th><th class="text-end">المتبقي</th><th>آخر تاريخ</th><th>⚙</th></tr></thead>
-            <tbody id="advBodyInline"></tbody>
-          </table>
-        </div>
-        <div class="d-flex align-items-center gap-2 mt-2"><button class="btn btn-outline-secondary" id="advPrevInline">‹</button><span id="advPageInfoInline" class="small text-muted">—</span><button class="btn btn-outline-secondary" id="advNextInline">›</button><select class="form-select" id="advPageSizeInline" style="width:90px"><option>10</option><option>25</option><option>50</option></select><button class="btn btn-outline-primary" id="advExportInline">تصدير CSV</button></div>
+        <table>
+          <thead><tr><th>التاريخ</th><th>الوصف</th><th>مدين</th><th>دائن</th></tr></thead>
+          <tbody>
+            {% for a in advances %}
+            <tr data-row="adv" data-id="{{ a.id }}" data-emp="{{ a.employee_id }}">
+              <td>{{ a.line_date }}</td>
+              <td>{{ a.description }}</td>
+              <td>{{ '%.2f'|format(a.debit or 0) }}</td>
+              <td>{{ '%.2f'|format(a.credit or 0) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
 
       <div id="panel-ledger" class="panel" style="display:none">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-          <div class="fw-semibold">كشوفات الحساب (حسب الموظف)</div>
-          <div class="d-flex align-items-center gap-2" style="min-width:420px"><select class="form-select" id="ledgerEmpInline" style="max-width:220px"><option value="">اختر الموظف</option>{% for e in employees %}<option value="{{ e.id }}">{{ e.full_name }}</option>{% endfor %}</select><button class="btn btn-outline-primary" id="ledgerReloadInline">تحميل</button></div>
-        </div>
-        <div id="ledgerMonthsInline" class="d-flex flex-wrap gap-2 mb-2"></div>
-        <div class="table-responsive">
-          <table class="table table-sm table-hover align-middle">
-            <thead class="table-light"><tr><th>التاريخ</th><th>رقم القيد</th><th>الوصف</th><th class="text-end">مدين</th><th class="text-end">دائن</th><th class="text-end">الرصيد</th></tr></thead>
-            <tbody id="ledgerBodyInline"></tbody>
-            <tfoot><tr class="table-info"><td colspan="3"><strong>الإجمالي</strong></td><td class="text-end" id="ledgerSumDebit">—</td><td class="text-end" id="ledgerSumCredit">—</td><td class="text-end" id="ledgerSumBalance">—</td></tr></tfoot>
-          </table>
-        </div>
-        <div class="d-flex align-items-center gap-2 mt-2"><button class="btn btn-outline-secondary" id="ledgerExportInline">تصدير CSV</button></div>
+        <table>
+          <thead><tr><th>رقم القيد</th><th>التاريخ</th><th>الوصف</th><th>الحالة</th></tr></thead>
+        <tbody>
+          {% for j in ledgers %}
+          <tr data-row="je" data-id="{{ j.id }}">
+            <td>{{ j.entry_number }}</td>
+            <td>{{ j.date }}</td>
+            <td>{{ j.description }}</td>
+            <td>{{ j.status }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        </table>
       </div>
-      <div id="panel-reports" class="panel" style="display:none">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-          <div class="fw-semibold">التقارير الشهرية</div>
-          <div class="d-flex align-items-center gap-2" style="min-width:420px"><input type="month" class="form-control" id="repMonthInline" style="max-width:180px"><select class="form-select" id="repEmpInline" style="max-width:220px"><option value="">الموظف</option>{% for e in employees %}<option value="{{ e.id }}">{{ e.full_name }}</option>{% endfor %}</select></div>
-        </div>
-        <div class="row g-2 mb-3">
-          <div class="col-12 col-xl-3"><div class="glass-card kpi-card"><div class="text-muted small">إجمالي الرواتب</div><div class="fs-5 fw-bold" id="repKpiPayroll">—</div></div></div>
-          <div class="col-12 col-xl-3"><div class="glass-card kpi-card"><div class="text-muted small">إجمالي السلف</div><div class="fs-5 fw-bold" id="repKpiAdv">—</div></div></div>
-          <div class="col-12 col-xl-3"><div class="glass-card kpi-card"><div class="text-muted small">إجمالي الخصومات</div><div class="fs-5 fw-bold" id="repKpiDed">—</div></div></div>
-          <div class="col-12 col-xl-3"><div class="glass-card kpi-card"><div class="text-muted small">عدد القيود</div><div class="fs-5 fw-bold" id="repKpiEntries">—</div></div></div>
-        </div>
-        <div class="table-responsive">
-          <table class="table table-borderless table-hover align-middle table-sm report-table">
-            <thead class="table-light"><tr>
-              <th>#</th>
-              <th>🧾 الموظف</th>
-              <th>القسم</th>
-              <th class="text-end">الأساسي</th>
-              <th class="text-end">OT</th>
-              <th class="text-end">Bonus</th>
-              <th class="text-end">Total</th>
-              <th class="text-end">السلف</th>
-              <th class="text-end">الخصومات</th>
-              <th class="text-end">الصافي</th>
-              <th>💳 الحالة</th>
-              <th>📅 الشهر</th>
-            </tr></thead>
-            <tbody id="repBodyInline"></tbody>
-          </table>
-        </div>
-        <div class="d-flex align-items-center gap-2 mt-2"><button class="btn btn-outline-secondary" id="repReloadInline">تحديث</button><button class="btn btn-outline-primary" id="repExportInline">تصدير CSV</button></div>
-      </div>
-      <div id="panel-ext" class="panel" style="height:70vh;border:1px solid #eaeaea;border-radius:16px;overflow:hidden;background:#ffffffd9;display:none">
-        <div class="d-flex align-items-center justify-content-center h-100 text-muted">—</div>
+      <div id="panel-ext" class="panel" style="height:70vh;border:1px solid #eaeaea;border-radius:16px;overflow:hidden;background:#ffffffd9">
+        <iframe id="panelIframe" src="" style="width:100%;height:100%;border:0;"> </iframe>
       </div>
     </div>
-  </div>
 
   <div id="slideover" class="slideover">
-    <div class="slideover-header"><div>تفاصيل</div><button type="button" id="slideoverClose" class="btn btn-sm btn-outline-secondary">✖︎ إغلاق</button></div>
+    <div class="slideover-header">تفاصيل</div>
     <div class="slideover-body" id="slideoverBody"></div>
-  </div>
-  <div id="slideoverBackdrop" class="slideover-backdrop"></div>
-
-  <div id="slideoverSettings" class="slideover">
-    <div class="slideover-header"><div>⚙ إعدادات الموظف</div><button type="button" id="slideoverSettingsClose" class="btn btn-sm btn-outline-secondary">✖︎ إغلاق</button></div>
-    <div class="slideover-body" id="slideoverSettingsBody"></div>
-  </div>
-  <div id="slideoverSettingsBackdrop" class="slideover-backdrop"></div>
-
-  <div id="panel-pay" class="panel" style="display:none">
-    <div class="mb-2 d-flex gap-2 flex-wrap">
-      <input type="month" id="payMonth" class="form-control" style="max-width:160px" value="" />
-      <select id="payEmp" class="form-select" style="max-width:220px"><option value="">كل الموظفين</option></select>
-      <select id="payMethod" class="form-select" style="max-width:140px"><option value="cash">نقدي</option><option value="bank">بنك</option><option value="card">بطاقة</option></select>
-      <input type="number" inputmode="decimal" lang="en" step="0.01" id="bulkAmount" class="form-control" style="max-width:160px" placeholder="مبلغ لكل موظف" />
-      <button type="button" id="btnPaySelected" class="btn btn-success btn-sm">💰 سداد المحددين</button>
-      <button type="button" id="btnRefreshPay" class="btn btn-outline-secondary btn-sm">🔄 تحديث</button>
-    </div>
-    <div class="table-responsive">
-      <table class="table table-sm" id="payTable">
-        <thead>
-          <tr>
-            <th><input type="checkbox" id="paySelectAll"/></th>
-            <th>الاسم</th>
-            <th class="text-end">الأساسي</th>
-            <th class="text-end">المتبقي</th>
-            <th class="text-end">المبلغ</th>
-            <th>طريقة الدفع</th>
-            <th>الشهر</th>
-            <th>الحالة</th>
-            <th>إجراء</th>
-          </tr>
-        </thead>
-        <tbody id="payBody"></tbody>
-      </table>
-    </div>
-  </div>
-  <div id="panel-settings" class="panel" style="display:none">
-    <div class="mb-2 d-flex gap-2 flex-wrap align-items-end">
-      <input type="month" id="setMonth" class="form-control" style="max-width:160px" value="" />
-      <label class="form-check-label">
-        <input type="checkbox" id="setApplyFuture" class="form-check-input" /> تطبيق على الشهر القادم (غير المسدد)
-      </label>
-      <button type="button" id="btnReloadSettings" class="btn btn-outline-secondary btn-sm">🔄 تحديث</button>
-    </div>
-    <div id="settingsContent"></div>
   </div>
   <div id="toast" class="toast">مرحباً! تم تحميل لوحة تحكم الموظفين</div>
 </div>
 
 <script>
   window.AUTO_OPEN_CREATE = {{ 'true' if auto_open_create else 'false' }};
-  var __csrfMeta = document.querySelector('meta[name="csrf-token"]');
-  const CSRF = (window.csrfToken || ((__csrfMeta && __csrfMeta.content) || ''));
-  function toEn(n, opts){ try{ if(n===undefined||n===null||n==='') return '0'; var num = Number(n); if(!isFinite(num)) return String(n); var o = Object.assign({useGrouping:false}, (opts||{})); return num.toLocaleString('en-US', o); }catch(e){ return String(n); } }
-  function toNum(s){ try{ if(s===undefined||s===null) return 0; var str = String(s); var map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'}; str = str.replace(/[٠-٩۰-۹]/g, function(ch){ return map[ch]||ch; }); var n = parseFloat(str); if(isNaN(n)) return 0; return n; }catch(e){ try{ var n2 = Number(s); return isNaN(n2)?0:n2; }catch(_){ return 0; } } }
-  async function ensurePayHealth(){
-    try{
-      const r = await fetch('/api/employees/pay-health', {credentials:'same-origin'});
-      const j = await r.json();
-      if(!j || !j.ok){ throw new Error(j && j.error || 'health_failed'); }
-      return true;
-    }catch(e){ showToast('⚠️ فشل التحقق من خدمة الدفع: '+(e && e.message || e), 'warning'); return false; }
-  }
-  window.__diagErrors = [];
-  window.addEventListener('error', function(e){
-    var info = { type:'error', message:e.message, filename:e.filename, lineno:e.lineno, colno:e.colno };
-    try { info.stack = e.error && e.error.stack; } catch(_){}
-    console.log('DIAG', info);
-    try{ window.__diagErrors.push(info); }catch(_){ }
-  });
-  window.addEventListener('unhandledrejection', function(e){
-    var msg = '';
-    try{ msg = (e.reason && e.reason.message) || String(e.reason); }catch(_){ msg = String(e.reason); }
-    var info = { type:'unhandledrejection', message: msg };
-    try{ info.stack = e.reason && e.reason.stack; }catch(_){}
-    console.log('DIAG', info);
-    try{ window.__diagErrors.push(info); }catch(_){ }
-  });
-  function showToast(msg, type='success'){const t=document.getElementById('toast');t.textContent=msg||t.textContent;t.style.background=type==='error'?'linear-gradient(135deg,#dc3545,#c82333)':type==='warning'?'linear-gradient(135deg,#ffc107,#e0a800)':'linear-gradient(135deg,var(--p1),var(--p2))';if(window.gsap){gsap.to(t,{duration:.4,y:100});setTimeout(()=>gsap.to(t,{duration:.4,y:-100}),5000)}else{t.style.transition='transform .4s ease, opacity .4s';t.style.transform='translateY(100px)';t.style.opacity='1';setTimeout(()=>{t.style.transform='translateY(-100px)';t.style.opacity='0';},5000)}}
-  function openSlideover(html){const p=document.getElementById('slideover');const b=document.getElementById('slideoverBackdrop');document.getElementById('slideoverBody').innerHTML=html; b.style.display='block'; b.offsetHeight; b.style.opacity='1'; if(window.gsap){gsap.to(p,{duration:.5,x:-520,scale:1,ease:'power2.out'})}else{p.style.transition='transform .5s ease';p.style.transform='translateX(-520px)'} const c=document.getElementById('slideoverClose'); if(c){ c.onclick=closeSlideover; }}
-  function closeSlideover(){const p=document.getElementById('slideover');const b=document.getElementById('slideoverBackdrop');if(window.gsap){gsap.to(p,{duration:.4,x:0,ease:'power2.in'})}else{p.style.transition='transform .4s ease';p.style.transform='translateX(0)'} if(b){ b.style.opacity='0'; setTimeout(()=>{ b.style.display='none'; },300); }}
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeSlideover(); }});
-  document.getElementById('slideoverBackdrop').addEventListener('click', closeSlideover);
-  function openSettingsSlideover(){const p=document.getElementById('slideoverSettings');const b=document.getElementById('slideoverSettingsBackdrop');b.style.display='block';b.offsetHeight;b.style.opacity='1'; if(window.gsap){gsap.to(p,{duration:.5,x:-520,scale:1,ease:'power2.out'})}else{p.style.transition='transform .5s ease';p.style.transform='translateX(-520px)'} const c=document.getElementById('slideoverSettingsClose'); if(c){ c.onclick=closeSettingsSlideover; }}
-  function closeSettingsSlideover(){const p=document.getElementById('slideoverSettings');const b=document.getElementById('slideoverSettingsBackdrop');if(window.gsap){gsap.to(p,{duration:.4,x:0,ease:'power2.in'})}else{p.style.transition='transform .4s ease';p.style.transform='translateX(0)'} if(b){ b.style.opacity='0'; setTimeout(()=>{ b.style.display='none'; },300); }}
-  document.getElementById('slideoverSettingsBackdrop').addEventListener('click', closeSettingsSlideover);
-  function renderEmpSettings(empId){
-    const body = document.getElementById('slideoverSettingsBody');
-    window.__currentEmpSettingsId = empId;
-    body.innerHTML = '<div class="row g-3">'
-      + '<div class="col-12 col-md-6"><label class="form-label">نوع الدوام</label><select class="form-select" id="setWorkType"><option value="full">مليء</option><option value="part">جزئي</option><option value="daily">يومي</option><option value="hourly">بالساعة</option></select></div>'
-      + '<div class="col-12 col-md-6"><label class="form-label">ساعات العمل الشهرية</label><input type="number" step="0.1" min="0" class="form-control" id="setMonthlyHours"></div>'
-      + '<div class="col-12 col-md-6"><label class="form-label">سعر الساعة</label><input type="number" step="0.01" min="0" class="form-control" id="setHourlyRate"><div class="form-text" id="setHourlyRateHint"></div></div>'
-      + '<div class="col-12 col-md-6"><label class="form-label">حالة الموظف</label><select class="form-select" id="setStatus"><option value="active">فعال</option><option value="inactive">غير فعال</option><option value="trial">تحت التجربة</option></select></div>'
-      + '<div class="col-12 col-md-6"><label class="form-label">استحقاق الراتب</label><select class="form-select" id="setPayCycle"><option value="monthly">شهري</option><option value="weekly">أسبوعي</option><option value="on_demand">عند الطلب</option></select></div>'
-      + '<div class="col-12 col-md-6"><label class="form-label">طريقة الدفع</label><select class="form-select" id="setPaymentMethod"><option value="transfer">تحويل</option><option value="cash">نقدًا</option><option value="partial">جزئيًا</option></select></div>'
-      + '<div class="col-12 col-md-6"><label class="form-label">نسبة OT</label><input type="number" step="0.01" min="0" class="form-control" id="setOtRate"></div>'
-      + '<div class="col-12 col-md-6"><label class="form-label">يستحق بدلات؟</label><select class="form-select" id="setAllowAllowances"><option value="true">نعم</option><option value="false">لا</option></select></div>'
-      + '<div class="col-12 col-md-6"><label class="form-label">يستحق مكافآت؟</label><select class="form-select" id="setAllowBonuses"><option value="true">نعم</option><option value="false">لا</option></select></div>'
-      + '<div class="col-12 col-md-6"><label class="form-label">ظهور في التقارير؟</label><select class="form-select" id="setShowReports"><option value="true">نعم</option><option value="false">لا</option></select></div>'
-      + '</div>'
-      + '<div id="settingsMsg" class="alert" style="display:none"></div>'
-      + '<div class="d-flex justify-content-end gap-2 mt-3"><button type="button" class="btn btn-primary" id="saveEmpSettings">💾 حفظ التغييرات</button><button type="button" class="btn btn-outline-secondary" id="closeEmpSettings">إغلاق</button></div>';
-
-    const saveBtn = document.getElementById('saveEmpSettings');
-    const closeBtn = document.getElementById('closeEmpSettings');
-    function showMsg(text, kind){ var m=document.getElementById('settingsMsg'); if(m){ m.textContent=text; m.className='alert '+(kind||'alert-secondary'); m.style.display='block'; } }
-    if(closeBtn){ closeBtn.addEventListener('click', closeSettingsSlideover); }
-    if(saveBtn){
-      saveBtn.addEventListener('click', async function(){
-        const fd = new FormData();
-        fd.append('emp_id', String(empId));
-        fd.append('work_type', document.getElementById('setWorkType').value||'');
-        fd.append('monthly_hours', String(toNum(document.getElementById('setMonthlyHours').value||'0')));
-        fd.append('hourly_rate_employee', String(toNum(document.getElementById('setHourlyRate').value||'0')));
-        fd.append('status', document.getElementById('setStatus').value||'');
-        fd.append('pay_cycle', document.getElementById('setPayCycle').value||'');
-        fd.append('payment_method', document.getElementById('setPaymentMethod').value||'');
-        fd.append('ot_rate', String(toNum(document.getElementById('setOtRate').value||'0')));
-        fd.append('allow_allowances', document.getElementById('setAllowAllowances').value||'true');
-        fd.append('allow_bonuses', document.getElementById('setAllowBonuses').value||'true');
-        fd.append('show_in_reports', document.getElementById('setShowReports').value||'true');
-        saveBtn.disabled = true; saveBtn.textContent = '⏳ جاري الحفظ...';
-        try{
-          const r = await fetch('/api/employee/settings', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' });
-          const ct = (r.headers.get('content-type')||'').toLowerCase();
-          if(r.ok){
-            let msg = 'تم حفظ إعدادات الموظف';
-            if(ct.includes('application/json')){ try{ const j=await r.json(); msg = (j && (j.message||j.ok)) ? '✅ تم حفظ إعدادات الموظف' : msg; }catch(_){} }
-            showToast('✅ '+msg);
-            showMsg(msg,'alert-success');
-          } else {
-            let err = 'فشل الحفظ (HTTP '+String(r.status)+')';
-            try{ const t=await r.text(); err = t || err; }catch(_){}
-            showToast('❌ '+err,'error');
-            showMsg(err,'alert-danger');
-          }
-        }catch(e){
-          const err = 'خطأ في الاتصال بالخادم: '+ e.message;
-          showToast('❌ '+err,'error');
-          showMsg(err,'alert-danger');
-        }finally{
-          saveBtn.disabled = false; saveBtn.textContent = '💾 حفظ التغييرات';
-        }
-      });
-    }
-
-    fetch('/api/employee/settings?emp_id='+encodeURIComponent(empId), { credentials:'same-origin' })
-      .then(function(r){ return r.json(); })
-      .then(function(j){
-        if(!j || !j.ok){ showToast('فشل تحميل الإعدادات','error'); showMsg('فشل تحميل الإعدادات','alert-danger'); return; }
-        const s = j.settings || {};
-        document.getElementById('setWorkType').value = String(s.work_type||'hourly');
-        document.getElementById('setMonthlyHours').setAttribute('lang','en');
-        document.getElementById('setMonthlyHours').setAttribute('inputmode','decimal');
-        document.getElementById('setMonthlyHours').value = toEn((s.monthly_hours||0), {minimumFractionDigits:1, maximumFractionDigits:1});
-        document.getElementById('setHourlyRate').setAttribute('lang','en');
-        document.getElementById('setHourlyRate').setAttribute('inputmode','decimal');
-        document.getElementById('setHourlyRate').value = toEn((s.hourly_rate_employee||0), {minimumFractionDigits:2, maximumFractionDigits:2});
-        document.getElementById('setHourlyRateHint').textContent = 'سعر القسم: '+ toEn((s.dept_rate_fallback||0), {minimumFractionDigits:2, maximumFractionDigits:2});
-        document.getElementById('setStatus').value = String(s.status||'active');
-        document.getElementById('setPayCycle').value = String(s.pay_cycle||'monthly');
-        document.getElementById('setPaymentMethod').value = String(s.payment_method||'cash');
-        document.getElementById('setOtRate').setAttribute('lang','en');
-        document.getElementById('setOtRate').setAttribute('inputmode','decimal');
-        document.getElementById('setOtRate').value = toEn((s.ot_rate||0), {minimumFractionDigits:2, maximumFractionDigits:2});
-        document.getElementById('setAllowAllowances').value = String(Boolean(s.allow_allowances));
-        document.getElementById('setAllowBonuses').value = String(Boolean(s.allow_bonuses));
-        document.getElementById('setShowReports').value = String(Boolean(s.show_in_reports));
-        ['setWorkType','setMonthlyHours','setHourlyRate','setStatus','setPayCycle','setPaymentMethod','setOtRate','setAllowAllowances','setAllowBonuses','setShowReports'].forEach(function(id){
-          const el = document.getElementById(id);
-          el.addEventListener('change', function(){
-            const fd = new FormData();
-            fd.append('emp_id', String(empId));
-            const map = {'setWorkType':'work_type','setMonthlyHours':'monthly_hours','setHourlyRate':'hourly_rate_employee','setStatus':'status','setPayCycle':'pay_cycle','setPaymentMethod':'payment_method','setOtRate':'ot_rate','setAllowAllowances':'allow_allowances','setAllowBonuses':'allow_bonuses','setShowReports':'show_in_reports'};
-            fd.append(map[id], this.value);
-            fetch('/api/employee/settings', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' })
-              .then(function(r){ return r.json(); })
-              .then(function(j2){ if(j2 && j2.ok){ showToast('تم الحفظ'); } else { showToast('فشل الحفظ','error'); showMsg('فشل الحفظ','alert-danger'); } })
-              .catch(function(){ showToast('خطأ في الحفظ','error'); showMsg('خطأ في الحفظ','alert-danger'); });
-          });
-        });
-      })
-      .catch(function(){ showToast('فشل تحميل الإعدادات','error'); showMsg('فشل تحميل الإعدادات','alert-danger'); });
-  }
-  function openEmpSettings(empId){renderEmpSettings(empId);openSettingsSlideover();}
-  function openEmpSettingsFromSidebar(){const sel=document.getElementById('empSelect');const sel2=document.getElementById('empSelect2');let v=(sel&&sel.value)?sel.value:((sel2&&sel2.value)||'');if(!v){const row=document.querySelector('#panel-employees tbody tr[data-row="emp"]');if(row){v=row.getAttribute('data-id')||'';}}if(v){openEmpSettings(v);}else{openSettingsSlideover();const body=document.getElementById('slideoverSettingsBody');if(body){body.innerHTML='<div class="alert alert-warning">اختر الموظف من الأعلى لعرض الإعدادات</div>';}showToast('اختر الموظف أولاً','warning');}}
-  function renderPayPanel(){
-    const tbody = document.getElementById('payBody');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-    const rows = Array.from(document.querySelectorAll('#panel-employees tbody tr[data-row="emp"]')).filter(r=> r.style.display !== 'none');
-    rows.forEach(function(r){
-      const id = r.getAttribute('data-id');
-      const name = r.children[1].textContent.trim();
-      const basic = parseFloat(r.children[4].textContent||'0')||0;
-      const status = r.children[7].textContent.trim();
-      const month = new Date().toISOString().slice(0,7);
-      const tr = document.createElement('tr');
-      tr.setAttribute('data-id', id);
-      tr.innerHTML = '<td><input type="checkbox" class="paySel"/></td>'+
-                     '<td>'+name+'</td>'+
-                     '<td class="text-end">'+basic.toFixed(2)+'</td>'+
-                     '<td class="text-end"><span class="rowRemaining">—</span></td>'+
-                     '<td class="text-end"><input type="number" inputmode="decimal" lang="en" step="0.01" class="form-control form-control-sm rowAmount" value="'+toEn(basic,{minimumFractionDigits:2,maximumFractionDigits:2})+'" style="max-width:140px"/></td>'+
-                     '<td><select class="form-select form-select-sm rowMethod" style="max-width:120px"><option value="cash">نقدي</option><option value="bank">بنك</option><option value="card">بطاقة</option></select></td>'+
-                     '<td><input type="month" class="form-control form-control-sm rowMonth" value="'+month+'" style="max-width:140px"/></td>'+
-                     '<td>'+status+'</td>'+
-                     '<td><button type="button" class="btn btn-primary btn-sm rowPay">سداد</button></td>';
-      tbody.appendChild(tr);
-    });
-    const selAll = document.getElementById('paySelectAll');
-    if(selAll){ selAll.checked=false; selAll.onchange=function(){ document.querySelectorAll('#payBody .paySel').forEach(cb=> cb.checked=selAll.checked); } }
-    document.querySelectorAll('#payBody .rowPay').forEach(function(btn){
-      btn.addEventListener('click', async function(){
-        const tr = this.closest('tr');
-        const id = tr.getAttribute('data-id');
-        const amt = toNum(tr.querySelector('.rowAmount').value||'0');
-        const mtd = tr.querySelector('.rowMethod').value||'cash';
-        const mon = tr.querySelector('.rowMonth').value||new Date().toISOString().slice(0,7);
-        const fd = new FormData();
-        try{ fd.append('csrf_token', CSRF); }catch(_){}
-        fd.append('employee_id', String(id));
-        fd.append('paid_amount', String(amt));
-        fd.append('payment_method', mtd);
-        fd.append('month', mon);
-        const r = await fetch('/api/employees/pay-salary', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' });
-        const j = await r.json().catch(()=>null);
-        if(r.ok && j && j.ok){ 
-          showToast('✅ تم سداد راتب '+String(id)); 
-          const span = tr.querySelector('.rowRemaining');
-          if(span && j.remaining!==undefined){ span.textContent = Number(j.remaining||0).toFixed(2); span.className = 'rowRemaining ' + (Number(j.remaining||0)>0? 'text-danger' : 'text-success'); }
-          const statusCell = tr.children[7]; if(statusCell && j.status){ statusCell.textContent = j.status; }
-        } else { showToast('❌ فشل السداد: '+ ((j&&j.error)||r.statusText), 'error'); }
-      });
-    });
-    // تحميل المتبقي لكل موظف وتحديث الحقول
-    (async function(){
-      try{
-        const mon = document.getElementById('payMonth').value || new Date().toISOString().slice(0,7);
-        const ids = Array.from(document.querySelectorAll('#payBody tr')).map(tr=> tr.getAttribute('data-id'));
-        const url = new URL('/api/employees/pay-summary', location.origin);
-        url.searchParams.set('month', mon);
-        url.searchParams.set('ids', ids.join(','));
-        const r = await fetch(url, {credentials:'same-origin'});
-        const j = await r.json();
-        if(!j || !j.ok) return;
-        const byId = {};
-        (j.rows||[]).forEach(x=>{ byId[String(x.id)] = x; });
-        document.querySelectorAll('#payBody tr').forEach(function(tr){
-          const id = tr.getAttribute('data-id');
-          const info = byId[id];
-          if(info){
-            const rem = Number(info.remaining||0);
-            const total = Number(info.total||0);
-            const paid = Number(info.paid||0);
-            const span = tr.querySelector('.rowRemaining');
-            if(span){ span.textContent = rem.toFixed(2); span.className = 'rowRemaining ' + (rem>0? 'text-danger' : 'text-success'); }
-            const inp = tr.querySelector('.rowAmount');
-            if(inp){ inp.value = (rem>0? rem : total).toFixed(2); }
-          }
-        });
-      }catch(e){ /* silent */ }
-    })();
-  }
-  function renderPayPanelAPI(){
-    const tbody = document.getElementById('payBody');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-    const month = document.getElementById('payMonth')?.value || new Date().toISOString().slice(0,7);
-    const empSel = document.getElementById('payEmp');
-    const selectedEmp = (empSel && empSel.value) ? empSel.value : '';
-    const url = new URL('/api/employees/pay-summary', location.origin);
-    url.searchParams.set('month', month);
-    if(selectedEmp){ url.searchParams.set('ids', selectedEmp); }
-    fetch(url, {credentials:'same-origin'}).then(r=>r.json()).then(function(j){
-      if(!j || !j.ok) return;
-      // Populate employee selector if empty or needs refresh
-      if(empSel){
-        const keep = empSel.value;
-        empSel.innerHTML = '<option value="">كل الموظفين</option>' + (j.rows||[]).map(function(x){ return '<option value="'+String(x.id)+'"'+(String(x.id)===keep?' selected':'')+'>'+String(x.name||('ID '+x.id))+'</option>'; }).join('');
-        // Preserve previous selection
-        if(keep){ empSel.value = keep; }
-      }
-      (j.rows||[]).forEach(function(x){
-        const tr = document.createElement('tr');
-        tr.setAttribute('data-id', String(x.id));
-        tr.innerHTML = '<td><input type="checkbox" class="paySel"/></td>'+
-                       '<td>'+String(x.name||'')+'</td>'+
-                       '<td class="text-end">'+Number(x.basic||0).toFixed(2)+'</td>'+
-                       '<td class="text-end"><span class="rowRemaining">'+Number(x.remaining||0).toFixed(2)+'</span></td>'+
-                       '<td class="text-end"><input type="number" inputmode="decimal" lang="en" step="0.01" class="form-control form-control-sm rowAmount" value="'+toEn((x.remaining>0?x.remaining:x.total)||0,{minimumFractionDigits:2,maximumFractionDigits:2})+'" style="max-width:140px"/></td>'+
-                       '<td><select class="form-select form-select-sm rowMethod" style="max-width:120px"><option value="cash">نقدي</option><option value="bank">بنك</option><option value="card">بطاقة</option></select></td>'+
-                       '<td><input type="month" class="form-control form-control-sm rowMonth" value="'+month+'" style="max-width:140px"/></td>'+
-                       '<td>'+String(x.status||'')+'</td>'+
-                       '<td><button type="button" class="btn btn-primary btn-sm rowPay">سداد</button></td>';
-        tbody.appendChild(tr);
-      });
-      const selAll = document.getElementById('paySelectAll');
-      if(selAll){ selAll.checked=false; selAll.onchange=function(){ document.querySelectorAll('#payBody .paySel').forEach(cb=> cb.checked=selAll.checked); } }
-      document.querySelectorAll('#payBody .rowPay').forEach(function(btn){
-        btn.addEventListener('click', async function(){
-          const tr = this.closest('tr');
-          const id = tr.getAttribute('data-id');
-          const amt = toNum(tr.querySelector('.rowAmount').value||'0');
-          const mtd = tr.querySelector('.rowMethod').value||'cash';
-          const mon = tr.querySelector('.rowMonth').value||month;
-          const fd = new FormData();
-          try{ fd.append('csrf_token', CSRF); }catch(_){ }
-          fd.append('employee_id', String(id));
-          fd.append('paid_amount', String(amt));
-          fd.append('payment_method', mtd);
-          fd.append('month', mon);
-          const r = await fetch('/api/employees/pay-salary', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' });
-          const j2 = await r.json().catch(()=>null);
-          if(r.ok && j2 && j2.ok){ 
-            const span = tr.querySelector('.rowRemaining');
-            if(span && j2.remaining!==undefined){ span.textContent = Number(j2.remaining||0).toFixed(2); span.className = 'rowRemaining ' + (Number(j2.remaining||0)>0? 'text-danger' : 'text-success'); }
-            const statusCell = tr.children[7]; if(statusCell && j2.status){ statusCell.textContent = j2.status; }
-            showToast('✅ تم السداد');
-          } else { showToast('❌ فشل السداد: '+ ((j2&&j2.error)||r.statusText), 'error'); }
-        });
-      });
-    }).catch(function(){ });
-  }
-  document.querySelectorAll('.dept-tab[data-tab="pay"], .nav-item[data-tab="pay"]').forEach(function(a){ a.addEventListener('click', function(ev){ ev.preventDefault(); openPanel('pay'); ensurePayHealth(); renderPayPanelAPI(); }); });
-  document.getElementById('btnRefreshPay') && document.getElementById('btnRefreshPay').addEventListener('click', function(){ renderPayPanelAPI(); });
-  document.getElementById('payMonth') && document.getElementById('payMonth').addEventListener('change', function(){ renderPayPanelAPI(); });
-  document.getElementById('payEmp') && document.getElementById('payEmp').addEventListener('change', function(){ renderPayPanelAPI(); });
-  document.getElementById('btnPaySelected') && document.getElementById('btnPaySelected').addEventListener('click', async function(){
-    const ids = Array.from(document.querySelectorAll('#payBody tr')).filter(tr=> tr.querySelector('.paySel')?.checked).map(tr=> tr.getAttribute('data-id'));
-    if(!ids.length){ showToast('⚠️ يرجى اختيار موظفين أولاً', 'warning'); return; }
-    const mon = document.getElementById('payMonth').value || new Date().toISOString().slice(0,7);
-    const amt = toNum(document.getElementById('bulkAmount').value||'0');
-    const mtd = document.getElementById('payMethod').value || 'cash';
-    const fd = new FormData();
-    try{ fd.append('csrf_token', CSRF); }catch(_){}
-    fd.append('employee_ids', ids.join(','));
-    fd.append('month', mon);
-    fd.append('paid_amount', String(amt));
-    fd.append('payment_method', mtd);
-    const r = await fetch('/api/employees/pay-salary-bulk', { method:'POST', headers:{ 'X-CSRFToken': CSRF, 'Accept':'application/json' }, body: fd });
-    const j = await r.json().catch(()=>null);
-    if(r.ok && j && j.ok){ showToast('✅ تم سداد '+Number(j.success_count||0)+' راتب بنجاح'+(Number(j.failed_count||0)>0? '، فشل '+Number(j.failed_count||0):'')); } else { showToast('❌ فشل السداد الجماعي: '+((j&&j.error)||r.statusText), 'error'); }
-  });
-  document.addEventListener('click', function(ev){ if(ev.target.id==='toast'){ closeSlideover(); } });
+  function showToast(msg){const t=document.getElementById('toast');t.textContent=msg||t.textContent;if(window.gsap){gsap.to(t,{duration:.4,y:100});setTimeout(()=>gsap.to(t,{duration:.4,y:-100}),5000)}else{t.style.transition='transform .4s ease, opacity .4s';t.style.transform='translateY(100px)';t.style.opacity='1';setTimeout(()=>{t.style.transform='translateY(-100px)';t.style.opacity='0';},5000)}}
+  function openSlideover(html){const p=document.getElementById('slideover');document.getElementById('slideoverBody').innerHTML=html;if(window.gsap){gsap.to(p,{duration:.5,x:-520,scale:1,ease:'power2.out'})}else{p.style.transition='transform .5s ease';p.style.transform='translateX(-520px)'}}
+  function closeSlideover(){const p=document.getElementById('slideover');if(window.gsap){gsap.to(p,{duration:.4,x:0,ease:'power2.in'})}else{p.style.transition='transform .4s ease';p.style.transform='translateX(0)'}}
+  document.addEventListener('click',function(ev){if(ev.target.id==='toast'){closeSlideover()}})
   const empTab = document.querySelector('.nav-item[data-tab="employees"]');
   if(empTab){ empTab.addEventListener('click',()=>{ const k='employees'; document.querySelectorAll('.panel').forEach(p=>{p.classList.toggle('active',p.id==='panel-'+k)}); if(window.gsap){ gsap.fromTo('#panel-'+k,{opacity:0,y:16},{opacity:1,y:0,duration:.3}); } else { const el=document.querySelector('#panel-'+k); if(el){ el.style.opacity='0'; el.style.transform='translateY(16px)'; setTimeout(()=>{ el.style.transition='all .3s ease'; el.style.opacity='1'; el.style.transform='translateY(0)'; }, 0); } } }); }
   
   document.querySelectorAll('.dept-tab').forEach(b=>{b.addEventListener('click',()=>{document.querySelectorAll('.dept-tab').forEach(bb=>bb.classList.remove('active'));b.classList.add('active');const dept=b.dataset.dept;document.querySelectorAll('tbody tr[data-row="emp"]').forEach(tr=>{const d=tr.dataset.dept||'other';tr.style.display=(dept==='all'||dept===d)?'':'none'})})})
-  ;(function(){ const map={}; try{ {% for e in employees %} map['{{ e.id }}']={{ (e.department or '')|lower|tojson }}; {% endfor %} }catch(err){} document.querySelectorAll('#panel-prev .dept-tab').forEach(b=>{ b.addEventListener('click', function(){ document.querySelectorAll('#panel-prev .dept-tab').forEach(x=>x.classList.remove('active')); this.classList.add('active'); const d=this.getAttribute('data-dept')||'all'; document.querySelectorAll('#panel-prev tbody tr[data-row="sal"]').forEach(tr=>{ const dd=(tr.getAttribute('data-dept')||''); const ok = d==='all' || (d==='kitchen'&&/kitchen|chef|شيف/i.test(dd)) || (d==='hall'&&/hall|floor|wait|صالة|الصالة/i.test(dd)) || (d==='admin'&&/admin|إداري/i.test(dd)); tr.style.display = ok? '' : 'none'; }); }); }); document.querySelectorAll('#panel-adv .dept-tab').forEach(b=>{ b.addEventListener('click', function(){ document.querySelectorAll('#panel-adv .dept-tab').forEach(x=>x.classList.remove('active')); this.classList.add('active'); const d=this.getAttribute('data-dept')||'all'; document.querySelectorAll('#panel-adv tbody tr[data-row="adv"]').forEach(tr=>{ const emp=(tr.getAttribute('data-emp')||''); const dd=map[emp]||''; const ok = d==='all' || (d==='kitchen'&&/kitchen|chef|شيف/i.test(dd)) || (d==='hall'&&/hall|floor|wait|صالة|الصالة/i.test(dd)) || (d==='admin'&&/admin|إداري/i.test(dd)); tr.style.display = ok? '' : 'none'; }); }); }); })()
-  document.querySelectorAll('tbody tr').forEach(function(r){})
+  ;(function(){ const last = localStorage.getItem('uvd_dept'); if(last){ const btn = Array.from(document.querySelectorAll('.dept-tab')).find(el=>el.dataset.dept===last); if(btn){ btn.click(); } } document.querySelectorAll('.dept-tab').forEach(el=> el.addEventListener('click', ()=>{ try{ localStorage.setItem('uvd_dept', el.dataset.dept||'all'); }catch(e){} })); })()
+  ;(function(){ const map={}; try{ {% for e in employees %} map['{{ e.id }}']='{{ (e.department or '')|lower }}'; {% endfor %} }catch(err){} document.querySelectorAll('#panel-prev .dept-tab').forEach(b=>{ b.addEventListener('click', function(){ document.querySelectorAll('#panel-prev .dept-tab').forEach(x=>x.classList.remove('active')); this.classList.add('active'); const d=this.getAttribute('data-dept')||'all'; document.querySelectorAll('#panel-prev tbody tr[data-row="sal"]').forEach(tr=>{ const dd=(tr.getAttribute('data-dept')||''); const ok = d==='all' || (d==='kitchen'&&/kitchen|chef|شيف/i.test(dd)) || (d==='hall'&&/hall|floor|wait|صالة|الصالة/i.test(dd)) || (d==='admin'&&/admin|إداري/i.test(dd)); tr.style.display = ok? '' : 'none'; }); }); }); document.querySelectorAll('#panel-adv .dept-tab').forEach(b=>{ b.addEventListener('click', function(){ document.querySelectorAll('#panel-adv .dept-tab').forEach(x=>x.classList.remove('active')); this.classList.add('active'); const d=this.getAttribute('data-dept')||'all'; document.querySelectorAll('#panel-adv tbody tr[data-row="adv"]').forEach(tr=>{ const emp=(tr.getAttribute('data-emp')||''); const dd=map[emp]||''; const ok = d==='all' || (d==='kitchen'&&/kitchen|chef|شيف/i.test(dd)) || (d==='hall'&&/hall|floor|wait|صالة|الصالة/i.test(dd)) || (d==='admin'&&/admin|إداري/i.test(dd)); tr.style.display = ok? '' : 'none'; }); }); }); })()
+  document.querySelectorAll('tbody tr').forEach(r=>{r.addEventListener('click',()=>{const cells=[...r.children].map(td=>td.textContent);openSlideover('<div>'+cells.join(' | ')+'</div>')})})
   ;(function(){
-    const sel = document.getElementById('empSelect2');
-    function scrollToEmp(id){
-      const tr = document.querySelector(`#panel-employees tbody tr[data-row="emp"][data-id="${id}"]`);
-      if(tr){ try{ tr.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){} tr.classList.add('table-warning'); setTimeout(()=> tr.classList.remove('table-warning'), 1200); }
-    }
-    if(sel){ sel.addEventListener('change', function(){ const id = this.value||''; if(id){ scrollToEmp(id); } }); }
-  })()
-  ;(function(){
-    function hideOps(){ 
-      document.querySelectorAll('.ops-menu').forEach(m=> m.style.display='none'); 
-      document.querySelectorAll('tbody tr.menu-open').forEach(tr=> tr.classList.remove('menu-open'));
-    }
-    document.addEventListener('click', function(e){
-      if(!e.target.closest('.ops-btn') && !e.target.closest('.ops-menu')){ hideOps(); return; }
-      const btn = e.target.closest('.ops-btn');
-      if(btn){
-        e.stopPropagation(); e.preventDefault();
-        const menu = btn.parentElement.querySelector('.ops-menu');
-        const vis = (menu && menu.style.display==='block');
-        hideOps();
-        if(menu){ if(!vis){ const tr = btn.closest('tr'); if(tr){ tr.classList.add('menu-open'); } }
-          menu.style.display = vis? 'none' : 'block';
-        }
-        return;
-      }
-      const it = e.target.closest('.ops-menu .it');
-      if(it){
-        e.stopPropagation();
-        const tr=it.closest('tr');
-        const id=(tr ? tr.getAttribute('data-id') : '');
-        const op=it.getAttribute('data-op');
-        hideOps();
-        if(!id) return;
-        switch(op){
+    function hideOps(){ document.querySelectorAll('.ops-fly').forEach(m=> m.remove()); document.querySelectorAll('.ops-menu').forEach(m=> m.style.display='none'); }
+    document.addEventListener('click', function(e){ if(!e.target.closest('.ops-btn') && !e.target.closest('.ops-fly')){ hideOps(); } });
+    document.querySelectorAll('.ops-btn').forEach(btn=>{
+      btn.addEventListener('click', function(ev){ ev.stopPropagation(); hideOps(); const cell = this.parentElement; const row = this.closest('tr'); const id = row?.getAttribute('data-id')||''; const orig = cell.querySelector('.ops-menu'); if(!orig) return; const fly = orig.cloneNode(true); fly.classList.remove('ops-menu'); fly.classList.add('ops-fly'); fly.style.display='block'; fly.dataset.empId = id; document.body.appendChild(fly); const r = this.getBoundingClientRect(); const w = fly.offsetWidth; const h = fly.offsetHeight; let top = r.bottom + 6; let left = r.right - w; if(top + h > window.innerHeight) top = r.top - h - 6; if(left < 6) left = 6; fly.style.top = (top)+'px'; fly.style.left = (left)+'px'; fly.querySelectorAll('.it').forEach(it=>{
+        it.addEventListener('click', function(ev2){ ev2.stopPropagation(); const op = this.getAttribute('data-op'); const rid = fly.dataset.empId; const tr = document.querySelector('tr[data-id="'+rid+'"]'); hideOps(); if(!tr) return; switch(op){
         case 'edit':
           (function(){ const cells=[...tr.children].map(td=>td.textContent); const html=`<form id='editEmpForm' class='d-grid gap-2'>
             <div class='input-group'><span class='input-group-text'>الاسم</span><input name='full_name' class='form-control' value='${cells[1]||''}' required></div>
             <div class='input-group'><span class='input-group-text'>الوظيفة</span><input name='position' class='form-control' value='${cells[2]||''}'></div>
             <div class='input-group'><span class='input-group-text'>الفرع</span><input name='branch_code' class='form-control' value='${cells[3]||''}'></div>
             <div class='input-group'><span class='input-group-text'>راتب أساسي</span><input name='base_salary' type='number' step='0.01' class='form-control' value='${parseFloat(cells[4]||'0')}'></div>
-            <div class='d-flex gap-2 mt-2'><button class='btn btn-navy' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelEdit'>إلغاء</button></div>
-          </form>`; openSlideover(html); const f=document.getElementById('editEmpForm'); document.getElementById('cancelEdit').onclick=closeSlideover; f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); const btn = f.querySelector('button[type="submit"]'); if(!CSRF){ showToast('⚠️ المعرّف الأمني غير متوفر، يرجى إعادة تحميل الصفحة', 'error'); return; } btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ...'; try { const r=await fetch('/api/employees/'+id, { method:'PUT', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body:fd, credentials:'same-origin' }); const ct=(r.headers.get('content-type')||'').toLowerCase(); const isJson=ct.indexOf('application/json')!==-1; let payload=null; try{ payload=isJson? await r.json() : null; }catch(_){ payload=null; } if(r.ok && payload && payload.ok){ tr.children[1].textContent = String(fd.get('full_name')||''); tr.children[2].textContent = String(fd.get('position')||''); tr.children[3].textContent = String(fd.get('branch_code')||''); tr.children[4].textContent = Number(fd.get('base_salary')||0).toFixed(2); showToast('✅ تم التعديل بنجاح'); closeSlideover(); } else { const msg = (payload && payload.error) || (isJson? 'فشل التعديل' : await r.text()); showToast('❌ '+(msg||'فشل التعديل'), 'error'); } } catch(err) { showToast('❌ خطأ في الاتصال بالخادم: ' + err.message, 'error'); } finally { btn.disabled = false; btn.innerHTML = '💾 حفظ'; } } })();
-          break;
-        case 'settings':
-          (function(){ openEmpSettings(id); })();
+            <div class='input-group'><span class='input-group-text'>نوع الراتب</span><select name='salary_type' class='form-select'><option value='fixed'>ثابت</option><option value='hourly'>بالساعة</option></select></div>
+            <div class='input-group'><span class='input-group-text'>سعر الساعة</span><input name='hourly_rate' type='number' step='0.01' class='form-control' value=''></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-primary' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelEdit'>إلغاء</button></div>
+          </form>`; openSlideover(html); const f=document.getElementById('editEmpForm'); document.getElementById('cancelEdit').onclick=closeSlideover; f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/api/employees/'+id, { method:'PUT', body:fd }); const j=await r.json(); showToast(j&&j.ok?'تم التعديل':'فشل التعديل'); if(j&&j.ok){ tr.children[1].textContent = String(fd.get('full_name')||''); tr.children[2].textContent = String(fd.get('position')||''); tr.children[3].textContent = String(fd.get('branch_code')||''); tr.children[4].textContent = Number(fd.get('base_salary')||0).toFixed(2); closeSlideover(); } } })();
           break;
         case 'advance':
-          (function(){ 
-            const html=`<form id='advForm' class='d-grid gap-2'>
-              <div class='input-group'><span class='input-group-text'>المبلغ</span><input name='amount' type='number' step='0.01' class='form-control' required></div>
-              <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
-              <div class='input-group'><span class='input-group-text'>التاريخ</span><input name='date' type='date' class='form-control' value='${new Date().toISOString().slice(0,10)}'></div>
-              <div class='input-group'><span class='input-group-text'>الملاحظات</span><textarea name='notes' class='form-control' rows='2'></textarea></div>
-              <div class='d-flex gap-2 mt-2'><button class='btn btn-navy' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelAdv'>إلغاء</button></div>
-            </form>`; 
-            openSlideover(html); 
-            ensurePayHealth();
-            const f=document.getElementById('advForm'); 
-            document.getElementById('cancelAdv').onclick=closeSlideover; 
-            f.onsubmit=async function(e){ 
-              e.preventDefault(); 
-              const fd=new FormData(f); 
-              try{ fd.append('csrf_token', CSRF); }catch(_){}
-              fd.append('employee_id', id); 
-              const btn = f.querySelector('button[type="submit"]');
-              btn.disabled = true;
-              btn.innerHTML = '⏳ جاري الحفظ...';
-              try {
-                const r=await fetch('/api/advances', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body:fd, credentials:'same-origin' }); 
-                const ct=(r.headers.get('content-type')||'').toLowerCase(); const isJson=ct.indexOf('application/json')!==-1; const j = isJson ? await r.json() : null;
-                if(r.ok && j && j.ok){
-                  showToast('✅ تم تسجيل السلفة بنجاح');
-                  closeSlideover(); 
-                  // تحديث قيمة السلفة في الجدول
-                  const currentAdvance = parseFloat(tr.children[5].textContent) || 0;
-                  const newAdvance = parseFloat(fd.get('amount')) || 0;
-                  tr.children[5].textContent = (currentAdvance + newAdvance).toFixed(2);
-                } else {
-                  const err = (j && j.error) || (isJson? 'فشل تسجيل السلفة' : await r.text());
-                  showToast('❌ '+(err||'فشل تسجيل السلفة'), 'error');
-                }
-              } catch(err) {
-                showToast('❌ خطأ في الاتصال بالخادم: ' + err.message, 'error');
-              } finally {
-                btn.disabled = false;
-                btn.innerHTML = '💾 حفظ';
-              }
-            } 
-          })();
+          (function(){ const html=`<form id='advForm' class='d-grid gap-2'>
+            <div class='input-group'><span class='input-group-text'>المبلغ</span><input name='amount' type='number' step='0.01' class='form-control' required></div>
+            <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
+            <div class='input-group'><span class='input-group-text'>التاريخ</span><input name='date' type='date' class='form-control' value='${new Date().toISOString().slice(0,10)}'></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-primary' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelAdv'>إلغاء</button></div>
+          </form>`; openSlideover(html); const f=document.getElementById('advForm'); document.getElementById('cancelAdv').onclick=closeSlideover; f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', id); fd.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/api/advances', { method:'POST', body:fd }); const j=await r.json(); showToast(j&&j.ok?'تم تسجيل السلفة':'فشل تسجيل السلفة'); if(j&&j.ok){ closeSlideover(); } } })();
           break;
         case 'pay':
-          (function(){ 
-            const html=`<form id='payForm' class='d-grid gap-2'>
-              <div class='input-group'><span class='input-group-text'>الشهر</span><input name='month' type='month' class='form-control' value='${new Date().toISOString().slice(0,7)}'></div>
-              <div class='alert alert-info'>سداد راتب الموظف: <strong>${tr.children[1].textContent}</strong></div>
-              <div class='input-group'><span class='input-group-text'>المبلغ</span><input name='paid_amount' type='number' step='0.01' class='form-control' value='${tr.children[4].textContent}' required></div>
-              <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='payment_method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
-              <div class='input-group'><span class='input-group-text'>التاريخ</span><input name='date' type='date' class='form-control' value='${new Date().toISOString().slice(0,10)}'></div>
-              <div class='input-group'><span class='input-group-text'>الملاحظات</span><textarea name='notes' class='form-control' rows='2'>راتب شهر ${new Date().toLocaleDateString('ar-SA', {month:'long', year:'numeric'})}</textarea></div>
-              <div id='payMsg' class='alert alert-secondary' style='display:none'></div>
-              <div class='d-flex gap-2 mt-2'><button class='btn btn-success' type='submit'>💰 سداد الراتب</button><button type='button' class='btn btn-outline-secondary' id='cancelPay'>إلغاء</button></div>
-            </form>`; 
-            openSlideover(html); 
-            const f=document.getElementById('payForm'); 
-            const msg=document.getElementById('payMsg');
-            function showBox(text, kind){ if(msg){ msg.textContent=text; msg.className='alert '+(kind||'alert-secondary'); msg.style.display='block'; } }
-            document.getElementById('cancelPay').onclick=closeSlideover; 
-            f.onsubmit=async function(e){ 
-              e.preventDefault(); 
-              const fd=new FormData(f); 
-              try{ fd.append('csrf_token', CSRF); }catch(_){}
-              fd.append('employee_id', String(id)); 
-              const btn = f.querySelector('button[type="submit"]');
-              btn.disabled = true;
-              btn.innerHTML = '⏳ جاري السداد...';
-              try {
-                const r=await fetch('/api/employees/pay-salary', { 
-                  method:'POST', 
-                  headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, 
-                  body:fd, 
-                  credentials:'same-origin'
-                }); 
-                const ct = (r.headers.get('content-type')||'').toLowerCase();
-                const isJson = ct.indexOf('application/json') !== -1;
-                let msgText = 'تم تسجيل دفع الراتب';
-                if(r.ok){
-                  if(isJson){ const j = await r.json(); msgText = (j && (j.message||j.success)) ? (j.message||msgText) : msgText; }
-                  else { const t = await r.text(); msgText = t || msgText; }
-                  showBox(msgText,'alert-success');
-                  showToast('✅ '+msgText);
-                  setTimeout(()=>{ closeSlideover(); location.reload(); }, 1200);
-                } else {
-                  let err='فشل دفع الراتب';
-                  try{ const t=await r.text(); const j=isJson?JSON.parse(t||'{}'):null; err = (j && j.message) || t || err; }catch(_){ }
-                  const failedUrl = r.url || '/api/employees/pay-salary';
-                  if(r.redirected){ err = 'طلب مرفوض أو إعادة توجيه. تأكد من تسجيل الدخول'; }
-                  err = (err||'') + ' (HTTP '+String(r.status)+') ['+failedUrl+']';
-                  showBox(err,'alert-danger');
-                  showToast('❌ '+err, 'error');
-                }
-              } catch(err) {
-                const e='خطأ في الاتصال بالخادم: '+ err.message;
-                showBox(e,'alert-danger');
-                showToast('❌ '+e, 'error');
-              } finally {
-                btn.disabled = false;
-                btn.innerHTML = '💰 سداد الراتب';
-              }
-            } 
-          })();
+          (function(){ const iframe=document.getElementById('panelIframe'); document.querySelectorAll('.panel').forEach(p=> p.classList.remove('active')); const ext=document.getElementById('panel-ext'); ext.classList.add('active'); iframe.src='/employees/'+id+'/pay'; showToast('فتح سداد راتب الموظف'); })();
           break;
         case 'journal':
-          (function(){ 
-            const html=`<div class='text-center p-3'><div class="spinner-border text-primary" role="status"><span class="visually-hidden">جاري التحميل...</span></div><p>جاري تحميل القيود...</p></div>`;
-            openSlideover(html);
-            fetch('/api/employee-ledger?employee_id='+id)
-              .then(r=>{
-                if(!r.ok) throw new Error('فشل تحميل القيود');
-                return r.json();
-              })
-              .then(j=>{ 
-                const rows=(j.rows||[]); 
-                if(rows.length === 0){
-                  let html='<div class="alert alert-info">لا توجد قيود لهذا الموظف</div>';
-                  openSlideover(html);
-                  return;
-                }
-                let html=`<div><h6>قيود هذا الموظف: <strong>${tr.children[1].textContent}</strong></h6><div class="table-responsive"><table class="table table-striped table-hover"><thead class="table-light"><tr><th>التاريخ</th><th>الوصف</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>`; 
-                let balance = 0;
-                rows.forEach(x=>{ 
-                  const debit = Number(x.debit||0);
-                  const credit = Number(x.credit||0);
-                  balance += (debit - credit);
-                  html+=`<tr><td>${x.date||'-'}</td><td>${x.description||''}</td><td class='text-end text-success fw-bold'>${debit.toFixed(2)}</td><td class='text-end text-danger fw-bold'>${credit.toFixed(2)}</td><td class='text-end ${balance >= 0 ? "text-success" : "text-danger"} fw-bold'>${balance.toFixed(2)}</td></tr>`; 
-                }); 
-                html+=`</tbody><tfoot><tr class="table-info"><td colspan="2"><strong>الإجمالي</strong></td><td class="text-end"><strong>${rows.reduce((sum,x)=>sum+Number(x.debit||0),0).toFixed(2)}</strong></td><td class="text-end"><strong>${rows.reduce((sum,x)=>sum+Number(x.credit||0),0).toFixed(2)}</strong></td><td class="text-end ${balance >= 0 ? "text-success" : "text-danger"}"><strong>${balance.toFixed(2)}</strong></td></tr></tfoot></table></div></div>`; 
-                openSlideover(html); 
-              })
-              .catch(err => { 
-                showToast('❌ خطأ في تحميل القيود: ' + err.message, 'error');
-                closeSlideover();
-              }); 
-          })();
-          break;
-        case 'statement':
-          (function(){
-            const url = '/payroll/employee/statement/' + String(id);
-            try { window.open(url, '_blank'); } catch(e) { location.href = url; }
-          })();
-          break;
-        case 'details':
-          (function(){
-            const month = new Date().toISOString().slice(0,7);
-            const loader = `<div class='text-center p-3'><div class="spinner-border text-primary" role="status"><span class="visually-hidden">جاري التحميل...</span></div><p>جاري تحميل تفاصيل الموظف...</p></div>`;
-            openSlideover(loader);
-            Promise.all([
-              fetch('/api/employees').then(r=>r.json()).catch(()=>null),
-              fetch('/api/salaries/statements?month='+encodeURIComponent(month)+'&emp_id='+encodeURIComponent(id)).then(r=>r.json()).catch(()=>null),
-              fetch('/api/employee-ledger?emp_id='+encodeURIComponent(id)).then(r=>r.json()).catch(()=>null)
-            ]).then(([empRes, salRes, ledRes])=>{
-              const empList = (empRes && empRes.employees) || [];
-              const emp = empList.find(e=> String(e.id)===String(id)) || null;
-              const salRow = (salRes && salRes.rows && salRes.rows[0]) || null;
-              const ledgerRows = (ledRes && ledRes.rows) || [];
-              let html = `<div class='d-grid gap-3'>`;
-              html += `<div class='glass-card p-3'><div class='fw-bold mb-2'>معلومات الموظف</div>`
-                   + `<div>الاسم: <strong>${emp ? (emp.name||'') : tr.children[1].textContent}</strong></div>`
-                   + `<div>القسم: ${emp ? (emp.department||'-') : (tr.getAttribute('data-dept')||'-')}</div>`
-                   + `<div>الوظيفة: ${tr.children[2].textContent||'-'}</div>`
-                   + `</div>`;
-              html += `<div class='glass-card p-3'><div class='fw-bold mb-2'>راتب الشهر (${month})</div>`;
-              if(salRow){
-                html += `<div class='row g-2'><div class='col'>الأساسي: <strong>${Number(salRow.basic||0).toFixed(2)}</strong></div>`
-                     + `<div class='col'>البدلات: <strong>${Number(salRow.allow||0).toFixed(2)}</strong></div>`
-                     + `<div class='col'>الخصومات: <strong>${Number(salRow.ded||0).toFixed(2)}</strong></div>`
-                     + `<div class='col'>سابقة: <strong>${Number(salRow.prev||0).toFixed(2)}</strong></div>`
-                     + `<div class='col'>الإجمالي: <strong>${Number(salRow.total||0).toFixed(2)}</strong></div>`
-                     + `<div class='col'>المدفوع: <strong class='text-success'>${Number(salRow.paid||0).toFixed(2)}</strong></div>`
-                     + `<div class='col'>المتبقي: <strong class='text-danger'>${Number(salRow.remaining||0).toFixed(2)}</strong></div>`
-                     + `<div class='col'>الحالة: <span class='badge bg-light'>${salRow.status||'-'}</span></div></div>`;
-              } else {
-                html += `<div class='alert alert-secondary mb-0'>لا توجد بيانات راتب لهذا الشهر</div>`;
-              }
-              html += `</div>`;
-              html += `<div class='glass-card p-3'><div class='fw-bold mb-2'>سجل القيود (أحدث 6)</div>`;
-              if(ledgerRows && ledgerRows.length){
-                const recent = ledgerRows.slice(-6);
-                html += `<div class='table-responsive'><table class='table table-sm table-hover'><thead class='table-light'><tr><th>التاريخ</th><th>الوصف</th><th class='text-end'>مدين</th><th class='text-end'>دائن</th></tr></thead><tbody>`;
-                recent.forEach(x=>{
-                  const d=Number(x.debit||0), c=Number(x.credit||0);
-                  html += `<tr><td>${x.date||'-'}</td><td>${x.desc||''}</td><td class='text-end ${d>0?'text-success':''}'>${d.toFixed(2)}</td><td class='text-end ${c>0?'text-danger':''}'>${c.toFixed(2)}</td></tr>`;
-                });
-                html += `</tbody></table></div>`;
-              } else {
-                html += `<div class='alert alert-secondary mb-0'>لا توجد قيود مسجلة</div>`;
-              }
-              html += `</div>`;
-              html += `</div>`;
-              openSlideover(html);
-            }).catch(err=>{
-              showToast('❌ خطأ في تحميل التفاصيل: '+(err&&err.message||'') , 'error');
-              closeSlideover();
-            });
-          })();
-          break;
-        case 'components':
-          (function(){
-            const mm = new Date().toISOString().slice(0,7);
-            const html = `<form id='monthCompForm' class='d-grid gap-3'>`
-              + `<div class='input-group'><span class='input-group-text'>الشهر</span><input name='month' type='month' class='form-control' value='${mm}' required></div>`
-              + `<div class='input-group'><span class='input-group-text'>ساعات الغياب</span><input name='absence_hours' type='number' step='0.01' class='form-control' value='0'></div>`
-              + `<div class='input-group'><span class='input-group-text'>ساعات إضافية</span><input name='overtime_hours' type='number' step='0.01' class='form-control' value='0'></div>`
-              + `<div class='input-group'><span class='input-group-text'>حافز إضافي</span><input name='bonus_amount' type='number' step='0.01' class='form-control' value='0'></div>`
-              + `<div class='input-group'><span class='input-group-text'>استقطاع إضافي</span><input name='deduction_amount' type='number' step='0.01' class='form-control' value='0'></div>`
-              + `<div class='alert alert-secondary' id='monthCompPreview' style='display:none'></div>`
-              + `<div class='d-flex gap-2'><button type='submit' class='btn btn-primary'>💾 حفظ</button><button type='button' id='cancelMonthComp' class='btn btn-outline-secondary'>إلغاء</button></div>`
-              + `</form>`;
-            openSlideover(html);
-            const f = document.getElementById('monthCompForm');
-            const pv = document.getElementById('monthCompPreview');
-            document.getElementById('cancelMonthComp').onclick = closeSlideover;
-            function parseN(v){ try{ return parseFloat(v||0)||0; }catch(e){ return 0; } }
-            function updatePreview(){
-              const abs = parseN(f.absence_hours.value);
-              const ot = parseN(f.overtime_hours.value);
-              const bonus = parseN(f.bonus_amount.value);
-              const ded = parseN(f.deduction_amount.value);
-              pv.style.display = 'block';
-              pv.textContent = `غياب: ${abs} س, إضافي: ${ot} س, حافز: ${bonus.toFixed(2)}, استقطاع: ${ded.toFixed(2)}`;
-            }
-            ['absence_hours','overtime_hours','bonus_amount','deduction_amount'].forEach(n=>{ f[n].addEventListener('input', updatePreview); });
-            f.onsubmit = async function(e){
-              e.preventDefault();
-              const fd = new FormData(f);
-              fd.append('employee_id', String(id));
-              const btn = f.querySelector('button[type="submit"]');
-              btn.disabled = true;
-              btn.textContent = '⏳ جاري الحفظ...';
-              try{
-                const r = await fetch('/api/salaries/upsert', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body:fd, credentials:'same-origin' });
-                const ct=(r.headers.get('content-type')||'').toLowerCase(); const isJson=ct.indexOf('application/json')!==-1; const j = isJson ? await r.json() : null;
-                if(r.ok && j && j.ok){
-                  showToast('✅ تم حفظ مكونات الشهر');
-                  closeSlideover();
-                } else {
-                  const err = (j && j.error) || (isJson? 'فشل الحفظ' : await r.text());
-                  showToast('❌ '+(err||'فشل الحفظ'), 'error');
-                }
-              }catch(err){
-                showToast('❌ خطأ في الاتصال بالخادم: ' + err.message, 'error');
-              }finally{
-                btn.disabled = false;
-                btn.textContent = '💾 حفظ';
-              }
-            };
-          })();
+          (function(){ fetch('/api/employee-ledger?emp_id='+id).then(r=>r.json()).then(j=>{ const rows=(j.rows||[]); let html='<div><h6>قيود هذا الموظف</h6><table class="table"><thead><tr><th>التاريخ</th><th>الوصف</th><th>مدين</th><th>دائن</th></tr></thead><tbody>'; rows.forEach(x=>{ html+=`<tr><td>${x.date||'-'}</td><td>${x.description||''}</td><td class='text-end'>${Number(x.debit||0).toFixed(2)}</td><td class='text-end'>${Number(x.credit||0).toFixed(2)}</td></tr>`; }); html+='</tbody></table></div>'; openSlideover(html); }).catch(()=> showToast('تعذر تحميل القيود')); })();
           break;
         case 'delete':
-          (function(){ 
-            if(!confirm('⚠️ هل تريد حذف هذا الموظف؟\n\n⚠️ هذا الإجراء لا يمكن التراجع عنه!')) return; 
-            const menu = this.closest('.ops-menu'); 
-            if(menu) menu.style.display = 'none';
-            tr.style.opacity = '0.7';
-            if(!CSRF){ showToast('⚠️ المعرّف الأمني غير متوفر، يرجى إعادة تحميل الصفحة', 'error'); tr.style.opacity='1'; return; }
-            fetch('/api/employees/'+id, { method:'DELETE', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, credentials:'same-origin' })
-              .then(async r=> { const ct=(r.headers.get('content-type')||'').toLowerCase(); const isJson=ct.indexOf('application/json')!==-1; const body = isJson? await r.json(): await r.text(); return {ok:r.ok, body}; })
-              .then(j=>{ 
-                if(j && j.ok && j.body && j.body.ok){ 
-                  tr.style.transition = 'opacity 0.3s ease'; 
-                  tr.style.opacity = '0'; 
-                  setTimeout(() => tr.remove(), 300); 
-                  showToast('✅ تم الحذف بنجاح'); 
-                } else { 
-                  tr.style.opacity = '1';
-                  const err = j && j.body && (j.body.error||j.body) || 'خطأ غير معروف';
-                  showToast('❌ فشل الحذف: ' + err, 'error'); 
-                } 
-              })
-              .catch(err => { 
-                tr.style.opacity = '1';
-                showToast('❌ خطأ في الاتصال بالخادم: ' + err.message, 'error'); 
-              });
-          })();
+          (function(){ if(!confirm('تأكيد حذف الموظف؟')) return; fetch('/api/employees/'+id, { method:'DELETE', headers: { 'X-CSRFToken': '{{ csrf_token() }}' } }).then(r=> r.json()).then(j=>{ showToast(j&&j.ok?'تم حذف الموظف':'تعذر حذف الموظف'); if(j&&j.ok){ tr.remove(); } }).catch(()=> showToast('خطأ في الشبكة')); })();
           break;
-      }
-      }
+        }
+      });
     });
-    document.querySelectorAll('tbody tr').forEach(function(r){ r.addEventListener('click', function(ev){ return; }); });
+    document.querySelectorAll('tbody tr').forEach(r=>{ r.addEventListener('click', function(ev){ if(ev.target.closest('button')||ev.target.closest('.ops-menu')) return; const cells=[...r.children].map(td=>td.textContent); openSlideover('<div>'+cells.join(' | ')+'</div>'); }); });
   })();
   ;(function(){ const btn=document.createElement('button'); btn.className='btn btn-outline-primary btn-sm'; btn.textContent='🖨️ طباعة كشف'; const cont=document.querySelector('#panel-ledger'); if(cont){ cont.insertBefore(btn, cont.firstChild); btn.addEventListener('click', function(){ const table=cont.querySelector('table'); if(!table) return; const w=window.open('', '_blank'); w.document.write('<html><head><title>كشف حساب</title></head><body>'+table.outerHTML+'<script>window.onload=function(){window.print();};<\/script></body></html>'); w.document.close(); }); } })()
   document.querySelectorAll('.ripple-btn').forEach(btn=>{btn.addEventListener('click',e=>{const x=e.offsetX,y=e.offsetY;const s=document.createElement('span');s.style.position='absolute';s.style.left=x+'px';s.style.top=y+'px';s.style.width=s.style.height='8px';s.style.borderRadius='50%';s.style.background='rgba(255,255,255,.7)';btn.appendChild(s); if(window.gsap){ gsap.to(s,{duration:.5,scale:12,opacity:0,onComplete:()=>s.remove()}); } else { s.style.transition='transform .5s ease, opacity .5s ease'; requestAnimationFrame(()=>{ s.style.transform='scale(12)'; s.style.opacity='0'; }); setTimeout(()=>{ try{ s.remove(); }catch(e){} }, 520); } })})
-  ;(function(){ const inp=document.getElementById('empSearch'); const sug=document.getElementById('empSuggest'); const emptyBox = document.getElementById('empEmpty'); function listEmployees(){ return Array.from(document.querySelectorAll('#panel-employees tbody tr[data-row="emp"]')).map(tr=>({ id: tr.getAttribute('data-id'), name: tr.children[1].textContent.trim(), dept: tr.getAttribute('data-dept')||'', pos: tr.children[2].textContent.trim() })); } function renderSuggest(items){ if(!sug) return; if(!items.length){ sug.style.display='none'; sug.innerHTML=''; return; } sug.innerHTML = items.map(it=>`<div class='item' data-id='${it.id}'>${it.name} - ${it.pos}</div>`).join(''); sug.style.display='block'; sug.querySelectorAll('.item').forEach(it=>{ it.addEventListener('click', function(){ const id=this.getAttribute('data-id'); const tr=document.querySelector(`#panel-employees tbody tr[data-row="emp"][data-id="${id}"]`); if(tr){ try{ tr.scrollIntoView({behavior:'smooth', block:'center'}); }catch(_){ } tr.classList.add('table-warning'); setTimeout(()=> tr.classList.remove('table-warning'), 1200); } sug.style.display='none'; }); }); } function applyFilter(q){ const rows = document.querySelectorAll('#panel-employees tbody tr[data-row="emp"]'); const s = (q||'').trim().toLowerCase(); let vis = 0; rows.forEach(tr=>{ const name = tr.children[1].textContent.toLowerCase(); const pos = tr.children[2].textContent.toLowerCase(); const dept = (tr.getAttribute('data-dept')||'').toLowerCase(); const ok = !s || name.includes(s) || pos.includes(s) || dept.includes(s); tr.style.display = ok ? '' : 'none'; if(ok) vis++; }); if(emptyBox){ emptyBox.style.display = vis === 0 ? 'block' : 'none'; } } if(inp){ inp.addEventListener('input', function(){ const q=this.value||''; applyFilter(q); const items = listEmployees().filter(x=> x.name.toLowerCase().includes(q.toLowerCase()) || x.pos.toLowerCase().includes(q.toLowerCase()) ).slice(0,6); renderSuggest(items); }); } const btn=document.getElementById('empSearchBtn'); if(btn){ btn.addEventListener('click', function(){ const q=(inp&&inp.value)||''; applyFilter(q); const items = listEmployees().filter(x=> x.name.toLowerCase().includes(q.toLowerCase()) || x.pos.toLowerCase().includes(q.toLowerCase()) ).slice(0,6); renderSuggest(items); }); } document.addEventListener('click', function(e){ if(!e.target.closest('#empSuggest') && e.target.id!=='empSearch'){ if(sug){ sug.style.display='none'; } } }); })()
-  ;(function(){ const tbl=document.getElementById('empTable'); if(!tbl) return; let state={ key:'', dir:1 }; function cmp(a,b){ if(!isNaN(a) && !isNaN(b)){ return (parseFloat(a)-parseFloat(b)) * state.dir; } return a.localeCompare(b) * state.dir; } function sortBy(key){ const rows=Array.from(tbl.querySelectorAll('tbody tr[data-row="emp"]')); rows.sort((r1,r2)=>{ const map={ idx:0, name:1, pos:2, branch:3, basic:4, adv:5, last:6, status:7 }; const i = map[key]||0; const a=r1.children[i].textContent.trim(); const b=r2.children[i].textContent.trim(); return cmp(a,b); }); const tb=tbl.querySelector('tbody'); rows.forEach((r,i)=>{ r.children[0].textContent = String(i+1); tb.appendChild(r); }); } tbl.querySelectorAll('thead th[data-key]').forEach(th=>{ th.style.cursor='pointer'; th.addEventListener('click', function(){ const k=this.getAttribute('data-key')||''; if(state.key===k){ state.dir = -state.dir; } else { state.key=k; state.dir=1; } sortBy(k); }); }); })()
-  ;(function(){ const btn=document.getElementById('btnExportCsv'); if(!btn) return; btn.addEventListener('click', function(){ const rows = Array.from(document.querySelectorAll('#panel-employees tbody tr[data-row="emp"]')).filter(r=> r.style.display !== 'none'); const data = rows.map(r=> [ r.children[0].textContent.trim(), r.children[1].textContent.trim(), r.children[2].textContent.trim(), r.children[3].textContent.trim(), r.children[4].textContent.trim(), r.children[5].textContent.trim(), r.children[6].textContent.trim(), r.children[7].textContent.trim() ] ); let csv='رقم,الاسم,الدور,الفرع,راتب أساسي,سلفة,آخر راتب,الحالة\n'; data.forEach(row=>{ csv += row.map(x=> '"'+String(x).replace('"','""')+'"').join(',') + '\n'; }); const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'employees.csv'; document.body.appendChild(a); a.click(); setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 100); }); })()
   ;(function(){document.querySelectorAll('.spark').forEach(c=>{const ctx=c.getContext('2d');const w=c.width=c.clientWidth;const h=c.height=c.clientHeight;ctx.clearRect(0,0,w,h);ctx.strokeStyle='#4c7cf5';ctx.lineWidth=2;const pts=Array.from({length:20},(_,i)=>({x:(i/(20-1))*w,y:h-((Math.sin(i*.5)+1)/2)*h*0.8-5}));ctx.beginPath();pts.forEach((p,i)=>{if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y)});ctx.stroke();ctx.fillStyle='rgba(76,124,245,.12)';ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fill()})})()
   showToast('مرحباً! تم تحميل لوحة تحكم الموظفين')
-  var ADV_ROWS_INLINE=[];var ADV_PAGE_INLINE=1;var LEDGER_ROWS=[];function openAdvPanel(){document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');p.style.display='none'});var p=document.getElementById('panel-adv');if(p){p.style.display='block';p.classList.add('active');loadAdvMetrics();loadAdvList();}}
-  function openPanel(name){document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');p.style.display='none'});var p=document.getElementById('panel-'+name);if(p){p.style.display='block';p.classList.add('active');if(name==='reports'){loadMonthlyInline();} if(name==='prev'){try{loadPrevInline();}catch(e){}} if(name==='settings'){ if(!document.getElementById('setMonth').value){ try{ document.getElementById('setMonth').value = new Date().toISOString().slice(0,7); }catch(e){} } renderSettingsPanel(); }} }
-  function loadAdvMetrics(){fetch('/api/advances/metrics').then(function(r){return r.json()}).then(function(j){if(j&&j.ok){document.getElementById('advKpiTotal').textContent='﷼'+Number(j.total||0).toFixed(2);document.getElementById('advKpiUnpaid').textContent='﷼'+Number(j.unpaid||0).toFixed(2);document.getElementById('advKpiLast').textContent=j.last_date||'—';}}).catch(function(){})}
-  function loadAdvList(){var emp=document.getElementById('advEmpFilter');var qs='';if(emp&&emp.value){qs='?employee_id='+encodeURIComponent(emp.value)}var container=document.getElementById('panel-adv');var spinner=document.createElement('div');spinner.className='spinner-border text-primary';spinner.style.marginLeft='8px';var added=false;var t=setTimeout(function(){if(container){var hdr=container.querySelector('.fw-semibold');if(hdr){hdr.appendChild(spinner);added=true;}}},1000);fetch('/api/advances/list'+qs).then(function(r){return r.json()}).then(function(j){if(j&&j.ok){ADV_ROWS_INLINE=(j.rows||[]);ADV_PAGE_INLINE=1;renderAdvPage();}}).catch(function(){}) .finally(function(){clearTimeout(t);if(added&&spinner.parentNode){spinner.parentNode.removeChild(spinner);}})}
-  function renderAdvPage(){var tbody=document.getElementById('advBodyInline');if(!tbody)return;tbody.innerHTML='';var size=parseInt(document.getElementById('advPageSizeInline').value||'10');var total=ADV_ROWS_INLINE.length;var pages=Math.max(1,Math.ceil(total/size));if(ADV_PAGE_INLINE>pages)ADV_PAGE_INLINE=pages;var start=(ADV_PAGE_INLINE-1)*size;var end=start+size;var idx=0;if(total===0){var tr=document.createElement('tr');tr.innerHTML='<td colspan="8" class="text-center text-muted">📝 لا توجد بيانات مطابقة للفلتر المحدد</td>';tbody.appendChild(tr);}else{ADV_ROWS_INLINE.slice(start,end).forEach(function(x){var tr=document.createElement('tr');tr.setAttribute('data-name',x.employee_name||'');tr.innerHTML='<td>'+(start+(++idx))+'</td><td>'+(x.employee_name||'')+'</td><td>'+(x.branch||'-')+'</td><td class="text-end">'+Number(x.granted||0).toFixed(2)+'</td><td class="text-end">'+Number(x.paid||0).toFixed(2)+'</td><td class="text-end">'+Number(x.remaining||0).toFixed(2)+'</td><td>'+(x.last_date||'-')+'</td><td><div class="dropdown"><button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">⋮</button><ul class="dropdown-menu"><li><button class="dropdown-item" data-act="repay" data-emp="'+String(x.employee_id||'')+'">سداد جزئي</button></li><li><button class="dropdown-item" data-act="edit" data-emp="'+String(x.employee_id||'')+'" data-remain="'+String(x.remaining||0)+'">تعديل</button></li></ul></div></td>';tbody.appendChild(tr);});}var pi=document.getElementById('advPageInfoInline');if(pi)pi.textContent=ADV_PAGE_INLINE+'/'+pages+' ('+total+')'}
-  document.addEventListener('click',function(e){var link=e.target.closest('.nav-item[data-tab], .dept-tab[data-tab]');if(!link)return;var t=link.getAttribute('data-tab')||'';if(!t)return;e.preventDefault();if(t==='adv'){openAdvPanel();}else if(t==='settings'){openPanel('settings');}else{openPanel(t);}});
-  window.addEventListener('hashchange', function(){ var h=(location.hash||'').replace('#',''); if(!h) return; if(h==='settings'){ openPanel('settings'); } else if(h==='adv'){ openAdvPanel(); } else { openPanel(h); } });
-  document.addEventListener('DOMContentLoaded', function(){ var h=(location.hash||'').replace('#',''); if(h){ if(h==='settings'){ openPanel('settings'); } else if(h==='adv'){ openAdvPanel(); } else { openPanel(h); } } });
-  document.querySelectorAll('.nav-item[data-tab], .dept-tab[data-tab]').forEach(function(a){ a.addEventListener('click', function(){ var t=this.getAttribute('data-tab')||''; if(t){ try{ location.hash = '#' + t; }catch(e){} } }); });
-  document.querySelectorAll('.nav-item[data-tab="employees"], .dept-tab[data-tab="employees"]').forEach(function(a){a.addEventListener('click',function(ev){ev.preventDefault();openPanel('employees')})});
-  document.querySelectorAll('.nav-item[data-tab="adv"], .dept-tab[data-tab="adv"]').forEach(function(a){a.addEventListener('click',function(ev){ev.preventDefault();openPanel('adv')})});
-  document.querySelectorAll('.nav-item[data-tab="reports"], .dept-tab[data-tab="reports"]').forEach(function(a){a.addEventListener('click',function(ev){ev.preventDefault();openPanel('reports')})});
-  document.querySelectorAll('.nav-item[data-tab="settings"], .dept-tab[data-tab="settings"]').forEach(function(a){a.addEventListener('click',function(ev){ev.preventDefault();openPanel('settings')})});
-  function renderSettingsPanel(){
-    const cont = document.getElementById('settingsContent');
-    const month = document.getElementById('setMonth')?.value || new Date().toISOString().slice(0,7);
-    if(!cont) return;
-    cont.innerHTML = '<div class="glass-card p-2"><div class="d-flex align-items-center gap-2 mb-2"><span class="badge bg-light">⚙️</span><strong>إعدادات الموظفين</strong></div><div class="tabs d-flex gap-2"><button class="btn btn-outline-primary btn-sm" data-tab="dept">الأقسام</button><button class="btn btn-outline-primary btn-sm" data-tab="emp">الموظفون</button></div><div id="tabBody" class="mt-3"></div></div>';
-    const tabs = cont.querySelectorAll('[data-tab]');
-    let active = cont.__activeTab || 'dept';
-    tabs.forEach(t=>{ t.classList.toggle('active', t.getAttribute('data-tab')===active); });
-    tabs.forEach(t=>{ t.addEventListener('click', function(){ active = this.getAttribute('data-tab')||'dept'; cont.__activeTab = active; tabs.forEach(x=> x.classList.toggle('active', x===this)); renderBody(); }); });
-    function renderBody(){
-      const body = cont.querySelector('#tabBody');
-      body.innerHTML = '<div class="text-muted">جاري التحميل...</div>';
-      if(active==='dept'){
-        Promise.all([
-          fetch('/api/dept-rates', {credentials:'same-origin'}).then(r=>r.json()).catch(()=>null),
-          fetch('/api/employees', {credentials:'same-origin'}).then(r=>r.json()).catch(()=>null)
-        ]).then(function([ratesRes, empRes]){
-          const rates = (ratesRes && ratesRes.rows) || [];
-          const employees = (empRes && empRes.employees) || [];
-          const deptCounts = employees.reduce(function(m,e){ const d=String(e.department||'other').toLowerCase(); m[d]=(m[d]||0)+1; return m; },{});
-          let html = '<div class="d-flex justify-content-between align-items-center mb-2"'+
-                     '<div class="d-flex gap-2"><button class="btn btn-primary btn-sm" id="btnAddDept">➕ إضافة قسم</button></div>'+
-                     '<div class="d-flex gap-2 align-items-center"><span id="deptSaveStatus" class="text-muted small"></span><button class="btn btn-success btn-sm" id="btnSaveDept">💾 حفظ التغييرات</button><button class="btn btn-outline-danger btn-sm" id="btnCleanupDummy">🧹 تنظيف بيانات تجريبية</button></div>'+
-                     '</div>';
-          html += '<div class="table-responsive"><table class="table table-sm table-hover align-middle"><thead class="table-light"><tr><th>القسم</th><th>سعر الساعة</th><th>ساعات شهرية افتراضية</th><th>الموظفون</th><th>✏️</th><th>🗑</th></tr></thead><tbody>';
-          rates.forEach(function(r){ const name=String(r.name||''); const rate=Number(r.hourly_rate||0); const mh=Number(r.monthly_hours||0)||0; const cnt = deptCounts[String(name).toLowerCase()]||0; html += '<tr class="dept-row" data-name="'+name.toLowerCase()+'"><td><span class="dept-name">'+name+'</span> <span class="badge bg-warning text-dark ms-1 d-none" data-dirty-state>غير محفوظ</span></td><td><input inputmode="decimal" lang="en" type="number" step="0.01" class="form-control form-control-sm glow" value="'+toEn(rate,{minimumFractionDigits:2,maximumFractionDigits:2})+'" data-rate="'+name+'"></td><td><input inputmode="decimal" lang="en" type="number" step="0.1" class="form-control form-control-sm glow" value="'+toEn(mh,{minimumFractionDigits:1,maximumFractionDigits:1})+'" data-mh="'+name+'"></td><td>'+toEn(cnt)+'</td><td><button class="btn btn-outline-secondary btn-sm" data-edit="'+name+'">✏️</button></td><td><button class="btn btn-outline-danger btn-sm" data-del="'+name+'">🗑</button></td></tr>'; });
-          html += '</tbody></table></div>';
-          body.innerHTML = html;
-          const cleanupBtn = body.querySelector('#btnCleanupDummy');
-          if(cleanupBtn){ cleanupBtn.addEventListener('click', async function(){ cleanupBtn.disabled = true; try{ const r = await fetch('/api/maintenance/cleanup-dummy', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, credentials:'same-origin' }); const j = await r.json().catch(()=>null); showToast((j&&j.ok)?'✅ تم تنظيف البيانات':'❌ فشل التنظيف', (j&&j.ok)?'success':'error'); renderBody(); } finally { cleanupBtn.disabled = false; } }); }
-          const markDirty = function(name){ const tr = body.querySelector('.dept-row[data-name="'+String(name).toLowerCase()+'"]'); if(tr){ tr.classList.add('table-warning'); const badge = tr.querySelector('[data-dirty-state]'); if(badge){ badge.classList.remove('d-none'); } }
-            const st = body.querySelector('#deptSaveStatus'); if(st){ st.textContent = 'هناك تعديلات غير محفوظة'; } };
-          body.querySelectorAll('[data-rate],[data-mh]').forEach(function(inp){ inp.addEventListener('change', function(){ const n = this.getAttribute('data-rate') || this.getAttribute('data-mh'); const tr = this.closest('tr'); if(tr){ tr.dataset.dirty = '1'; } markDirty(n); }); });
-          body.querySelector('#btnSaveDept').addEventListener('click', async function(){ const btn=this; btn.disabled=true; const st = body.querySelector('#deptSaveStatus'); let ok=0, fail=0; const rows = body.querySelectorAll('.dept-row[data-name][data-dirty="1"]'); for(const tr of rows){ const name = tr.getAttribute('data-name'); const rateEl = tr.querySelector('[data-rate]'); const mhEl = tr.querySelector('[data-mh]'); const rate = toNum(rateEl && rateEl.value || '0'); const mh = toNum(mhEl && mhEl.value || '0'); const apply_future = document.getElementById('setApplyFuture')?.checked ? 'true' : 'false'; try{ const fd=new FormData(); fd.append('name', name); fd.append('hourly_rate', String(rate)); fd.append('monthly_hours', String(mh)); fd.append('month', month); fd.append('apply_future', apply_future); const r = await fetch('/api/dept-rates', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' }); const j=await r.json(); if(j&&j.ok){ ok++; tr.classList.remove('table-warning'); tr.dataset.dirty=''; const badge = tr.querySelector('[data-dirty-state]'); if(badge){ badge.classList.add('d-none'); } } else { fail++; }
-          }catch(e){ fail++; }
-          }
-          btn.disabled=false; if(st){ st.textContent = 'تم حفظ '+ok+' قسم'+(fail? '، فشل '+fail:''); } showToast(ok && !fail ? '✅ تم حفظ تعديلات الأقسام' : (fail? '❌ فشل في حفظ بعض الأقسام':'⚠️ لا توجد تعديلات'));
-          });
-          body.querySelectorAll('[data-edit]').forEach(function(btn){ btn.addEventListener('click', function(){ const name=this.getAttribute('data-edit'); const rateEl = body.querySelector('[data-rate="'+name+'"]'); const mhEl = body.querySelector('[data-mh="'+name+'"]'); const html = '<form id="deptEditForm" class="d-grid gap-2">'+ '<div class="input-group"><span class="input-group-text">القسم</span><input name="dept_name" class="form-control" value="'+name+'"></div>'+ '<div class="input-group"><span class="input-group-text">سعر الساعة</span><input name="hourly_rate" type="number" step="0.01" class="form-control" value="'+(rateEl&&rateEl.value||'0')+'"></div>'+ '<div class="input-group"><span class="input-group-text">ساعات شهرية</span><input name="monthly_hours" type="number" step="0.1" class="form-control" value="'+(mhEl&&mhEl.value||'0')+'"></div>'+ '<div class="form-check"><input class="form-check-input" type="checkbox" id="applyAll"><label class="form-check-label" for="applyAll">تطبيق على جميع موظفي هذا القسم</label></div>'+ '<div class="d-flex gap-2 mt-2"><button class="btn btn-navy" type="submit">💾 حفظ</button><button type="button" class="btn btn-outline-secondary" id="cancelDept">إلغاء</button></div>' + '</form>';
-            openSlideover(html); const f=document.getElementById('deptEditForm'); document.getElementById('cancelDept').onclick=closeSlideover; f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); const nm = String(fd.get('dept_name')||name).toLowerCase(); fd.append('name', nm); fd.append('month', month); const r = await fetch('/api/dept-rates', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' }); const j=await r.json(); if(j&&j.ok){ if(document.getElementById('applyAll').checked){ const rd = await fetch('/api/dept-reassign', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: new URLSearchParams({from_dept: name.toLowerCase(), to_dept: nm}), credentials:'same-origin' }); await rd.json(); } showToast('✅ تم حفظ القسم'); closeSlideover(); renderBody(); } else { showToast('❌ فشل الحفظ: '+(j&&j.error||r.statusText), 'error'); } } } ); });
-          body.querySelectorAll('[data-del]').forEach(function(btn){ btn.addEventListener('click', function(){ const name=this.getAttribute('data-del'); const cnt = deptCounts[String(name).toLowerCase()]||0; const html = '<div class="d-grid gap-2"><div class="alert alert-warning">هل تريد حذف القسم '+name+'؟'+(cnt>0?' يوجد '+cnt+' موظف. يمكنك إعادة تعيينهم.':'')+'</div>' + (cnt>0? '<div class="input-group"><span class="input-group-text">إعادة تعيين إلى</span><input id="reassignDept" class="form-control" placeholder="اسم القسم"></div>' : '') + '<div class="d-flex gap-2"><button class="btn btn-danger" id="confirmDel">حذف</button><button class="btn btn-outline-secondary" id="cancelDel">إلغاء</button></div></div>';
-            openSlideover(html); document.getElementById('cancelDel').onclick=closeSlideover; document.getElementById('confirmDel').onclick=async function(){ try{ if(cnt>0){ const to = document.getElementById('reassignDept').value||''; if(to){ await fetch('/api/dept-reassign', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: new URLSearchParams({from_dept: name.toLowerCase(), to_dept: String(to).toLowerCase()}), credentials:'same-origin' }); } } const fd=new FormData(); fd.append('name', name.toLowerCase()); fd.append('mode', 'delete'); const r = await fetch('/api/dept-rates', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' }); const j=await r.json(); if(j&&j.ok){ showToast('✅ تم الحذف'); closeSlideover(); renderBody(); } else { showToast('❌ فشل الحذف: '+(j&&j.error||r.statusText),'error'); } }catch(e){ showToast('❌ خطأ: '+e.message,'error'); } } } ); });
-          document.getElementById('btnAddDept').addEventListener('click', function(){ const html = '<form id="deptAddForm" class="d-grid gap-2">'+ '<div class="input-group"><span class="input-group-text">القسم</span><input name="name" class="form-control" required></div>'+ '<div class="input-group"><span class="input-group-text">سعر الساعة</span><input name="hourly_rate" inputmode="decimal" lang="en" type="number" step="0.01" class="form-control" required></div>'+ '<div class="input-group"><span class="input-group-text">ساعات شهرية</span><input name="monthly_hours" inputmode="decimal" lang="en" type="number" step="0.1" class="form-control" value="160"></div>'+ '<div class="d-flex gap-2 mt-2"><button class="btn btn-primary" type="submit">➕ إضافة</button><button type="button" class="btn btn-outline-secondary" id="cancelAddDept">إلغاء</button></div>' + '</form>';
-            openSlideover(html); const f=document.getElementById('deptAddForm'); document.getElementById('cancelAddDept').onclick=closeSlideover; f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('month', month); const r = await fetch('/api/dept-rates', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' }); const j=await r.json(); if(j&&j.ok){ showToast('✅ تم إضافة القسم'); closeSlideover(); renderBody(); } else { showToast('❌ فشل الإضافة: '+(j&&j.error||r.statusText), 'error'); } } });
-        }).catch(function(){ body.innerHTML = '<div class="alert alert-danger">فشل تحميل الأقسام</div>'; });
-      } else {
-        Promise.all([
-          fetch('/api/employees', {credentials:'same-origin'}).then(r=>r.json()).catch(()=>null),
-          fetch('/api/dept-rates', {credentials:'same-origin'}).then(r=>r.json()).catch(()=>null)
-        ]).then(function([empRes, ratesRes]){
-          const employees = (empRes && empRes.employees) || [];
-          const rates = (ratesRes && ratesRes.rows || []).map(r=> String(r.name||'').toLowerCase());
-          let html = '<div class="d-flex justify-content-end align-items-center mb-2"><span id="empSaveStatus" class="text-muted small me-2"></span><button class="btn btn-success btn-sm" id="btnSaveEmp">💾 حفظ التغييرات</button></div>';
-          html += '<div class="table-responsive"><table class="table table-sm table-hover align-middle"><thead class="table-light"><tr><th>الاسم</th><th>القسم</th><th>نوع الراتب</th><th>سعر الساعة/راتب شهري</th><th>ساعات شهرية</th><th>ملاحظة</th><th>✏️</th><th>🗑</th></tr></thead><tbody>';
-          employees.forEach(function(e){ const dept = String(e.department||'other').toLowerCase(); const kind = (Number(e.basic||0)>0 ? 'monthly' : 'hourly'); const rowClass = kind==='hourly' ? 'table-info' : 'table-warning'; html += '<tr class="'+rowClass+'" data-id="'+String(e.id)+'">'+ '<td>'+String(e.name||e.full_name||'')+'</td>'+ '<td><select class="form-select form-select-sm glow empDept">'+ rates.map(function(d){ return '<option value="'+d+'"'+(d===dept?' selected':'')+'>'+d+'</option>'; }).join('') + '</select></td>'+ '<td><select class="form-select form-select-sm glow empKind"><option value="hourly"'+(kind==='hourly'?' selected':'')+'>بالساعة</option><option value="monthly"'+(kind==='monthly'?' selected':'')+'>شهري</option></select></td>'+ '<td><input inputmode="decimal" lang="en" type="number" step="0.01" class="form-control form-control-sm glow empRate" value="'+(kind==='hourly'? toEn(0,{minimumFractionDigits:2,maximumFractionDigits:2}) : toEn((e.basic||0),{minimumFractionDigits:2,maximumFractionDigits:2}))+'"></td>'+ '<td><input inputmode="decimal" lang="en" type="number" step="0.1" class="form-control form-control-sm glow empHours" value="'+toEn(0,{minimumFractionDigits:1,maximumFractionDigits:1})+'"></td>'+ '<td><input type="text" class="form-control form-control-sm glow empNote" placeholder="ملاحظة داخلية"></td>'+ '<td><button class="btn btn-outline-secondary btn-sm empEdit">✏️</button></td>'+ '<td><button class="btn btn-outline-danger btn-sm empDel">🗑</button></td>'+ '</tr>'; });
-          html += '</tbody></table></div>';
-          body.innerHTML = html;
-          body.querySelectorAll('.empKind').forEach(function(sel){ sel.addEventListener('change', function(){ const tr=this.closest('tr'); const kind=this.value; const rate=tr.querySelector('.empRate'); const hours=tr.querySelector('.empHours'); tr.dataset.dirty='1'; tr.classList.add('table-warning'); const st = body.querySelector('#empSaveStatus'); if(st){ st.textContent='هناك تعديلات غير محفوظة'; } if(kind==='monthly'){ hours.disabled=true; } else { hours.disabled=false; } }); });
-          body.querySelectorAll('.empDept, .empRate, .empHours, .empNote').forEach(function(inp){ inp.addEventListener('change', function(){ const tr=this.closest('tr'); tr.dataset.dirty='1'; tr.classList.add('table-warning'); const st = body.querySelector('#empSaveStatus'); if(st){ st.textContent='هناك تعديلات غير محفوظة'; } }); });
-          body.querySelector('#btnSaveEmp').addEventListener('click', async function(){ const btn=this; btn.disabled=true; const st = body.querySelector('#empSaveStatus'); let ok=0, fail=0; const rows = body.querySelectorAll('tr[data-id][data-dirty="1"]'); for(const tr of rows){ const id=tr.getAttribute('data-id'); const dept=tr.querySelector('.empDept').value; const kind=tr.querySelector('.empKind').value; const rate=toNum(tr.querySelector('.empRate').value||'0'); const hours=toNum(tr.querySelector('.empHours').value||'0'); const noteVal = tr.querySelector('.empNote').value||''; try{ if(kind==='monthly'){ const fd = new FormData(); fd.append('base_salary', String(rate)); await fetch('/api/employees/'+id, { method:'PUT', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' }); } else { const fd=new FormData(); fd.append('emp_id', String(id)); fd.append('work_type','hourly'); fd.append('hourly_rate_employee', String(rate)); fd.append('monthly_hours', String(hours)); await fetch('/api/employee/settings', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' }); } if(dept){ const fd2=new FormData(); fd2.append('department', dept); await fetch('/api/employees/'+id, { method:'PUT', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd2, credentials:'same-origin' }); } if(noteVal){ const fd3=new FormData(); fd3.append('emp_id', String(id)); fd3.append('note', noteVal); await fetch('/api/employee/note', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd3, credentials:'same-origin' }); } ok++; tr.classList.remove('table-warning'); tr.dataset.dirty=''; }catch(e){ fail++; }
-          }
-          btn.disabled=false; if(st){ st.textContent = 'تم حفظ تعديلات الموظفين ('+ok+')'+(fail? '، فشل '+fail:''); } showToast(ok && !fail ? '✅ تم حفظ تعديلات الموظفين' : (fail? '❌ فشل في حفظ بعض الموظفين':'⚠️ لا توجد تعديلات'));
-          });
-          body.querySelectorAll('.empEdit').forEach(function(btn){ btn.addEventListener('click', function(){ const tr=this.closest('tr'); const id=tr.getAttribute('data-id'); const html = '<form id="empEditForm" class="d-grid gap-2">'+ '<div class="input-group"><span class="input-group-text">النوع</span><select name="salary_kind" class="form-select"><option value="hourly">بالساعة</option><option value="monthly">شهري</option></select></div>'+ '<div class="input-group"><span class="input-group-text">سعر/راتب</span><input name="value" inputmode="decimal" lang="en" type="number" step="0.01" class="form-control"></div>'+ '<div class="input-group"><span class="input-group-text">الساعات</span><input name="hours" inputmode="decimal" lang="en" type="number" step="0.1" class="form-control"></div>'+ '<div class="d-flex gap-2 mt-2"><button class="btn btn-navy" type="submit">💾 حفظ</button><button type="button" class="btn btn-outline-secondary" id="cancelEmpEdit">إلغاء</button></div>' + '</form>';
-            openSlideover(html); const f=document.getElementById('empEditForm'); document.getElementById('cancelEmpEdit').onclick=closeSlideover; f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); const kind=String(fd.get('salary_kind')||'hourly'); const val=toNum(fd.get('value')||'0'); const hrs=toNum(fd.get('hours')||'0'); try{ if(kind==='monthly'){ const f1=new FormData(); f1.append('base_salary', String(val)); await fetch('/api/employees/'+id, { method:'PUT', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: f1, credentials:'same-origin' }); } else { const f2=new FormData(); f2.append('emp_id', String(id)); f2.append('work_type','hourly'); f2.append('hourly_rate_employee', String(val)); f2.append('monthly_hours', String(hrs)); await fetch('/api/employee/settings', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: f2, credentials:'same-origin' }); } showToast('✅ تم الحفظ'); closeSlideover(); }catch(e){ showToast('❌ خطأ: '+e.message,'error'); } } }); });
-          body.querySelectorAll('.empDel').forEach(function(btn){ btn.addEventListener('click', async function(){ const tr=this.closest('tr'); const id=tr.getAttribute('data-id'); if(!confirm('حذف هذا الموظف؟')) return; try{ const r=await fetch('/api/employees/'+id, { method:'DELETE', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, credentials:'same-origin' }); const j=await r.json(); if(j&&j.ok){ tr.style.opacity='.5'; setTimeout(()=>{ tr.remove(); }, 300); showToast('✅ تم الحذف'); } else { showToast('❌ فشل الحذف','error'); } }catch(e){ showToast('❌ خطأ: '+e.message,'error'); } }); });
-          body.querySelectorAll('.empNote').forEach(function(inp){ inp.addEventListener('change', async function(){ const tr=this.closest('tr'); const id=tr.getAttribute('data-id'); try{ const fd=new FormData(); fd.append('emp_id', String(id)); fd.append('note', this.value||''); const r=await fetch('/api/employee/note', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body: fd, credentials:'same-origin' }); await r.json(); showToast('✅ تم حفظ الملاحظة'); }catch(e){ showToast('❌ خطأ: '+e.message,'error'); } }); });
-        }).catch(function(){ body.innerHTML = '<div class="alert alert-danger">فشل تحميل الموظفين</div>'; });
-      }
-    }
-    renderBody();
-  }
-  document.getElementById('btnReloadSettings') && document.getElementById('btnReloadSettings').addEventListener('click', function(){ renderSettingsPanel(); });
-  document.getElementById('setMonth') && document.getElementById('setMonth').addEventListener('change', function(){ renderSettingsPanel(); });
-  document.getElementById('advReload')&&document.getElementById('advReload').addEventListener('click',function(){loadAdvList()});
-  document.getElementById('advEmpFilter')&&document.getElementById('advEmpFilter').addEventListener('change',function(){loadAdvList()});
-  document.getElementById('advPageSizeInline')&&document.getElementById('advPageSizeInline').addEventListener('change',function(){ADV_PAGE_INLINE=1;renderAdvPage()});
-  document.getElementById('advPrevInline')&&document.getElementById('advPrevInline').addEventListener('click',function(){if(ADV_PAGE_INLINE>1){ADV_PAGE_INLINE-=1;renderAdvPage()}});
-  document.getElementById('advNextInline')&&document.getElementById('advNextInline').addEventListener('click',function(){var size=parseInt(document.getElementById('advPageSizeInline').value||'10');var pages=Math.max(1,Math.ceil(ADV_ROWS_INLINE.length/size));if(ADV_PAGE_INLINE<pages){ADV_PAGE_INLINE+=1;renderAdvPage()}});
-  document.getElementById('advExportInline')&&document.getElementById('advExportInline').addEventListener('click',function(){var rows=ADV_ROWS_INLINE;var head=['#','الاسم','الفرع','الممنوح','المدفوع','المتبقي','آخر تاريخ'];var data=[head].concat(rows.map(function(x,i){return [String(i+1),x.employee_name||'',x.branch||'',Number(x.granted||0).toFixed(2),Number(x.paid||0).toFixed(2),Number(x.remaining||0).toFixed(2),x.last_date||'-']}));var csv=data.map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"'}).join(',')}).join('\n');var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='advances.csv';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},0)});
-  document.getElementById('advBodyInline')&&document.getElementById('advBodyInline').addEventListener('click',function(ev){var it=ev.target.closest('.dropdown-item');if(!it)return;var act=it.getAttribute('data-act')||'';var id=it.getAttribute('data-emp')||'';if(act==='repay'){var amount=prompt('قيمة السداد');if(!amount)return;var fd=new FormData();fd.append('employee_id',String(id));fd.append('amount',String(amount));fd.append('method','cash');fetch('/api/advances/pay',{method:'POST',headers:{'X-CSRFToken':CSRF,'Accept':'application/json'},body:fd,credentials:'same-origin'}).then(async function(r){var ct=(r.headers.get('content-type')||'').toLowerCase();var isJson=ct.indexOf('application/json')!==-1;var j=isJson?await r.json():null;if(r.ok&&j&&j.ok){showToast('✅ تم السداد');}else{var err=(j&&j.error)||(isJson?'فشل السداد':await r.text());showToast('❌ '+(err||'فشل السداد'),'error');}loadAdvList()}).catch(function(e){showToast('❌ '+e.message,'error')})}else if(act==='edit'){var remain=it.getAttribute('data-remain')||'0';var amount=prompt('قيمة السلفة',remain);if(!amount)return;var fd=new FormData();fd.append('employee_id',String(id));fd.append('amount',String(amount));fd.append('method','cash');fetch('/api/advances',{method:'POST',headers:{'X-CSRFToken':CSRF,'Accept':'application/json'},body:fd,credentials:'same-origin'}).then(async function(r){var ct=(r.headers.get('content-type')||'').toLowerCase();var isJson=ct.indexOf('application/json')!==-1;var j=isJson?await r.json():null;if(r.ok&&j&&j.ok){showToast('✅ تم تسجيل السلفة');}else{var err=(j&&j.error)||(isJson?'فشل تسجيل السلفة':await r.text());showToast('❌ '+(err||'فشل تسجيل السلفة'),'error');}loadAdvList()}).catch(function(e){showToast('❌ '+e.message,'error')})}});
-  document.getElementById('advSearchInline')&&document.getElementById('advSearchInline').addEventListener('input',function(){var q=(this.value||'').trim().toLowerCase();document.querySelectorAll('#advBodyInline tr').forEach(function(tr){var nm=(tr.getAttribute('data-name')||'').toLowerCase();tr.style.display=(q&&nm.indexOf(q)===-1)?'none':''})});
-  async function loadLedgerInline(){var emp=document.getElementById('ledgerEmpInline').value||'';if(!emp){document.getElementById('ledgerBodyInline').innerHTML='';document.getElementById('ledgerSumDebit').textContent='—';document.getElementById('ledgerSumCredit').textContent='—';document.getElementById('ledgerSumBalance').textContent='—';document.getElementById('ledgerMonthsInline').innerHTML='';return;}var u=new URL('/api/employee-ledger', location.origin);u.searchParams.set('emp_id', emp);var r=await fetch(u,{headers:{'Accept':'application/json'},credentials:'same-origin'});var j=await r.json().catch(function(){return null});if(!r.ok||!j||!j.ok){showToast('❌ فشل تحميل القيود','error');return;}LEDGER_ROWS=(j.rows||[]);var tbody=document.getElementById('ledgerBodyInline');tbody.innerHTML='';var sumD=0,sumC=0,balance=0;LEDGER_ROWS.forEach(function(x){var d=Number(x.debit||0),c=Number(x.credit||0);sumD+=d;sumC+=c;balance+=d-c;var tr=document.createElement('tr');tr.innerHTML='<td>'+x.date+'</td><td>'+x.entry+'</td><td>'+x.desc+'</td><td class="text-end">'+d.toFixed(2)+'</td><td class="text-end">'+c.toFixed(2)+'</td><td class="text-end '+(balance>=0?'text-success':'text-danger')+'">'+balance.toFixed(2)+'</td>';tbody.appendChild(tr);});document.getElementById('ledgerSumDebit').textContent=sumD.toFixed(2);document.getElementById('ledgerSumCredit').textContent=sumC.toFixed(2);document.getElementById('ledgerSumBalance').textContent=balance.toFixed(2);renderLedgerMonths(emp);}
-  function parseMonthFromRow(x){var m=null;try{var m1=(x.entry||'').match(/JE\-SAL(?:ACC)?\-(\d{4})(\d{2})/);if(m1){m=m1[1]+'-'+m1[2];}else{var m2=(x.desc||'').match(/ACCRUAL\s+\d+\s+(\d{4})\-(\d{1,2})/);if(m2){var mm=m2[2].padStart?m2[2].padStart(2,'0'):('0'+m2[2]).slice(-2);m=m2[1]+'-'+mm;}else{var m3=(x.desc||'').match(/PAY\s+SAL\s+(\d{4})\-(\d{1,2})\s+EMP\s+(\d+)/);if(m3){var mm=m3[2].padStart?m3[2].padStart(2,'0'):('0'+m3[2]).slice(-2);m=m3[1]+'-'+mm;}}} }catch(e){} return m;}
-  function renderLedgerMonths(empId){
-    var map = {};
-    LEDGER_ROWS.forEach(function(x){
-      var mo = parseMonthFromRow(x);
-      if(mo){
-        map[mo] = map[mo] || { month: mo, paid: false };
-        var payMatch = (x.desc||'').match(/PAY\s+SAL\s+(\d{4})\-(\d{1,2})\s+EMP\s+(\d+)/);
-        if(payMatch){
-          var mm = payMatch[1]+'-'+(payMatch[2].padStart?payMatch[2].padStart(2,'0'):('0'+payMatch[2]).slice(-2));
-          if(mm === map[mo].month){ map[mo].paid = true; }
-        }
-      }
-    });
-    var months = Object.keys(map).sort();
-    var cont = document.getElementById('ledgerMonthsInline');
-    if(!cont) return;
-    cont.innerHTML = '';
-    months.forEach(function(mo){
-      var badge = document.createElement('span');
-      badge.className = 'badge '+(map[mo].paid ? 'bg-success' : 'bg-danger');
-      badge.textContent = mo+' '+(map[mo].paid ? 'مدفوع' : 'غير مدفوع');
-      badge.setAttribute('data-month', mo);
-      badge.style.cursor = 'pointer';
-      badge.addEventListener('click', function(){ filterLedgerByMonth(mo); });
-      cont.appendChild(badge);
-    });
-  }
-  function filterLedgerByMonth(mo){
-    var tbody = document.getElementById('ledgerBodyInline');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-    var sumD = 0, sumC = 0, balance = 0;
-    LEDGER_ROWS.forEach(function(x){
-      var xm = parseMonthFromRow(x) || String(x.date||'').slice(0,7);
-      if(xm !== mo) return;
-      var d = Number(x.debit||0), c = Number(x.credit||0);
-      sumD += d; sumC += c; balance += d - c;
-      var tr = document.createElement('tr');
-      tr.innerHTML = '<td>'+x.date+'</td>'+
-                     '<td>'+x.entry+'</td>'+
-                     '<td>'+x.desc+'</td>'+
-                     '<td class="text-end">'+d.toFixed(2)+'</td>'+
-                     '<td class="text-end">'+c.toFixed(2)+'</td>'+
-                     '<td class="text-end '+(balance>=0?'text-success':'text-danger')+'">'+balance.toFixed(2)+'</td>';
-      tbody.appendChild(tr);
-    });
-    document.getElementById('ledgerSumDebit').textContent = sumD.toFixed(2);
-    document.getElementById('ledgerSumCredit').textContent = sumC.toFixed(2);
-    document.getElementById('ledgerSumBalance').textContent = balance.toFixed(2);
-  }
-  document.getElementById('ledgerReloadInline') && document.getElementById('ledgerReloadInline').addEventListener('click', function(){
-    loadLedgerInline();
-  });
-  document.getElementById('ledgerEmpInline') && document.getElementById('ledgerEmpInline').addEventListener('change', function(){
-    loadLedgerInline();
-  });
-  document.getElementById('ledgerExportInline') && document.getElementById('ledgerExportInline').addEventListener('click', function(){
-    var head = ['التاريخ','رقم القيد','الوصف','مدين','دائن','الرصيد'];
-    var rows = [].slice.call(document.querySelectorAll('#ledgerBodyInline tr')).map(function(tr){
-      return [].slice.call(tr.children).map(function(td){ return td.textContent.trim(); });
-    });
-    var data = [head].concat(rows);
-    var csv = data.map(function(r){
-      return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(',');
-    }).join('\n');
-    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'employee_ledger.csv';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 0);
-  });
-  document.querySelectorAll('.nav-item[data-tab="ledger"], .dept-tab[data-tab="ledger"]').forEach(function(a){
-    a.addEventListener('click', function(ev){ ev.preventDefault(); openPanel('ledger'); });
-  });
-  async function loadMonthlyInline(){
-    var m = document.getElementById('repMonthInline').value || '';
-    var emp = document.getElementById('repEmpInline').value || '';
-    var u = new URL('/api/reports/monthly', location.origin);
-    if(m) u.searchParams.set('month', m);
-    if(emp) u.searchParams.set('emp', emp);
-    var kpiEls = {
-      payroll: document.getElementById('repKpiPayroll'),
-      adv: document.getElementById('repKpiAdv'),
-      ded: document.getElementById('repKpiDed'),
-      entries: document.getElementById('repKpiEntries')
-    };
-    var container = document.getElementById('panel-reports');
-    var spinner = document.createElement('span');
-    spinner.className = 'report-spinner';
-    var addedSpinner = false;
-    var timer = setTimeout(function(){ if(container){ container.querySelector('.fw-semibold')?.appendChild(spinner); addedSpinner=true; } }, 1000);
-    try{
-      var r = await fetch(u);
-      var j = await r.json();
-      if(!j || !j.ok) return;
-      kpiEls.payroll.textContent = '﷼'+Number((j.kpis||{}).payroll_total||0).toFixed(2);
-      kpiEls.adv.textContent = '﷼'+Number((j.kpis||{}).advances_total||0).toFixed(2);
-      kpiEls.ded.textContent = '﷼'+Number((j.kpis||{}).deductions_total||0).toFixed(2);
-      kpiEls.entries.textContent = Number((j.kpis||{}).entries_count||0);
-      Object.values(kpiEls).forEach(function(el){ el.classList.add('kpi-updated'); setTimeout(function(){ el.classList.remove('kpi-updated'); }, 700); });
-      var tbody = document.getElementById('repBodyInline');
-      tbody.innerHTML = '';
-      var i = 0;
-      (j.rows||[]).forEach(function(x){
-        var statusCls = (x.status==='paid')? 'status-badge status-paid' : (x.status==='partial'? 'status-badge status-partial' : 'status-badge status-due');
-        var tr = document.createElement('tr');
-        tr.innerHTML = '<td>'+String(++i)+'</td>'+
-                       '<td>'+(x.name||'')+'</td>'+
-                       '<td>'+(x.dept||'')+'</td>'+
-                       '<td class="text-end">'+Number(x.basic||0).toFixed(2)+'</td>'+
-                       '<td class="text-end">'+Number(x.ot||0).toFixed(2)+'</td>'+
-                       '<td class="text-end">'+Number(x.bonus||0).toFixed(2)+'</td>'+
-                       '<td class="text-end">'+Number(x.total||0).toFixed(2)+'</td>'+
-                       '<td class="text-end">'+Number(x.advances||0).toFixed(2)+'</td>'+
-                       '<td class="text-end">'+Number(x.deductions||0).toFixed(2)+'</td>'+
-                       '<td class="text-end">'+Number(x.net||0).toFixed(2)+'</td>'+
-                       '<td><span class="'+statusCls+'">'+(x.status||'')+'</span></td>'+
-                       '<td>'+(x.month||m||'')+'</td>';
-        tbody.appendChild(tr);
+  (function(){
+    const sel = document.getElementById('empSelect');
+    function apply(){
+      const id = sel?.value||'';
+      const rows = Array.from(document.querySelectorAll('#panel-employees tbody tr[data-row="emp"]'));
+      rows.forEach(tr=>{
+        const tid = tr.getAttribute('data-id')||'';
+        tr.style.display = (!id || tid===id) ? '' : 'none';
       });
-    } finally {
-      clearTimeout(timer);
-      if(addedSpinner){ try{ spinner.remove(); }catch(e){} }
     }
-  }
-  if(document.getElementById('repReloadInline')){ document.getElementById('repReloadInline').style.display='none'; }
-  document.getElementById('repMonthInline') && document.getElementById('repMonthInline').addEventListener('change', function(){
-    loadMonthlyInline();
-  });
-  document.getElementById('repEmpInline') && document.getElementById('repEmpInline').addEventListener('change', function(){
-    loadMonthlyInline();
-  });
-  document.getElementById('repExportInline') && document.getElementById('repExportInline').addEventListener('click', function(){
-    var head = ['#','الموظف','القسم','الأساسي','OT','Bonus','Total','السلف','الخصومات','الصافي','الحالة','الشهر'];
-    var rows = [].slice.call(document.querySelectorAll('#repBodyInline tr')).map(function(tr){
-      return [].slice.call(tr.children).map(function(td){ return td.textContent.trim(); });
-    });
-    var data = [head].concat(rows);
-    var csv = data.map(function(r){
-      return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(',');
-    }).join('\n');
-    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'monthly_reports.csv';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 0);
-  });
-  document.getElementById('prevSearchInline')&&document.getElementById('prevSearchInline').addEventListener('input',function(){var q=(this.value||'').trim().toLowerCase();document.querySelectorAll('#prevBodyInline tr').forEach(function(tr){var nm=(tr.getAttribute('data-name')||'').toLowerCase();tr.style.display=((q&&nm.indexOf(q)===-1)?'none':'');});});
-  document.getElementById('prevExportInline')&&document.getElementById('prevExportInline').addEventListener('click',function(){var head=['السنة','الشهر','الموظف','الإجمالي','الحالة'];var rows=[].slice.call(document.querySelectorAll('#prevBodyInline tr')).map(function(tr){return [].slice.call(tr.children).map(function(td){return td.textContent.trim()})});var data=[head].concat(rows);var csv=data.map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"'}).join(',')}).join('\n');var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='previous_salaries.csv';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},0)});
-  ;(function(){var anyActive=document.querySelector('.panel.active');if(!anyActive){openPanel('employees');}})();
-  async function loadPrevInline(){var m=document.getElementById('prevMonthInline').value||'';var emp=document.getElementById('prevEmpInline').value||'';var st=document.getElementById('prevStatusInline').value||'';var u=new URL('/api/salaries/statements', location.origin);if(m)u.searchParams.set('month', m);if(emp)u.searchParams.set('emp_id', emp);if(st)u.searchParams.set('status', st);var r=await fetch(u);var j=await r.json();if(!j||!j.ok)return;var tbody=document.getElementById('prevBodyInline');tbody.innerHTML='';(j.rows||[]).forEach(function(x){var tr=document.createElement('tr');tr.setAttribute('data-name',x.employee_name||'');tr.innerHTML='<td>'+String(j.year)+'</td><td>'+String(j.month).padStart(2,'0')+'</td><td>'+(x.employee_name||'')+'</td><td class="text-end">'+Number(x.prev||0).toFixed(2)+'</td><td class="text-end">'+Number(x.total||0).toFixed(2)+'</td><td class="text-end">'+Number(x.paid||0).toFixed(2)+'</td><td class="text-end">'+Number(x.remaining||0).toFixed(2)+'</td><td>'+(x.status||'')+'</td>';tbody.appendChild(tr);});document.getElementById('prevSumPrev').textContent=Number((j.totals||{}).prev||0).toFixed(2);document.getElementById('prevSumTotal').textContent=Number((j.totals||{}).total||0).toFixed(2);document.getElementById('prevSumPaid').textContent=Number((j.totals||{}).paid||0).toFixed(2);document.getElementById('prevSumRemaining').textContent=Number((j.totals||{}).remaining||0).toFixed(2);} 
-  document.getElementById('prevReloadInline')&&document.getElementById('prevReloadInline').addEventListener('click',function(){loadPrevInline()});
-  document.getElementById('prevMonthInline')&&document.getElementById('prevMonthInline').addEventListener('change',function(){loadPrevInline()});
-  document.getElementById('prevEmpInline')&&document.getElementById('prevEmpInline').addEventListener('change',function(){loadPrevInline()});
-  document.getElementById('prevStatusInline')&&document.getElementById('prevStatusInline').addEventListener('change',function(){loadPrevInline()});
-  document.querySelectorAll('.nav-item[data-tab="prev"], .dept-tab[data-tab="prev"]').forEach(function(a){a.addEventListener('click',function(ev){ev.preventDefault();openPanel('prev');loadPrevInline();})});
-  (function(){ var el=document.getElementById('empSelect'); if(!el) return; el.addEventListener('change', function(){
-    const id = this.value || '';
-    if(!id){ document.querySelectorAll('tbody tr[data-row="emp"]').forEach(tr=> tr.style.display=''); return; }
-    const tr = document.querySelector(`#panel-employees tbody tr[data-row="emp"][data-id="${id}"]`);
-    if(tr){ try{ tr.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){} document.querySelectorAll('tbody tr[data-row="emp"]').forEach(r=> r.style.display=''); tr.classList.add('table-warning'); setTimeout(()=> tr.classList.remove('table-warning'), 1200); }
-  }); })();
+    sel?.addEventListener('change', apply);
+  })();
+  (function(){
+    const sortSel = document.getElementById('empSort');
+    const pageSel = document.getElementById('empPageSize');
+    function sortRows(){
+      const key = (sortSel?.value||'name');
+      const tbody = document.querySelector('#panel-employees tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr[data-row="emp"]'));
+      rows.sort((a,b)=>{
+        function val(tr){
+          if(key==='name') return (tr.children[1]?.textContent||'').toLowerCase();
+          if(key==='status') return (tr.children[7]?.textContent||'').toLowerCase();
+          if(key==='basic') return parseFloat(tr.children[4]?.textContent||'0');
+          if(key==='advance') return parseFloat(tr.children[5]?.textContent||'0');
+          if(key==='last_salary') return parseFloat(tr.children[6]?.textContent||'0');
+          return (tr.children[1]?.textContent||'').toLowerCase();
+        }
+        const va = val(a), vb = val(b);
+        if(typeof va==='number' && typeof vb==='number') return vb - va;
+        return String(va).localeCompare(String(vb));
+      });
+      rows.forEach((tr,i)=>{ tr.querySelector('td:first-child').textContent = String(i+1); tbody.appendChild(tr); });
+      paginate();
+    }
+    function paginate(){
+      const size = parseInt(pageSel?.value||'20');
+      const rows = Array.from(document.querySelectorAll('#panel-employees tbody tr[data-row="emp"]')).filter(tr=> tr.style.display !== 'none');
+      rows.forEach((tr,i)=>{ tr.style.display = (i < size) ? (tr.style.display||'') : 'none'; });
+    }
+    sortSel?.addEventListener('change', sortRows);
+    pageSel?.addEventListener('change', paginate);
+    sortRows();
+  })();
   const slh=document.getElementById('slHeader'); if(slh){ document.addEventListener('mousemove',e=>{const r=slh.getBoundingClientRect();const dx=(e.clientX-(r.left+r.width/2))/r.width;const dy=(e.clientY-(r.top+r.height/2))/r.height; if(window.gsap){ gsap.to(slh,{duration:.2,transform:'translate3d('+dx*6+'px,'+dy*6+'px,0) rotate('+dx*2+'deg)'}); } else { slh.style.transition='transform .2s ease'; slh.style.transform='translate3d('+dx*6+'px,'+dy*6+'px,0) rotate('+dx*2+'deg)'; } }) }
-  // تم حذف الكود المكرر - يتم التعامل مع الأحداث في القسم السابق
   
+  document.querySelectorAll('tbody tr[data-row="emp"] .ops-menu .it').forEach(it=>{
+    it.addEventListener('click', async function(ev){ ev.stopPropagation(); const tr=this.closest('tr'); const id=parseInt(tr.getAttribute('data-id')); const op=this.getAttribute('data-op'); if(op==='view'){ const cells=[...tr.children].map(td=>td.textContent); openSlideover('<div>'+cells.join(' | ')+'</div>'); }
+    else if(op==='edit'){ const name=tr.children[1].textContent.trim(); const pos=tr.children[2].textContent.trim(); const br=tr.children[3].textContent.trim(); const base=tr.children[4].textContent.trim(); const html=`<form id='empForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الاسم</span><input name='full_name' class='form-control' value='${name}' required></div>
+        <div class='input-group'><span class='input-group-text'>القسم</span><input name='department' class='form-control' value='${(tr.dataset.dept||'')}'></div>
+        <div class='input-group'><span class='input-group-text'>الوظيفة</span><input name='position' class='form-control' value='${pos}'></div>
+        <div class='input-group'><span class='input-group-text'>الفرع</span><input name='branch_code' class='form-control' value='${br}'></div>
+        <div class='input-group'><span class='input-group-text'>راتب أساسي</span><input name='base_salary' type='number' step='0.01' class='form-control' value='${base}'></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelEdit'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelEdit').onclick=closeSlideover; const f=document.getElementById('empForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('id', String(id)); const r=await fetch('/api/employees/'+id, { method:'PUT', body:fd }); const j=await r.json(); if(j&&j.ok){ tr.children[1].textContent=fd.get('full_name'); tr.children[2].textContent=fd.get('position'); tr.children[3].textContent=fd.get('branch_code'); tr.children[4].textContent=parseFloat(fd.get('base_salary')||0).toFixed(2); tr.dataset.dept=(fd.get('department')||'').toLowerCase(); showToast('تم حفظ تعديل الموظف'); closeSlideover(); } else { showToast('فشل حفظ التعديل'); } } }
+    else if(op==='delete'){ const confirmHtml=`<div class='d-grid gap-2'><div>هل تريد حذف الموظف؟</div><div class='d-flex gap-2'><button id='doDel' class='btn btn-danger'>نعم، حذف</button><button class='btn btn-outline-secondary' id='noDel'>إلغاء</button></div></div>`; openSlideover(confirmHtml); document.getElementById('noDel').onclick=closeSlideover; document.getElementById('doDel').onclick=async function(){ const r=await fetch('/api/employees/'+id, { method:'DELETE' }); const j=await r.json(); if(j&&j.ok){ tr.remove(); showToast('تم حذف الموظف'); closeSlideover(); } else { showToast('تعذر الحذف'); } } }
+    else if(op==='advance'){ const html=`<form id='advForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>المبلغ</span><input name='amount' type='number' step='0.01' class='form-control' required></div>
+        <div class='input-group'><span class='input-group-text'>التاريخ</span><input name='date' type='date' class='form-control' value='${new Date().toISOString().slice(0,10)}'></div>
+        <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelAdv'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelAdv').onclick=closeSlideover; const f=document.getElementById('advForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', String(id)); const r=await fetch('/api/advances', { method:'POST', body:fd }); const j=await r.json(); if(j&&j.ok){ showToast('تم منح السلفة'); closeSlideover(); } else { showToast('فشل منح السلفة'); } } }
+    else if(op==='deduct'){ const html=`<form id='dedForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الشهر</span><input name='month' type='month' class='form-control' value='${new Date().toISOString().slice(0,7)}'></div>
+        <div class='input-group'><span class='input-group-text'>قيمة الخصم</span><input name='deduction_amount' type='number' step='0.01' class='form-control' required></div>
+        <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelDed'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelDed').onclick=closeSlideover; const f=document.getElementById('dedForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); const month=String(fd.get('month')||''); const amt=parseFloat(String(fd.get('deduction_amount')||'0')); const y=parseInt(month.split('-')[0]||'0'); const m=parseInt(month.split('-')[1]||'0'); const api = new URL('/api/salaries/upsert', location.origin); api.searchParams.set('employee_id', String(id)); api.searchParams.set('month', month); const body=new FormData(); body.append('employee_id', String(id)); body.append('month', month); body.append('deduction_amount', String(amt||0)); body.append('absence_hours', '0'); body.append('overtime_hours', '0'); body.append('bonus_amount', '0'); body.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/api/salaries/upsert', { method:'POST', body }); const j=await r.json(); showToast(j&&j.ok?'تم إضافة الخصم':'فشل إضافة الخصم'); if(j&&j.ok){ closeSlideover(); } }
+    }
+    else if(op==='pay'){ const html=`<form id='payForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الشهر</span><input name='month' type='month' class='form-control' value='${new Date().toISOString().slice(0,7)}'></div>
+        <div class='input-group'><span class='input-group-text'>المبلغ المدفوع</span><input name='paid_amount' type='number' step='0.01' class='form-control' required></div>
+        <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='payment_method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelPay'>إلغاء</button></div>
+          </form>`; openSlideover(html); document.getElementById('cancelPay').onclick=closeSlideover; const f=document.getElementById('payForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', String(id)); fd.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/salaries/pay', { method:'POST', body:fd }); const ok = r.status===200; if(ok){ showToast('تم تسجيل دفع الراتب'); closeSlideover(); } else { showToast('فشل دفع الراتب'); } } }
+    else if(op==='accrual'){ const html=`<form id='accForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الشهر</span><input name='month' type='month' class='form-control' value='${new Date().toISOString().slice(0,7)}'></div>
+        <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>إنشاء المستحق</button><button type='button' class='btn btn-outline-secondary' id='cancelAcc'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelAcc').onclick=closeSlideover; const f=document.getElementById('accForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', String(id)); fd.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/salaries/accrual', { method:'POST', body:fd }); const j=await r.json(); showToast(j&&j.ok?'تم إنشاء المستحق':'فشل إنشاء المستحق'); if(j&&j.ok){ closeSlideover(); } }
+    }
+    else if(op==='journal'){ const url=new URL('/api/employee-ledger', location.origin); url.searchParams.set('emp_id', String(id)); const r=await fetch(url); const j=await r.json(); if(j&&j.ok){ const rows=(j.rows||[]).map(x=>`<tr><td>${x.date}</td><td>${x.entry}</td><td>${x.desc}</td><td class='text-end'>${Number(x.debit||0).toFixed(2)}</td><td class='text-end'>${Number(x.credit||0).toFixed(2)}</td></tr>`).join(''); openSlideover(`<div class='table-responsive'><table class='table table-sm'><thead><tr><th>التاريخ</th><th>رقم القيد</th><th>الوصف</th><th>مدين</th><th>دائن</th></tr></thead><tbody>${rows}</tbody></table></div>`); } else { showToast('تعذر تحميل القيود'); } }
+  }); });
   function openAddEmp(){ const html=`<form id='addEmpForm' class='d-grid gap-2'>
       <div class='input-group'><span class='input-group-text'>الاسم</span><input name='full_name' class='form-control' required></div>
       <div class='input-group'><span class='input-group-text'>الرقم الوطني</span><input name='national_id' class='form-control' required></div>
@@ -1285,346 +382,49 @@
       <div class='input-group'><span class='input-group-text'>تاريخ التعيين</span><input name='hire_date' type='date' class='form-control' value='${new Date().toISOString().slice(0,10)}'></div>
       <div class='input-group'><span class='input-group-text'>الفرع</span><input name='branch_code' class='form-control'></div>
       <div class='input-group'><span class='input-group-text'>راتب أساسي</span><input name='base_salary' type='number' step='0.01' class='form-control' value='0'></div>
-      <div class='d-flex gap-2 mt-2'><button class='btn btn-navy ripple' type='submit'>💾 حفظ</button><a class='btn btn-outline-primary' href='/employees/create'>فتح صفحة الإنشاء</a><button type='button' class='btn btn-outline-secondary' id='cancelAdd'>إلغاء</button></div>
-    </form>`; openSlideover(html); document.getElementById('cancelAdd').onclick=closeSlideover; const f=document.getElementById('addEmpForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); const btn = f.querySelector('button[type="submit"]'); if(!CSRF){ showToast('⚠️ المعرّف الأمني غير متوفر، يرجى إعادة تحميل الصفحة', 'error'); return; } btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ...'; try { const r=await fetch('/api/employees', { method:'POST', headers:{'X-CSRFToken': CSRF, 'Accept':'application/json'}, body:fd, credentials:'same-origin' }); const ct=(r.headers.get('content-type')||'').toLowerCase(); const isJson=ct.indexOf('application/json')!==-1; const j = isJson ? await r.json() : null; if(r.ok && j && j.ok){ const tbody=document.querySelector('#panel-employees tbody'); const idx=tbody.children.length+1; const d=(fd.get('department')||'').toLowerCase(); const tr=document.createElement('tr'); tr.setAttribute('data-row','emp'); tr.setAttribute('data-id', String(j.id)); tr.setAttribute('data-dept', d); tr.innerHTML=`<td>${idx}</td><td>${fd.get('full_name')||''}</td><td>${fd.get('position')||''}</td><td>${fd.get('branch_code')||''}</td><td>${parseFloat(fd.get('base_salary')||0).toFixed(2)}</td><td>${(0).toFixed(2)}</td><td>${(0).toFixed(2)}</td><td class=\"status-column\">active</td><td><button class='btn btn-sm btn-outline-primary ops-btn'>⋮</button><div class='ops-menu'><div class='it' data-op='edit'>تعديل</div><div class='it' data-op='advance'>منح سلفة</div><div class='it' data-op='pay'>دفع راتب</div><div class='it' data-op='settings'>إعدادات</div><div class='it' data-op='journal'>معاينة قيد</div><div class='it text-danger' data-op='delete'>حذف</div></div></td>`; tbody.appendChild(tr); showToast('✅ تم إضافة الموظف بنجاح'); closeSlideover(); } else { const err = (j && j.error) || (isJson? 'فشل إضافة الموظف' : await r.text()); showToast('❌ '+(err||'فشل إضافة الموظف'), 'error'); } } catch(err) { showToast('❌ خطأ في الاتصال بالخادم: ' + err.message, 'error'); } finally { btn.disabled = false; btn.innerHTML = '💾 حفظ'; } } }
-  (function(){ var b=document.getElementById('btnAddEmp'); if(b){ b.addEventListener('click', function(ev){ ev.preventDefault(); openAddEmp(); }); } })();
-  (function(){ var b=document.getElementById('btnRefresh'); if(b){ b.addEventListener('click', function(ev){ ev.preventDefault(); location.reload(); }); } })();
-  (function(){ var b=document.getElementById('btnRefreshData'); if(b){ b.addEventListener('click', function(ev){ ev.preventDefault(); location.reload(); }); } })();
-  (function(){ var b=document.getElementById('btnPrint'); if(b){ b.addEventListener('click', function(ev){ ev.preventDefault(); window.print(); }); } })();
-  (function(){ var b=document.getElementById('btnExportCsv'); if(!b) return; b.addEventListener('click', function(ev){ 
-    ev.preventDefault(); 
-    const table = document.getElementById('empTable');
-    const rows = Array.from(table.querySelectorAll('tbody tr'));
-    const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent).filter(h => h !== '⚙');
-    let csv = headers.join(',') + '\n';
-    rows.forEach(row => {
-      const cells = Array.from(row.querySelectorAll('td')).slice(0, -1).map(td => td.textContent.trim());
-      csv += cells.join(',') + '\n';
-    });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'employees_' + new Date().toISOString().slice(0,10) + '.csv';
-    link.click();
-    showToast('✅ تم تصدير البيانات بنجاح');
-  }); })();
+      <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>💾 حفظ</button><a class='btn btn-outline-primary' href='/employees/create'>فتح صفحة الإنشاء</a><button type='button' class='btn btn-outline-secondary' id='cancelAdd'>إلغاء</button></div>
+    </form>`; openSlideover(html); document.getElementById('cancelAdd').onclick=closeSlideover; const f=document.getElementById('addEmpForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/api/employees', { method:'POST', body:fd }); const j=await r.json(); if(j&&j.ok){ const tbody=document.querySelector('#panel-employees tbody'); const idx=tbody.children.length+1; const d=(fd.get('department')||'').toLowerCase(); const tr=document.createElement('tr'); tr.setAttribute('data-row','emp'); tr.setAttribute('data-id', String(j.id)); tr.setAttribute('data-dept', d); tr.innerHTML=`<td>${idx}</td><td>${fd.get('full_name')||''}</td><td>${fd.get('position')||''}</td><td>${fd.get('branch_code')||''}</td><td>${parseFloat(fd.get('base_salary')||0).toFixed(2)}</td><td>${(0).toFixed(2)}</td><td>${(0).toFixed(2)}</td><td>active</td><td><button class='btn btn-sm btn-outline-primary ops-btn'>⋮</button><div class='ops-menu'><div class='it' data-op='edit'>تعديل</div><div class='it' data-op='advance'>منح سلفة</div><div class='it' data-op='pay'>دفع راتب</div><div class='it' data-op='journal'>معاينة قيد</div><div class='it text-danger' data-op='delete'>حذف</div></div></td>`; tbody.appendChild(tr); showToast('تم إضافة الموظف'); closeSlideover(); } else { showToast('فشل إضافة الموظف'); } } }
+  document.getElementById('btnAddEmp')?.addEventListener('click', function(ev){ ev.preventDefault(); openAddEmp(); });
   if(window.AUTO_OPEN_CREATE){ openAddEmp(); }
-  
-  // وظائف الأزرار الجماعية
-  (function(){ var b=document.getElementById('btnBulkPay'); if(!b) return; b.addEventListener('click', function(ev) {
-    ev.preventDefault();
-    const selectedEmployees = getSelectedEmployees();
-    if (selectedEmployees.length === 0) {
-      showToast('⚠️ يرجى اختيار موظفين أولاً', 'warning');
-      return;
-    }
-    
-    var mo = new Date().toISOString().slice(0,7);
-    var html = "<div class='d-grid gap-3'>"
-      + "<h6>سداد رواتب جماعي (" + selectedEmployees.length + " موظف)</h6>"
-      + "<div class='alert alert-info'>سيتم سداد الرواتب للموظفين المختارين</div>"
-      + "<div class='input-group'><span class='input-group-text'>الشهر</span><input id='bulkMonth' type='month' class='form-control' value='" + mo + "'></div>"
-      + "<div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select id='bulkMethod' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>"
-      + "<div class='input-group'><span class='input-group-text'>المبلغ لكل موظف</span><input id='bulkAmount' type='number' step='0.01' class='form-control' placeholder='0.00' required></div>"
-      + "<div class='input-group'><span class='input-group-text'>ملاحظات</span><textarea id='bulkNotes' class='form-control' rows='2'></textarea></div>"
-      + "<div class='d-flex gap-2'>"
-      +   "<button id='confirmBulkPay' class='btn btn-success'>✅ تأكيد السداد</button>"
-      +   "<button id='cancelBulkPay' class='btn btn-outline-secondary'>إلغاء</button>"
-      + "</div>"
-      + "</div>";
-    
-    openSlideover(html);
-    document.getElementById('cancelBulkPay').onclick = closeSlideover;
-    document.getElementById('confirmBulkPay').onclick = async function() {
-      const month = document.getElementById('bulkMonth').value;
-      const method = document.getElementById('bulkMethod').value;
-      const notes = document.getElementById('bulkNotes').value;
-      const amount = parseFloat(document.getElementById('bulkAmount').value || '0');
-      
-      if (!month) {
-        showToast('⚠️ يرجى اختيار الشهر', 'warning');
-        return;
-      }
-      if (!(amount > 0)) {
-        showToast('⚠️ يرجى إدخال مبلغ صحيح لكل موظف', 'warning');
-        return;
-      }
-      
-      this.disabled = true;
-      this.innerHTML = '⏳ جاري المعالجة...';
-      
-      let successCount = 0;
-      let errorCount = 0;
-      
-      for (const empId of selectedEmployees) {
-        successCount = selectedEmployees.length; errorCount = 0;
-      }
-      
-      try {
-        const fd = new FormData();
-        fd.append('employee_ids', selectedEmployees.join(','));
-        fd.append('month', month);
-        fd.append('payment_method', method);
-        fd.append('notes', notes);
-        fd.append('paid_amount', String(amount));
-        try{ fd.append('csrf_token', CSRF); }catch(_){}
-        const resp = await fetch('/api/employees/pay-salary-bulk', { method:'POST', headers:{ 'X-CSRFToken': CSRF, 'Accept':'application/json' }, body: fd });
-        const j = await resp.json().catch(()=>null);
-        if(resp.ok && j && j.ok){ successCount = Number(j.success_count||0); errorCount = Number(j.failed_count||0); }
-      } catch(_){ }
-      closeSlideover();
-      showToast('✅ تم سداد ' + successCount + ' راتب بنجاح' + (errorCount > 0 ? '، فشل ' + errorCount : ''));
-    };
-  }); })();
-  
-  (function(){ var b=document.getElementById('btnBulkAdv'); if(!b) return; b.addEventListener('click', function(ev) {
-    ev.preventDefault();
-    const selectedEmployees = getSelectedEmployees();
-    if (selectedEmployees.length === 0) {
-      showToast('⚠️ يرجى اختيار موظفين أولاً', 'warning');
-      return;
-    }
-    
-    var d = new Date().toISOString().slice(0,10);
-    var html = "<form id='bulkAdvForm' class='d-grid gap-3'>"
-      + "<h6>منح سلف جماعي (" + selectedEmployees.length + " موظف)</h6>"
-      + "<div class='input-group'><span class='input-group-text'>المبلغ</span><input name='amount' type='number' step='0.01' class='form-control' required></div>"
-      + "<div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>"
-      + "<div class='input-group'><span class='input-group-text'>التاريخ</span><input name='date' type='date' class='form-control' value='" + d + "'></div>"
-      + "<div class='input-group'><span class='input-group-text'>الملاحظات</span><textarea name='notes' class='form-control' rows='2'></textarea></div>"
-      + "<div class='d-flex gap-2'>"
-      +   "<button type='submit' class='btn btn-warning'>💸 منح السلف</button>"
-      +   "<button type='button' id='cancelBulkAdv' class='btn btn-outline-secondary'>إلغاء</button>"
-      + "</div>"
-      + "</form>";
-    
-    openSlideover(html);
-    document.getElementById('cancelBulkAdv').onclick = closeSlideover;
-    document.getElementById('bulkAdvForm').onsubmit = async function(e) {
-      e.preventDefault();
-      const formData = new FormData(this);
-      const amount = parseFloat(formData.get('amount')) || 0;
-      
-      if (amount <= 0) {
-        showToast('⚠️ يرجى إدخال مبلغ صحيح', 'warning');
-        return;
-      }
-      
-      const submitBtn = this.querySelector('button[type="submit"]');
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '⏳ جاري المعالجة...';
-      
-      let successCount = 0;
-      let errorCount = 0;
-      
-      for (const empId of selectedEmployees) {
-        try {
-          const empFormData = new FormData();
-          empFormData.append('employee_id', empId);
-          empFormData.append('amount', amount);
-          empFormData.append('method', formData.get('method'));
-          empFormData.append('date', formData.get('date'));
-          empFormData.append('notes', formData.get('notes'));
-          
-          const response = await fetch('/api/advances', {
-            method: 'POST',
-            headers: { 'X-CSRFToken': CSRF },
-            body: empFormData
-          });
-          
-          if (response.ok) {
-            successCount++;
-            // تحديث صف الموظف في الجدول
-            const row = document.querySelector(`tr[data-id="${empId}"]`);
-            if (row) {
-              const currentAdvance = parseFloat(row.children[5].textContent) || 0;
-              row.children[5].textContent = (currentAdvance + amount).toFixed(2);
-            }
-          } else {
-            errorCount++;
-          }
-        } catch (error) {
-          errorCount++;
-        }
-      }
-      
-      closeSlideover();
-      showToast('✅ تم منح ' + successCount + ' سلفة بنجاح' + (errorCount > 0 ? '، فشل ' + errorCount : ''));
-    };
-  }); })();
-  
-  (function(){ var b=document.getElementById('btnBulkActions'); if(!b) return; b.addEventListener('click', function(ev) {
-    ev.preventDefault();
-    const selectedEmployees = getSelectedEmployees();
-    if (selectedEmployees.length === 0) {
-      showToast('⚠️ يرجى اختيار موظفين أولاً', 'warning');
-      return;
-    }
-    
-    const html = `<div class='d-grid gap-3'>
-      <h6>إجراءات جماعية (${selectedEmployees.length} موظف)</h6>
-      <div class='alert alert-info'>اختر الإجراء المطلوب للموظفين المختارين</div>
-      <div class='d-grid gap-2'>
-        <button id='bulkActivate' class='btn btn-success'>✅ تفعيل</button>
-        <button id='bulkDeactivate' class='btn btn-danger'>⛔ تعطيل</button>
-        <button id='bulkExport' class='btn btn-primary'>📊 تصدير بيانات</button>
-        <button id='bulkPrint' class='btn btn-secondary'>🖨️ طباعة كشوفات</button>
-      </div>
-      <button id='cancelBulkActions' class='btn btn-outline-secondary'>إلغاء</button>
-    </div>`;
-    
-    openSlideover(html);
-    document.getElementById('cancelBulkActions').onclick = closeSlideover;
-    
-    document.getElementById('bulkActivate').onclick = function() {
-      bulkUpdateStatus(selectedEmployees, 'active', 'تم التفعيل');
-    };
-    
-    document.getElementById('bulkDeactivate').onclick = function() {
-      bulkUpdateStatus(selectedEmployees, 'inactive', 'تم التعطيل');
-    };
-    
-    document.getElementById('bulkExport').onclick = function() {
-      bulkExportData(selectedEmployees);
-      closeSlideover();
-    };
-    
-    document.getElementById('bulkPrint').onclick = function() {
-      bulkPrintData(selectedEmployees);
-      closeSlideover();
-    };
-  }); })();
-  
-  // دالة للحصول على الموظفين المختارين
-  function getSelectedEmployees() {
-    // مؤقتاً: سنعيد جميع الموظفين المرئيين
-    // في المستقبل: يمكن إضافة checkboxes لكل صف
-    return Array.from(document.querySelectorAll('#panel-employees tbody tr[data-row="emp"]'))
-      .filter(row => row.style.display !== 'none')
-      .map(row => row.getAttribute('data-id'));
-  }
-  
-  // دالة لتحديث الحالة بالجملة
-  async function bulkUpdateStatus(employeeIds, status, actionText) {
-    let successCount = 0;
-    for (const empId of employeeIds) {
-      try {
-        const formData = new FormData();
-        formData.append('status', status);
-        
-        const response = await fetch(`/api/employees/${empId}`, {
-          method: 'PUT',
-          headers: { 'X-CSRFToken': CSRF },
-          body: formData
-        });
-        
-        if (response.ok) {
-          successCount++;
-          // تحديث العرض في الجدول
-          const row = document.querySelector(`tr[data-id="${empId}"]`);
-          if (row) {
-            row.children[7].textContent = status;
-            row.children[7].className = 'status-column';
-          }
-        }
-      } catch (error) {
-        console.error('Error updating status:', error);
-      }
-    }
-    
-    closeSlideover();
-    showToast('✅ ' + actionText + ' ' + successCount + ' موظف بنجاح');
-  }
-  
-  // دالة لتصدير بيانات مختارة
-  function bulkExportData(employeeIds) {
-    const rows = Array.from(document.querySelectorAll('#panel-employees tbody tr[data-row="emp"]'))
-      .filter(row => employeeIds.includes(row.getAttribute('data-id')));
-    
-    const data = rows.map(r => [
-      r.children[0].textContent.trim(),
-      r.children[1].textContent.trim(),
-      r.children[2].textContent.trim(),
-      r.children[3].textContent.trim(),
-      r.children[4].textContent.trim(),
-      r.children[5].textContent.trim(),
-      r.children[6].textContent.trim(),
-      r.children[7].textContent.trim()
-    ]);
-    
-    let csv = 'رقم,الاسم,الدور,الفرع,راتب أساسي,سلفة,آخر راتب,الحالة\n';
-    data.forEach(row => {
-      csv += row.map(x => '"' + String(x).replace('"', '""') + '"').join(',') + '\n';
-    });
-    
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `selected_employees_${new Date().toISOString().slice(0,10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-    
-    showToast('✅ تم تصدير البيانات المختارة');
-  }
-  
-  // دالة لطباعة بيانات مختارة
-  function bulkPrintData(employeeIds) {
-    const rows = Array.from(document.querySelectorAll('#panel-employees tbody tr[data-row="emp"]'))
-      .filter(row => employeeIds.includes(row.getAttribute('data-id')));
-    
-    const printWindow = window.open('', '_blank');
-    let html = `
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>كشوفات موظفين</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 20px; direction: rtl; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-          th { background-color: #f5f5f5; font-weight: bold; }
-          h2 { text-align: center; color: #333; }
-        </style>
-      </head>
-      <body>
-        <h2>كشوفات الموظفين المختارين</h2>
-        <p>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</p>
-        <table>
-          <thead>
-            <tr><th>#</th><th>الاسم</th><th>الدور</th><th>الفرع</th><th>راتب أساسي</th><th>سلفة</th><th>آخر راتب</th><th>الحالة</th></tr>
-          </thead>
-          <tbody>`;
-    
-    rows.forEach((row, index) => {
-      html += `<tr>
-        <td>${index + 1}</td>
-        <td>${row.children[1].textContent}</td>
-        <td>${row.children[2].textContent}</td>
-        <td>${row.children[3].textContent}</td>
-        <td>${row.children[4].textContent}</td>
-        <td>${row.children[5].textContent}</td>
-        <td>${row.children[6].textContent}</td>
-        <td>${row.children[7].textContent}</td>
-      </tr>`;
-    });
-    
-    html += `</tbody></table></body></html>`;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.print();
-    
-    showToast('🖨️ جاري الطباعة...');
-  }
-  
   try{lottie.loadAnimation({container:document.getElementById('lottieEmp'),renderer:'svg',loop:true,autoplay:true,path:'https://assets8.lottiefiles.com/packages/lf20_3rwasyjy.json'})}catch(e){}
   try{lottie.loadAnimation({container:document.getElementById('lottieSal'),renderer:'svg',loop:true,autoplay:true,path:'https://assets1.lottiefiles.com/packages/lf20_ujd3f9rs.json'})}catch(e){}
   try{lottie.loadAnimation({container:document.getElementById('lottieAdv'),renderer:'svg',loop:true,autoplay:true,path:'https://assets3.lottiefiles.com/packages/lf20_vfux7z1h.json'})}catch(e){}
   try{lottie.loadAnimation({container:document.getElementById('lottiePay'),renderer:'svg',loop:true,autoplay:true,path:'https://assets9.lottiefiles.com/packages/lf20_udydk9.json'})}catch(e){}
-  document.getElementById('btnDiagPanels')&&document.getElementById('btnDiagPanels').addEventListener('click',async function(){function wait(ms){return new Promise(r=>setTimeout(r,ms))}function clickTab(t){var el=document.querySelector('.nav-item[data-tab="'+t+'"]')||document.querySelector('.dept-tab[data-tab="'+t+'"]');if(el){el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}))}}var pass=0,fail=0;try{openPanel('employees');await wait(100);document.querySelector('#panel-employees table')?pass++:fail++;}catch(e){fail++}try{clickTab('adv');await wait(600);document.getElementById('advBodyInline')?pass++:fail++;}catch(e){fail++}try{openPanel('ledger');await wait(100);var sel=document.getElementById('ledgerEmpInline');if(sel&&sel.options.length>1){sel.value=sel.options[1].value;sel.dispatchEvent(new Event('change'));await wait(900);}document.querySelector('#ledgerBodyInline tr')?pass++:fail++;}catch(e){fail++}try{openPanel('prev');await wait(100);var pm=document.getElementById('prevMonthInline');if(pm){var d=new Date();var mo=(d.getMonth()+1).toString().padStart(2,'0');pm.value=d.getFullYear()+'-'+mo;pm.dispatchEvent(new Event('change'));await wait(900);}document.querySelector('#prevBodyInline tr')?pass++:fail++;}catch(e){fail++}try{openPanel('reports');await wait(100);var rm=document.getElementById('repMonthInline');if(rm){var d=new Date();var mo=(d.getMonth()+1).toString().padStart(2,'0');rm.value=d.getFullYear()+'-'+mo;rm.dispatchEvent(new Event('change'));await wait(900);}document.querySelector('#repBodyInline tr')?pass++:fail++;}catch(e){fail++}showToast('تشخيص النقر: ناجحة '+pass+' / فاشلة '+fail, fail? 'warning':'success');})
+  document.addEventListener('click', function(ev){ const b = ev.target.closest('.ops-btn'); if(!b) return; ev.stopPropagation(); document.querySelectorAll('.ops-fly').forEach(m=> m.remove()); const cell = b.parentElement; const row = b.closest('tr'); const id = row?.getAttribute('data-id')||''; const orig = cell.querySelector('.ops-menu'); if(!orig) return; const fly = orig.cloneNode(true); fly.classList.remove('ops-menu'); fly.classList.add('ops-fly'); fly.style.display='block'; fly.dataset.empId = id; document.body.appendChild(fly); const r = b.getBoundingClientRect(); const w = fly.offsetWidth; const h = fly.offsetHeight; let top = r.bottom + 6; let left = r.right - w; if(top + h > window.innerHeight) top = r.top - h - 6; if(left < 6) left = 6; fly.style.top = (top)+'px'; fly.style.left = (left)+'px'; });
+  document.addEventListener('click', async function(ev){ const it = ev.target.closest('.ops-fly .it'); if(!it) return; ev.stopPropagation(); const rid = it.closest('.ops-fly')?.dataset.empId||''; const tr = document.querySelector('tr[data-id="'+rid+'"]'); document.querySelectorAll('.ops-fly').forEach(m=> m.remove()); if(!tr) return; const id = parseInt(rid||'0'); const op = it.getAttribute('data-op'); if(op==='view'){ const cells=[...tr.children].map(td=>td.textContent); openSlideover('<div>'+cells.join(' | ')+'</div>'); }
+    else if(op==='edit'){ const name=tr.children[1].textContent.trim(); const pos=tr.children[2].textContent.trim(); const br=tr.children[3].textContent.trim(); const base=tr.children[4].textContent.trim(); const html=`<form id='empForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الاسم</span><input name='full_name' class='form-control' value='${name}' required></div>
+        <div class='input-group'><span class='input-group-text'>القسم</span><input name='department' class='form-control' value='${(tr.dataset.dept||'')}'></div>
+        <div class='input-group'><span class='input-group-text'>الوظيفة</span><input name='position' class='form-control' value='${pos}'></div>
+        <div class='input-group'><span class='input-group-text'>الفرع</span><input name='branch_code' class='form-control' value='${br}'></div>
+        <div class='input-group'><span class='input-group-text'>راتب أساسي</span><input name='base_salary' type='number' step='0.01' class='form-control' value='${base}'></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelEdit'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelEdit').onclick=closeSlideover; const f=document.getElementById('empForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('id', String(id)); const r=await fetch('/api/employees/'+id, { method:'PUT', body:fd }); const j=await r.json(); if(j&&j.ok){ tr.children[1].textContent=fd.get('full_name'); tr.children[2].textContent=fd.get('position'); tr.children[3].textContent=fd.get('branch_code'); tr.children[4].textContent=parseFloat(fd.get('base_salary')||0).toFixed(2); tr.dataset.dept=(fd.get('department')||'').toLowerCase(); showToast('تم حفظ تعديل الموظف'); closeSlideover(); } else { showToast('فشل حفظ التعديل'); } } }
+    else if(op==='delete'){ const confirmHtml=`<div class='د-grid gap-2'><div>هل تريد حذف الموظف؟</div><div class='d-flex gap-2'><button id='doDel' class='btn btn-danger'>نعم، حذف</button><button class='btn btn-outline-secondary' id='noDel'>إلغاء</button></div></div>`; openSlideover(confirmHtml); document.getElementById('noDel').onclick=closeSlideover; document.getElementById('doDel').onclick=async function(){ const r=await fetch('/api/employees/'+id, { method:'DELETE', headers: { 'X-CSRFToken': '{{ csrf_token() }}' } }); const j=await r.json(); if(j&&j.ok){ tr.remove(); showToast('تم حذف الموظف'); closeSlideover(); } else { showToast('تعذر الحذف'); } } }
+    else if(op==='advance'){ const html=`<form id='advForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>المبلغ</span><input name='amount' type='number' step='0.01' class='form-control' required></div>
+        <div class='input-group'><span class='input-group-text'>التاريخ</span><input name='date' type='date' class='form-control' value='${new Date().toISOString().slice(0,10)}'></div>
+        <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelAdv'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelAdv').onclick=closeSlideover; const f=document.getElementById('advForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', String(id)); fd.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/api/advances', { method:'POST', body:fd }); const j=await r.json(); showToast(j&&j.ok?'تم تسجيل السلفة':'فشل تسجيل السلفة'); if(j&&j.ok){ closeSlideover(); } } }
+    else if(op==='deduct'){ const html=`<form id='dedForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الشهر</span><input name='month' type='month' class='form-control' value='${new Date().toISOString().slice(0,7)}'></div>
+        <div class='input-group'><span class='input-group-text'>قيمة الخصم</span><input name='deduction_amount' type='number' step='0.01' class='form-control' required></div>
+        <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelDed'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelDed').onclick=closeSlideover; const f=document.getElementById('dedForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); const month=String(fd.get('month')||''); const amt=parseFloat(String(fd.get('deduction_amount')||'0')); const body=new FormData(); body.append('employee_id', String(id)); body.append('month', month); body.append('deduction_amount', String(amt||0)); body.append('absence_hours', '0'); body.append('overtime_hours', '0'); body.append('bonus_amount', '0'); body.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/api/salaries/upsert', { method:'POST', body }); const j=await r.json(); showToast(j&&j.ok?'تم إضافة الخصم':'فشل إضافة الخصم'); if(j&&j.ok){ closeSlideover(); } }
+    }
+    else if(op==='pay'){ const html=`<form id='payForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الشهر</span><input name='month' type='month' class='form-control' value='${new Date().toISOString().slice(0,7)}'></div>
+        <div class='input-group'><span class='input-group-text'>المبلغ المدفوع</span><input name='paid_amount' type='number' step='0.01' class='form-control' required></div>
+        <div class='input-group'><span class='input-group-text'>طريقة الدفع</span><select name='payment_method' class='form-select'><option value='cash'>نقدي</option><option value='bank'>بنك</option><option value='card'>بطاقة</option></select></div>
+            <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>💾 حفظ</button><button type='button' class='btn btn-outline-secondary' id='cancelPay'>إلغاء</button></div>
+          </form>`; openSlideover(html); document.getElementById('cancelPay').onclick=closeSlideover; const f=document.getElementById('payForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', String(id)); fd.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/salaries/pay', { method:'POST', body:fd }); const ok = r.status===200; if(ok){ showToast('تم تسجيل دفع الراتب'); closeSlideover(); } else { showToast('فشل دفع الراتب'); } } }
+    else if(op==='accrual'){ const html=`<form id='accForm' class='d-grid gap-2'>
+        <div class='input-group'><span class='input-group-text'>الشهر</span><input name='month' type='month' class='form-control' value='${new Date().toISOString().slice(0,7)}'></div>
+        <div class='d-flex gap-2 mt-2'><button class='btn btn-primary ripple' type='submit'>إنشاء المستحق</button><button type='button' class='btn btn-outline-secondary' id='cancelAcc'>إلغاء</button></div>
+      </form>`; openSlideover(html); document.getElementById('cancelAcc').onclick=closeSlideover; const f=document.getElementById('accForm'); f.onsubmit=async function(e){ e.preventDefault(); const fd=new FormData(f); fd.append('employee_id', String(id)); fd.append('csrf_token', '{{ csrf_token() }}'); const r=await fetch('/salaries/accrual', { method:'POST', body:fd }); const j=await r.json(); showToast(j&&j.ok?'تم إنشاء المستحق':'فشل إنشاء المستحق'); if(j&&j.ok){ closeSlideover(); } }
+    }
+    else if(op==='journal'){ const url=new URL('/api/employee-ledger', location.origin); url.searchParams.set('emp_id', String(id)); fetch(url).then(r=>r.json()).then(j=>{ if(j&&j.ok){ const rows=(j.rows||[]).map(x=>`<tr><td>${x.date}</td><td>${x.entry}</td><td>${x.desc}</td><td class='text-end'>${Number(x.debit||0).toFixed(2)}</td><td class='text-end'>${Number(x.credit||0).toFixed(2)}</td></tr>`).join(''); openSlideover(`<div class='table-responsive'><table class='table table-sm'><thead><tr><th>التاريخ</th><th>رقم القيد</th><th>الوصف</th><th>مدين</th><th>دائن</th></tr></thead><tbody>${rows}</tbody></table></div>`); } else { showToast('تعذر تحميل القيود'); } }).catch(()=> showToast('تعذر تحميل القيود')); }
+  });
 </script>
 {% endblock %}
