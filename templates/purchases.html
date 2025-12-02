@@ -129,7 +129,7 @@ body {
                     {{ form.payment_method(class_='form-select') }}
                   </div>
                   
-                  <div class="col-md-3">
+                  <div class="col-md-3" style="display:none;">
                     <label class="form-label">{{ _('Invoice No / رقم الفاتورة') }}</label>
                     <input class="form-control" value="{{ _('Auto on save (e.g. INV-PUR-YYYY-0001) / يُولّد تلقائياً عند الحفظ (مثال: INV-PUR-YYYY-0001)') }}" readonly>
                   </div>
@@ -185,11 +185,12 @@ body {
                       {{ item_form.price_before_tax.label(class_='form-label') }}
                       {{ item_form.price_before_tax(class_='form-control', step='0.01') }}
                     </div>
-                    <div class="col-md-2">
+                    <!-- إخفاء حقول الخصم والضريبة لكل بند لتبسيط الإدخال -->
+                    <div class="col-md-2" style="display:none;">
                       {{ item_form.discount.label(class_='form-label') }}
                       {{ item_form.discount(class_='form-control', step='0.01') }}
                     </div>
-                    <div class="col-md-1">
+                    <div class="col-md-1" style="display:none;">
                       <label class="form-label">VAT %</label>
                       <input type="number" step="0.01" class="form-control" name="items-{{ loop.index0 }}-tax_pct" value="0">
                     </div>
@@ -207,15 +208,7 @@ body {
               <div class="card-header bg-light fw-semibold">{{ _('Totals / الإجماليات') }}</div>
               <div class="card-body">
                 <div class="row g-3">
-                  <div class="col-md-3">
-                    <label class="form-label">{{ _('Total Amount / المبلغ الإجمالي') }}</label>
-                    <input type="number" step="0.01" id="total_amount" name="total_amount" class="form-control" value="">
-                  </div>
-                  <div class="col-md-3">
-                    <label class="form-label">{{ _('VAT Amount / مبلغ الضريبة') }}</label>
-                    <input type="number" step="0.01" id="vat_amount" name="vat_amount" class="form-control" value="">
-                  </div>
-                  <div class="col-md-3">
+                  <div class="col-md-3" style="display:none;">
                     <label class="form-label">{{ _('Items Count / عدد الأصناف') }}</label>
                     <input type="number" id="items_count" name="items_count" class="form-control" value="">
                   </div>
@@ -235,7 +228,7 @@ body {
                 <hr/>
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div>{{ _('Purchases Total / إجمالي المشتريات') }}: <strong id="display_total"></strong></div>
+                        <div>{{ _('Purchases Total / إجمالي المشتريات') }}: <strong id="final-total"></strong></div>
                         <div>{{ _('VAT Total / إجمالي الضريبة') }}: <strong id="display_vat"></strong></div>
                     </div>
                     <div>
@@ -256,35 +249,34 @@ body {
     const materials = {{ materials_json | safe }};
 
 
-    // Auto-calculation functionality with input normalization and safety clamps
+    // حساب الإجماليات تلقائيًا من بنود الفاتورة
     function toAsciiDigits(str){
         let s = String(str || '');
-        const ar = '٠١٢٣٤٥٦٧٨٩';
-        const fa = '۰۱۲۳۴۵۶۷۸۹';
-        for(let i=0;i<10;i++){ s = s.replace(new RegExp(ar[i],'g'), String(i)); }
-        for(let i=0;i<10;i++){ s = s.replace(new RegExp(fa[i],'g'), String(i)); }
+        const ar = '٠١٢٣٤٥٦٧٨٩'; const fa = '۰۱۲۳۴۵۶۷۸۹';
+        for(let i=0;i<10;i++){ s = s.replace(new RegExp(ar[i],'g'), String(i)); s = s.replace(new RegExp(fa[i],'g'), String(i)); }
         return s;
     }
-    function clamp(v, min, max){ v = parseFloat(v); if (isNaN(v)) v = 0; return Math.min(max, Math.max(min, v)); }
     function calculateTotals() {
-        const totalInput = document.getElementById('total_amount');
-        const vatInput = document.getElementById('vat_amount');
-        const totalRaw = toAsciiDigits(totalInput?.value);
-        const vatRaw = toAsciiDigits(vatInput?.value);
-        const totalEl = document.getElementById('display_total');
+        const invType = (document.getElementById('invoice_type')?.value || 'VAT').toUpperCase();
+        const VAT_RATE = invType === 'VAT' ? 0.15 : 0.0;
+        let base = 0.0, vat = 0.0, cnt = 0;
+        document.querySelectorAll('#items-container .item-row').forEach(row => {
+            const qEl = row.querySelector('[name*="-quantity"]');
+            const pEl = row.querySelector('[name*="-price_before_tax"]');
+            const dEl = row.querySelector('[name*="-discount"]');
+            const q = parseFloat(toAsciiDigits(qEl?.value||'')) || 0;
+            const p = parseFloat(toAsciiDigits(pEl?.value||'')) || 0;
+            const d = parseFloat(toAsciiDigits(dEl?.value||'')) || 0;
+            if(q>0 && p>0){
+                let line = (q*p) - d; if(line<0) line = 0;
+                base += line; vat += line * VAT_RATE; cnt += 1;
+            }
+        });
+        const totalEl = document.getElementById('final-total');
         const vatEl = document.getElementById('display_vat');
-        if (totalRaw && totalRaw.trim() !== '') {
-            const total = parseFloat(totalRaw) || 0;
-            totalEl.textContent = '﷼' + total.toFixed(2);
-        } else {
-            totalEl.textContent = '';
-        }
-        if (vatRaw && vatRaw.trim() !== '') {
-            const vat = parseFloat(vatRaw) || 0;
-            vatEl.textContent = '﷼' + vat.toFixed(2);
-        } else {
-            vatEl.textContent = '';
-        }
+        if(totalEl) totalEl.textContent = base>0 || vat>0 ? ('﷼' + (base+vat).toFixed(2)) : '';
+        if(vatEl) vatEl.textContent = vat>0 ? ('﷼' + vat.toFixed(2)) : '﷼0.00';
+        const cntEl = document.getElementById('items_count'); if(cntEl) cntEl.value = String(cnt);
         try{ if(typeof updatePartialMax==='function') updatePartialMax(); }catch(e){}
     }
 
@@ -310,10 +302,11 @@ body {
 
     // Event listeners
     document.addEventListener('input', e => {
-        if (e.target && (e.target.id==='total_amount' || e.target.id==='vat_amount')) {
+        if (e.target && /items-\d+-(quantity|price_before_tax|discount)/.test(e.target.name||'')) {
             calculateTotals();
         }
     });
+    document.getElementById('invoice_type')?.addEventListener('change', calculateTotals);
 
     (function(){
       const container = document.getElementById('items-container');
@@ -323,8 +316,24 @@ body {
           const url = cat ? (`/api/raw_materials?category=${encodeURIComponent(cat)}`) : '/api/raw_materials';
           const resp = await fetch(url);
           if(!resp.ok) throw new Error('HTTP '+resp.status);
-          return await resp.json();
+          const j = await resp.json();
+          return (j && j.ok) ? (j.items||[]) : [];
         }catch(e){ return []; }
+      }
+      async function fetchCategories(){
+        try{
+          const resp = await fetch('/api/raw_materials/categories');
+          if(!resp.ok) throw new Error('HTTP '+resp.status);
+          const j = await resp.json();
+          return (j && j.ok) ? (j.categories||[]) : [];
+        }catch(e){ return []; }
+      }
+      function populateCategorySelect(sel, cats){
+        const current = sel.value;
+        sel.innerHTML = '';
+        const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = '{{ _('Select Category / اختر الفئة') }}'; sel.appendChild(opt0);
+        cats.forEach(c=>{ const opt=document.createElement('option'); opt.value = c.name; opt.textContent = c.label; sel.appendChild(opt); });
+        if(current){ sel.value=current; }
       }
       function populateMaterialsSelect(sel, arr){
         const current = sel.value;
@@ -339,11 +348,43 @@ body {
         const cat = e.target.value;
         const arr = await fetchMaterialsByCategory(cat);
         populateMaterialsSelect(matSel, arr);
+        // Reset unit when category changes
+        const unitInput = row?.querySelector('.unit-input');
+        if(unitInput){ unitInput.value=''; }
       }
-      function attachRowEvents(row){
+      async function onMaterialChange(e){
+        const row = e.target.closest('.item-row');
+        const catSel = row?.querySelector('.category-select');
+        const unitInput = row?.querySelector('.unit-input');
+        const stockInfoDiv = row?.querySelector('.stock-info');
+        const cat = catSel?.value || '';
+        const id = e.target.value;
+        if(!id){ if(unitInput) unitInput.value=''; if(stockInfoDiv) stockInfoDiv.textContent=''; return; }
+        const arr = await fetchMaterialsByCategory(cat);
+        const item = arr.find(o => String(o.id) === String(id));
+        if(item){
+          if(unitInput) unitInput.value = item.unit || '';
+          if(stockInfoDiv) stockInfoDiv.textContent = `Current stock: ${item.stock_quantity} ${item.unit} | Cost: ﷼${Number(item.cost_per_unit||0).toFixed(2)}/unit`;
+        } else {
+          if(unitInput) unitInput.value='';
+          if(stockInfoDiv) stockInfoDiv.textContent='';
+        }
+      }
+      async function attachRowEvents(row){
         const catSel = row.querySelector('.category-select');
         const matSel = row.querySelector('.material-select');
-        catSel?.addEventListener('change', onCategoryChange);
+        if(catSel){
+          const cats = await fetchCategories();
+          populateCategorySelect(catSel, cats);
+          catSel.addEventListener('change', onCategoryChange);
+        }
+        if(matSel && catSel){
+          const arr = await fetchMaterialsByCategory(catSel.value||'');
+          populateMaterialsSelect(matSel, arr);
+          matSel.addEventListener('change', onMaterialChange);
+          // Initialize unit/stock for current selection
+          await onMaterialChange({ target: matSel });
+        }
       }
       function nextIndex(){
         const rows = container.querySelectorAll('.item-row'); return rows.length;
@@ -364,9 +405,10 @@ body {
         container.insertBefore(clone, addBtn.parentElement);
         attachRowEvents(clone);
       }
-      addBtn?.addEventListener('click', cloneLast);
+      addBtn?.addEventListener('click', function(){ cloneLast(); calculateTotals(); });
       // Attach events for initial rows
-      container.querySelectorAll('.item-row').forEach(attachRowEvents);
+      container.querySelectorAll('.item-row').forEach(row=>{ attachRowEvents(row); });
+      calculateTotals();
     })();
 
     // Remove item functionality

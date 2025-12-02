@@ -168,8 +168,8 @@ def create_app(config_class=None):
             p = (request.path or '').lower()
         except Exception:
             p = ''
-        legacy_prefixes = ('/employees/payroll', '/salaries', '/salary', '/print/salary')
-        if any(p.startswith(pref) for pref in legacy_prefixes):
+        # Block only the legacy payroll dashboard route; allow new salaries/pay and salary receipts
+        if p.startswith('/employees/payroll'):
             return ('', 404)
 
 
@@ -247,3 +247,6 @@ def create_app(config_class=None):
         pass
 
     return app
+
+# Export a ready-to-use app instance for test clients and simple scripts
+app = create_app()

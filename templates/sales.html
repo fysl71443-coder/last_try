@@ -143,6 +143,7 @@ body {
                     <button type="button" class="btn btn-secondary" id="add-item">
                         ➕ {{ _('Add Meal / إضافة وجبة') }}
                     </button>
+                    <button type="button" class="btn btn-outline-secondary ms-2" id="print-order">PRINT ORDER-طباعة الطلب</button>
                 </div>
                 <div class="col-md-6 text-end">
                     {{ form.submit(class_='btn btn-primary btn-lg') }}
@@ -378,6 +379,69 @@ body {
         alert('Invoice details for ID: ' + invoiceId + ' (Feature coming soon)');
     }
 
+    function _esc(s){ try{ return String(s||'').replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]); }); }catch(_){ return String(s||''); } }
+    function printOrder(){
+        const rows = Array.from(document.querySelectorAll('#items-container .item-row'));
+        const items = rows.map(function(row){
+            const pidSel = row.querySelector('select[name$="-product_id"]');
+            const qtyInput = row.querySelector('input[name$="-quantity"]');
+            const unitInput = row.querySelector('input[name$="-price_before_tax"]');
+            const taxInput = row.querySelector('input[name$="-tax_amount"]');
+            const discInput = row.querySelector('input[name$="-discount"]');
+            const totalInput = row.querySelector('input[name$="-total_price"]');
+            const pid = parseInt(pidSel && pidSel.value) || 0;
+            const prod = products.find(p => p.id === pid);
+            const name = prod ? prod.name : '';
+            const qty = parseFloat(qtyInput && qtyInput.value || 0) || 0;
+            const unit = parseFloat(unitInput && unitInput.value || 0) || 0;
+            const tax = parseFloat(taxInput && taxInput.value || 0) || 0;
+            const disc = parseFloat(discInput && discInput.value || 0) || 0;
+            const total = parseFloat(totalInput && totalInput.value || 0) || 0;
+            return {name, qty, unit, tax, disc, total};
+        }).filter(function(it){ return it.qty > 0 && (it.name || it.unit || it.total); });
+        const now = new Date();
+        const dt = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+        const hdr = 'PRINT ORDER / طباعة الطلب';
+        const msgAr = 'هذه ليست فاتورة ضريبية ونهائية<br>هذه الفاتورة فقط لمتابعة الطلب<br>لا تنسى أخذ الفاتورة عند الدفع';
+        const msgEn = 'This is not a final tax invoice<br>This order slip is for following up the order<br>Do not forget to take the invoice when paying';
+        let bodyRows = items.map(function(it){
+            return '<tr>'+
+                '<td>'+_esc(it.name)+'</td>'+
+                '<td style="text-align:center">'+(Number(it.qty||0).toFixed(2))+'</td>'+
+                '<td style="text-align:right">'+(Number(it.unit||0).toFixed(2))+'</td>'+
+                '<td style="text-align:right">'+(Number(it.disc||0).toFixed(2))+'</td>'+
+                '<td style="text-align:right">'+(Number(it.tax||0).toFixed(2))+'</td>'+
+                '<td style="text-align:right">'+(Number(it.total||0).toFixed(2))+'</td>'+
+            '</tr>';
+        }).join('');
+        const subtotal = items.reduce(function(s,it){ return s + (Number(it.unit||0)*Number(it.qty||0)); }, 0);
+        const discTotal = items.reduce(function(s,it){ return s + Number(it.disc||0); }, 0);
+        const taxTotal = items.reduce(function(s,it){ return s + Number(it.tax||0); }, 0);
+        const grand = items.reduce(function(s,it){ return s + Number(it.total||0); }, 0);
+        const html = (
+            '<!doctype html><html><head><meta charset="utf-8"><title>'+hdr+'</title>'+
+            '<style>body{font-family:Tajawal,Segoe UI,Arial,sans-serif;padding:16px}h2{margin:0 0 8px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;font-size:14px}th{background:#f2f2f2;text-align:left}tfoot td{font-weight:700} .note{margin-top:16px;font-size:13px;line-height:1.6;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;padding:10px}</style>'+
+            '</head><body>'+
+            '<h2>'+hdr+'</h2>'+
+            '<div style="margin-bottom:6px;color:#666;font-size:12px">'+_esc(dt)+'</div>'+
+            '<table><thead><tr>'+
+            '<th>Item / الصنف</th><th style="width:90px;text-align:center">Qty / الكمية</th><th style="width:120px;text-align:right">Unit / السعر</th><th style="width:120px;text-align:right">Discount / الخصم</th><th style="width:120px;text-align:right">Tax / الضريبة</th><th style="width:140px;text-align:right">Total / الإجمالي</th>'+
+            '</tr></thead><tbody>'+bodyRows+'</tbody>'+
+            '<tfoot><tr><td colspan="2">Subtotal</td><td style="text-align:right">'+Number(subtotal).toFixed(2)+'</td><td style="text-align:right">'+Number(discTotal).toFixed(2)+'</td><td style="text-align:right">'+Number(taxTotal).toFixed(2)+'</td><td style="text-align:right">'+Number(grand).toFixed(2)+'</td></tr></tfoot>'+
+            '</table>'+
+            '<div class="note"><div>'+msgAr+'</div><div style="margin-top:6px">'+msgEn+'</div></div>'+
+            '</body></html>'
+        );
+        const w = window.open('', '_blank', 'width=800,height=600,scrollbars=yes');
+        if(!w) return;
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+        setTimeout(function(){ try{ w.focus(); w.print(); }catch(_){} }, 300);
+    }
+    document.getElementById('print-order')?.addEventListener('click', printOrder);
+</script>
+
     async function deleteSalesInvoice(invoiceId, invoiceNumber) {
         const confirmed = await showConfirm('{{ _("Are you sure you want to delete sales invoice") }} "' + invoiceNumber + '"?\n\n{{ _("This action cannot be undone.") }}');
         if (confirmed) {
@@ -424,7 +488,9 @@ body {
             const tokMeta = document.querySelector("meta[name='csrf-token']");
             const tok = tokMeta ? tokMeta.getAttribute('content') : '';
             const res = await fetch('{{ url_for('main.api_customers_create') }}',{
-                method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':tok},
+                method:'POST',
+                headers:{'Content-Type':'application/json','X-CSRFToken':tok,'Accept':'application/json'},
+                credentials:'same-origin',
                 body: JSON.stringify({name, phone, discount_percent: discount})
             });
             const j = await res.json();
@@ -492,7 +558,9 @@ window.submitNewCustomerSales = async function(){
     const tokMeta = document.querySelector("meta[name='csrf-token']");
     const tok = tokMeta ? tokMeta.getAttribute('content') : '';
     const res = await fetch('{{ url_for('main.api_customers_create') }}',{
-      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':tok},
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':tok,'Accept':'application/json'},
+      credentials:'same-origin',
       body: JSON.stringify({name, phone, discount_percent: discount})
     });
     const j = await res.json();

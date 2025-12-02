@@ -49,18 +49,18 @@
     table{
       width: 100%; 
       border-collapse: collapse;
-      margin: 8px 0;
-      font-size: {{ (fs|int - 1) if (fs|int > 8) else fs }}px;
+      margin: 6px 0;
+      font-size: {{ (fs|int - 3) if (fs|int > 9) else ((fs|int - 2) if (fs|int > 8) else fs) }}px;
     }
     th{
-      padding: 4px 2px; 
+      padding: 3px 2px; 
       border-bottom: 1px solid #000;
       font-weight: 700;
-      font-size: {{ (fs|int + 1) if (fs|int > 8) else (fs|int) }}px;
+      font-size: {{ (fs|int - 1) if (fs|int > 9) else (fs|int) }}px;
       color: #000;
     }
     td{
-      padding: 3px 2px; 
+      padding: 2px 2px; 
       border-bottom: 1px solid #000;
       vertical-align: top;
       color: #000;
@@ -68,13 +68,13 @@
     .total-row td{
       font-weight: 700;
       border-bottom: 1px solid #000;
-      padding: 4px 2px;
+      padding: 3px 2px;
       color: #000;
     }
     .grand-total{
       border-top: 2px solid #000 !important;
       border-bottom: 2px solid #000 !important;
-      font-size: {{ (fs|int + 3) if fs else 15 }}px;
+      font-size: {{ (fs|int + 1) if fs else 14 }}px;
       font-weight: 700;
       color: #000;
     }
@@ -90,6 +90,8 @@
       margin-top: 12px;
       font-size: {{ (fs|int - 1) if (fs|int > 8) else fs }}px;
     }
+    .currency-amount{ display:inline-flex; align-items:center; gap:2px; }
+    .currency-img{ width:12px; height:12px; object-fit:contain; }
     .page-layout{ display:flex; justify-content:center; align-items:center; padding-top:16px; }
     .actions-row{ width: {{ pw }}mm; max-width: {{ pw }}mm; margin: 14px auto 0; display:flex; justify-content: space-between; align-items:center; gap:12px; }
     .actions-row .action-btn{ flex: 1; text-align: center; padding: 14px 18px; font-size: 17px; }
@@ -196,107 +198,102 @@
       {% set branch_code = (inv.branch or inv.branch_code or '')|lower %}
       {% set is_china = branch_code[0:5] == 'china' %}
       {% set is_india = ('place' in branch_code) or ('india' in branch_code) %}
-      {% if is_china %}
-        {% if settings and (settings.china_town_phone1 or settings.china_town_phone2) %}
-        <div class="small muted">
-          {{ _('Phone') }}: {{ (settings.china_town_phone1 or '') ~ ((' / ' ~ settings.china_town_phone2) if settings.china_town_phone2 else '') }}
-        </div>
-        {% endif %}
-      {% elif is_india %}
-        {% if settings and (settings.place_india_phone1 or settings.place_india_phone2) %}
-        <div class="small muted">
-          {{ _('Phone') }}: {{ (settings.place_india_phone1 or '') ~ ((' / ' ~ settings.place_india_phone2) if settings.place_india_phone2 else '') }}
-        </div>
-        {% endif %}
+      {% set tel = (settings.china_town_phone1 if is_china else (settings.place_india_phone1 if is_india else settings.phone)) %}
+      {% if tel %}
+      <div class="small muted">Tel: {{ tel }}</div>
       {% endif %}
       <div class="small muted">{{ date_time }}</div>
       {% if is_china %}
-      <div class="small muted">Branch: China Town / الفرع: China Town</div>
+      <div class="small muted">Branch / الفرع: China Town</div>
       {% elif is_india %}
-      <div class="small muted">Branch: Place India / الفرع: Place India</div>
+      <div class="small muted">Branch / الفرع: Place India</div>
       {% else %}
-      <div class="small muted">Branch: {{ inv.branch_code }} / الفرع: {{ inv.branch_code }}</div>
+      <div class="small muted">Branch / الفرع: {{ inv.branch_code }}</div>
       {% endif %}
     </div>
-
     <hr/>
+
 
     <div class="center">
-      <div style="font-size: {{ (fs|int + 2) if fs else 14 }}px; font-weight: bold; margin-bottom: 8px;">
-        Invoice: {{ inv.invoice_number }} / الفاتورة: {{ inv.invoice_number }}
-      </div>
+      <div class="small muted">Invoice / الفاتورة: {{ inv.invoice_number }}</div>
       {% if inv.table_number %}
-      <div class="small muted">Table: {{ inv.table_number }} / الطاولة: {{ inv.table_number }}</div>
+      <div class="small muted">Table / الطاولة: {{ inv.table_number }}</div>
       {% endif %}
+    </div>
+    <hr/>
+    <div class="center">
       {% if inv.customer_name %}
-      <div class="small muted">Customer: {{ inv.customer_name }} / العميل: {{ inv.customer_name }}</div>
+      <div class="small muted">Customer / العميل: {{ inv.customer_name }}</div>
       {% endif %}
       {% if inv.customer_phone %}
-      <div class="small muted">Phone: {{ inv.customer_phone }} / هاتف: {{ inv.customer_phone }}</div>
+      <div class="small muted">Phone / هاتف: {{ inv.customer_phone }}</div>
       {% endif %}
       {% if inv.payment_method %}
-      <div class="small muted">Payment: {{ inv.payment_method }} / طريقة الدفع: {{ inv.payment_method }}</div>
+      <div class="small muted">Payment / طريقة الدفع: {{ inv.payment_method }}</div>
       {% endif %}
     </div>
 
-    <hr/>
+    
 
     <table>
       <thead>
         <tr>
-          <th class="right">Item / المنتج</th>
-          <th class="center-text">Qty / الكمية</th>
-          <th class="right">Amount / المجموع</th>
+          <th class="left" style="width:65%">Item / المنتج</th>
+          <th class="center-text" style="width:15%">Qty</th>
+          <th class="right" style="width:20%">Total</th>
         </tr>
       </thead>
-      <tbody>
-        {% for item in items %}
-        <tr>
-          <td class="right">{{ item.product_name }}</td>
-          <td class="center-text">{{ item.quantity|int }}</td>
-          <td class="right">{{ item.total_price|round(2) }}</td>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td class="left" style="width:65%">{{ item.product_name }}</td>
+            <td class="center-text" style="width:15%">{{ item.quantity|int }}</td>
+            <td class="right" style="width:20%"><span class="currency-amount">{{ item.total_price|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+    
+
+      <table>
+        <tr class="total-row">
+          <td class="right">Subtotal / المجموع الفرعي:</td>
+          <td class="right"><span class="currency-amount">{{ inv.total_before_tax|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
         </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    <hr/>
-
-    <table>
-      <tr class="total-row">
-        <td class="right">Subtotal / المجموع الفرعي:</td>
-        <td class="right">{{ inv.total_before_tax|round(2) }}</td>
+        {% if inv.tax_amount > 0 %}
+        <tr class="total-row">
+          <td class="right">VAT / الضريبة:</td>
+          <td class="right"><span class="currency-amount">{{ inv.tax_amount|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
+        </tr>
+        {% endif %}
+        {% if inv.discount_amount > 0 %}
+        <tr class="total-row">
+          <td class="right">Discount / الخصم:</td>
+          <td class="right"><span class="currency-amount">-{{ inv.discount_amount|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
       </tr>
-      {% if inv.tax_amount > 0 %}
-      <tr class="total-row">
-        <td class="right">VAT / الضريبة:</td>
-        <td class="right">{{ inv.tax_amount|round(2) }}</td>
-      </tr>
-      {% endif %}
-      {% if inv.discount_amount > 0 %}
-      <tr class="total-row">
-        <td class="right">Discount / الخصم:</td>
-        <td class="right">-{{ inv.discount_amount|round(2) }}</td>
-      </tr>
-      {% endif %}
+        {% endif %}
+      
       <tr class="grand-total">
         <td class="right">Total / المجموع النهائي:</td>
-        <td class="right">{{ inv.total_after_tax_discount|round(2) }}</td>
+        <td class="right"><span class="currency-amount">{{ inv.total_after_tax_discount|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
       </tr>
     </table>
 
+    
+    <div class="center small muted">QR Code / رمز الاستجابة</div>
     {% if qr_data_url %}
-    <hr/>
-    <div class="center">
-      <img src="{{ qr_data_url }}" alt="QR Code" style="width: 100px; height: 100px;"/>
-      <div class="small muted">QR Code / رمز QR</div>
-    </div>
+    <div class="center"><img src="{{ qr_data_url }}" alt="QR Code" style="width: 100px; height: 100px;"/></div>
+    {% else %}
+    <div class="center">[       QR HERE       ]</div>
     {% endif %}
 
-    <hr/>
+    
     <div class="footer center">
-      <div class="small muted">شكراً لزيارتكم - Thank you for visiting</div>
-      <div class="small muted">نتمنى لكم وجبة شهية - Enjoy your meal</div>
+      <div class="small muted">شكراً لزيارتكم</div>
+      <div class="small muted">Thank you for visiting</div>
+      <div class="small muted">نتمنى لكم وجبة شهية</div>
+      <div class="small muted">Enjoy your meal</div>
     </div>
     </div>
   

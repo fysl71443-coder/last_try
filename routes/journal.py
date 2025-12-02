@@ -129,7 +129,7 @@ def create_missing_journal_entries():
                 discount_amt = float(inv.discount_amount or 0)
                 tax_amt = float(inv.tax_amount or 0)
                 net_rev = max(0.0, total_before - discount_amt)
-                total_inc_tax = float(inv.total_after_tax_discount or (net_rev + tax_amt))
+                total_inc_tax = round(net_rev + tax_amt, 2)
                 cust = (getattr(inv, 'customer_name', '') or '').strip().lower()
                 def _grp(n: str):
                     s = (n or '').lower()
@@ -188,7 +188,7 @@ def create_missing_journal_entries():
             try:
                 total_before = float(inv.total_before_tax or 0)
                 tax_amt = float(inv.tax_amount or 0)
-                total_inc_tax = float(inv.total_after_tax_discount or (total_before + tax_amt))
+                total_inc_tax = round(total_before + tax_amt, 2)
                 exp_acc = _acc_by_code('1210')
                 vat_in_acc = _acc_by_code('6200')
                 ap_acc = _acc_by_code('2110')
@@ -230,7 +230,7 @@ def create_missing_journal_entries():
             try:
                 total_before = float(inv.total_before_tax or 0)
                 tax_amt = float(inv.tax_amount or 0)
-                total_inc_tax = float(inv.total_after_tax_discount or (total_before + tax_amt))
+                total_inc_tax = round(total_before + tax_amt, 2)
                 exp_acc = _acc_by_code('5100')
                 vat_in_acc = _acc_by_code('6200')
                 ap_acc = _acc_by_code('2110')
@@ -352,7 +352,7 @@ def create_missing_journal_entries_for(kind: str):
                 discount_amt = float(inv.discount_amount or 0)
                 tax_amt = float(inv.tax_amount or 0)
                 net_rev = max(0.0, total_before - discount_amt)
-                total_inc_tax = float(inv.total_after_tax_discount or (net_rev + tax_amt))
+                total_inc_tax = round(net_rev + tax_amt, 2)
                 cust = (getattr(inv, 'customer_name', '') or '').strip().lower()
                 def _grp(n: str):
                     s = (n or '').lower()
@@ -401,7 +401,7 @@ def create_missing_journal_entries_for(kind: str):
             try:
                 total_before = float(inv.total_before_tax or 0)
                 tax_amt = float(inv.tax_amount or 0)
-                total_inc_tax = float(inv.total_after_tax_discount or (total_before + tax_amt))
+                total_inc_tax = round(total_before + tax_amt, 2)
                 exp_acc = _acc_by_code('1210')
                 vat_in_acc = _acc_by_code('6200')
                 ap_acc = _acc_by_code('2110')
@@ -433,7 +433,7 @@ def create_missing_journal_entries_for(kind: str):
             try:
                 total_before = float(inv.total_before_tax or 0)
                 tax_amt = float(inv.tax_amount or 0)
-                total_inc_tax = float(inv.total_after_tax_discount or (total_before + tax_amt))
+                total_inc_tax = round(total_before + tax_amt, 2)
                 exp_acc = _acc_by_code('5100')
                 vat_in_acc = _acc_by_code('6200')
                 ap_acc = _acc_by_code('2110')
@@ -595,6 +595,9 @@ def list_entries():
     sd = (request.args.get('start_date') or '').strip()
     ed = (request.args.get('end_date') or '').strip()
     user_id = request.args.get('user_id', type=int)
+    emp_id = request.args.get('emp_id', type=int)
+    type_f = (request.args.get('type') or '').strip().lower()
+    status_f = (request.args.get('status') or '').strip().lower()
     page = int(request.args.get('page') or 1)
     per_page_arg = (request.args.get('per_page') or '').strip()
     if per_page_arg.lower() == 'all':
@@ -612,6 +615,10 @@ def list_entries():
         query = query.filter(JournalEntry.description.ilike(f"%{q}%"))
     if entry_number:
         query = query.filter(JournalEntry.entry_number.ilike(f"%{entry_number}%"))
+    if type_f in ('sales','purchase','expense','salary'):
+        query = query.filter(JournalEntry.invoice_type == type_f)
+    if status_f in ('posted','draft'):
+        query = query.filter(JournalEntry.status == status_f)
     if sd:
         from datetime import datetime as _dt
         try:
@@ -628,6 +635,9 @@ def list_entries():
             pass
     if user_id:
         query = query.filter((JournalEntry.created_by == user_id) | (JournalEntry.posted_by == user_id) | (JournalEntry.updated_by == user_id))
+    if emp_id:
+        from sqlalchemy import distinct
+        query = query.join(JournalLine, JournalLine.journal_id == JournalEntry.id).filter(JournalLine.employee_id == int(emp_id)).group_by(JournalEntry.id)
     pag = query.paginate(page=page, per_page=per_page, error_out=False)
     accounts = Account.query.order_by(Account.code.asc()).all()
     employees = []
@@ -807,6 +817,95 @@ def export_all():
         'Content-Disposition': 'attachment; filename=journal_entries.xls'
     }
     return Response(html, mimetype='application/vnd.ms-excel', headers=headers)
+
+@csrf.exempt
+@bp.route('/rebalance_rounding', methods=['POST','GET'])
+@login_required
+def rebalance_rounding():
+    updated = 0
+    errors = []
+    try:
+        from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice
+        sales = JournalEntry.query.filter(JournalEntry.invoice_type == 'sales').all()
+        for je in sales:
+            try:
+                inv = SalesInvoice.query.get(int(getattr(je, 'invoice_id', 0)))
+            except Exception:
+                inv = None
+            try:
+                total_before = float(getattr(inv, 'total_before_tax', 0) or 0)
+                discount_amt = float(getattr(inv, 'discount_amount', 0) or 0)
+                tax_amt = float(getattr(inv, 'tax_amount', 0) or 0)
+                net_rev = max(0.0, total_before - discount_amt)
+                total_inc_tax = round(net_rev + tax_amt, 2)
+                for ln in je.lines:
+                    desc = (ln.description or '').lower()
+                    if (float(ln.debit or 0) > 0) and ('ar' in desc):
+                        ln.debit = total_inc_tax
+                    if (float(ln.credit or 0) > 0) and ('clear ar' in desc):
+                        ln.credit = total_inc_tax
+                has_cash = any([(ln.description or '').lower().startswith('receipt') for ln in je.lines])
+                je.total_debit = total_inc_tax * 2 if has_cash else total_inc_tax
+                je.total_credit = total_inc_tax * 2 if has_cash else total_inc_tax
+                updated += 1
+            except Exception as e:
+                errors.append(str(e))
+        purch = JournalEntry.query.filter(JournalEntry.invoice_type == 'purchase').all()
+        for je in purch:
+            try:
+                inv = PurchaseInvoice.query.get(int(getattr(je, 'invoice_id', 0)))
+            except Exception:
+                inv = None
+            try:
+                total_before = float(getattr(inv, 'total_before_tax', 0) or 0)
+                tax_amt = float(getattr(inv, 'tax_amount', 0) or 0)
+                total_inc_tax = round(total_before + tax_amt, 2)
+                for ln in je.lines:
+                    desc = (ln.description or '').lower()
+                    if (float(ln.credit or 0) > 0) and ('accounts payable' in desc):
+                        ln.credit = total_inc_tax
+                    if (float(ln.debit or 0) > 0) and ('pay ap' in desc):
+                        ln.debit = total_inc_tax
+                has_cash = any([(ln.description or '').lower().startswith('pay ap') for ln in je.lines])
+                je.total_debit = total_inc_tax * 2 if has_cash else total_inc_tax
+                je.total_credit = total_inc_tax * 2 if has_cash else total_inc_tax
+                updated += 1
+            except Exception as e:
+                errors.append(str(e))
+        exp = JournalEntry.query.filter(JournalEntry.invoice_type == 'expense').all()
+        for je in exp:
+            try:
+                inv = ExpenseInvoice.query.get(int(getattr(je, 'invoice_id', 0)))
+            except Exception:
+                inv = None
+            try:
+                total_before = float(getattr(inv, 'total_before_tax', 0) or 0)
+                tax_amt = float(getattr(inv, 'tax_amount', 0) or 0)
+                total_inc_tax = round(total_before + tax_amt, 2)
+                for ln in je.lines:
+                    desc = (ln.description or '').lower()
+                    if (float(ln.credit or 0) > 0) and ('accounts payable' in desc):
+                        ln.credit = total_inc_tax
+                    if (float(ln.debit or 0) > 0) and ('pay ap' in desc):
+                        ln.debit = total_inc_tax
+                has_cash = any([(ln.description or '').lower().startswith('pay ap') for ln in je.lines])
+                je.total_debit = total_inc_tax * 2 if has_cash else total_inc_tax
+                je.total_credit = total_inc_tax * 2 if has_cash else total_inc_tax
+                updated += 1
+            except Exception as e:
+                errors.append(str(e))
+        db.session.commit()
+        try:
+            flash(f"تمت إعادة موازنة القيود: {updated} قيود؛ أخطاء: {len(errors)}", 'success' if not errors else 'warning')
+        except Exception:
+            pass
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        flash(str(e) or 'Rounding rebalance failed', 'danger')
+    return redirect(url_for('financials.trial_balance'))
 
 @bp.route('/<int:jid>/delete', methods=['POST'])
 @login_required

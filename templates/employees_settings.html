@@ -78,7 +78,7 @@
   </form>
 
   <h5 class="mb-2">ساعات العمل الشهرية</h5>
-  <form method="GET" class="row g-2 align-items-end mb-2">
+    <form method="GET" class="row g-2 align-items-end mb-2" id="periodForm">
     <div class="col-sm-2">
       <label class="form-label">سنة</label>
       <input type="number" name="year" class="form-control" value="{{ year }}">
@@ -87,10 +87,54 @@
       <label class="form-label">شهر</label>
       <input type="number" name="month" class="form-control" min="1" max="12" value="{{ month }}">
     </div>
-    <div class="col-sm-2">
-      <button class="btn btn-secondary w-100">تحديث</button>
-    </div>
+    
   </form>
+
+  <div class="row g-2 align-items-end mb-3">
+    <div class="col-sm-3">
+      <label class="form-label">نوع الراتب</label>
+      <select class="form-select" id="salaryTypeFilter">
+        <option value="all">الكل</option>
+        <option value="hourly">ساعاتي</option>
+        <option value="monthly">شهري</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-2">
+          <label class="form-label">القسم</label>
+          <select class="form-select" id="payDept">
+            <option value="">الكل</option>
+            {% for r in dept_rates %}
+            <option value="{{ r.name|lower }}">{{ r.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label">شهر</label>
+          <input type="month" class="form-control" id="payMonth" value="{{ '%04d-%02d'|format(year, month) }}">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label">المبلغ</label>
+          <input type="number" step="0.01" min="0" class="form-control" id="payAmount">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label">طريقة الدفع</label>
+          <select class="form-select" id="payMethod">
+            <option value="cash">نقدي</option>
+            <option value="bank">بنك</option>
+          </select>
+        </div>
+        <div class="col-sm-4 text-end">
+          <button type="button" class="btn btn-warning" id="btnDeptPay">💳 سداد حسب القسم</button>
+          <button type="button" class="btn btn-primary" id="btnAllPay">💳 سداد جماعي</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <form method="POST">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -105,23 +149,63 @@
             <th>#</th>
             <th>الموظف</th>
             <th>القسم</th>
-            <th>الساعات</th>
-            <th>الأجر المحسوب</th>
+          <th>الساعات</th>
+          <th>غياب (ساعات)</th>
+          <th>ساعات إضافية</th>
+          <th>بدل الإضافي</th>
+          <th>خصم الغياب</th>
+          <th>البدلات الافتراضية</th>
+          <th>الخصومات الافتراضية</th>
+          <th>الأجر المحسوب</th>
+          <th>الإجمالي المتوقع</th>
+          <th>الحالة</th>
+          <th style="width:160px">مبلغ السداد</th>
+          <th>سداد</th>
           </tr>
         </thead>
         <tbody>
           {% for emp in employees %}
           {% set rate = dept_rate_map.get((emp.department or '')|lower, 0) %}
           {% set h = hours_map.get(emp.id, 0) %}
+          {% set d = defaults_map.get(emp.id) %}
+          {% set allow_def = (d.allowances if d else 0) %}
+          {% set ded_def = (d.deductions if d else 0) %}
           {% set calc = (rate or 0) * (h or 0) %}
-          <tr data-rate="{{ '%.2f'|format(rate or 0) }}">
+          {% set st = (status_map.get(emp.id) or 'due') %}
+          <tr data-rate="{{ '%.2f'|format(rate or 0) }}" data-emp="{{ emp.id }}" data-type="{{ 'hourly' if (rate or 0) > 0 else 'monthly' }}">
             <td>{{ loop.index }}</td>
             <td>{{ emp.full_name }}</td>
             <td>{{ emp.department or '-' }}</td>
             <td style="width:160px">
               <input type="number" step="0.01" min="0" class="form-control emp-hours" name="hours_{{ emp.id }}" value="{{ h }}">
             </td>
+            <td style="width:160px">
+              <input type="number" step="0.01" min="0" class="form-control emp-absent" name="absent_hours_{{ emp.id }}" value="0">
+            </td>
+            <td style="width:160px">
+              <input type="number" step="0.01" min="0" class="form-control emp-ot" name="overtime_hours_{{ emp.id }}" value="0">
+            </td>
+            <td class="fw-bold emp-ot-allow">0.00</td>
+            <td class="fw-bold emp-abs-ded">0.00</td>
+            <td style="width:140px">
+              <input type="number" step="0.01" min="0" class="form-control" name="allow_default_{{ emp.id }}" value="{{ '%.2f'|format(allow_def or 0) }}">
+            </td>
+            <td style="width:140px">
+              <input type="number" step="0.01" min="0" class="form-control" name="ded_default_{{ emp.id }}" value="{{ '%.2f'|format(ded_def or 0) }}">
+            </td>
             <td class="fw-bold emp-wage">{{ '%.2f'|format(calc) }}</td>
+            <td class="fw-bold emp-total">{{ '%.2f'|format(calc) }}</td>
+            <td>
+              {% if st == 'paid' %}<span class="badge bg-success">مدفوع</span>
+              {% elif st == 'partial' %}<span class="badge bg-warning text-dark">جزئي</span>
+              {% else %}<span class="badge bg-danger">مستحق</span>{% endif %}
+            </td>
+            <td>
+              <input type="number" step="0.01" min="0" class="form-control emp-pay-amt" placeholder="0.00">
+            </td>
+            <td>
+              <button type="button" class="btn btn-outline-success btn-sm emp-pay-btn">سداد</button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -135,20 +219,98 @@
 </div>
 
 <script>
-// Live wage recalculation on hours change
+// Live wage & absence deduction recalculation
 (function(){
   const table = document.getElementById('hoursTable');
   if(!table) return;
-  table.addEventListener('input', function(e){
-    const input = e.target.closest('.emp-hours');
-    if(!input) return;
-    const tr = input.closest('tr');
+  function recalc(tr){
     const rate = parseFloat(tr.getAttribute('data-rate')) || 0;
-    const hours = parseFloat(input.value) || 0;
+    const hours = parseFloat(tr.querySelector('.emp-hours')?.value||0) || 0;
+    const absent = parseFloat(tr.querySelector('.emp-absent')?.value||0) || 0;
+    const ot = parseFloat(tr.querySelector('.emp-ot')?.value||0) || 0;
+    const allowDef = parseFloat(tr.querySelector('[name^="allow_default_"]')?.value||0) || 0;
+    const dedDef = parseFloat(tr.querySelector('[name^="ded_default_"]')?.value||0) || 0;
     const wageCell = tr.querySelector('.emp-wage');
+    const absCell = tr.querySelector('.emp-abs-ded');
+    const otCell = tr.querySelector('.emp-ot-allow');
+    const totalCell = tr.querySelector('.emp-total');
     if(wageCell){ wageCell.textContent = (rate * hours).toFixed(2); }
+    if(absCell){ absCell.textContent = (rate * absent).toFixed(2); }
+    if(otCell){ otCell.textContent = (rate * ot).toFixed(2); }
+    if(totalCell){ totalCell.textContent = (rate * hours + rate * ot - rate * absent + allowDef - dedDef).toFixed(2); }
+  }
+  table.addEventListener('input', function(e){
+    const tr = e.target.closest('tr');
+    if(!tr) return;
+    recalc(tr);
+  });
+  // Initial pass
+  table.querySelectorAll('tbody tr').forEach(recalc);
+})();
+
+(function(){
+  const table = document.getElementById('hoursTable');
+  const sel = document.getElementById('salaryTypeFilter');
+  if(!table || !sel) return;
+  function apply(){
+    const v = sel.value;
+    table.querySelectorAll('tbody tr').forEach(tr => {
+      const t = tr.getAttribute('data-type')||'all';
+      tr.style.display = (v==='all' || v===t) ? '' : 'none';
+    });
+  }
+  sel.addEventListener('change', apply);
+  apply();
+})();
+
+// Payment actions
+(function(){
+  const monthVal = `${String({{ year }}).padStart(4,'0')}-${String({{ month }}).padStart(2,'0')}`;
+  document.querySelectorAll('.emp-pay-btn').forEach(btn => {
+    btn.addEventListener('click', async function(){
+      const tr = this.closest('tr');
+      const empId = tr.getAttribute('data-emp');
+      const amt = tr.querySelector('.emp-pay-amt')?.value || '0';
+      const fd = new FormData();
+      fd.append('csrf_token', '{{ csrf_token() }}');
+      fd.append('paid_amount', amt);
+      fd.append('payment_method', 'cash');
+      const url = `/employees/${empId}/pay?employee_id=${empId}&year=${monthVal.split('-')[0]}&month=${monthVal.split('-')[1]}`;
+      try{ const r = await fetch(url, { method:'POST', body: fd }); if(r.ok){ location.reload(); } else { alert('فشل السداد'); } }catch(e){ alert('فشل السداد'); }
+    });
+  });
+  document.getElementById('btnAllPay')?.addEventListener('click', async function(){
+    const m = document.getElementById('payMonth').value || monthVal;
+    const amt = document.getElementById('payAmount').value || '0';
+    const method = document.getElementById('payMethod').value || 'cash';
+    const fd = new FormData(); fd.append('csrf_token', '{{ csrf_token() }}'); fd.append('employee_id', 'all'); fd.append('month', m); fd.append('paid_amount', amt); fd.append('payment_method', method);
+    try{ const r = await fetch('/salaries/pay', { method:'POST', body: fd }); if(r.ok){ location.reload(); } else { alert('فشل السداد الجماعي'); } }catch(e){ alert('فشل السداد الجماعي'); }
+  });
+  document.getElementById('btnDeptPay')?.addEventListener('click', async function(){
+    const dept = (document.getElementById('payDept').value||'').toLowerCase();
+    const m = document.getElementById('payMonth').value || monthVal;
+    const amt = document.getElementById('payAmount').value || '0';
+    const method = document.getElementById('payMethod').value || 'cash';
+    const fd = new FormData(); fd.append('csrf_token', '{{ csrf_token() }}'); fd.append('employee_id', 'all'); fd.append('department', dept); fd.append('month', m); fd.append('paid_amount', amt); fd.append('payment_method', method);
+    try{ const r = await fetch('/salaries/pay', { method:'POST', body: fd }); if(r.ok){ location.reload(); } else { alert('فشل سداد القسم'); } }catch(e){ alert('فشل سداد القسم'); }
   });
 })();
+  // Instant change for year/month without button
+  (function(){
+    const form = document.getElementById('periodForm');
+    if(!form) return;
+    const y = form.querySelector('[name="year"]');
+    const m = form.querySelector('[name="month"]');
+    function go(){
+      const yy = (y?.value||'').trim();
+      const mm = (m?.value||'').trim();
+      const params = new URLSearchParams(window.location.search);
+      if(yy) params.set('year', yy);
+      if(mm) params.set('month', mm);
+      window.location.search = params.toString();
+    }
+    y?.addEventListener('change', go);
+    m?.addEventListener('change', go);
+  })();
 </script>
 {% endblock %}
-

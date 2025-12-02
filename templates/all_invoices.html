@@ -11,12 +11,10 @@
           <th>Branch</th>
           <th>Date</th>
           <th>Invoice No.</th>
-          <th>Item</th>
-          <th>Qty</th>
-          <th>Amount</th>
-          <th>Discount</th>
-          <th>VAT</th>
-          <th>Total</th>
+          <th class="text-end">Subtotal</th>
+          <th class="text-end">Discount</th>
+          <th class="text-end">Tax</th>
+          <th class="text-end">Total</th>
           <th>Payment</th>
         </tr>
       </thead>
@@ -29,6 +27,7 @@
 <script>
 (function(){
   function n2(x){ try{return Number(x||0).toFixed(2);}catch(e){return '0.00';} }
+  const currency = (window.settings && window.settings.currency) || 'SAR';
   fetch('/api/all-invoices', {credentials:'same-origin'})
     .then(r=>r.json())
     .then(data=>{
@@ -44,7 +43,7 @@
           currentBranch = r.branch;
           const hdr = document.createElement('tr');
           hdr.className = 'table-info fw-bold';
-          hdr.innerHTML = `<td colspan="10">Branch: ${currentBranch||''}</td>`;
+          hdr.innerHTML = `<td colspan="8">Branch: ${currentBranch||''}</td>`;
           body.appendChild(hdr);
         }
         const tr = document.createElement('tr');
@@ -52,38 +51,35 @@
           <td>${r.branch||''}</td>
           <td>${r.date||''}</td>
           <td>${r.invoice_number||''}</td>
-          <td>${r.item_name||''}</td>
-          <td>${Number(r.quantity||0)}</td>
-          <td>${n2(r.price)}</td>
-          <td>${n2(r.discount)}</td>
-          <td>${n2(r.vat)}</td>
-          <td>${n2(r.total)}</td>
+          <td class="text-end">${n2(r.subtotal)} ${currency}</td>
+          <td class="text-end">${n2(r.discount)} ${currency}</td>
+          <td class="text-end">${n2(r.vat)} ${currency}</td>
+          <td class="text-end">${n2(r.total)} ${currency}</td>
           <td>${r.payment_method||''}</td>`;
         body.appendChild(tr);
       });
 
-      // Branch totals
       const btot = data.branch_totals||{};
       Object.keys(btot).sort().forEach(b=>{
-        const t = btot[b]||{amount:0,discount:0,vat:0,total:0};
+        const t = btot[b]||{subtotal:0,discount:0,vat:0,total:0};
         const tr = document.createElement('tr'); tr.className = 'table-warning fw-bold';
         tr.innerHTML = `
-          <td colspan="5" class="text-end">Branch Totals (${b}):</td>
-          <td>${n2(t.amount)}</td>
-          <td>${n2(t.discount)}</td>
-          <td>${n2(t.vat)}</td>
-          <td>${n2(t.total)}</td>
+          <td colspan="3" class="text-end">Branch Totals (${b}):</td>
+          <td class="text-end">${n2(t.subtotal)} ${currency}</td>
+          <td class="text-end">${n2(t.discount)} ${currency}</td>
+          <td class="text-end">${n2(t.vat)} ${currency}</td>
+          <td class="text-end">${n2(t.total)} ${currency}</td>
           <td></td>`;
         tfoot.appendChild(tr);
       });
-      const overall = data.overall_totals || data.summary || {amount:0,discount:0,vat:0,total:0};
+      const overall = data.overall_totals || {subtotal:0,discount:0,vat:0,total:0};
       const tro = document.createElement('tr'); tro.className = 'table-secondary fw-bold';
       tro.innerHTML = `
-        <td colspan="5" class="text-end">Overall Totals:</td>
-        <td>${n2(overall.amount)}</td>
-        <td>${n2(overall.discount)}</td>
-        <td>${n2(overall.vat)}</td>
-        <td>${n2(overall.total)}</td>
+        <td colspan="3" class="text-end">Overall Totals:</td>
+        <td class="text-end">${n2(overall.subtotal)} ${currency}</td>
+        <td class="text-end">${n2(overall.discount)} ${currency}</td>
+        <td class="text-end">${n2(overall.vat)} ${currency}</td>
+        <td class="text-end">${n2(overall.total)} ${currency}</td>
         <td></td>`;
       tfoot.appendChild(tro);
     })

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from models import get_saudi_now
 from sqlalchemy import func
 from extensions import db
+from sqlalchemy.exc import IntegrityError
 from models import Account, JournalEntry, JournalLine, SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, LedgerEntry
 
 bp = Blueprint('financials', __name__, url_prefix='/financials')
@@ -38,13 +39,37 @@ def _normalize_short_aliases():
             except Exception:
                 pass
         num_map = {
-            '1010': '1110',
-            '1020': '1120',
+            # Cash/Bank legacy -> new
+            '1010': '1040',
+            '1110': '1040',
+            '1020': '1050',
+            '1120': '1050',
+            # VAT legacy -> new
+            '6100': '2060',
+            '6200': '1100',
+            '6300': '6000',
+            # Revenue legacy -> new
+            '4100': '4000',
+            '4110': '4010',
+            '4120': '4020',
+            '4130': '4030',
+            # Bank commissions unify to 5090 per new chart
+            '5060': '5090',
+            '5190': '5090',
+            '4040': '5090',
+            # Misc merges kept
             '1.1.4.2': '1030',
             '3010': '3000',
             '3100': '3000',
-            '5060': '5190',
-            '4040': '5190'
+            '1025': '1210',
+            '5030': '5330',
+            '5320': '5330',
+            # Liabilities legacy -> new
+            '2000': '2110',
+            '2010': '2110',
+            '2020': '2130',
+            '2030': '2130',
+            '2040': '2120'
         }
         # User-approved merges
         num_map.update({
@@ -126,12 +151,27 @@ def income_statement():
 
     try:
         from app.routes import CHART_OF_ACCOUNTS
+        keys = list((CHART_OF_ACCOUNTS or {}).keys())
+        try:
+            existing = {str(code) for (code,) in db.session.query(Account.code).filter(Account.code.in_(keys)).all()}
+        except Exception:
+            existing = set()
         for code, meta in (CHART_OF_ACCOUNTS or {}).items():
-            if not Account.query.filter_by(code=code).first():
-                db.session.add(Account(code=code, name=meta.get('name',''), type=meta.get('type','EXPENSE')))
-        db.session.commit()
+            if str(code) not in existing:
+                try:
+                    db.session.add(Account(code=code, name=meta.get('name',''), type=meta.get('type','EXPENSE')))
+                    db.session.flush()
+                except IntegrityError:
+                    db.session.rollback()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
     except Exception:
-        pass
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
     # Helper to sum by account type
     def sum_type(acc_type):
@@ -411,12 +451,27 @@ def balance_sheet():
 
     try:
         from app.routes import CHART_OF_ACCOUNTS
+        keys = list((CHART_OF_ACCOUNTS or {}).keys())
+        try:
+            existing = {str(code) for (code,) in db.session.query(Account.code).filter(Account.code.in_(keys)).all()}
+        except Exception:
+            existing = set()
         for code, meta in (CHART_OF_ACCOUNTS or {}).items():
-            if not Account.query.filter_by(code=code).first():
-                db.session.add(Account(code=code, name=meta.get('name',''), type=meta.get('type','EXPENSE')))
-        db.session.commit()
+            if str(code) not in existing:
+                try:
+                    db.session.add(Account(code=code, name=meta.get('name',''), type=meta.get('type','EXPENSE')))
+                    db.session.flush()
+                except IntegrityError:
+                    db.session.rollback()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
     except Exception:
-        pass
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
     rows = db.session.query(
         Account.code.label('code'),
@@ -428,8 +483,24 @@ def balance_sheet():
      .filter((JournalLine.line_date <= asof) | (JournalLine.id.is_(None))) \
      .group_by(Account.id) \
      .order_by(Account.type.asc(), Account.code.asc()).all()
-    ca_codes = {'1110','1120','1210','1310','6200','1030','1050'}
-    cl_codes = {'2110','2130','6100'}
+    ca_codes = {
+        # Cash & Bank
+        '1040','1050','1110','1120',
+        # Accounts receivable (general and platforms)
+        '1020','1130','1140',
+        # Inventory and prepaid
+        '1210','1070','1310','1320','1090',
+        # Input VAT (asset)
+        '1100',
+        # Employee advances and other current assets
+        '1030','1150'
+    }
+    cl_codes = {
+        # Accounts payable and payroll liabilities
+        '2110','2130',
+        # VAT payable
+        '2120','2060'
+    }
     current_assets = 0.0
     noncurrent_assets = 0.0
     current_liabilities = 0.0
@@ -514,7 +585,7 @@ def trial_balance():
      .group_by(Account.id) \
      .order_by(Account.type.asc(), Account.code.asc()).all()
 
-    hide_codes = {'AR','AP','CASH','BANK','VAT_IN','VAT_OUT','VAT_SETTLE','COGS','4040','4.1.2.1','4.1.2.2'}
+    hide_codes = {'AR','AP','CASH','BANK','VAT_IN','VAT_OUT','VAT_SETTLE','COGS','4040','4.1.2.1','4.1.2.2','1000','2000','3000','4000','5000','6000'}
     rows = [r for r in rows if (r.code not in hide_codes) and not (float(r.debit or 0) == 0.0 and float(r.credit or 0) == 0.0 and (r.code in {'1010','1020'}))]
 
     total_debit = float(sum([float(r.debit or 0) for r in rows]))
@@ -823,7 +894,7 @@ def backfill_journals():
         discount_amt = float(inv.discount_amount or 0)
         tax_amt = float(inv.tax_amount or 0)
         net_rev = max(0.0, total_before - discount_amt)
-        total_inc_tax = float(inv.total_after_tax_discount or (net_rev + tax_amt))
+        total_inc_tax = round(net_rev + tax_amt, 2)
         cash_acc = acc_by_code(cash_code)
         rev_acc = acc_by_code(rev_code)
         vat_out_acc = acc_by_code(vat_out_code)
@@ -845,7 +916,7 @@ def backfill_journals():
         ap_acc = acc_by_code('2110')
         total_before = float(inv.total_before_tax or 0)
         tax_amt = float(inv.tax_amount or 0)
-        total_inc_tax = float(inv.total_after_tax_discount or (total_before + tax_amt))
+        total_inc_tax = round(total_before + tax_amt, 2)
         je = JournalEntry(entry_number=f"JE-PUR-{inv.invoice_number}", date=inv.date, branch_code=None, description=f"Purchase {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax)
         db.session.add(je); db.session.flush()
         if total_before > 0:
@@ -863,7 +934,7 @@ def backfill_journals():
         ap_acc = acc_by_code('2110')
         total_before = float(inv.total_before_tax or 0)
         tax_amt = float(inv.tax_amount or 0)
-        total_inc_tax = float(inv.total_after_tax_discount or (total_before + tax_amt))
+        total_inc_tax = round(total_before + tax_amt, 2)
         je = JournalEntry(entry_number=f"JE-EXP-{inv.invoice_number}", date=inv.date, branch_code=None, description=f"Expense {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax)
         db.session.add(je); db.session.flush()
         if total_before > 0:

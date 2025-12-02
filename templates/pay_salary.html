@@ -18,7 +18,7 @@
         </div>
         <div class="col-md-4">
           <label class="form-label">Employee / الموظف</label>
-          <select name="employee_id" required class="form-select">
+          <select name="employee_id" required class="form-select" id="employeeSelect">
             <option value="">-- Select --</option>
             {% for emp in employees %}
               <option value="{{ emp.id }}" {% if emp.id == selected_employee_id %}selected{% endif %}>{{ emp.full_name }}</option>
@@ -120,6 +120,20 @@
     </tbody>
   </table>
 </div>
+<script>
+(function(){
+  const sel = document.getElementById('employeeSelect');
+  if(!sel) return;
+  sel.addEventListener('change', function(){
+    const empId = this.value;
+    const params = new URLSearchParams(window.location.search);
+    if(empId) params.set('employee_id', empId);
+    const y = '{{ year }}'; const m = '{{ month }}';
+    params.set('year', y); params.set('month', m);
+    window.location.search = params.toString();
+  });
+})();
+</script>
 {% endblock %}
 
 
