@@ -33,9 +33,15 @@
   .thumb .cap{ position:absolute; left:0; right:0; bottom:0; padding:6px 8px; background: linear-gradient(180deg, rgba(0,0,0,.0), rgba(0,0,0,.25)); color:#fff; font-weight:600; font-size:.9rem; text-shadow:0 1px 2px rgba(0,0,0,.35); display:flex; justify-content:space-between; align-items:center; }
   [dir="rtl"] .thumb .cap{ flex-direction:row-reverse; }
   .elegant-title{ background: linear-gradient(90deg, #1c2c58, #2b3e78 40%, #c9a34a 90%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; letter-spacing:.3px; }
-  .lux-btn{ background: linear-gradient(135deg, var(--ui-primary), #0f1f44); color:#fff; border: 1px solid rgba(201,163,74,.45); box-shadow: 0 10px 24px rgba(12,18,32,.35), inset 0 0 0 1px rgba(255,255,255,.06); border-radius: 16px; padding: 12px 22px; font-weight:600; letter-spacing:.2px; transition: transform .15s ease, box-shadow .15s ease, filter .15s ease; }
+  .lux-btn{ background: linear-gradient(135deg, var(--ui-primary), #0f1f44); color:#fff; border: 1px solid rgba(201,163,74,.45); box-shadow: 0 10px 24px rgba(12,18,32,.35), inset 0 0 0 1px rgba(255,255,255,.06); border-radius: 14px; padding: 10px 18px; font-weight:600; letter-spacing:.2px; transition: transform .15s ease, box-shadow .15s ease, filter .15s ease; }
   .lux-btn:hover{ filter: brightness(1.06); box-shadow: 0 14px 32px rgba(12,18,32,.42), inset 0 0 0 1px rgba(255,255,255,.08); }
   .lux-btn:active{ transform: translateY(1px) scale(.99); }
+  .lux-btn-red{ background: linear-gradient(135deg, #b21f2d, #7a0c16); color:#fff; border: 1px solid rgba(220,53,69,.45); box-shadow: 0 10px 24px rgba(178,31,45,.35), inset 0 0 0 1px rgba(255,255,255,.06); border-radius: 14px; padding: 10px 18px; font-weight:600; letter-spacing:.2px; transition: transform .15s ease, box-shadow .15s ease, filter .15s ease; }
+  .lux-btn-red:hover{ filter: brightness(1.06); box-shadow: 0 14px 32px rgba(178,31,45,.42), inset 0 0 0 1px rgba(255,255,255,.08); }
+  .lux-btn-red:active{ transform: translateY(1px) scale(.99); }
+  .lux-btn-gray{ background: linear-gradient(135deg, #6c757d, #495057); color:#fff; border: 1px solid rgba(108,117,125,.45); box-shadow: 0 10px 24px rgba(73,80,87,.35), inset 0 0 0 1px rgba(255,255,255,.06); border-radius: 14px; padding: 10px 18px; font-weight:600; letter-spacing:.2px; transition: transform .15s ease, box-shadow .15s ease, filter .15s ease; }
+  .lux-btn-gray:hover{ filter: brightness(1.06); box-shadow: 0 14px 32px rgba(73,80,87,.42), inset 0 0 0 1px rgba(255,255,255,.08); }
+  .lux-btn-gray:active{ transform: translateY(1px) scale(.99); }
   .form-control, .form-select{ border-radius: 12px; transition: box-shadow .18s ease, transform .12s ease; }
   .form-control:focus, .form-select:focus{ box-shadow: var(--ui-ring), 0 10px 22px rgba(12,18,32,.18); border-color: var(--ui-accent); }
   .table{ border-collapse: separate; border-spacing: 0 6px; }
@@ -181,9 +187,38 @@
           </div>
 
           <div class="mt-3 d-flex justify-content-center align-items-center gap-3">
-            <button id="btnGenerateInvoice" class="btn btn-success btn-lg lux-btn">Issue Invoice / إصدار فاتورة</button>
-            <button id="btnVoidInvoice" class="btn btn-outline-danger">Cancel Invoice / إلغاء الفاتورة</button>
-            <button id="btnPrintOrder" class="btn btn-outline-secondary">PRINT ORDER-طباعة الطلب</button>
+            <button id="btnGenerateInvoice" class="btn lux-btn">Issue Invoice / إصدار فاتورة</button>
+            <button id="btnVoidInvoice" class="btn lux-btn-red">Cancel Invoice / إلغاء الفاتورة</button>
+            <button id="btnPrintOrder" class="btn lux-btn-gray">PRINT ORDER-طباعة الطلب</button>
+          </div>
+          <div class="mt-3 text-center">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btnCashCalcTbl">Cash Change Calculator</button>
+          </div>
+          <div id="cashCalcTbl" class="mt-2 card border-0 shadow-sm" style="display:none">
+            <div class="card-body p-3">
+            <div class="fw-semibold mb-2">Cash Change Calculator</div>
+            <div class="row g-2 justify-content-center">
+              <div class="col-12 col-md-5">
+                <label class="form-label">Amount Received</label>
+                <div class="input-group">
+                  <span class="input-group-text">SAR</span>
+                  <input id="cashReceivedTbl" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label">Total</label>
+                <div class="form-control bg-light" id="cashTotalTbl">SAR0.00</div>
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label">Change</label>
+                <div class="form-control bg-success text-white" id="cashChangeTbl">SAR0.00</div>
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label">Due</label>
+                <div class="form-control bg-warning" id="cashDueTbl">SAR0.00</div>
+              </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -217,7 +252,12 @@
      data-draft='{{ draft_items|safe }}'
      data-draft-id="{{ current_draft.id if current_draft else '' }}"
      data-cat-map='{{ cat_map_json|safe }}'
-     data-cat-images='{{ cat_image_map_json|safe }}'>
+     data-cat-images='{{ cat_image_map_json|safe }}'
+     data-cust-name="{{ init_cust_name }}"
+     data-cust-phone="{{ init_cust_phone }}"
+     data-disc="{{ init_discount_pct }}"
+     data-tax="{{ init_tax_pct }}"
+     data-pay="{{ init_payment_method }}">
 </div>
 
 <!-- Add Customer Modal (Table Invoice) -->
@@ -304,6 +344,52 @@
 </script>
 
 <script src="{{ url_for('static', filename='js/pos_table.js') }}?v={{ ASSET_VERSION }}"></script>
+<script>
+  (function(){
+    try{
+      var n = "{{ init_cust_name }}";
+      var p = "{{ init_cust_phone }}";
+      var d = "{{ init_discount_pct }}";
+      var t = "{{ init_tax_pct }}";
+      var m = "{{ init_payment_method }}";
+      if(n){ var el = document.getElementById('custName'); if(el) el.value = n; }
+      if(p){ var elp = document.getElementById('custPhone'); if(elp) elp.value = p; }
+      if(d){ var eld = document.getElementById('discountPct'); if(eld) eld.value = String(d); }
+      if(t){ var elt = document.getElementById('taxPct'); if(elt) elt.value = String(t); }
+      if(m){ var elm = document.getElementById('payMethod'); if(elm) elm.value = m.toUpperCase(); }
+    }catch(e){}
+  })();
+</script>
+
+<script>
+  function parseMoneyTxtTbl(t){ try{ return parseFloat(String(t||'').replace(/[^0-9.\-]/g,''))||0; }catch(_){ return 0; } }
+  function getGrandTbl(){ const el=document.getElementById('grand'); return parseMoneyTxtTbl(el && el.textContent || '0'); }
+  function computeCashChangeTbl(){
+    const box = document.getElementById('cashCalcTbl'); if(!box) return;
+    const pm = (document.getElementById('payMethod')?.value||'');
+    const force = !!window.cashCalcForceShowTbl;
+    box.style.display = (force || pm==='CASH') ? 'block' : 'none';
+    const total = getGrandTbl();
+    const recv = parseFloat(document.getElementById('cashReceivedTbl')?.value||'0')||0;
+    const change = Math.max(0, recv - total);
+    const due = Math.max(0, total - recv);
+    const set=(id,val)=>{ const el=document.getElementById(id); if(el){ el.textContent = `SAR${Number(val||0).toFixed(2)}`; } };
+    set('cashTotalTbl', total);
+    set('cashChangeTbl', change);
+    set('cashDueTbl', due);
+  }
+  document.getElementById('cashReceivedTbl')?.addEventListener('input', computeCashChangeTbl);
+  document.getElementById('payMethod')?.addEventListener('change', computeCashChangeTbl);
+  document.getElementById('btnCashCalcTbl')?.addEventListener('click', function(){ window.cashCalcForceShowTbl = !window.cashCalcForceShowTbl; computeCashChangeTbl(); });
+  try{
+    const target = document.getElementById('grand');
+    if(target){
+      const obs = new MutationObserver(()=> computeCashChangeTbl());
+      obs.observe(target, { childList:true, characterData:true, subtree:true });
+      computeCashChangeTbl();
+    }
+  }catch(_){ }
+</script>
 
 {% endblock %}
 

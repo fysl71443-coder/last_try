@@ -296,25 +296,38 @@ def api_all_invoices():
             q = q.filter(SalesInvoice.branch == b)
         if pm != 'all':
             q = q.filter(func.lower(SalesInvoice.payment_method) == pm)
+        used_fallback = set()
         for inv, it in q.order_by(SalesInvoice.branch.asc(), SalesInvoice.date.desc(), SalesInvoice.id.desc(), SalesInvoiceItem.id.desc()).all():
             qty = float(it.quantity or 0)
-            unit = float(it.price_before_tax or 0)
-            amount = unit * qty
-            total_line = float(it.total_price or (amount - float(it.discount or 0) + float(it.tax or 0)))
+            unit_price = float(it.price_before_tax or 0)
+            amount = unit_price * qty
+            discount_line = float(it.discount or 0)
+            vat_line = float(it.tax or 0)
+            total_line = float(it.total_price or (amount - discount_line + vat_line))
             bname = BRANCH_CODES.get(inv.branch, inv.branch)
+            # Fallback to invoice-level values when item data is missing/zero (show one synthetic row per invoice)
+            if (qty <= 0 and unit_price <= 0 and not (it.product_name or '').strip() and (inv.id not in used_fallback)):
+                qty = 1.0
+                unit_price = float(inv.total_before_tax or 0.0)  # represent invoice subtotal as one unit
+                amount = float(inv.total_before_tax or 0.0)
+                discount_line = float(inv.discount_amount or 0.0)
+                vat_line = float(inv.tax_amount or 0.0)
+                total_line = float(inv.total_after_tax_discount or 0.0)
+                used_fallback.add(inv.id)
             rows.append({
                 'branch': bname,
                 'date': inv.date.strftime('%Y-%m-%d') if inv.date else '',
                 'invoice_number': inv.invoice_number,
-                'item_name': it.product_name,
+                'item_name': it.product_name or '',
                 'quantity': qty,
-                'price': float(amount),
-                'discount': float(it.discount or 0),
-                'vat': float(it.tax or 0),
+                'unit_price': unit_price,
+                'amount': float(amount),
+                'discount': discount_line,
+                'vat': vat_line,
                 'total': total_line,
                 'payment_method': inv.payment_method or ''
             })
-            _add_branch_tot(bname, amount, it.discount, it.tax, total_line)
+            _add_branch_tot(bname, amount, discount_line, vat_line, total_line)
         # Purchases
         pq = db.session.query(PurchaseInvoice, PurchaseInvoiceItem).join(PurchaseInvoiceItem, PurchaseInvoiceItem.invoice_id==PurchaseInvoice.id)
         pq = pq.filter(PurchaseInvoice.date.between(start_d, end_d))
@@ -332,7 +345,8 @@ def api_all_invoices():
                 'invoice_number': inv.invoice_number,
                 'item_name': it.raw_material_name,
                 'quantity': qty,
-                'price': float(amount),
+                'unit_price': float(unit),
+                'amount': float(amount),
                 'discount': float(it.discount or 0),
                 'vat': float(it.tax or 0),
                 'total': total_line,
@@ -356,7 +370,8 @@ def api_all_invoices():
                 'invoice_number': inv.invoice_number,
                 'item_name': it.description,
                 'quantity': qty,
-                'price': float(amount),
+                'unit_price': float(unit),
+                'amount': float(amount),
                 'discount': float(it.discount or 0),
                 'vat': float(it.tax or 0),
                 'total': total_line,
@@ -366,7 +381,7 @@ def api_all_invoices():
 
         # Summary (overall totals)
         summary = {
-            'amount': sum(r.get('price', 0.0) for r in rows),
+            'amount': sum(r.get('amount', 0.0) for r in rows),
             'discount': sum(r.get('discount', 0.0) for r in rows),
             'vat': sum(r.get('vat', 0.0) for r in rows),
             'total': sum(r.get('total', 0.0) for r in rows),
@@ -429,24 +444,36 @@ def print_all_invoices_sales():
             q = q.filter(SalesInvoice.branch == b)
         if pm != 'all':
             q = q.filter(func.lower(SalesInvoice.payment_method) == pm)
+        used_fallback = set()
         for inv, it in q.order_by(SalesInvoice.branch.asc(), SalesInvoice.date.desc(), SalesInvoice.id.desc(), SalesInvoiceItem.id.desc()).all():
-            qty = float(it.quantity or 0); unit = float(it.price_before_tax or 0)
+            qty = float(it.quantity or 0)
+            unit = float(it.price_before_tax or 0)
             amount = unit * qty
-            total_line = float(it.total_price or (amount - float(it.discount or 0) + float(it.tax or 0)))
+            discount_line = float(it.discount or 0)
+            vat_line = float(it.tax or 0)
+            total_line = float(it.total_price or (amount - discount_line + vat_line))
             bname = BRANCH_CODES.get(inv.branch, inv.branch)
+            # Fallback to invoice-level values when item data is missing/zero
+            if (qty <= 0 and unit <= 0 and not (it.product_name or '').strip() and (inv.id not in used_fallback)):
+                qty = 1.0
+                amount = float(inv.total_before_tax or 0.0)
+                discount_line = float(inv.discount_amount or 0.0)
+                vat_line = float(inv.tax_amount or 0.0)
+                total_line = float(inv.total_after_tax_discount or 0.0)
+                used_fallback.add(inv.id)
             rows.append({
                 'branch': bname,
                 'date': inv.date.strftime('%Y-%m-%d') if inv.date else '',
                 'invoice_number': inv.invoice_number,
-                'item_name': it.product_name,
+                'item_name': it.product_name or '',
                 'quantity': qty,
                 'amount': float(amount),
-                'discount': float(it.discount or 0),
-                'vat': float(it.tax or 0),
+                'discount': discount_line,
+                'vat': vat_line,
                 'total': total_line,
                 'payment_method': inv.payment_method or ''
             })
-            _add_branch_tot(bname, amount, it.discount, it.tax, total_line)
+            _add_branch_tot(bname, amount, discount_line, vat_line, total_line)
         overall = {
             'amount': sum(r.get('amount', 0.0) for r in rows),
             'discount': sum(r.get('discount', 0.0) for r in rows),
@@ -1829,6 +1856,27 @@ def inject_asset_version():
         return dict(ASSET_VERSION=ASSET_VERSION)
     except Exception:
         return dict(ASSET_VERSION='0')
+
+@app.context_processor
+def inject_time_helpers():
+    try:
+        return dict(get_saudi_now=get_saudi_now, get_saudi_today=get_saudi_today)
+    except Exception:
+        return {}
+
+try:
+    from flask import url_for as _flask_url_for
+    def url_for_safe(endpoint, *args, **kwargs):
+        try:
+            return _flask_url_for(endpoint, *args, **kwargs)
+        except Exception:
+            try:
+                return _flask_url_for(f'main.{endpoint}', *args, **kwargs)
+            except Exception:
+                return '#'
+    app.jinja_env.globals['url_for'] = url_for_safe
+except Exception:
+    pass
 
 
 @app.route('/', endpoint='root_index')
@@ -5430,7 +5478,20 @@ def expenses():
     page = request.args.get('page', 1, type=int)
     per_page = 20
     pag = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).paginate(page=page, per_page=per_page, error_out=False)
-    return render_template('expenses.html', form=form, invoices=pag.items, pagination=pag)
+    try:
+        return render_template('expenses.html', form=form, invoices=pag.items, pagination=pag)
+    except Exception as e:
+        try:
+            import traceback, os
+            print('EXPENSES template render error (app.py):', e)
+            print(traceback.format_exc())
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'exp_err_app.txt'), 'a', encoding='utf-8') as _f:
+                _f.write('\n=== /expenses render error (app.py) ===\n')
+                _f.write(str(e) + '\n')
+                _f.write(traceback.format_exc() + '\n')
+        except Exception:
+            pass
+        return ('', 500)
 
 
 @app.route('/expenses/<int:invoice_id>/view')

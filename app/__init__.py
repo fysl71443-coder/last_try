@@ -1,5 +1,10 @@
 import os
 from flask import Flask
+from datetime import datetime
+try:
+    from zoneinfo import ZoneInfo
+except Exception:
+    ZoneInfo = None
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
@@ -67,6 +72,28 @@ def create_app(config_class=None):
         app.config.setdefault('INVENTORY_INTEL_ENABLED', bool(int(os.getenv('INVENTORY_INTEL_ENABLED', '0'))))
     except Exception:
         app.config.setdefault('INVENTORY_INTEL_ENABLED', False)
+    # Timezone helpers for templates
+    try:
+        KSA_TZ = ZoneInfo("Asia/Riyadh") if ZoneInfo else None
+    except Exception:
+        KSA_TZ = None
+    def get_saudi_now():
+        try:
+            return datetime.now(KSA_TZ) if KSA_TZ else datetime.now()
+        except Exception:
+            return datetime.now()
+    def get_saudi_today():
+        try:
+            return get_saudi_now().date()
+        except Exception:
+            return datetime.now().date()
+
+    try:
+        app.jinja_env.globals.setdefault('get_saudi_now', get_saudi_now)
+        app.jinja_env.globals.setdefault('get_saudi_today', get_saudi_today)
+    except Exception:
+        pass
+
     # Inject common template globals (asset version + CSRF token helper)
     from flask_wtf.csrf import generate_csrf
     @app.context_processor
@@ -149,6 +176,8 @@ def create_app(config_class=None):
             'can': can,
             'settings': None,
             'section_image_for': section_image_for,
+            'get_saudi_now': get_saudi_now,
+            'get_saudi_today': get_saudi_today,
         }
 
 

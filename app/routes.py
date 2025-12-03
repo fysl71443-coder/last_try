@@ -2264,7 +2264,20 @@ def api_inventory_intelligence():
 @main.route('/expenses', methods=['GET', 'POST'], endpoint='expenses')
 @login_required
 def expenses():
-    form = ExpenseInvoiceForm()
+    try:
+        form = ExpenseInvoiceForm()
+    except Exception as e:
+        try:
+            import traceback, os
+            root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+            p2 = os.path.join(root, 'static', 'uploads', 'exp_err.txt')
+            with open(p2, 'a', encoding='utf-8') as _f:
+                _f.write('\n=== /expenses form init error ===\n')
+                _f.write(str(e) + '\n')
+                _f.write(traceback.format_exc() + '\n')
+        except Exception:
+            pass
+        return ('', 500)
     try:
         form.date.data = get_saudi_now().date()
     except Exception:
@@ -2429,9 +2442,11 @@ def expenses():
                 pass
             flash('Failed to save expense', 'danger')
         return redirect(url_for('main.expenses'))
-    invs = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).limit(50).all()
+    invs = []
     invs_json = []
+    invs_json_str = '[]'
     try:
+        invs = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).limit(50).all()
         for inv in invs:
             items = []
             for it in (getattr(inv, 'items', []) or []):
@@ -2452,51 +2467,108 @@ def expenses():
                 'status': getattr(inv, 'status', ''),
                 'items': items,
             })
-    except Exception:
+        try:
+            import json as _json
+            invs_json_str = _json.dumps(invs_json)
+        except Exception:
+            invs_json_str = '[]'
+    except Exception as e:
+        try:
+            import traceback, os
+            root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+            p2 = os.path.join(root, 'static', 'uploads', 'exp_err.txt')
+            with open(p2, 'a', encoding='utf-8') as _f:
+                _f.write('\n=== /expenses query build error ===\n')
+                _f.write(str(e) + '\n')
+                _f.write(traceback.format_exc() + '\n')
+        except Exception:
+            pass
         try:
             db.session.rollback()
         except Exception:
             pass
-        pass
-    return render_template('expenses.html', form=form, invoices=invs, invoices_json=invs_json)
+    try:
+        return render_template('expenses.html', form=form, invoices=invs, invoices_json=invs_json_str)
+    except Exception as e:
+        try:
+            current_app.logger.exception('Expenses template render error: %s', e)
+        except Exception:
+            pass
+        try:
+            import traceback
+            print('Expenses template render error:', e)
+            print(traceback.format_exc())
+        except Exception:
+            pass
+        try:
+            import os, traceback
+            root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+            p1 = os.path.join(root, 'exp_err.txt')
+            p2 = os.path.join(root, 'static', 'uploads', 'exp_err.txt')
+            for fp in (p1, p2):
+                try:
+                    with open(fp, 'a', encoding='utf-8') as _f:
+                        _f.write('\n=== /expenses render error ===\n')
+                        _f.write(str(e) + '\n')
+                        _f.write(traceback.format_exc() + '\n')
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return ('', 500)
 
 @main.route('/expenses/delete/<int:eid>', methods=['POST'], endpoint='expense_delete')
 @login_required
 def expense_delete(eid):
-	try:
-		inv = ExpenseInvoice.query.get(int(eid))
-		if not inv:
-			flash('Expense invoice not found', 'warning')
-			return redirect(url_for('main.expenses'))
-		# Delete children items first
-		for it in (inv.items or []):
-			try:
-				db.session.delete(it)
-			except Exception:
-				pass
-		try:
-			Payment.query.filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'expense').delete(synchronize_session=False)
-		except Exception:
-			pass
-		try:
-			from models import JournalEntry, JournalLine
-			rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
-			for je in (rows or []):
-				JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
-				db.session.delete(je)
-		except Exception:
-			pass
-		try:
-			db.session.query(LedgerEntry).filter(LedgerEntry.description.ilike('%{}%'.format(inv.invoice_number))).delete(synchronize_session=False)
-		except Exception:
-			pass
-		db.session.delete(inv)
-		db.session.commit()
-		flash('Expense invoice deleted', 'success')
-	except Exception:
-		db.session.rollback()
-		flash('Failed to delete expense invoice', 'danger')
-	return redirect(url_for('main.expenses'))
+    try:
+        inv = ExpenseInvoice.query.get(int(eid))
+        if not inv:
+            flash('Expense invoice not found', 'warning')
+            return redirect(url_for('main.expenses'))
+        # Delete children items first
+        for it in (inv.items or []):
+            try:
+                db.session.delete(it)
+            except Exception:
+                pass
+        try:
+            Payment.query.filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'expense').delete(synchronize_session=False)
+        except Exception:
+            pass
+        try:
+            from models import JournalEntry, JournalLine
+            rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
+            for je in (rows or []):
+                JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
+                db.session.delete(je)
+        except Exception:
+            pass
+        try:
+            db.session.query(LedgerEntry).filter(LedgerEntry.description.ilike('%{}%'.format(inv.invoice_number))).delete(synchronize_session=False)
+        except Exception:
+            pass
+        db.session.delete(inv)
+        db.session.commit()
+        flash('Expense invoice deleted', 'success')
+    except Exception:
+        db.session.rollback()
+        flash('Failed to delete expense invoice', 'danger')
+    return redirect(url_for('main.expenses'))
+
+@main.route('/expenses/test', methods=['GET'], endpoint='expenses_test')
+@login_required
+def expenses_test():
+    try:
+        form = ExpenseInvoiceForm()
+        return render_template('expenses.html', form=form, invoices=[], invoices_json=[])
+    except Exception as e:
+        try:
+            import traceback
+            print('Expenses test render error:', e)
+            print(traceback.format_exc())
+        except Exception:
+            pass
+        return ('', 500)
 
 @main.route('/invoices', endpoint='invoices')
 @login_required
@@ -6131,6 +6203,22 @@ def pos_table(branch_code, table_number):
     draft = kv_get(f'draft:{branch_code}:{table_number}', {}) or {}
     draft_items = json.dumps(draft.get('items') or [])
     current_draft = type('Obj', (), {'id': draft.get('draft_id')}) if draft.get('draft_id') else None
+    try:
+        init_cust = (draft.get('customer') or {})
+        init_cust_name = (init_cust.get('name') or '').strip()
+        init_cust_phone = (init_cust.get('phone') or '').strip()
+    except Exception:
+        init_cust_name = ''
+        init_cust_phone = ''
+    try:
+        init_discount_pct = float((draft.get('discount_pct') or 0) or 0)
+    except Exception:
+        init_discount_pct = 0.0
+    try:
+        init_tax_pct = float((draft.get('tax_pct') or vat_rate) or vat_rate)
+    except Exception:
+        init_tax_pct = float(vat_rate or 15)
+    init_payment_method = (draft.get('payment_method') or '').strip().upper()
     # Warmup DB (avoid heavy create_all/seed on every request)
     warmup_db_once()
     # Load categories from DB for UI and provide a name->id map
@@ -6203,6 +6291,11 @@ def pos_table(branch_code, table_number):
                            cat_map_json=cat_map_json,
                            cat_image_map_json=cat_image_map_json,
                            today=today,
+                           init_cust_name=init_cust_name,
+                           init_cust_phone=init_cust_phone,
+                           init_discount_pct=init_discount_pct,
+                           init_tax_pct=init_tax_pct,
+                           init_payment_method=init_payment_method,
                            settings=s)
 
 
@@ -6564,7 +6657,7 @@ def api_branch_settings(branch_code):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@main.route('/api/draft-order/<branch_code>/<int:table_number>', methods=['POST'], endpoint='api_draft_create_or_update')
+@main.route('/api/draft-order/<branch_code>/<int:table_number>', methods=['GET','POST'], endpoint='api_draft_create_or_update')
 @login_required
 def api_draft_create_or_update(branch_code, table_number):
     # Return 401 for unauthenticated XHR so the front-end can redirect cleanly
@@ -6576,6 +6669,15 @@ def api_draft_create_or_update(branch_code, table_number):
     if not user_can('sales','view', branch_code):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
 
+    # GET: return current draft details for prefill
+    if request.method == 'GET':
+        try:
+            rec = kv_get(f'draft:{branch_code}:{table_number}', {}) or {}
+            return jsonify({'success': True, 'draft': rec})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e), 'draft': {}}), 400
+
+    # POST: create or update draft
     try:
         payload = request.get_json(silent=True) or {}
         items = payload.get('items') or []
@@ -6895,6 +6997,17 @@ def api_draft_checkout():
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
     return jsonify({'ok': True, 'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': int(table)})
+
+@main.route('/api/draft/<branch_code>/<int:table_number>', methods=['GET'], endpoint='api_draft_get')
+@login_required
+def api_draft_get(branch_code, table_number):
+    try:
+        if not user_can('sales','view', branch_code):
+            return jsonify({'success': False, 'error': 'forbidden'}), 403
+        rec = kv_get(f'draft:{branch_code}:{table_number}', {}) or {}
+        return jsonify({'success': True, 'draft': rec})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'draft': {}}), 400
 
 
 @main.route('/api/sales/checkout', methods=['POST'], endpoint='api_sales_checkout')
@@ -7857,8 +7970,8 @@ def invoice_print(invoice_id):
     if not inv:
         return 'Invoice not found', 404
     
-    # Check if invoice is issued (status should be 'issued' or 'finalized')
-    if inv.status not in ['issued', 'finalized', 'paid']:
+    st = (inv.status or '').lower()
+    if st not in ['issued', 'finalized', 'paid', 'unpaid', 'partial']:
         return 'Invoice not issued yet', 403
     
     items = SalesInvoiceItem.query.filter_by(invoice_id=inv.id).all()
@@ -10052,25 +10165,51 @@ def print_trial_balance():
 @login_required
 def api_all_invoices():
     try:
-        payment_method = (request.args.get('payment_method') or '').strip().lower()
-        branch_f = (request.args.get('branch') or '').strip().lower()
+        payment_method = (request.args.get('payment_method') or 'all').strip().lower()
+        branch_f = (request.args.get('branch') or 'all').strip().lower()
+        start_date = (request.args.get('start_date') or '').strip()
+        end_date = (request.args.get('end_date') or '').strip()
         rows = []
         branch_totals = {}
-        overall = {'subtotal': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0}
+        overall = {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0}
 
-        q = db.session.query(SalesInvoice)
+        # Join sales invoices with items for itemized view
+        from models import SalesInvoice, SalesInvoiceItem
+        q = db.session.query(SalesInvoice, SalesInvoiceItem).join(SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id)
         if payment_method and payment_method != 'all':
             q = q.filter(func.lower(SalesInvoice.payment_method) == payment_method)
         if branch_f and branch_f != 'all':
             q = q.filter(func.lower(SalesInvoice.branch) == branch_f)
+        # Optional date range (use created_at if available else date)
+        if start_date:
+            try:
+                if hasattr(SalesInvoice, 'created_at'):
+                    q = q.filter(func.date(SalesInvoice.created_at) >= start_date)
+                elif hasattr(SalesInvoice, 'date'):
+                    q = q.filter(SalesInvoice.date >= start_date)
+            except Exception:
+                pass
+        if end_date:
+            try:
+                if hasattr(SalesInvoice, 'created_at'):
+                    q = q.filter(func.date(SalesInvoice.created_at) <= end_date)
+                elif hasattr(SalesInvoice, 'date'):
+                    q = q.filter(SalesInvoice.date <= end_date)
+            except Exception:
+                pass
         if hasattr(SalesInvoice, 'created_at'):
             q = q.order_by(SalesInvoice.created_at.desc())
         elif hasattr(SalesInvoice, 'date'):
             q = q.order_by(SalesInvoice.date.desc())
 
         results = q.all()
+        # Aggregate invoice base for proportional head discount/VAT allocation
+        inv_base = {}
+        for inv, it in results:
+            line_base = float(getattr(it, 'price_before_tax', 0.0) or 0.0) * float(getattr(it, 'quantity', 0.0) or 0.0)
+            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
 
-        for inv in results:
+        for inv, it in results:
             branch = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
             if getattr(inv, 'created_at', None):
                 date_s = inv.created_at.date().isoformat()
@@ -10078,24 +10217,34 @@ def api_all_invoices():
                 date_s = inv.date.isoformat()
             else:
                 date_s = ''
-            subtotal = float(getattr(inv, 'total_before_tax', 0.0) or 0.0)
-            discount = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-            vat = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
-            total = float(getattr(inv, 'total_after_tax_discount', 0.0) or max(subtotal - discount, 0.0) + vat)
+            amount = float((getattr(it, 'price_before_tax', 0.0) or 0.0) * (getattr(it, 'quantity', 0.0) or 0.0))
+            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
+            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
+            inv_vat  = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
+            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
+                disc = inv_disc * (amount / base_total)
+                vat  = inv_vat  * (amount / base_total)
+            else:
+                disc = float(getattr(it, 'discount', 0.0) or 0.0)
+                vat  = float(getattr(it, 'tax', 0.0) or 0.0)
+            base_after_disc = max(amount - disc, 0.0)
+            total = base_after_disc + vat
             pm = (inv.payment_method or '').upper()
             rows.append({
                 'branch': branch,
                 'date': date_s,
                 'invoice_number': inv.invoice_number,
-                'subtotal': round(subtotal, 2),
-                'discount': round(discount, 2),
+                'item_name': getattr(it, 'product_name', '') or '',
+                'quantity': float(getattr(it, 'quantity', 0.0) or 0.0),
+                'price': amount,
+                'discount': round(disc, 2),
                 'vat': round(vat, 2),
                 'total': round(total, 2),
                 'payment_method': pm,
             })
-            bt = branch_totals.setdefault(branch, {'subtotal': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0})
-            bt['subtotal'] += subtotal; bt['discount'] += discount; bt['vat'] += vat; bt['total'] += total
-            overall['subtotal'] += subtotal; overall['discount'] += discount; overall['vat'] += vat; overall['total'] += total
+            bt = branch_totals.setdefault(branch, {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0})
+            bt['amount'] += amount; bt['discount'] += disc; bt['vat'] += vat; bt['total'] += total
+            overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += total
 
         return jsonify({'invoices': rows, 'branch_totals': branch_totals, 'overall_totals': overall})
     except Exception as e:
@@ -10103,7 +10252,7 @@ def api_all_invoices():
             current_app.logger.exception(f"/api/all-invoices failed: {e}")
         except Exception:
             pass
-        return jsonify({'invoices': [], 'branch_totals': {}, 'overall_totals': {'subtotal':0,'discount':0,'vat':0,'total':0}, 'note': 'stub', 'error': str(e)}), 200
+        return jsonify({'invoices': [], 'branch_totals': {}, 'overall_totals': {'amount':0,'discount':0,'vat':0,'total':0}, 'note': 'stub', 'error': str(e)}), 200
 
 
 @main.route('/api/reports/all-purchases', methods=['GET'], endpoint='api_reports_all_purchases')
@@ -12953,6 +13102,76 @@ def api_chart_opening_balance():
             pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+@main.route('/api/vat/net', methods=['GET'], endpoint='api_vat_net')
+@login_required
+def api_vat_net():
+    try:
+        start_arg = (request.args.get('start_date') or '').strip()
+        end_arg = (request.args.get('end_date') or '').strip()
+        branch = (request.args.get('branch') or '').strip()
+        from datetime import datetime as _dt
+        today = get_saudi_now().date()
+        if start_arg and end_arg:
+            try:
+                sd = _dt.strptime(start_arg, '%Y-%m-%d').date()
+                ed = _dt.strptime(end_arg, '%Y-%m-%d').date()
+            except Exception:
+                sd = today.replace(day=1)
+                ed = today
+        else:
+            sd = today.replace(day=1)
+            ed = today
+        from models import JournalLine, Account, JournalEntry
+        q_out = db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0)).\
+            join(Account, JournalLine.account_id == Account.id).\
+            join(JournalEntry, JournalLine.journal_id == JournalEntry.id).\
+            filter(Account.code == '2060', JournalLine.line_date.between(sd, ed))
+        q_in = db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0)).\
+            join(Account, JournalLine.account_id == Account.id).\
+            join(JournalEntry, JournalLine.journal_id == JournalEntry.id).\
+            filter(Account.code == '1100', JournalLine.line_date.between(sd, ed))
+        if branch in ('china_town','place_india'):
+            q_out = q_out.filter(JournalEntry.branch_code == branch)
+            q_in = q_in.filter(JournalEntry.branch_code == branch)
+        vat_out = float(q_out.scalar() or 0.0)
+        vat_in = float(q_in.scalar() or 0.0)
+        net = round(vat_out - vat_in, 2)
+        return jsonify({'ok': True, 'start_date': sd.isoformat(), 'end_date': ed.isoformat(), 'branch': branch or 'all', 'out': vat_out, 'in': vat_in, 'net': net})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@main.route('/api/sales/cash_total', methods=['GET'], endpoint='api_sales_cash_total')
+@login_required
+def api_sales_cash_total():
+    try:
+        start_arg = (request.args.get('start_date') or '').strip()
+        end_arg = (request.args.get('end_date') or '').strip()
+        branch = (request.args.get('branch') or '').strip()
+        from datetime import datetime as _dt
+        today = get_saudi_now().date()
+        if start_arg and end_arg:
+            try:
+                sd = _dt.strptime(start_arg, '%Y-%m-%d').date()
+                ed = _dt.strptime(end_arg, '%Y-%m-%d').date()
+            except Exception:
+                sd = today.replace(day=1)
+                ed = today
+        else:
+            sd = today.replace(day=1)
+            ed = today
+        from models import Payment, SalesInvoice
+        q = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).\
+            join(SalesInvoice, Payment.invoice_id == SalesInvoice.id).\
+            filter(Payment.invoice_type == 'sales', Payment.payment_method == 'CASH')
+        # Payment.payment_date may be nullable; fallback to SalesInvoice.date
+        q = q.filter(or_(Payment.payment_date.between(sd, ed), SalesInvoice.date.between(sd, ed)))
+        if branch in ('china_town','place_india'):
+            q = q.filter(SalesInvoice.branch == branch)
+        amt = float(q.scalar() or 0.0)
+        return jsonify({'ok': True, 'start_date': sd.isoformat(), 'end_date': ed.isoformat(), 'branch': branch or 'all', 'amount': round(amt, 2)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 @main.route('/api/expenses/proof', methods=['POST'], endpoint='api_expense_proof')
 @login_required
 @csrf.exempt
@@ -12967,7 +13186,8 @@ def api_expense_proof():
         if amount <= 0:
             return jsonify({'ok': False, 'error': 'invalid_amount'}), 400
         date_str = (data.get('date') or '').strip()
-        branch = (data.get('branch') or '').strip() or None
+        branch_raw = (data.get('branch') or '').strip().lower()
+        branch = branch_raw if branch_raw in ('china_town','place_india') else None
         pm = (data.get('payment_method') or 'cash').strip().lower()
         note = (data.get('note') or '').strip()
         apply_vat = bool(str(data.get('apply_vat') or '').lower() in ('1','true','yes','on'))
@@ -12979,7 +13199,7 @@ def api_expense_proof():
         except Exception:
             inv_date = get_saudi_now().date()
         inv_no = f"EXP-{int(get_saudi_now().timestamp())}"
-        tax_amt = round(amount * 0.15, 2) if (apply_vat and scenario in ('maintenance','services','service')) else 0.0
+        tax_amt = round(amount * 0.15, 2) if (apply_vat and scenario in ('maintenance','services','service','prepaid_rent','rent')) else 0.0
         total_final = round(amount + tax_amt, 2)
         inv = ExpenseInvoice(
             invoice_number=inv_no,
@@ -12993,7 +13213,24 @@ def api_expense_proof():
             user_id=getattr(current_user,'id',None)
         )
         db.session.add(inv); db.session.flush()
-        desc = {'salaries':'سداد رواتب','vat':'سداد ضريبة القيمة المضافة','purchase_no_vat':'مشتريات تشغيل بدون ضريبة','maintenance':'صيانة وخدمات','prepaid_rent':'إيجار مقدم','cash_deposit':'إيداع نقدي بالبنك'}.get(scenario, 'مصروف')
+        purchase_category = (data.get('purchase_category') or '').strip()
+        purchase_item = (data.get('purchase_item') or '').strip()
+        desc = {
+            'salaries':'Salaries Payment / سداد رواتب',
+            'vat':'VAT Settlement / سداد ضريبة القيمة المضافة',
+            'purchase_no_vat':'Operating Purchases (No VAT) / مشتريات تشغيل بدون ضريبة',
+            'maintenance':'Maintenance & Services / صيانة وخدمات',
+            'prepaid_rent':'Prepaid Rent / إيجار مقدم',
+            'cash_deposit':'Bank Cash Deposit / إيداع نقدي بالبنك'
+        }.get(scenario, 'Expense / مصروف')
+        if scenario == 'purchase_no_vat':
+            extra = []
+            if purchase_category:
+                extra.append(purchase_category)
+            if purchase_item:
+                extra.append(purchase_item)
+            if extra:
+                desc = f"{desc} — " + "; ".join(extra)
         item = ExpenseInvoiceItem(invoice_id=inv.id, description=desc, quantity=1, price_before_tax=amount, tax=tax_amt, discount=0.0, total_price=total_final)
         db.session.add(item); db.session.flush()
         je = JournalEntry(entry_number=f"JE-EXP-{inv_no}", date=inv_date, branch_code=branch, description=desc, status='posted', total_debit=total_final, total_credit=total_final, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))

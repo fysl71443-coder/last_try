@@ -11,7 +11,7 @@
           <th>Branch</th>
           <th>Date</th>
           <th>Invoice No.</th>
-          <th class="text-end">Subtotal</th>
+          <th class="text-end">Amount</th>
           <th class="text-end">Discount</th>
           <th class="text-end">Tax</th>
           <th class="text-end">Total</th>
@@ -47,11 +47,12 @@
           body.appendChild(hdr);
         }
         const tr = document.createElement('tr');
+        const amt = Number(r.amount || 0);
         tr.innerHTML = `
           <td>${r.branch||''}</td>
           <td>${r.date||''}</td>
           <td>${r.invoice_number||''}</td>
-          <td class="text-end">${n2(r.subtotal)} ${currency}</td>
+          <td class="text-end">${n2(amt)} ${currency}</td>
           <td class="text-end">${n2(r.discount)} ${currency}</td>
           <td class="text-end">${n2(r.vat)} ${currency}</td>
           <td class="text-end">${n2(r.total)} ${currency}</td>
@@ -61,22 +62,24 @@
 
       const btot = data.branch_totals||{};
       Object.keys(btot).sort().forEach(b=>{
-        const t = btot[b]||{subtotal:0,discount:0,vat:0,total:0};
+        const t = btot[b]||{amount:0,discount:0,vat:0,total:0};
+        const bAmount = Number(t.amount || 0);
         const tr = document.createElement('tr'); tr.className = 'table-warning fw-bold';
         tr.innerHTML = `
           <td colspan="3" class="text-end">Branch Totals (${b}):</td>
-          <td class="text-end">${n2(t.subtotal)} ${currency}</td>
+          <td class="text-end">${n2(bAmount)} ${currency}</td>
           <td class="text-end">${n2(t.discount)} ${currency}</td>
           <td class="text-end">${n2(t.vat)} ${currency}</td>
           <td class="text-end">${n2(t.total)} ${currency}</td>
           <td></td>`;
         tfoot.appendChild(tr);
       });
-      const overall = data.overall_totals || {subtotal:0,discount:0,vat:0,total:0};
+      const overall = data.overall_totals || {amount:0,discount:0,vat:0,total:0};
+      const oAmount = Number(overall.amount || 0);
       const tro = document.createElement('tr'); tro.className = 'table-secondary fw-bold';
       tro.innerHTML = `
         <td colspan="3" class="text-end">Overall Totals:</td>
-        <td class="text-end">${n2(overall.subtotal)} ${currency}</td>
+        <td class="text-end">${n2(oAmount)} ${currency}</td>
         <td class="text-end">${n2(overall.discount)} ${currency}</td>
         <td class="text-end">${n2(overall.vat)} ${currency}</td>
         <td class="text-end">${n2(overall.total)} ${currency}</td>

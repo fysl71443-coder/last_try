@@ -506,6 +506,41 @@
       (draft||[]).forEach(d=> items.push({ meal_id: d.meal_id, name: d.name, unit: number(d.price), qty: number(d.quantity||d.qty||1) }));
     }catch(e){ /* ignore */ }
     CURRENT_DRAFT_ID = (init?.getAttribute('data-draft-id') || '').trim() || null;
+    try{
+      const initCustName = init?.getAttribute('data-cust-name') || '';
+      const initCustPhone = init?.getAttribute('data-cust-phone') || '';
+      const initDisc = init?.getAttribute('data-disc') || '';
+      const initTax = init?.getAttribute('data-tax') || '';
+      const initPay = init?.getAttribute('data-pay') || '';
+      if(initCustName){ const el = qs('#custName'); if(el) el.value = initCustName; }
+      if(initCustPhone){ const el = qs('#custPhone'); if(el) el.value = initCustPhone; }
+      if(initDisc){ const el = qs('#discountPct'); if(el) el.value = String(number(initDisc)); }
+      if(initTax){ const el = qs('#taxPct'); if(el) el.value = String(number(initTax)); }
+      if(initPay){ const el = qs('#payMethod'); if(el) el.value = initPay.toUpperCase(); }
+    }catch(_e){}
+
+    // Fallback: fetch draft if attributes are missing
+    (async function(){
+      try{
+        const dn = init?.getAttribute('data-cust-name');
+        const dp = init?.getAttribute('data-pay');
+        if(dn || dp) return; // already initialized
+        if(!BRANCH || !TABLE_NO) return;
+        const resp = await fetch(`/api/draft/${BRANCH}/${TABLE_NO}`, { credentials:'same-origin' });
+        if(!resp.ok) return;
+        const j = await resp.json().catch(()=>({}));
+        const rec = j.draft || {};
+        const customer = rec.customer || {};
+        const name = (customer.name||''); const phone=(customer.phone||'');
+        const disc = rec.discount_pct; const tax = rec.tax_pct; const pay= (rec.payment_method||'').toUpperCase();
+        if(name){ const el = qs('#custName'); if(el) el.value = name; }
+        if(phone){ const el = qs('#custPhone'); if(el) el.value = phone; }
+        if(typeof disc !== 'undefined'){ const el = qs('#discountPct'); if(el) el.value = String(number(disc)); }
+        if(typeof tax !== 'undefined'){ const el = qs('#taxPct'); if(el) el.value = String(number(tax)); }
+        if(pay){ const el = qs('#payMethod'); if(el) el.value = pay; }
+        setTotals();
+      }catch(_e){}
+    })();
     const catMapRaw = init?.getAttribute('data-cat-map') || '{}';
     try{ CAT_MAP = JSON.parse(catMapRaw) || {}; }catch(e){ CAT_MAP = {}; }
     let CAT_IMAGES = {};
@@ -585,6 +620,15 @@
     qs('#custPhone')?.addEventListener('blur', ()=> scheduleSave());
     qs('#payMethod')?.addEventListener('change', ()=> scheduleSave());
     qs('#discountPct')?.addEventListener('input', ()=> { setTotals(); scheduleSave(); });
+    // If user types KEETA/HUNGER as customer, apply discount immediately without requiring phone
+    const custInputSpecial = qs('#custName');
+    custInputSpecial?.addEventListener('change', function(){
+      const up = (custInputSpecial.value||'').trim().toUpperCase();
+      if(up === 'KEETA' || up === 'HUNGER'){
+        // Discount already handled in handleCustInput on 'input'; ensure totals update
+        setTotals(); scheduleSave();
+      }
+    });
     qs('#taxPct')?.addEventListener('input', ()=> { setTotals(); scheduleSave(); });
 
     // Pre-print (thermal receipt before payment)
@@ -619,8 +663,14 @@
       const val = (custInput?.value || '').trim();
       const up = val.toUpperCase();
       if(up === 'KEETA' || up === 'HUNGER'){
+        const dp = qs('#discountPct');
+        if(dp){ try{ dp.removeAttribute('readonly'); dp.classList.remove('bg-light'); dp.title = 'Special discount for KEETA/HUNGER'; }catch(_e){} }
         const p = await (window.showPrompt ? window.showPrompt('أدخل نسبة خصم خاصة % / Enter special discount %') : Promise.resolve(prompt('أدخل نسبة خصم خاصة % / Enter special discount %')));
-        if(p!==null){ const n = number(p, 0); const dp = qs('#discountPct'); if(dp){ dp.value = String(n); } setTotals(); saveDraftOrder(); }
+        if(p!==null){ const n = number(p, 0); if(dp){ dp.value = String(n); } setTotals(); saveDraftOrder(); }
+      }
+      else {
+        const dp = qs('#discountPct');
+        if(dp){ try{ dp.setAttribute('readonly',''); dp.classList.add('bg-light'); dp.title = 'Auto from customer; editable only for KEETA/HUNGER'; }catch(_e){} }
       }
       clearTimeout(custFetchTimer);
       if(!val){ hideCustList(); return; }
