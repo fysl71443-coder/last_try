@@ -178,6 +178,76 @@ body {
     </div>
     {% endif %}
 
+    <div class="expenses-card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">🧾 {{ _('Expense Proof / إثبات مصروف') }}</h5>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-12">
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <button class="btn btn-outline-primary" onclick="openScenario('salaries')">سداد رواتب</button>
+                    <button class="btn btn-outline-primary" onclick="openScenario('vat')">سداد ضريبة القيمة المضافة</button>
+                    <button class="btn btn-outline-primary" onclick="openScenario('purchase_no_vat')">مشتريات تشغيل بدون ضريبة</button>
+                    <button class="btn btn-outline-primary" onclick="openScenario('maintenance')">صيانة/خدمات</button>
+                    <button class="btn btn-outline-primary" onclick="openScenario('prepaid_rent')">إيجار مقدّم</button>
+                    <button class="btn btn-outline-primary" onclick="openScenario('cash_deposit')">إيداع نقدي بالبنك</button>
+                </div>
+                <div id="scenarioForm" style="display:none">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">الفرع</label>
+                            <select id="scBranch" class="form-select">
+                                <option value="place_india">Place India</option>
+                                <option value="china_town">China Town</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">التاريخ</label>
+                            <input id="scDate" type="date" class="form-control" value="{{ get_saudi_now().date() }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">طريقة الدفع</label>
+                            <select id="scPM" class="form-select">
+                                <option value="cash">نقداً</option>
+                                <option value="bank">بنك</option>
+                                <option value="creditor">موردين</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">المبلغ</label>
+                            <div class="input-group">
+                                <span class="input-group-text">﷼</span>
+                                <input id="scAmount" type="number" step="0.01" class="form-control" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="col-md-3" id="scVatBox" style="display:none">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="scApplyVat">
+                                <label class="form-check-label" for="scApplyVat">تطبيق ضريبة مدخلات 15%%</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3" id="scBankFeeBox" style="display:none">
+                            <label class="form-label fw-bold">عمولة بنك (اختياري)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">﷼</span>
+                                <input id="scBankFee" type="number" step="0.01" class="form-control" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">ملاحظة</label>
+                            <input id="scNote" type="text" class="form-control" placeholder="اختياري">
+                        </div>
+                    </div>
+                    <div class="alert alert-secondary mt-3" id="scPreview"></div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-success" onclick="submitScenario()">حفظ</button>
+                        <button class="btn btn-outline-secondary" onclick="closeScenario()">إلغاء</button>
+                        <button class="btn btn-outline-info" id="scAutoBtn" style="display:none"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- نموذج إنشاء فاتورة مصروفات جديدة -->
     <div class="expenses-card">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -749,6 +819,18 @@ body {
     document.addEventListener('DOMContentLoaded', function() {
         calculateTotals();
     });
+    let currentScenario = null;
+    function openScenario(s){ currentScenario = s; document.getElementById('scenarioForm').style.display='block';
+      document.getElementById('scVatBox').style.display = (s==='maintenance')?'block':'none';
+      document.getElementById('scBankFeeBox').style.display = (s==='cash_deposit')?'block':'none';
+      const autoBtn = document.getElementById('scAutoBtn'); autoBtn.style.display='none'; autoBtn.onclick=null; autoBtn.textContent='';
+      if(s==='vat'){ autoBtn.style.display='inline-block'; autoBtn.textContent='ملء تلقائي لصافي VAT'; autoBtn.onclick=function(){ fetch('/api/vat/net', {credentials:'same-origin'}).then(r=>r.json()).then(j=>{ if(j&&j.ok){ document.getElementById('scAmount').value = j.net||0; previewScenario(); } }); } }
+      if(s==='cash_deposit'){ autoBtn.style.display='inline-block'; autoBtn.textContent='اقتراح مبلغ الإيداع'; autoBtn.onclick=function(){ fetch('/api/sales/cash_total', {credentials:'same-origin'}).then(r=>r.json()).then(j=>{ if(j&&j.ok){ document.getElementById('scAmount').value = j.amount||0; previewScenario(); } }); } }
+      previewScenario(); }
+    function closeScenario(){ currentScenario=null; document.getElementById('scenarioForm').style.display='none'; }
+    function previewScenario(){ const amt = parseFloat(document.getElementById('scAmount').value||'0')||0; const pm = document.getElementById('scPM').value; const dt = document.getElementById('scDate').value; const map={'salaries':'سداد رواتب','vat':'سداد ضريبة القيمة المضافة','purchase_no_vat':'مشتريات تشغيل بدون ضريبة','maintenance':'صيانة/خدمات','prepaid_rent':'إيجار مقدّم','cash_deposit':'إيداع نقدي بالبنك'}; const txt = `سيتم إثبات ${map[currentScenario]||'مصروف'} بمبلغ ﷼${amt.toFixed(2)} من ${pm==='cash'?'نقداً':(pm==='bank'?'بنك':'موردين')} بتاريخ ${dt||''}`; document.getElementById('scPreview').textContent = txt; }
+    function submitScenario(){ const payload={ scenario: currentScenario, amount: document.getElementById('scAmount').value, date: document.getElementById('scDate').value, branch: document.getElementById('scBranch').value, payment_method: document.getElementById('scPM').value, apply_vat: document.getElementById('scApplyVat').checked, bank_fee: document.getElementById('scBankFee').value, note: document.getElementById('scNote').value }; fetch('/api/expenses/proof', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), credentials:'same-origin' }).then(r=>r.json()).then(j=>{ if(j&&j.ok){ closeScenario(); location.reload(); } else { alert('فشل الحفظ'); } }); }
+    ['scAmount','scDate','scPM'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.addEventListener('input', previewScenario); el.addEventListener('change', previewScenario); }});
 </script>
 
 {% endblock %}

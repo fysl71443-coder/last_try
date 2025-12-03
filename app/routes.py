@@ -12953,6 +12953,109 @@ def api_chart_opening_balance():
             pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+@main.route('/api/expenses/proof', methods=['POST'], endpoint='api_expense_proof')
+@login_required
+@csrf.exempt
+def api_expense_proof():
+    try:
+        data = request.get_json(force=True) or {}
+    except Exception:
+        data = request.form.to_dict() if request.form else {}
+    try:
+        scenario = (data.get('scenario') or '').strip().lower()
+        amount = float(data.get('amount') or 0.0)
+        if amount <= 0:
+            return jsonify({'ok': False, 'error': 'invalid_amount'}), 400
+        date_str = (data.get('date') or '').strip()
+        branch = (data.get('branch') or '').strip() or None
+        pm = (data.get('payment_method') or 'cash').strip().lower()
+        note = (data.get('note') or '').strip()
+        apply_vat = bool(str(data.get('apply_vat') or '').lower() in ('1','true','yes','on'))
+        bank_fee = float(data.get('bank_fee') or 0.0)
+        from models import ExpenseInvoice, ExpenseInvoiceItem, JournalEntry, JournalLine
+        try:
+            from datetime import datetime as _dt
+            inv_date = _dt.strptime(date_str, '%Y-%m-%d').date() if date_str else get_saudi_now().date()
+        except Exception:
+            inv_date = get_saudi_now().date()
+        inv_no = f"EXP-{int(get_saudi_now().timestamp())}"
+        tax_amt = round(amount * 0.15, 2) if (apply_vat and scenario in ('maintenance','services','service')) else 0.0
+        total_final = round(amount + tax_amt, 2)
+        inv = ExpenseInvoice(
+            invoice_number=inv_no,
+            date=inv_date,
+            payment_method=pm.upper(),
+            total_before_tax=amount,
+            tax_amount=tax_amt,
+            discount_amount=0.0,
+            total_after_tax_discount=total_final,
+            status='paid',
+            user_id=getattr(current_user,'id',None)
+        )
+        db.session.add(inv); db.session.flush()
+        desc = {'salaries':'سداد رواتب','vat':'سداد ضريبة القيمة المضافة','purchase_no_vat':'مشتريات تشغيل بدون ضريبة','maintenance':'صيانة وخدمات','prepaid_rent':'إيجار مقدم','cash_deposit':'إيداع نقدي بالبنك'}.get(scenario, 'مصروف')
+        item = ExpenseInvoiceItem(invoice_id=inv.id, description=desc, quantity=1, price_before_tax=amount, tax=tax_amt, discount=0.0, total_price=total_final)
+        db.session.add(item); db.session.flush()
+        je = JournalEntry(entry_number=f"JE-EXP-{inv_no}", date=inv_date, branch_code=branch, description=desc, status='posted', total_debit=total_final, total_credit=total_final, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+        db.session.add(je); db.session.flush()
+        def acc(code, name, typ):
+            return _account(code, name, typ)
+        cash_acc = _pm_account(pm)
+        if scenario == 'salaries':
+            a = acc('5310', CHART_OF_ACCOUNTS['5310']['name'], 'EXPENSE')
+            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+            if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+        elif scenario == 'vat':
+            a = acc('2050', CHART_OF_ACCOUNTS['2050']['name'], 'LIABILITY')
+            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+            if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+        elif scenario == 'purchase_no_vat':
+            a = acc('1210', CHART_OF_ACCOUNTS['1210']['name'], 'ASSET')
+            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+            if pm == 'creditor':
+                ar = acc('2110', CHART_OF_ACCOUNTS['2110']['name'], 'LIABILITY')
+                if ar: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ar.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+            else:
+                if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+        elif scenario == 'maintenance':
+            a = acc('5150', CHART_OF_ACCOUNTS['5150']['name'], 'EXPENSE')
+            ln = 1
+            if a: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date)); ln += 1
+            if apply_vat:
+                v = acc('1100', CHART_OF_ACCOUNTS['1100']['name'], 'ASSET')
+                if v and tax_amt>0: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=v.id, debit=tax_amt, credit=0.0, description=desc, line_date=inv_date)); ln += 1
+            if pm == 'creditor':
+                ar = acc('2110', CHART_OF_ACCOUNTS['2110']['name'], 'LIABILITY')
+                if ar: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ar.id, debit=0.0, credit=total_final, description=desc, line_date=inv_date))
+            else:
+                if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=cash_acc.id, debit=0.0, credit=total_final, description=desc, line_date=inv_date))
+        elif scenario == 'prepaid_rent':
+            a = acc('1310', CHART_OF_ACCOUNTS['1310']['name'], 'ASSET')
+            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+            if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+        elif scenario == 'cash_deposit':
+            b = acc('1050', CHART_OF_ACCOUNTS['1050']['name'], 'ASSET')
+            c = acc('1040', CHART_OF_ACCOUNTS['1040']['name'], 'ASSET')
+            ln = 1
+            if b: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=b.id, debit=amount, credit=0.0, description=desc, line_date=inv_date)); ln += 1
+            if c: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=c.id, debit=0.0, credit=amount, description=desc, line_date=inv_date)); ln += 1
+            if bank_fee>0 and b:
+                f = acc('5090', CHART_OF_ACCOUNTS['5090']['name'], 'EXPENSE')
+                if f: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=f.id, debit=bank_fee, credit=0.0, description=desc, line_date=inv_date)); ln += 1
+                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=b.id, debit=0.0, credit=bank_fee, description=desc, line_date=inv_date)); ln += 1
+        else:
+            a = acc('5100', CHART_OF_ACCOUNTS['5100']['name'], 'EXPENSE')
+            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+            if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+        db.session.commit()
+        return jsonify({'ok': True, 'invoice_number': inv_no})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 @main.route('/api/chart/toggle/<code>', methods=['POST'], endpoint='api_chart_toggle')
 @login_required
 @csrf.exempt
