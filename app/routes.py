@@ -11395,6 +11395,7 @@ def api_archive_list():
         month = request.args.get('month', type=int)
         day = request.args.get('day', type=int)
         branch = (request.args.get('branch') or '').strip()
+        last4 = (request.args.get('last4') or '').strip()
         page = request.args.get('page', type=int) or 1
         page_size = request.args.get('page_size', type=int) or 100
         if page_size > 500:
@@ -11439,6 +11440,12 @@ def api_archive_list():
             q = q.filter(SalesInvoice.branch == branch)
         if start_date and end_date:
             q = q.filter(SalesInvoice.date.between(start_date.date(), end_date.date()))
+        if last4:
+            try:
+                if len(last4) <= 8:
+                    q = q.filter(SalesInvoice.invoice_number.like(f"%{last4}"))
+            except Exception:
+                pass
         q = q.order_by(SalesInvoice.date.desc(), SalesInvoice.created_at.desc())
         rows = q.offset((page - 1) * page_size).limit(page_size).all()
         keys = [f"pdf_path:sales:{r[0]}" for r in rows]

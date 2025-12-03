@@ -12,6 +12,11 @@
   <div class="card mb-3">
     <div class="card-body">
       <form class="row g-3 align-items-end" onsubmit="return false;">
+        <div class="col-md-3">
+          <label class="form-label">🔎 {{ _('Receipt Archive / أرشيف الإيصالات') }}</label>
+          <input id="last4" class="form-control" maxlength="4" placeholder="{{ _('Enter last 4 digits / أدخل آخر 4 أرقام') }}">
+          <div class="small text-muted mt-1">{{ _('Search receipts using the last 4 digits of the invoice number / يتم البحث في الإيصالات باستخدام آخر 4 أرقام من رقم الفاتورة') }}</div>
+        </div>
         <div class="col-md-2">
           <label class="form-label">{{ _('Year / السنة') }}</label>
           <select id="year" class="form-select">
@@ -117,14 +122,15 @@
     const m = document.getElementById('month').value||'';
     const d = document.getElementById('day').value||'';
     const b = document.getElementById('branch').value||'';
-    const url = `/api/archive/list?year=${encodeURIComponent(y)}&quarter=${encodeURIComponent(q)}&month=${encodeURIComponent(m)}&day=${encodeURIComponent(d)}&branch=${encodeURIComponent(b)}&page=${curPage}&page_size=${pageSize}`;
+    const l4 = (document.getElementById('last4')?.value||'').trim();
+    const url = `/api/archive/list?year=${encodeURIComponent(y)}&quarter=${encodeURIComponent(q)}&month=${encodeURIComponent(m)}&day=${encodeURIComponent(d)}&branch=${encodeURIComponent(b)}&last4=${encodeURIComponent(l4)}&page=${curPage}&page_size=${pageSize}`;
     const res = await fetch(url, {credentials:'same-origin'});
     const j = await res.json();
     const tbody = document.querySelector('#grid tbody');
     const badge = document.getElementById('count_badge');
     const pi = document.getElementById('page_info');
     tbody.innerHTML='';
-    if(!j.ok){ tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${j.error||'Failed'}</td></tr>`; badge.style.display='none'; pi.textContent=''; return; }
+    if(!j.ok){ tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${j.error||'Failed to load / فشل التحميل'}</td></tr>`; badge.style.display='none'; pi.textContent=''; return; }
     badge.textContent = `${j.items.length} {{ _('invoices / فواتير') }}`; badge.style.display='inline-block';
     pi.textContent = `{{ _('Page / صفحة') }} ${curPage}`;
     j.items.forEach(row=>{
