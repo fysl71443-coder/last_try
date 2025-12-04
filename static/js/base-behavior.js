@@ -75,5 +75,18 @@
       e.returnValue = '';
     }
   });
+  if(typeof window.showToast !== 'function'){
+    window.showToast = function(msg, type){
+      try{
+        var t = document.getElementById('toast');
+        if(!t){ t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+        t.textContent = msg || t.textContent || '';
+        t.style.transition='transform .4s ease, opacity .4s';
+        t.style.transform='translateY(100px)';
+        t.style.opacity='1';
+        setTimeout(function(){ t.style.transform='translateY(-100px)'; t.style.opacity='0'; }, 3000);
+      }catch(e){ console.log(msg); }
+    };
+  }
 })();
 

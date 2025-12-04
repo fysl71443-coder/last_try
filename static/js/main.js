@@ -198,12 +198,12 @@ function __initUI(){
     // Initialize any existing cart data
     updateCartDisplay();
     
-    // Add click handlers for dashboard cards
+    // Dashboard cards: rely on anchor default navigation (avoid programmatic redirects)
     document.querySelectorAll('.dashboard-card').forEach(card => {
-        card.addEventListener('click', function() {
+        card.addEventListener('click', function(e) {
             const link = this.closest('a');
             if (link) {
-                window.location.href = link.href;
+                try { link.click(); } catch(_e) { window.location.assign(link.href); }
             }
         });
     });

@@ -248,7 +248,7 @@
           <tr>
             <td class="left" style="width:65%">{{ item.product_name }}</td>
             <td class="center-text" style="width:15%">{{ item.quantity|int }}</td>
-            <td class="right" style="width:20%"><span class="currency-amount">{{ item.total_price|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
+            <td class="right" style="width:20%">{{ '%.2f'|format(item.total_price or 0) }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -259,24 +259,24 @@
       <table>
         <tr class="total-row">
           <td class="right">Subtotal / المجموع الفرعي:</td>
-          <td class="right"><span class="currency-amount">{{ inv.total_before_tax|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
+          <td class="right">{{ '%.2f'|format(inv.total_before_tax or 0) }}</td>
         </tr>
         {% if inv.tax_amount > 0 %}
         <tr class="total-row">
           <td class="right">VAT / الضريبة:</td>
-          <td class="right"><span class="currency-amount">{{ inv.tax_amount|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
+          <td class="right">{{ '%.2f'|format(inv.tax_amount or 0) }}</td>
         </tr>
         {% endif %}
         {% if inv.discount_amount > 0 %}
         <tr class="total-row">
           <td class="right">Discount / الخصم:</td>
-          <td class="right"><span class="currency-amount">-{{ inv.discount_amount|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
+          <td class="right">-{{ '%.2f'|format(inv.discount_amount or 0) }}</td>
       </tr>
         {% endif %}
       
       <tr class="grand-total">
         <td class="right">Total / المجموع النهائي:</td>
-        <td class="right"><span class="currency-amount">{{ inv.total_after_tax_discount|round(2) }}{% if currency_src %} <img src="{{ currency_src }}" class="currency-img" alt="">{% else %} {{ settings.currency if settings and settings.currency else 'SAR' }}{% endif %}</span></td>
+        <td class="right">{{ '%.2f'|format(inv.total_after_tax_discount or 0) }}</td>
       </tr>
     </table>
 

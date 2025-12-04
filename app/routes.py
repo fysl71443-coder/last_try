@@ -24,7 +24,7 @@ def _block_employee_screens():
         p = (request.path or '').lower()
     except Exception:
         p = ''
-    legacy_prefixes = ['/employees/payroll', '/employees/payroll/detailed', '/salaries', '/salary', '/print/salary']
+    legacy_prefixes = ['/employees/payroll', '/employees/payroll/detailed']
     if any(p.startswith(pref) for pref in legacy_prefixes):
         return ('', 404)
 # --- Employees: Detailed Payroll Report (across months with totals) ---
@@ -33,115 +33,7 @@ def _block_employee_screens():
 def payroll_detailed():
     return ('', 404)
 
-# --- Unified Visual Dashboard for Employees ---
-@main.route('/employee-uvd', methods=['GET'], endpoint='employee_uvd')
-@login_required
-def employee_uvd():
-    try:
-        today = get_saudi_now().date()
-        year = today.year
-        month = today.month
-        emp_count = int(db.session.query(func.coalesce(func.count(Employee.id), 0)).scalar() or 0)
-        sal_sum = float(db.session.query(func.coalesce(func.sum(Salary.total_salary), 0)).
-                        filter(Salary.year == year, Salary.month == month).scalar() or 0)
-        last_pay = db.session.query(Payment.payment_date).filter(Payment.invoice_type == 'salary').order_by(Payment.payment_date.desc()).first()
-        last_pay_dt = (last_pay[0].date() if last_pay and last_pay[0] else None)
-        je_cnt = int(db.session.query(func.coalesce(func.count(JournalEntry.id), 0)).
-                     filter(func.extract('year', JournalEntry.date) == year,
-                            func.extract('month', JournalEntry.date) == month).scalar() or 0)
-        adv_acc = Account.query.filter_by(code='1030').first()
-        adv_out = 0.0
-        if adv_acc:
-            rows = db.session.query(func.coalesce(func.sum(LedgerEntry.debit), 0), func.coalesce(func.sum(LedgerEntry.credit), 0)).filter(LedgerEntry.account_id == adv_acc.id).first()
-            d_sum = float(rows[0] or 0)
-            c_sum = float(rows[1] or 0)
-            adv_out = max(d_sum - c_sum, 0.0)
-    except Exception:
-        emp_count = 0
-        sal_sum = 0.0
-        adv_out = 0.0
-        last_pay_dt = None
-        je_cnt = 0
 
-    try:
-        employees = Employee.query.order_by(Employee.full_name.asc()).limit(200).all()
-    except Exception:
-        employees = []
-    try:
-        prev_salaries = Salary.query.order_by(Salary.year.desc(), Salary.month.desc()).limit(20).all()
-    except Exception:
-        prev_salaries = []
-    try:
-        advances = db.session.query(JournalLine).join(Account).\
-            filter(Account.code == '1030').order_by(JournalLine.line_date.desc()).limit(20).all()
-    except Exception:
-        advances = []
-    try:
-        ledgers = JournalEntry.query.order_by(JournalEntry.date.desc()).limit(20).all()
-    except Exception:
-        ledgers = []
-
-    try:
-        dept_counts = {}
-        for e in employees:
-            k = (getattr(e, 'department', '') or '').strip().lower()
-            if not k:
-                k = 'other'
-            dept_counts[k] = dept_counts.get(k, 0) + 1
-    except Exception:
-        dept_counts = {}
-
-    emp_metrics = {}
-    try:
-        from models import EmployeeSalaryDefault, Salary, JournalLine, Account
-        from sqlalchemy import and_
-        sdefs = EmployeeSalaryDefault.query.filter(EmployeeSalaryDefault.employee_id.in_([int(getattr(e,'id',0) or 0) for e in employees])).all()
-        base_map = {int(d.employee_id): float(d.base_salary or 0) for d in sdefs}
-        for e in employees:
-            eid = int(getattr(e,'id',0) or 0)
-            last_total = 0.0
-            try:
-                s = Salary.query.filter_by(employee_id=eid).order_by(Salary.year.desc(), Salary.month.desc()).first()
-                if s:
-                    last_total = float(getattr(s,'total_salary',0) or 0)
-            except Exception:
-                last_total = 0.0
-            adv_total = 0.0
-            try:
-                adv_acc = Account.query.filter_by(code='1030').first()
-                if adv_acc:
-                    rows = JournalLine.query.filter_by(employee_id=eid, account_id=int(adv_acc.id)).all()
-                    dsum = sum([float(getattr(r,'debit',0) or 0) for r in rows])
-                    csum = sum([float(getattr(r,'credit',0) or 0) for r in rows])
-                    adv_total = max(dsum - csum, 0.0)
-            except Exception:
-                adv_total = 0.0
-            emp_metrics[eid] = {
-                'basic': float(base_map.get(eid, 0.0)),
-                'last_salary': float(last_total or 0.0),
-                'advance': float(adv_total or 0.0),
-            }
-    except Exception as ex:
-        # Log the error for debugging
-        import traceback
-        print(f"Error building emp_metrics: {ex}")
-        traceback.print_exc()
-        emp_metrics = {}
-
-    auto_open_create = (str(request.args.get('mode') or '').lower() == 'create')
-    return render_template('employee_uvd.html',
-                           emp_count=emp_count,
-                           sal_sum=sal_sum,
-                           adv_out=adv_out,
-                           last_pay_dt=last_pay_dt,
-                           je_cnt=je_cnt,
-                           employees=employees,
-                           prev_salaries=prev_salaries,
-                           advances=advances,
-                           ledgers=ledgers,
-                           dept_counts=dept_counts,
-                           emp_metrics=emp_metrics,
-                           auto_open_create=auto_open_create)
 
 
 
@@ -1392,6 +1284,17 @@ def inventory():
     try:
         today = get_saudi_now().date()
         start_month = today.replace(day=1)
+        start_arg = (request.args.get('start_date') or '').strip()
+        end_arg = (request.args.get('end_date') or '').strip()
+        branch_arg = (request.args.get('branch') or '').strip()
+        def _parse_date(s):
+            try:
+                from datetime import datetime as _dt
+                return _dt.strptime(s, '%Y-%m-%d').date()
+            except Exception:
+                return None
+        start_period = _parse_date(start_arg) or start_month
+        end_period = _parse_date(end_arg) or today
         def latest_cost_per_unit(rm_id: int):
             try:
                 row = (
@@ -1430,7 +1333,7 @@ def inventory():
         try:
             total_purchases_month = float(
                 db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
+                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
                 .scalar() or 0
             )
         except Exception:
@@ -1439,8 +1342,10 @@ def inventory():
         try:
             sales_invoices_q = (
                 db.session.query(SalesInvoice.id, SalesInvoice.date, SalesInvoice.total_after_tax_discount)
-                .filter(SalesInvoice.date >= start_month, SalesInvoice.date <= today)
+                .filter(SalesInvoice.date >= start_period, SalesInvoice.date <= end_period)
             )
+            if branch_arg:
+                sales_invoices_q = sales_invoices_q.filter(SalesInvoice.branch == branch_arg)
             sales_invoice_ids = [int(r[0]) for r in sales_invoices_q.all()]
             total_sales_revenue_month = float(
                 sum([float(r[2] or 0) for r in sales_invoices_q.all()])
@@ -1474,6 +1379,7 @@ def inventory():
         estimated_total_meal_cost = 0.0
         meals_analysis = []
         outdated_meals = []
+        sold_details_map = {}
         def latest_purchase_date(rm_id: int):
             try:
                 d = (
@@ -1517,13 +1423,42 @@ def inventory():
             if outdated_flag:
                 outdated_meals.append(m_name)
 
+        try:
+            det_rows = (
+                db.session.query(
+                    SalesInvoiceItem.product_name,
+                    SalesInvoice.invoice_number,
+                    SalesInvoice.date,
+                    SalesInvoiceItem.quantity,
+                    SalesInvoiceItem.total_price,
+                    SalesInvoiceItem.price_before_tax
+                )
+                .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
+                .filter(SalesInvoiceItem.invoice_id.in_(sales_invoice_ids))
+                .filter((SalesInvoice.branch == branch_arg) if branch_arg else True)
+                .order_by(SalesInvoice.date.desc(), SalesInvoiceItem.id.desc())
+                .limit(1000)
+                .all()
+            )
+            for name, inv_no, dt, qty, total_p, unit_p in (det_rows or []):
+                key = (name or '').strip()
+                sold_details_map.setdefault(key, []).append({
+                    'invoice_number': inv_no,
+                    'date': (dt.isoformat() if dt else ''),
+                    'quantity': float(qty or 0),
+                    'unit_price': float(unit_p or 0),
+                    'total_price': float(total_p or 0),
+                })
+        except Exception:
+            sold_details_map = {}
+
         total_profit_generated = float(total_sales_revenue_month or 0) - float(estimated_total_meal_cost or 0)
 
         purchases_rows = []
         try:
             invs_m = (
                 PurchaseInvoice.query
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
+                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
                 .order_by(PurchaseInvoice.date.desc(), PurchaseInvoice.id.desc())
                 .limit(500)
                 .all()
@@ -1551,7 +1486,7 @@ def inventory():
             rows_t = (
                 db.session.query(PurchaseInvoiceItem.raw_material_name, func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0))
                 .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
+                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
                 .group_by(PurchaseInvoiceItem.raw_material_name)
                 .order_by(func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0).desc())
                 .limit(10)
@@ -1560,7 +1495,7 @@ def inventory():
             top_ingredients = [{'name': n, 'total': float(t or 0)} for n, t in (rows_t or [])]
             trows = (
                 db.session.query(PurchaseInvoice.date, func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
+                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
                 .group_by(PurchaseInvoice.date)
                 .order_by(PurchaseInvoice.date.asc())
                 .all()
@@ -1569,13 +1504,21 @@ def inventory():
         except Exception:
             top_ingredients = []
             purchase_trend = []
+        try:
+            trend_max_total = max([float(x.get('total') or 0) for x in (purchase_trend or [])]) if purchase_trend else 1.0
+        except Exception:
+            trend_max_total = 1.0
+        try:
+            top_total_max = max([float(x.get('total') or 0) for x in (top_ingredients or [])]) if top_ingredients else 1.0
+        except Exception:
+            top_total_max = 1.0
 
         stock_rows = []
         try:
             p_qty_rows = (
                 db.session.query(PurchaseInvoiceItem.raw_material_id, func.coalesce(func.sum(PurchaseInvoiceItem.quantity), 0))
                 .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
+                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
                 .group_by(PurchaseInvoiceItem.raw_material_id)
                 .all()
             )
@@ -1606,6 +1549,10 @@ def inventory():
         except Exception:
             stock_rows = []
 
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return render_template(
             'inventory.html',
             raw_materials=raw_materials,
@@ -1623,11 +1570,22 @@ def inventory():
             purchases_summary=purchases_rows,
             top_ingredients=top_ingredients,
             purchase_trend=purchase_trend,
+            trend_max_total=trend_max_total,
+            top_total_max=top_total_max,
             meals_analysis=meals_analysis,
             outdated_meals=outdated_meals,
+            sold_details_map=sold_details_map,
             stock_rows=stock_rows,
+            branches=BRANCH_LABELS,
+            selected_branch=branch_arg,
+            start_date_val=start_period.isoformat() if start_period else '',
+            end_date_val=end_period.isoformat() if end_period else '',
         )
     except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return render_template(
             'inventory.html',
             raw_materials=raw_materials,
@@ -1645,9 +1603,16 @@ def inventory():
             purchases_summary=[],
             top_ingredients=[],
             purchase_trend=[],
+            trend_max_total=1.0,
+            top_total_max=1.0,
             meals_analysis=[],
             outdated_meals=[],
+            sold_details_map={},
             stock_rows=[],
+            branches=BRANCH_LABELS,
+            selected_branch='',
+            start_date_val='',
+            end_date_val='',
         )
 
 @main.route('/inventory-intelligence', methods=['GET'], endpoint='inventory_intelligence')
@@ -3280,7 +3245,18 @@ def salaries_pay():
     except Exception:
         employees = []
     selected_month = request.args.get('month') or get_saudi_now().strftime('%Y-%m')
-    selected_employee = request.args.get('employee', type=int)
+    selected_employee_param = request.args.get('employee', type=int)
+    valid_emp_ids = {int(e.id) for e in (employees or []) if getattr(e, 'id', None)}
+    selected_employee = None
+    try:
+        if selected_employee_param and int(selected_employee_param) in valid_emp_ids:
+            selected_employee = int(selected_employee_param)
+        elif employees:
+            selected_employee = int(employees[0].id)
+        else:
+            selected_employee = None
+    except Exception:
+        selected_employee = (int(employees[0].id) if employees else None)
     # Build defaults map and previous due per employee for the selected month
     defaults_map = {}
     prev_due_map = {}
@@ -3368,14 +3344,14 @@ def salaries_pay():
     except Exception:
         current_salaries = []
 
+    # Maps for fast access and precomputed values
+    employee_map = {int(e.id): e for e in (employees or []) if getattr(e, 'id', None)}
+    salary_map = {int(getattr(s, 'employee_id', 0) or 0): s for s in (current_salaries or [])}
     # Selected employee's salary for this month (to prefill form with existing values)
     selected_salary = None
     try:
-        if selected_employee and current_salaries:
-            for s in current_salaries:
-                if int(getattr(s, 'employee_id', 0) or 0) == int(selected_employee):
-                    selected_salary = s
-                    break
+        if selected_employee and salary_map.get(int(selected_employee)):
+            selected_salary = salary_map.get(int(selected_employee))
     except Exception:
         selected_salary = None
 
@@ -3397,57 +3373,53 @@ def salaries_pay():
     except Exception:
         paid_map = {}
 
-    return render_template(
-        'salaries_pay.html',
-        employees=employees,
-        month=selected_month,
-        salaries=current_salaries,
-        selected_employee=selected_employee,
-        selected_salary=selected_salary,
-        defaults_map=defaults_map,
-        prev_due_map=prev_due_map,
-        paid_map=paid_map
-    )
+    # Precompute monetary components per employee for the selected month
+    calc_map = {}
+    try:
+        for emp_id in valid_emp_ids:
+            srow = salary_map.get(int(emp_id))
+            if srow:
+                base = float(getattr(srow, 'basic_salary', 0.0) or 0.0)
+                allow = float(getattr(srow, 'allowances', 0.0) or 0.0)
+                ded = float(getattr(srow, 'deductions', 0.0) or 0.0)
+                prev = float(getattr(srow, 'previous_salary_due', 0.0) or 0.0)
+                total = max(0.0, base + allow - ded + prev)
+                paid = float(paid_map.get(int(getattr(srow, 'id')), 0.0) or 0.0)
+                calc_map[int(emp_id)] = {
+                    'basic': base,
+                    'allow': allow,
+                    'ded': ded,
+                    'prev': prev,
+                    'total': total,
+                    'paid': paid,
+                    'remaining': max(0.0, total - paid)
+                }
+            else:
+                d = defaults_map.get(int(emp_id), {})
+                base = float(d.get('basic_salary', 0.0) or 0.0)
+                allow = float(d.get('allowances', 0.0) or 0.0)
+                ded = float(d.get('deductions', 0.0) or 0.0)
+                prev = float(prev_due_map.get(int(emp_id), 0.0) or 0.0)
+                total = max(0.0, base + allow - ded + prev)
+                calc_map[int(emp_id)] = {
+                    'basic': base,
+                    'allow': allow,
+                    'ded': ded,
+                    'prev': prev,
+                    'total': total,
+                    'paid': 0.0,
+                    'remaining': total
+                }
+    except Exception:
+        calc_map = {}
+
+    return ('', 404)
 
 
 @main.route('/print/salary-receipt')
 @login_required
 def salary_receipt():
-    # Accept multiple payment ids: ?pids=1,2,3
-    pids_param = (request.args.get('pids') or '').strip()
-    try:
-        ids = [int(x) for x in pids_param.split(',') if x.strip().isdigit()]
-    except Exception:
-        ids = []
-    payments = []
-    if ids:
-        try:
-            payments = Payment.query.filter(Payment.id.in_(ids)).all()
-        except Exception:
-            payments = []
-    # Group by employee and month for display
-    items = []
-    try:
-        for p in (payments or []):
-            s = Salary.query.get(int(p.invoice_id)) if getattr(p, 'invoice_type', '') == 'salary' else None
-            if not s:
-                continue
-            emp = Employee.query.get(int(s.employee_id)) if getattr(s, 'employee_id', None) else None
-            items.append({
-                'employee': getattr(emp, 'full_name', 'Employee'),
-                'year': int(getattr(s, 'year', 0) or 0),
-                'month': int(getattr(s, 'month', 0) or 0),
-                'amount': float(getattr(p, 'amount_paid', 0) or 0),
-                'method': getattr(p, 'payment_method', '-') or '-',
-                'payment_date': getattr(p, 'payment_date', None),
-            })
-    except Exception:
-        items = []
-    try:
-        settings = Settings.query.first()
-    except Exception:
-        settings = None
-    return render_template('print/payroll.html', items=items, settings=settings)
+    return ('', 404)
 
 
 # Alias route to handle legacy or shortened path usage
@@ -3605,13 +3577,14 @@ def salaries_statements():
         except Exception:
             pass
 
-    return render_template('salaries_statements.html', year=year, month=month, rows=rows, totals=totals, status_f=status_f)
+    return ('', 404)
 
 
 
 @main.route('/api/salaries/statements', methods=['GET'], endpoint='api_salaries_statements')
 @login_required
 def api_salaries_statements():
+    return ('', 404)
     month_param = (request.args.get('month') or '').strip()
     status_f = (request.args.get('status') or '').strip().lower()
     emp_id_f = request.args.get('emp_id', type=int)
@@ -3747,6 +3720,7 @@ def api_salaries_statements():
 @main.route('/api/salaries/upsert', methods=['POST'], endpoint='api_salaries_upsert')
 @login_required
 def api_salaries_upsert():
+    return ('', 404)
     try:
         emp_id = request.form.get('employee_id', type=int)
         month_raw = (request.form.get('month') or '').strip() or get_saudi_now().strftime('%Y-%m')
@@ -3812,6 +3786,7 @@ def api_salaries_upsert():
 @main.route('/api/salaries/<int:sid>/update', methods=['POST'], endpoint='api_salaries_update')
 @login_required
 def api_salaries_update(sid: int):
+    return ('', 404)
     try:
         if not user_can('salaries', 'edit'):
             return jsonify({'ok': False, 'error': 'forbidden'}), 403
@@ -3845,6 +3820,7 @@ def api_salaries_update(sid: int):
 @main.route('/api/salaries/<int:sid>/delete', methods=['POST'], endpoint='api_salaries_delete')
 @login_required
 def api_salaries_delete(sid: int):
+    return ('', 404)
     try:
         if not user_can('salaries', 'delete'):
             return jsonify({'ok': False, 'error': 'forbidden'}), 403
@@ -3871,6 +3847,7 @@ def api_salaries_delete(sid: int):
 @main.route('/api/payroll/seed-test', methods=['POST'], endpoint='api_payroll_seed_test')
 @csrf.exempt
 def api_payroll_seed_test():
+    return ('', 404)
     try:
         from datetime import date as _date, timedelta as _td
         y = get_saudi_now().year
@@ -4248,7 +4225,7 @@ def payroll():
         journal_count = 0
         emp_adv_total = 0.0
 
-    return render_template('payroll.html', years=years, months=months, year=year, month=month, status=status, payrolls=payrolls, journal_count=journal_count, emp_adv_total=emp_adv_total, dept_options=dept_options, dept_selected=dept_f)
+    return ('', 404)
 
 
 @main.route('/employees/<int:emp_id>/pay', methods=['GET', 'POST'], endpoint='pay_salary')
@@ -4438,23 +4415,21 @@ def pay_salary(emp_id):
 
     from calendar import month_name
     month_name_str = month_name[month]
-    return render_template('pay_salary.html',
-                           employees=employees,
-                           selected_employee_id=selected_employee_id,
-                           salary=salary_vm,
-                           year=year,
-                           month=month,
-                           month_name=month_name_str,
-                           current_month_salaries=current_month_salaries,
-                           next_due_year=next_due_year,
-                           next_due_month=next_due_month,
-                           next_due_label=next_due_label)
+    return ('', 404)
 
 
 # --- Printing: Payroll summary for a month ---
 @main.route('/payroll/print/<int:year>/<int:month>', methods=['GET'], endpoint='payroll_print')
-@login_required
 def payroll_print(year: int, month: int):
+    try:
+        from flask_login import login_required as _lr
+    except Exception:
+        pass
+    try:
+        if not user_can('payroll','view'):
+            return ('Forbidden', 403)
+    except Exception:
+        pass
     try:
         rows = Salary.query.filter_by(year=year, month=month).all()
     except Exception:
@@ -4490,12 +4465,7 @@ def payroll_print(year: int, month: int):
             }))
     except Exception:
         view_rows = []
-    return render_template('payroll-reports.html',
-                           mode='monthly',
-                           payrolls=view_rows,
-                           year=year,
-                           month=month,
-                           report_title='🧾 Monthly Payroll Statement / كشف رواتب الشهر')
+    return ('', 404)
 
 
 # --- Employees Settings: Hour-based payroll ---
@@ -4673,20 +4643,115 @@ def employees_settings():
                 pass
     except Exception:
         status_map = {}
-    return render_template('employees_settings.html',
-                           dept_rates=dept_rates,
-                           employees=employees,
-                           hours_map=hours_map,
-                           dept_rate_map=dept_rate_map,
-                           defaults_map=defaults_map,
-                           status_map=status_map,
-                           year=year, month=month,
-                           hide_back_button=True,
-                           hide_logout_button=True)
+    return ('', 404)
+
+@main.route('/salaries/save_hours', methods=['POST'], endpoint='salaries_save_hours')
+@login_required
+def salaries_save_hours():
+    return ('', 404)
+    try:
+        if not user_can('employees','edit') and not user_can('salaries','edit'):
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
+        year = request.form.get('year', type=int) or get_saudi_now().year
+        month = request.form.get('month', type=int) or get_saudi_now().month
+        cand = set()
+        for k in request.form.keys():
+            if k.startswith('hours_') or k.startswith('absent_hours_') or k.startswith('overtime_hours_') or k.startswith('allow_default_') or k.startswith('ded_default_'):
+                try:
+                    cand.add(int(k.split('_')[-1]))
+                except Exception:
+                    pass
+        from models import Employee, EmployeeHours, EmployeeSalaryDefault, DepartmentRate, Salary, JournalEntry, JournalLine
+        dept_rates = {}
+        try:
+            for dr in DepartmentRate.query.all():
+                try:
+                    dept_rates[(dr.name or '').strip().lower()] = float(dr.hourly_rate or 0.0)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        updated = 0
+        for emp_id in cand:
+            emp = Employee.query.get(emp_id)
+            if not emp:
+                continue
+            h = request.form.get(f'hours_{emp_id}', type=float) or 0.0
+            ah = request.form.get(f'absent_hours_{emp_id}', type=float) or 0.0
+            oh = request.form.get(f'overtime_hours_{emp_id}', type=float) or 0.0
+            ad = request.form.get(f'allow_default_{emp_id}', type=float) or 0.0
+            dd = request.form.get(f'ded_default_{emp_id}', type=float) or 0.0
+            hrs = EmployeeHours.query.filter_by(employee_id=emp_id, year=year, month=month).first()
+            if not hrs:
+                hrs = EmployeeHours(employee_id=emp_id, year=year, month=month, hours=h, absent_hours=ah, overtime_hours=oh)
+                db.session.add(hrs)
+            else:
+                hrs.hours = h; hrs.absent_hours = ah; hrs.overtime_hours = oh
+            d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
+            if not d:
+                d = EmployeeSalaryDefault(employee_id=emp_id, base_salary=0.0, allowances=0.0, deductions=0.0)
+                db.session.add(d)
+            d.allowances = float(ad or 0.0)
+            d.deductions = float(dd or 0.0)
+            rate = float(dept_rates.get((emp.department or '').strip().lower()) or 0.0)
+            try:
+                from app.models import AppKV
+                kv = AppKV.get(f"emp_settings:{int(emp_id)}") or {}
+                rv = float(kv.get('hourly_rate') or 0.0)
+                if rv > 0:
+                    rate = rv
+            except Exception:
+                pass
+            base = float(h or 0.0) * float(rate or 0.0)
+            abs_ded = float(ah or 0.0) * float(rate or 0.0)
+            ot_allow = float(oh or 0.0) * float(rate or 0.0)
+            allow = float(ad or 0.0) + float(ot_allow or 0.0)
+            ded = float(dd or 0.0) + float(abs_ded or 0.0)
+            total = max(0.0, base + allow - ded)
+            s = Salary.query.filter_by(employee_id=emp_id, year=year, month=month).first()
+            if not s:
+                s = Salary(employee_id=emp_id, year=year, month=month, basic_salary=base, allowances=allow, deductions=ded, previous_salary_due=0.0, total_salary=total, status='due')
+                db.session.add(s)
+                db.session.flush()
+            else:
+                s.basic_salary = base
+                s.allowances = allow
+                s.deductions = ded
+                s.previous_salary_due = 0.0
+                s.total_salary = total
+                s.status = 'due'
+            try:
+                existing = JournalEntry.query.filter(JournalEntry.salary_id == s.id, JournalEntry.description.ilike('%Payroll accrual%')).first()
+                if not existing and total > 0:
+                    exp_acc = _account(SHORT_TO_NUMERIC['SAL_EXP'][0], CHART_OF_ACCOUNTS['5310']['name'], CHART_OF_ACCOUNTS['5310']['type'])
+                    liab_acc = _account(SHORT_TO_NUMERIC['PAYROLL_LIAB'][0], CHART_OF_ACCOUNTS['2130']['name'], CHART_OF_ACCOUNTS['2130']['type'])
+                    je = JournalEntry(entry_number=f"JE-SALACC-{emp_id}-{year}{month:02d}", date=get_saudi_now().date(), branch_code=None, description=f"Payroll accrual {emp_id} {year}-{month}", status='posted', total_debit=total, total_credit=total, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), salary_id=s.id)
+                    db.session.add(je); db.session.flush()
+                    if exp_acc:
+                        db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total, credit=0.0, description='Payroll expense', line_date=get_saudi_now().date(), employee_id=emp_id))
+                    if liab_acc:
+                        db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=liab_acc.id, debit=0.0, credit=total, description='Payroll liability', line_date=get_saudi_now().date(), employee_id=emp_id))
+                    try:
+                        _post_ledger(get_saudi_now().date(), 'SAL_EXP', 'مصروف رواتب', 'expense', total, 0.0, f'ACCRUAL {emp_id} {year}-{month}')
+                        _post_ledger(get_saudi_now().date(), 'PAYROLL_LIAB', 'رواتب مستحقة', 'liability', 0.0, total, f'ACCRUAL {emp_id} {year}-{month}')
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            updated += 1
+        db.session.commit()
+        return jsonify({'ok': True, 'updated': updated})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 400
 
 @main.route('/api/employee/settings', methods=['GET'], endpoint='api_employee_settings_get')
 @login_required
 def api_employee_settings_get():
+    return ('', 404)
     try:
         emp_id = request.args.get('emp_id', type=int)
         if not emp_id:
@@ -4967,97 +5032,11 @@ def api_employee_hours_get():
 @login_required
 @csrf.exempt
 def salary_receipt_bulk():
-    from calendar import month_name as _month_name
-    # Determine target period
-    year = request.form.get('year', type=int) or get_saudi_now().year
-    month = request.form.get('month', type=int) or get_saudi_now().month
-    selected_ids = request.form.getlist('employee_ids') or []
-    try:
-        employee_ids = [int(i) for i in selected_ids if str(i).isdigit()]
-    except Exception:
-        employee_ids = []
-
-    # Build payments-like rows for printing only
-    payments = []
-    try:
-        # Defaults map
-        try:
-            from models import EmployeeSalaryDefault
-            defaults_map = {int(d.employee_id): d for d in EmployeeSalaryDefault.query.all()}
-        except Exception:
-            defaults_map = {}
-
-        for emp_id in (employee_ids or []):
-            emp = Employee.query.get(emp_id)
-            if not emp:
-                continue
-            # Current month salary components
-            s = Salary.query.filter_by(employee_id=emp_id, year=year, month=month).first()
-            if s:
-                base = float(s.basic_salary or 0)
-                allow = float(s.allowances or 0)
-                ded = float(s.deductions or 0)
-                prev = float(s.previous_salary_due or 0)
-                total = max(0.0, base + allow - ded + prev)
-                # Sum paid against this salary record
-                from sqlalchemy import func as _func
-                paid = float(db.session.query(_func.coalesce(_func.sum(Payment.amount_paid), 0))
-                             .filter(Payment.invoice_type=='salary', Payment.invoice_id==s.id)
-                             .scalar() or 0.0)
-            else:
-                d = defaults_map.get(emp_id)
-                base = float(getattr(d, 'base_salary', 0) or 0)
-                allow = float(getattr(d, 'allowances', 0) or 0)
-                ded = float(getattr(d, 'deductions', 0) or 0)
-                prev = 0.0
-                total = max(0.0, base + allow - ded)
-                paid = 0.0
-            net_remaining = max(0.0, total - paid)
-
-            payments.append(type('P', (), {
-                'employee': emp,
-                'basic': base,
-                'allowances': allow,
-                'deductions': ded,
-                'prev_due': prev,
-                'paid_amount': paid,
-                # In receipt, "Net Salary" should reflect the month's net total (not remaining)
-                'net_salary': total,
-                # Optionally expose remaining for templates that may show it later
-                'remaining': net_remaining,
-                'method': 'cash',
-            }))
-    except Exception:
-        payments = []
-
-    # Company name
-    try:
-        settings = Settings.query.first()
-        company_name = settings.company_name or 'Company'
-    except Exception:
-        company_name = 'Company'
-
-    return render_template(
-        'payroll-reports.html',
-        mode='receipt',
-        payments=payments,
-        company_name=company_name,
-        payment_date=get_saudi_now().date(),
-        now=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
-        report_title='🧾 Salary Payment Receipt / إيصال سداد رواتب'
-    )
+    return ('', 404)
 @main.route('/reports/print/salaries', methods=['GET'], endpoint='reports_print_salaries_legacy')
 @login_required
 def reports_print_salaries_legacy():
-    """Back-compat: redirect to new detailed payroll statement with same query params."""
-    try:
-        q = request.query_string.decode('utf-8') if request.query_string else ''
-    except Exception:
-        q = ''
-    target = url_for('main.reports_print_salaries_detailed')
-    if q:
-        target = f"{target}?{q}"
-    return redirect(target)
+    return ('', 404)
 
 @main.route('/payments', endpoint='payments')
 @login_required
@@ -5748,6 +5727,124 @@ def payments_export():
 @login_required
 def reports():
     return render_template('reports.html')
+
+@main.route('/api/reports/preview', methods=['GET'], endpoint='api_reports_preview')
+def api_reports_preview():
+    try:
+        from datetime import datetime as _dt, time as _time, timedelta as _td
+        inv_type = (request.args.get('type') or 'sales').strip().lower()
+        start_s = (request.args.get('start_date') or '').strip()
+        end_s = (request.args.get('end_date') or '').strip()
+        branch = (request.args.get('branch') or 'all').strip()
+        pm = (request.args.get('payment_method') or 'all').strip().lower()
+        def _parse(s):
+            try:
+                return _dt.strptime(s, '%Y-%m-%d').date()
+            except Exception:
+                return None
+        start_d = _parse(start_s)
+        end_d = _parse(end_s)
+        if (start_d is None) and (end_d is not None):
+            start_d = end_d
+        if (end_d is None) and (start_d is not None):
+            end_d = start_d
+        rows = []
+        if inv_type == 'sales':
+            q = db.session.query(SalesInvoice)
+            if start_d and end_d:
+                try:
+                    if hasattr(SalesInvoice, 'created_at'):
+                        start_dt = _dt.combine(start_d, _time.min)
+                        end_dt = _dt.combine(end_d, _time.max)
+                        q = q.filter(SalesInvoice.created_at >= start_dt, SalesInvoice.created_at <= end_dt)
+                    elif hasattr(SalesInvoice, 'date'):
+                        q = q.filter(SalesInvoice.date.between(start_d, end_d))
+                except Exception:
+                    pass
+            if branch and branch != 'all':
+                q = q.filter(SalesInvoice.branch == branch)
+            if pm and pm != 'all':
+                q = q.filter(SalesInvoice.payment_method == pm)
+            order_col = SalesInvoice.created_at if hasattr(SalesInvoice, 'created_at') else SalesInvoice.date
+            for r in q.order_by(order_col.asc()).all():
+                rows.append({
+                    'date': (r.created_at.date().isoformat() if getattr(r, 'created_at', None) else (r.date.isoformat() if getattr(r, 'date', None) else '')),
+                    'branch': BRANCH_LABELS.get(r.branch, r.branch),
+                    'customer': (r.customer_name or ''),
+                    'type': 'sales',
+                    'payment': (r.payment_method or ''),
+                    'total': float(r.total_after_tax_discount or 0.0),
+                })
+        elif inv_type == 'purchases':
+            q = db.session.query(PurchaseInvoice)
+            if start_d and end_d:
+                q = q.filter(PurchaseInvoice.date.between(start_d, end_d))
+            if pm and pm != 'all':
+                q = q.filter(PurchaseInvoice.payment_method == pm)
+            for r in q.order_by(PurchaseInvoice.date.asc()).all():
+                rows.append({
+                    'date': r.date.isoformat() if r.date else '',
+                    'branch': '—',
+                    'customer': (r.supplier_name or ''),
+                    'type': 'purchases',
+                    'payment': (r.payment_method or ''),
+                    'total': float(r.total_after_tax_discount or 0.0),
+                })
+        else:
+            q = db.session.query(ExpenseInvoice)
+            if start_d and end_d:
+                q = q.filter(ExpenseInvoice.date.between(start_d, end_d))
+            if pm and pm != 'all':
+                q = q.filter(ExpenseInvoice.payment_method == pm)
+            for r in q.order_by(ExpenseInvoice.date.asc()).all():
+                rows.append({
+                    'date': r.date.isoformat() if r.date else '',
+                    'branch': '—',
+                    'customer': '',
+                    'type': 'expenses',
+                    'payment': (r.payment_method or ''),
+                    'total': float(r.total_after_tax_discount or 0.0),
+                })
+        return jsonify({'ok': True, 'rows': rows})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@main.route('/api/reports/customer-sales', methods=['GET'], endpoint='api_reports_customer_sales')
+def api_reports_customer_sales():
+    try:
+        from datetime import datetime as _dt
+        names_csv = (request.args.get('customers') or '').strip()
+        start_s = (request.args.get('start_date') or '').strip()
+        end_s = (request.args.get('end_date') or '').strip()
+        branch = (request.args.get('branch') or 'all').strip()
+        groups = [x.strip() for x in names_csv.split(',') if x.strip()]
+        def _parse(s):
+            try:
+                return _dt.strptime(s, '%Y-%m-%d').date()
+            except Exception:
+                return None
+        start_d = _parse(start_s)
+        end_d = _parse(end_s)
+        q = db.session.query(SalesInvoice)
+        if start_d and end_d:
+            q = q.filter(SalesInvoice.date.between(start_d, end_d))
+        if branch and branch != 'all':
+            q = q.filter(SalesInvoice.branch == branch)
+        if groups:
+            q = q.filter(SalesInvoice.customer_name.in_(groups))
+        rows = []
+        for r in q.order_by(SalesInvoice.date.asc()).limit(1000).all():
+            rows.append({
+                'date': r.date.isoformat() if r.date else '',
+                'branch': BRANCH_LABELS.get(r.branch, r.branch),
+                'customer': (r.customer_name or ''),
+                'type': 'sales',
+                'payment': (r.payment_method or ''),
+                'total': float(r.total_after_tax_discount or 0.0),
+            })
+        return jsonify({'ok': True, 'rows': rows})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @main.route('/reports/monthly', methods=['GET'], endpoint='reports_monthly')
 @login_required
@@ -7636,7 +7733,6 @@ def api_customers_search():
 
 # ---- Print routes for sales receipts ----
 @main.route('/print/receipt/<invoice_number>', methods=['GET'], endpoint='print_receipt')
-@login_required
 def print_receipt(invoice_number):
     inv = SalesInvoice.query.filter_by(invoice_number=invoice_number).first()
     if not inv:
@@ -7943,15 +8039,29 @@ def print_order_slip(branch, table):
         kv_set(f'draft:{branch}:{table}', rec)
     branch_name = BRANCH_LABELS.get(branch, branch)
     dt_str = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
+    try:
+        s = Settings.query.first()
+    except Exception:
+        s = None
+    cust = rec.get('customer') or {}
+    payment_method = (rec.get('payment_method') or '').strip()
     return render_template('print/order_slip.html',
                            order_number=order_seq,
+                           branch_code=branch,
                            branch_name=branch_name,
+                           table_number=table,
                            date_time=dt_str,
                            items=items_ctx,
                            subtotal=round(subtotal, 2),
                            discount=round(discount_amount, 2),
+                           discount_pct=round(discount_pct, 2),
                            vat=round(vat_amount, 2),
-                           total=round(total_after, 2))
+                           tax_pct=round(tax_pct, 2),
+                           total=round(total_after, 2),
+                           customer_name=(cust.get('name') or ''),
+                           customer_phone=(cust.get('phone') or ''),
+                           payment_method=payment_method,
+                           settings=s)
 
 @main.route('/invoice/print/<invoice_id>', methods=['GET'], endpoint='invoice_print')
 @login_required
@@ -8190,6 +8300,7 @@ def api_customers_create():
 @main.route('/salaries/accrual', methods=['POST'], endpoint='salaries_accrual')
 @login_required
 def salaries_accrual():
+    return ('', 404)
     if not user_can('salaries','add'):
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     try:
@@ -11385,11 +11496,8 @@ def _archive_invoice_pdf(inv):
         pass
 
 @main.route('/api/archive/list', methods=['GET'], endpoint='api_archive_list')
-@login_required
 def api_archive_list():
     try:
-        if not user_can('archive','view'):
-            return jsonify({'ok': False, 'error': 'forbidden'}), 403
         year = request.args.get('year', type=int)
         quarter = (request.args.get('quarter') or '').strip().upper() or None
         month = request.args.get('month', type=int)
@@ -11538,11 +11646,8 @@ def api_archive_list():
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @main.route('/archive/open/<invoice_number>', methods=['GET'], endpoint='archive_open')
-@login_required
 def archive_open(invoice_number):
     try:
-        if not user_can('archive','view'):
-            return 'Forbidden', 403
         meta = kv_get(f"pdf_path:sales:{invoice_number}", {}) or {}
         p = meta.get('path')
         if not p or (not os.path.exists(p)):
@@ -11552,21 +11657,15 @@ def archive_open(invoice_number):
         return f'Error: {e}', 500
 
 @main.route('/archive', methods=['GET'], endpoint='archive')
-@login_required
 def archive_page():
     try:
-        if not user_can('archive','view'):
-            return 'Forbidden', 403
         return render_template('archive.html', now=get_saudi_now(), branches=BRANCH_LABELS)
     except Exception as e:
         return f'Error loading archive: {e}', 500
 
 @main.route('/archive/download', methods=['GET'], endpoint='archive_download')
-@login_required
 def archive_download():
     try:
-        if not user_can('archive','view'):
-            return jsonify({'ok': False, 'error': 'forbidden'}), 403
         import io, zipfile, csv
         year = request.args.get('year', type=int)
         quarter = (request.args.get('quarter') or '').strip().upper() or None
@@ -12190,11 +12289,12 @@ def advances_page():
         employees = Employee.query.order_by(Employee.full_name.asc()).all()
     except Exception:
         employees = []
-    return render_template('advances.html', employees=employees)
+    return ('', 404)
 
 @main.route('/api/advances/list', methods=['GET'], endpoint='api_advances_list')
 @login_required
 def api_advances_list():
+    return ('', 404)
     try:
         from datetime import date as _date
         from datetime import datetime as _dt
@@ -12304,6 +12404,7 @@ def api_advances_list():
 @main.route('/api/advances/metrics', methods=['GET'], endpoint='api_advances_metrics')
 @login_required
 def api_advances_metrics():
+    return ('', 404)
     try:
         from models import JournalLine, JournalEntry, Employee
         adv_code = SHORT_TO_NUMERIC['EMP_ADV'][0]
@@ -12342,6 +12443,7 @@ def api_advances_metrics():
 @main.route('/api/advances/pay', methods=['POST'], endpoint='api_advances_pay')
 @login_required
 def api_advances_pay():
+    return ('', 404)
     try:
         emp_id = request.form.get('employee_id', type=int)
         amount = request.form.get('amount', type=float) or 0.0
@@ -12379,6 +12481,7 @@ def api_advances_pay():
 @main.route('/api/employees', methods=['GET'], endpoint='api_employees')
 @login_required
 def api_employees():
+    return ('', 404)
     try:
         rows = Employee.query.order_by(Employee.full_name.asc()).all()
         data = []
@@ -12390,7 +12493,7 @@ def api_employees():
                 'position': getattr(e,'position','') or '',
                 'branch_code': getattr(e,'branch_code','') or '',
                 'status': getattr(e,'status','') or '',
-                'basic': float(getattr(getattr(e,'salary_default',None),'base_salary',0) or 0),
+                'basic': float(getattr(getattr(e,'employee_salary_default',None),'base_salary',0) or 0),
                 'last_salary': 0.0,
                 'advance': 0.0,
             })
@@ -12406,7 +12509,10 @@ def api_employees():
 @main.route('/api/employees', methods=['POST'], endpoint='api_employees_create')
 @login_required
 def api_employees_create():
+    return ('', 404)
     try:
+        if not user_can('employees','add'):
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
         from models import Employee, EmployeeSalaryDefault
         full_name = (request.form.get('full_name') or '').strip()
         national_id = (request.form.get('national_id') or '').strip()
@@ -12449,7 +12555,10 @@ def api_employees_create():
 @main.route('/api/employees/<int:eid>', methods=['PUT'], endpoint='api_employees_update')
 @login_required
 def api_employees_update(eid: int):
+    return ('', 404)
     try:
+        if not user_can('employees','edit'):
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
         from models import Employee, EmployeeSalaryDefault
         emp = Employee.query.get_or_404(int(eid))
         full_name = (request.form.get('full_name') or '').strip() or emp.full_name
@@ -12495,7 +12604,10 @@ def api_employees_update(eid: int):
 @main.route('/api/employees/<int:eid>', methods=['DELETE'], endpoint='api_employees_delete')
 @login_required
 def api_employees_delete(eid: int):
+    return ('', 404)
     try:
+        if not user_can('employees','delete'):
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
         from models import Employee, Salary, Payment, EmployeeSalaryDefault, EmployeeHours, JournalLine, JournalEntry, LedgerEntry
         emp = Employee.query.get_or_404(int(eid))
         sal_rows = Salary.query.filter_by(employee_id=int(eid)).all()
@@ -12583,6 +12695,31 @@ def api_employees_delete(eid: int):
         return jsonify({'ok': True})
     except Exception as e:
         db.session.rollback(); return jsonify({'ok': False, 'error': str(e)}), 400
+
+@main.route('/api/employees/<int:eid>', methods=['GET'], endpoint='api_employees_get')
+@login_required
+def api_employees_get(eid: int):
+    return ('', 404)
+    try:
+        from models import Employee, EmployeeSalaryDefault
+        emp = Employee.query.get(int(eid))
+        if not emp:
+            return jsonify({'ok': False, 'error': 'employee_not_found'}), 404
+        d = EmployeeSalaryDefault.query.filter_by(employee_id=int(emp.id)).first()
+        data = {
+            'id': int(getattr(emp,'id',0) or 0),
+            'full_name': getattr(emp,'full_name','') or '',
+            'department': getattr(emp,'department','') or '',
+            'position': getattr(emp,'position','') or '',
+            'branch_code': getattr(emp,'branch_code','') or '',
+            'status': getattr(emp,'status','') or '',
+            'basic': float(getattr(d,'base_salary',0) or 0) if d else 0.0,
+            'email': getattr(emp,'email','') or '',
+            'phone': getattr(emp,'phone','') or ''
+        }
+        return jsonify({'ok': True, 'employee': data})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
 
 @main.route('/api/maintenance/cleanup-dummy', methods=['POST'], endpoint='api_cleanup_dummy')
 @login_required
@@ -12777,6 +12914,7 @@ def api_advances():
 @main.route('/api/employee-ledger', methods=['GET'], endpoint='api_employee_ledger')
 @login_required
 def api_employee_ledger():
+    return ('', 404)
     try:
         emp_id = request.args.get('emp_id', type=int)
         if not emp_id:
@@ -12799,6 +12937,7 @@ def api_employee_ledger():
 @main.route('/api/payroll-import', methods=['POST'], endpoint='api_payroll_import')
 @login_required
 def api_payroll_import():
+    return ('', 404)
     try:
         file = request.files.get('file')
         if not file:
@@ -12853,11 +12992,12 @@ def payroll_previous_page():
         employees = Employee.query.order_by(Employee.full_name.asc()).all()
     except Exception:
         employees = []
-    return render_template('payroll_previous.html', employees=employees)
+    return ('', 404)
 
 @main.route('/api/payroll/history', methods=['GET'], endpoint='api_payroll_history')
 @login_required
 def api_payroll_history():
+    return ('', 404)
     try:
         rows = db.session.query(Salary.year, Salary.month, func.sum(func.coalesce(Salary.total_salary, 0))).group_by(Salary.year, Salary.month).order_by(Salary.year.desc(), Salary.month.desc()).all()
         total = float(sum([float(r[2] or 0) for r in rows]) or 0)
@@ -12874,10 +13014,12 @@ def api_payroll_history():
 @main.route('/api/payroll/history/list', methods=['GET'], endpoint='api_payroll_history_list')
 @login_required
 def api_payroll_history_list():
+    return ('', 404)
     try:
         month = (request.args.get('month') or '').strip()
         dept = (request.args.get('department') or '').strip().lower()
         status = (request.args.get('status') or '').strip().lower()
+        pay_method = (request.args.get('payment_method') or '').strip().upper()
         if month:
             y, m = month.split('-')
             y = int(y); m = int(m)
@@ -12897,6 +13039,31 @@ def api_payroll_history_list():
             st = (getattr(s, 'status', '') or '').strip().lower()
             if status and status not in st:
                 continue
+            pm_display = ''
+            receipt_url = ''
+            try:
+                from flask import url_for
+                pay_rows = Payment.query.filter(Payment.invoice_type=='salary', Payment.invoice_id==int(s.id)).order_by(Payment.payment_date.asc()).all()
+                pids = []
+                last_method = None
+                for p in (pay_rows or []):
+                    try:
+                        pids.append(str(int(p.id)))
+                        last_method = (getattr(p,'payment_method','') or '').strip().upper()
+                    except Exception:
+                        continue
+                if pids:
+                    receipt_url = url_for('main.salary_receipt') + '?pids=' + ','.join(pids)
+                pm_display = last_method or ''
+            except Exception:
+                pm_display = ''
+                receipt_url = ''
+            if pay_method:
+                def _norm(m):
+                    m = (m or '').upper()
+                    return 'BANK' if m in ('BANK','TRANSFER') else ('CASH' if m=='CASH' else m)
+                if _norm(pm_display) != _norm(pay_method):
+                    continue
             data.append({
                 'employee_id': int(getattr(s, 'employee_id', 0) or 0),
                 'employee_name': getattr(e, 'full_name', '') if e else '',
@@ -12905,7 +13072,9 @@ def api_payroll_history_list():
                 'ot': 0.0,
                 'bonus': 0.0,
                 'total': float(getattr(s, 'total_salary', 0) or 0),
-                'status': getattr(s, 'status', '') or 'due'
+                'status': getattr(s, 'status', '') or 'due',
+                'payment_method': pm_display,
+                'receipt_url': receipt_url,
             })
         return jsonify({'ok': True, 'rows': data})
     except Exception as e:
@@ -13470,6 +13639,7 @@ def api_ledger_list():
         emp_id = request.args.get('emp_id', type=int)
         month = (request.args.get('month') or '').strip()
         acc_type = (request.args.get('type') or '').strip().lower()
+        dept = (request.args.get('dept') or '').strip().lower()
         start_dt = None; end_dt = None
         if month:
             y, m = month.split('-'); y = int(y); m = int(m)
@@ -13490,6 +13660,7 @@ def api_ledger_list():
             item = {
                 'employee_id': int(getattr(jl, 'employee_id', 0) or 0),
                 'employee_name': '',
+                'employee_department': '',
                 'date': str(getattr(je, 'date', get_saudi_now().date())),
                 'desc': getattr(jl, 'description', '') or '',
                 'debit': float(getattr(jl, 'debit', 0) or 0),
@@ -13504,16 +13675,53 @@ def api_ledger_list():
             item['status'] = st
             data.append(item)
         try:
-            emps = {int(e.id): e.full_name for e in Employee.query.all()}
+            emps = {int(e.id): (e.full_name, (e.department or '').strip().lower()) for e in Employee.query.all()}
             for d in data:
-                d['employee_name'] = emps.get(d['employee_id'], '')
+                val = emps.get(d['employee_id'])
+                if val:
+                    d['employee_name'] = val[0]
+                    d['employee_department'] = val[1]
         except Exception:
             pass
+        if dept and dept not in ('all',):
+            data = [d for d in data if (d.get('employee_department','') or '') == dept]
         if acc_type:
             if acc_type == 'advance':
                 data = [d for d in data if d.get('type') == 'advance']
             elif acc_type == 'deduction':
                 data = [d for d in data if d.get('type') == 'deduction']
+        # Fallback aggregation when no journal rows exist for the employee/month
+        if (not data) and emp_id:
+            try:
+                from models import Salary, Payment
+                agg = []
+                if start_dt and end_dt:
+                    y = int(start_dt.year); m = int(start_dt.month)
+                    srows = Salary.query.filter_by(employee_id=int(emp_id), year=y, month=m).all()
+                else:
+                    srows = Salary.query.filter_by(employee_id=int(emp_id)).order_by(Salary.year.desc(), Salary.month.desc()).limit(12).all()
+                sal_ids = [int(getattr(s,'id',0) or 0) for s in srows]
+                for s in srows:
+                    dt = date(int(getattr(s,'year', get_saudi_now().year)), int(getattr(s,'month', get_saudi_now().month)), 1)
+                    tot = float(getattr(s,'total_salary',0) or 0)
+                    if tot>0:
+                        agg.append({'employee_id': int(emp_id), 'employee_name': emps.get(int(emp_id), ('', ''))[0] if 'emps' in locals() else '', 'employee_department': emps.get(int(emp_id), ('',''))[1] if 'emps' in locals() else '', 'date': str(dt), 'desc': 'مرتب مستحق', 'type': 'salary', 'debit': 0.0, 'credit': tot, 'balance': -tot, 'status': 'due'})
+                if sal_ids:
+                    pays = db.session.query(Payment).filter(Payment.invoice_type=='salary', Payment.invoice_id.in_(sal_ids)).order_by(Payment.payment_date.asc()).all()
+                    for p in pays:
+                        amt = float(getattr(p,'amount_paid',0) or 0)
+                        dval = getattr(p,'payment_date', get_saudi_now())
+                        agg.append({'employee_id': int(emp_id), 'employee_name': emps.get(int(emp_id), ('', ''))[0] if 'emps' in locals() else '', 'employee_department': emps.get(int(emp_id), ('',''))[1] if 'emps' in locals() else '', 'date': str(dval.date() if hasattr(dval,'date') else dval), 'desc': 'سداد راتب', 'type': 'payment', 'debit': amt, 'credit': 0.0, 'balance': amt, 'status': 'paid'})
+                # Compute running month balances
+                agg.sort(key=lambda r: r['date'])
+                data = agg
+                if acc_type:
+                    if acc_type == 'advance':
+                        data = [d for d in data if d.get('type') == 'advance']
+                    elif acc_type == 'deduction':
+                        data = [d for d in data if d.get('type') == 'deduction']
+            except Exception:
+                pass
         return jsonify({'ok': True, 'rows': data})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -13566,10 +13774,7 @@ def api_ledger_delete(jeid: int):
         return jsonify({'ok': True})
     except Exception as e:
         db.session.rollback(); return jsonify({'ok': False, 'error': str(e)}), 400
-@main.route('/employees/create', methods=['GET'], endpoint='employees_create_page')
-@login_required
-def employees_create_page():
-    return redirect(url_for('main.employee_uvd', mode='create'))
+
 
 @main.route('/api/sales/pay', methods=['POST'], endpoint='api_sales_pay')
 @login_required
@@ -13636,4 +13841,85 @@ def api_sales_pay():
             db.session.rollback()
         except Exception:
             pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+@main.route('/api/employee/settings2', methods=['GET', 'POST'], endpoint='api_employee_settings2')
+@login_required
+def api_employee_settings():
+    try:
+        emp_id = request.args.get('emp_id', type=int) or request.form.get('emp_id', type=int)
+        if not emp_id:
+            return jsonify({'ok': False, 'error': 'emp_id required'}), 400
+        from models import Employee
+        emp = Employee.query.get(int(emp_id))
+        if not emp:
+            return jsonify({'ok': False, 'error': 'employee not found'}), 404
+        try:
+            from app.models import AppKV
+        except Exception:
+            AppKV = None
+        if request.method == 'GET':
+            kv = {}
+            if AppKV:
+                try:
+                    kv = AppKV.get(f"emp_settings:{int(emp.id)}") or {}
+                except Exception:
+                    kv = {}
+            # Compose settings response
+            settings = {
+                'work_type': (kv.get('salary_type') or 'fixed'),
+                'monthly_hours': float(kv.get('monthly_hours') or 0.0),
+                'hourly_rate_employee': float(kv.get('hourly_rate') or 0.0),
+                'status': (emp.status or 'active'),
+                'payment_method': (kv.get('payment_method') or 'cash'),
+                'ot_rate': float(kv.get('ot_rate') or 0.0),
+                'allow_allowances': bool(kv.get('allow_allowances') or False),
+                'allow_bonuses': bool(kv.get('allow_bonuses') or False),
+                'show_in_reports': bool(kv.get('show_in_reports') or True),
+            }
+            return jsonify({'ok': True, 'settings': settings})
+        # POST save
+        status = (request.form.get('status') or '').strip().lower()
+        work_type = (request.form.get('work_type') or '').strip().lower()
+        monthly_hours = request.form.get('monthly_hours', type=float)
+        hourly_rate = request.form.get('hourly_rate_employee', type=float)
+        payment_method = (request.form.get('payment_method') or '').strip().lower()
+        ot_rate = request.form.get('ot_rate', type=float)
+        allow_allowances = bool(request.form.get('allow_allowances'))
+        allow_bonuses = bool(request.form.get('allow_bonuses'))
+        show_in_reports = bool(request.form.get('show_in_reports', True))
+        # Update employee basic fields
+        if status in ('active','inactive'):
+            emp.status = status
+            emp.active = (status == 'active')
+        try:
+            db.session.flush()
+        except Exception:
+            pass
+        # Persist KV settings
+        if AppKV:
+            try:
+                cur = AppKV.get(f"emp_settings:{int(emp.id)}") or {}
+                if work_type in ('fixed','hourly'):
+                    cur['salary_type'] = work_type
+                if monthly_hours is not None:
+                    cur['monthly_hours'] = float(monthly_hours or 0.0)
+                if hourly_rate is not None:
+                    cur['hourly_rate'] = float(hourly_rate or 0.0)
+                if payment_method:
+                    cur['payment_method'] = payment_method
+                if ot_rate is not None:
+                    cur['ot_rate'] = float(ot_rate or 0.0)
+                cur['allow_allowances'] = bool(allow_allowances)
+                cur['allow_bonuses'] = bool(allow_bonuses)
+                cur['show_in_reports'] = bool(show_in_reports)
+                AppKV.set(f"emp_settings:{int(emp.id)}", cur)
+            except Exception:
+                pass
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return jsonify({'ok': False, 'error': 'save_failed'}), 500
+        return jsonify({'ok': True})
+    except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

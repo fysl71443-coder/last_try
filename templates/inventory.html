@@ -222,7 +222,7 @@ body {
             {% for b in top_ingredients %}
               <div class="bar">
                 <div class="name">{{ b.name }}</div>
-                {% set pct = (b.total / (top_ingredients[0].total or 1)) if top_ingredients %}
+                {% set pct = (b.total / (top_total_max or 1)) if top_ingredients %}
                 <div class="val" style="width: {{ (pct * 100)|round(1) }}%"></div>
                 <div class="intel-num">{{ '{:,.2f}'.format(b.total or 0) }}</div>
               </div>
@@ -233,7 +233,7 @@ body {
           <h6 class="mb-2">{{ _('Purchase Trend / اتجاه المشتريات') }}</h6>
           <div class="spark">
             {% for p in purchase_trend %}
-            {% set h = (p.total / (purchase_trend|map(attribute='total')|max if purchase_trend else 1)) * 38 %}
+            {% set h = (p.total / (trend_max_total or 1)) * 38 %}
             <div class="pt" title="{{ p.date }}" style="height: {{ h|round(1) }}px"></div>
             {% endfor %}
           </div>
@@ -243,6 +243,28 @@ body {
 
     <div class="intel-sec">
       <h5 class="mb-2">{{ _('Meal Cost & Sales Analysis / تحليل تكلفة الوجبات والمبيعات') }}</h5>
+      <div class="mb-2 d-flex flex-wrap gap-2 align-items-end">
+        <div>
+          <label class="form-label">{{ _('Start Date / تاريخ البداية') }}</label>
+          <input id="salesStart" type="date" class="form-control" value="{{ start_date_val or '' }}">
+        </div>
+        <div>
+          <label class="form-label">{{ _('End Date / تاريخ النهاية') }}</label>
+          <input id="salesEnd" type="date" class="form-control" value="{{ end_date_val or '' }}">
+        </div>
+        <div>
+          <label class="form-label">{{ _('Branch / الفرع') }}</label>
+          <select id="salesBranch" class="form-select" style="min-width:180px;">
+            <option value="">{{ _('All / الكل') }}</option>
+            {% for code, name in (branches or {}).items() %}
+            <option value="{{ code }}" {% if selected_branch == code %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <button id="applySalesFilter" class="btn btn-outline-primary">{{ _('Apply / تطبيق') }}</button>
+        </div>
+      </div>
       {% if outdated_meals and outdated_meals|length > 0 %}
         <div class="alert alert-warning">⚠ {{ _('Meals using ingredients with outdated cost data / وجبات تحتوي مكونات بسعر قديم') }}: {{ outdated_meals|join(', ') }}</div>
       {% endif %}
@@ -271,7 +293,41 @@ body {
               <td class="text-end">{{ '{:,.2f}'.format(m.revenue or 0) }}</td>
               <td class="text-end">{{ '{:,.2f}'.format(m.profit or 0) }}</td>
               <td class="text-end">{{ '{:,.1f}'.format(margin) }}%</td>
-              <td>{{ '{:,.1f}'.format(contrib) }}%</td>
+              <td class="d-flex align-items-center justify-content-between">
+                <span>{{ '{:,.1f}'.format(contrib) }}%</span>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-toggle-meal="{{ m.meal_name }}">{{ _('Details / تفاصيل') }}</button>
+              </td>
+            </tr>
+            <tr class="d-none" data-meal-row="{{ m.meal_name }}">
+              <td colspan="7">
+                <div class="table-responsive">
+                  <table class="table table-sm table-bordered mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th>{{ _('Invoice / الفاتورة') }}</th>
+                        <th>{{ _('Date / التاريخ') }}</th>
+                        <th class="text-end">{{ _('Qty / الكمية') }}</th>
+                        <th class="text-end">{{ _('Unit / الوحدة') }}</th>
+                        <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for d in (sold_details_map.get(m.meal_name) or []) %}
+                      <tr>
+                        <td>{{ d.invoice_number }}</td>
+                        <td>{{ d.date }}</td>
+                        <td class="text-end">{{ '{:,.2f}'.format(d.quantity or 0) }}</td>
+                        <td class="text-end">{{ '{:,.2f}'.format(d.unit_price or 0) }}</td>
+                        <td class="text-end">{{ '{:,.2f}'.format(d.total_price or 0) }}</td>
+                      </tr>
+                      {% endfor %}
+                      {% if not (sold_details_map.get(m.meal_name) or []) %}
+                      <tr><td colspan="5" class="text-muted">{{ _('No details / لا توجد تفاصيل') }}</td></tr>
+                      {% endif %}
+                    </tbody>
+                  </table>
+                </div>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
@@ -321,6 +377,30 @@ body {
     var hideText = '{{ _('Hide Items / إخفاء العناصر') }}';
     if(row.classList.contains('d-none')){ row.classList.remove('d-none'); btn.textContent = hideText; }
     else { row.classList.add('d-none'); btn.textContent = showText; }
+  });
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-toggle-meal]');
+    if(!btn) return;
+    var key = btn.getAttribute('data-toggle-meal');
+    var row = document.querySelector('tr[data-meal-row="' + key + '"]');
+    if(!row) return;
+    var showText = '{{ _('Details / تفاصيل') }}';
+    var hideText = '{{ _('Hide / إخفاء') }}';
+    if(row.classList.contains('d-none')){ row.classList.remove('d-none'); btn.textContent = hideText; }
+    else { row.classList.add('d-none'); btn.textContent = showText; }
+  });
+  document.getElementById('applySalesFilter')?.addEventListener('click', function(ev){
+    ev.preventDefault();
+    var s = document.getElementById('salesStart')?.value || '';
+    var e = document.getElementById('salesEnd')?.value || '';
+    var b = document.getElementById('salesBranch')?.value || '';
+    var url = new URL(window.location.href);
+    var q = url.searchParams;
+    if(s) q.set('start_date', s); else q.delete('start_date');
+    if(e) q.set('end_date', e); else q.delete('end_date');
+    if(b) q.set('branch', b); else q.delete('branch');
+    url.search = q.toString();
+    window.location.href = url.toString();
   });
 })();
 </script>

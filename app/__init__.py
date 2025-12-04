@@ -229,10 +229,13 @@ def create_app(config_class=None):
         from app.emp_pay import emp_pay_bp
     except Exception:
         emp_pay_bp = None
-    from app.reports.payroll_reports import reports_bp
     app.register_blueprint(main)
     app.register_blueprint(vat)
-    app.register_blueprint(reports_bp)
+    try:
+        from app.reports.payroll_reports import reports_bp
+        app.register_blueprint(reports_bp)
+    except Exception:
+        pass
     if emp_pay_bp:
         app.register_blueprint(emp_pay_bp)
     # Alias certain API endpoints without blueprint prefix to avoid template BuildError

@@ -75,7 +75,7 @@
           {% if can('purchases','view') %}<a class="side-item" href="{{ url_for('main.purchases') }}"><div class="side-icon">🛒</div><span>{{ _('Purchases / المشتريات') }}</span></a>{% endif %}
           {% if can('suppliers','view') %}<a class="side-item" href="{{ url_for('main.suppliers') }}"><div class="side-icon">🤝</div><span>{{ _('Suppliers / الموردون') }}</span></a>{% endif %}
           {% if can('reports','view') %}<a class="side-item" href="{{ url_for('main.reports') }}"><div class="side-icon">📊</div><span>{{ _('Reports / التقارير') }}</span></a>{% endif %}
-          {% if can('archive','view') %}<a class="side-item" href="{{ url_for('main.archive') }}"><div class="side-icon">🗂️</div><span>{{ _('Archive / الأرشيف') }}</span></a>{% endif %}
+          <a class="side-item" href="{{ url_for('main.archive') }}"><div class="side-icon">🗂️</div><span>{{ _('Archive / الأرشيف') }}</span></a>
           {% if can('financials','view') %}<a class="side-item" href="{{ url_for('financials.income_statement') }}"><div class="side-icon">📘</div><span>{{ _('Financial Statements / القوائم المالية') }}</span></a>{% endif %}
           {% if can('inventory','view') %}<a class="side-item" href="{{ url_for('main.inventory') }}"><div class="side-icon">📦</div><span>{{ _('Inventory / المخزون') }}</span></a>{% endif %}
           {% if can('expenses','view') %}<a class="side-item" href="{{ url_for('main.expenses') }}"><div class="side-icon">🧾</div><span>{{ _('Expenses / المصروفات') }}</span></a>{% endif %}
@@ -89,8 +89,8 @@
           {% if can('users','view') %}<a class="side-item" href="{{ url_for('main.users') }}"><div class="side-icon">👤</div><span>{{ _('Users / المستخدمون') }}</span></a>{% endif %}
           {% if can('vat','view') %}<a class="side-item" href="{{ url_for('vat.vat_dashboard') }}"><div class="side-icon">🧮</div><span>{{ _('VAT / ضريبة القيمة المضافة') }}</span></a>{% endif %}
           {% if can('journal','view') %}<a class="side-item" href="{{ url_for('journal.list_entries') }}"><div class="side-icon">📓</div><span>{{ _('Journal / اليومية') }}</span></a>{% endif %}
-          <a class="side-item" href="{{ url_for('main.employee_uvd') }}"><div class="side-icon">👤</div><span>{{ _('Employee Dashboard / لوحة تحكم الموظفين') }}</span></a>
-          {% if can('salaries','view') %}<a class="side-item" href="{{ url_for('main.advances_page') }}"><div class="side-icon">💰</div><span>{{ _('Advances / السلف') }}</span></a>{% endif %}
+          
+          
         </div>
       </div>
     <div class="col-md-9 content-col">
@@ -201,32 +201,7 @@
     
 
     
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
-      <a href="{{ url_for('main.employee_uvd') }}" class="card-link">
-        <div class="dashboard-card kind-empuvd" data-target="{{ url_for('main.employee_uvd') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="gEmp" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#bbdefb"/>
-                <stop offset="100%" stop-color="#42a5f5"/>
-              </linearGradient>
-              <linearGradient id="gBadge" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#ffe082"/>
-                <stop offset="100%" stop-color="#ffca28"/>
-              </linearGradient>
-            </defs>
-            <rect x="10" y="12" width="44" height="36" rx="10" fill="url(#gEmp)"/>
-            <circle cx="24" cy="30" r="8" fill="#fff6"/>
-            <circle cx="40" cy="30" r="8" fill="#fff6"/>
-            <rect x="18" y="40" width="28" height="6" rx="3" fill="#fff8"/>
-            <circle cx="50" cy="16" r="7" fill="url(#gBadge)"/>
-          </svg>
-          <h6>{{ _('Employee Dashboard / لوحة تحكم الموظفين') }}</h6>
-          <div class="gate"><div class="left"></div><div class="right"></div></div>
-          <div class="flash"></div>
-        </div>
-      </a>
-    </div>
+    
     
 
     {% if can('reports','view') %}
