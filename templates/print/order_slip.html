@@ -6,22 +6,26 @@
   <style>
     {% set pw = (settings.receipt_paper_width if settings and settings.receipt_paper_width else '80') %}
     {% set pw_int = pw|int %}
+    {% if pw_int < 65 %}{% set pw_int = 65 %}{% endif %}
+    {% if pw_int > 75 %}{% set pw_int = 75 %}{% endif %}
     {% set fs = 12 if pw_int <= 58 else 13 %}
     {% set fs_tot = 13 if pw_int <= 58 else 14 %}
-    @page { size: {{ pw }}mm auto; margin: 4mm; }
+    @page { size: {{ pw_int }}mm auto; margin: 4mm; }
     body{font-family:'Courier New', monospace; margin:0; padding:0; color:#000; font-weight:700; line-height:1.3;}
-    .receipt{width: {{ pw }}mm; max-width: {{ pw }}mm; margin:0 auto; padding:4px 6px;}
+    .receipt{width: {{ pw_int }}mm; max-width: {{ pw_int }}mm; margin:0 auto; padding:4px 6px;}
     .sep{border-top:2px solid #000;margin:6px 0}
     .center{text-align:center}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:2px 4px;font-size:{{ fs }}px;color:#000;word-break:break-word}
+    table{width:100%;border-collapse:collapse; table-layout:fixed}
+    th,td{padding:2px 4px;font-size:{{ fs }}px;color:#000;vertical-align:middle}
     th{border-bottom:2px solid #000;font-weight:700}
     .totals td{padding:2px 0;font-size:{{ fs_tot }}px}
     .note{margin-top:6px;font-size:{{ fs - 1 }}px;line-height:1.5;color:#000}
     .num{font-family:"Courier New", monospace; direction:ltr}
     .left{text-align:left}
     .right{text-align:right}
-    .item-col{width:{{ 64 if pw_int <= 58 else 68 }}%}
+    .item-col{width:{{ 64 if pw_int <= 58 else 68 }}%; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    .qty-col{white-space:nowrap}
+    .price-col{white-space:nowrap}
     .qty-col{width:{{ 18 if pw_int <= 58 else 16 }}%; text-align:center}
     .price-col{width:{{ 18 if pw_int <= 58 else 16 }}%}
     .qty-price{display:flex;justify-content:space-between}
@@ -44,7 +48,7 @@
     <div class="center">Payment: {{ payment_method|upper }}</div>
     {% endif %}
     <div class="sep"></div>
-    <table>
+    <table dir="ltr">
       <thead>
         <tr>
           <th class="left item-col">Item</th>
@@ -66,21 +70,21 @@
     <table class="totals">
       <tr>
         <td>Subtotal (SAR):</td>
-        <td style="text-align:right;width:120px">{{ '%.2f'|format(subtotal) }}</td>
+        <td class="num right" style="width:120px">{{ '%.2f'|format(subtotal) }}</td>
       </tr>
       {% if discount and discount > 0 %}
       <tr>
         <td>Discount ({{ '%.2f'|format(discount_pct) }}%):</td>
-        <td style="text-align:right;width:120px">{{ '%.2f'|format(discount) }}</td>
+        <td class="num right" style="width:120px">{{ '%.2f'|format(discount) }}</td>
       </tr>
       {% endif %}
       <tr>
         <td>VAT ({{ '%.2f'|format(tax_pct) }}%):</td>
-        <td style="text-align:right;width:120px">{{ '%.2f'|format(vat) }}</td>
+        <td class="num right" style="width:120px">{{ '%.2f'|format(vat) }}</td>
       </tr>
       <tr>
         <td><strong>Grand Total (SAR):</strong></td>
-        <td style="text-align:right;width:120px"><strong>{{ '%.2f'|format(total) }}</strong></td>
+        <td class="num right" style="width:120px"><strong>{{ '%.2f'|format(total) }}</strong></td>
       </tr>
     </table>
     <div class="sep"></div>
