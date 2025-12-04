@@ -174,30 +174,34 @@
       const col = document.createElement('div'); col.className = 'col-6 col-md-4 col-lg-3';
       const card = document.createElement('div'); card.className = 'card meal-card item-card h-100 reveal';
       const body = document.createElement('div'); body.className = 'card-body d-flex flex-column justify-content-between';
-      const thumb = document.createElement('div'); thumb.className = 'thumb'; thumb.style.width='100%'; thumb.style.height='120px'; thumb.style.borderRadius='12px'; thumb.style.overflow='hidden'; thumb.style.marginBottom='8px'; thumb.style.background='linear-gradient(180deg, rgba(28,44,88,.06), rgba(28,44,88,.02))';
-      const img = document.createElement('img'); img.alt = (m.name||''); img.loading='lazy'; img.style.width='100%'; img.style.height='100%'; img.style.objectFit='cover';
-      const cap = document.createElement('div'); cap.className = 'cap';
-      const nm = document.createElement('div'); nm.className='name'; nm.textContent = m.name || '';
-      const pr = document.createElement('div'); pr.className='price'; pr.textContent = number(m.price||0).toFixed(2);
-      cap.appendChild(nm); cap.appendChild(pr);
-      thumb.appendChild(img); thumb.appendChild(cap); body.appendChild(thumb);
-      const nmBelow = document.createElement('div'); nmBelow.className='fw-bold'; nmBelow.textContent = m.name || '';
-      const prBelow = document.createElement('div'); prBelow.className='text-muted'; prBelow.textContent = 'Price: ' + number(m.price||0).toFixed(2);
-      body.appendChild(nmBelow); body.appendChild(prBelow); card.appendChild(body); col.appendChild(card);
+      // Small circular avatar next to name
+      const header = document.createElement('div'); header.className = 'd-flex align-items-center justify-content-between';
+      const left = document.createElement('div'); left.className = 'd-flex align-items-center gap-2';
+      const avatar = document.createElement('img'); avatar.alt = (m.name||''); avatar.loading='lazy'; avatar.style.width='28px'; avatar.style.height='28px'; avatar.style.borderRadius='50%'; avatar.style.objectFit='cover'; avatar.style.flex='0 0 28px';
+      const nameEl = document.createElement('div'); nameEl.className='fw-bold'; nameEl.textContent = m.name || '';
+      left.appendChild(avatar); left.appendChild(nameEl);
+      const priceEl = document.createElement('div'); priceEl.className='text-muted small'; priceEl.textContent = number(m.price||0).toFixed(2);
+      header.appendChild(left); header.appendChild(priceEl);
+      body.appendChild(header);
+      card.appendChild(body); col.appendChild(card);
       try{
         const u = (m.image_url || '').trim() || '/static/logo.svg';
         if(u.indexOf('images.unsplash.com') !== -1){
           const widths = [400,800,1200,1600];
           const srcs = widths.map(function(w){ try{ return u.replace(/w=\d+/,'w='+w); }catch(_){ return u; } });
-          img.setAttribute('data-src', srcs[srcs.length-1]);
-          img.setAttribute('data-srcset', srcs.map(function(s, i){ return s + ' ' + widths[i] + 'w'; }).join(', '));
-          img.sizes = '(min-width:1200px) 25vw, (min-width:768px) 33vw, 50vw';
+          avatar.setAttribute('data-src', srcs[srcs.length-1]);
+          avatar.setAttribute('data-srcset', srcs.map(function(s, i){ return s + ' ' + widths[i] + 'w'; }).join(', '));
+          avatar.sizes = '(min-width:1200px) 25vw, (min-width:768px) 33vw, 50vw';
         } else {
-          img.setAttribute('data-src', u);
+          avatar.setAttribute('data-src', u);
         }
-        try{ img.decoding = 'async'; }catch(_){}
-        try{ img.referrerPolicy = 'no-referrer'; }catch(_){}
-        try{ img.fetchPriority = 'low'; }catch(_){}
+        try{ avatar.decoding = 'async'; }catch(_)
+        {}
+        try{ avatar.referrerPolicy = 'no-referrer'; }catch(_)
+        {}
+        try{ avatar.fetchPriority = 'low'; }catch(_)
+        {}
+        avatar.className = (avatar.className||'') + ' meal-avatar';
       }catch(_e){}
       card.addEventListener('click', function(){
         try{
@@ -213,7 +217,7 @@
     grid.appendChild(frag);
     try{
       const ioImg = new IntersectionObserver(function(entries){ entries.forEach(function(entry){ if(entry.isIntersecting){ const im = entry.target; const ds = im.getAttribute('data-src'); if(ds){ im.src = ds; im.removeAttribute('data-src'); } const dss = im.getAttribute('data-srcset'); if(dss){ im.srcset = dss; im.removeAttribute('data-srcset'); } } }); }, { threshold:.01 });
-      qsa('#catGrid .thumb img').forEach(function(im){ ioImg.observe(im); });
+      qsa('#catGrid img.meal-avatar').forEach(function(im){ ioImg.observe(im); });
     }catch(_e){}
   }
 
@@ -560,7 +564,7 @@
         const body = card.querySelector('.card-body');
         if(body && imgUrl){
           let thumb = body.querySelector('.thumb');
-          if(!thumb){ thumb = document.createElement('div'); thumb.className = 'thumb'; thumb.style.width='100%'; thumb.style.height='90px'; thumb.style.borderRadius='12px'; thumb.style.overflow='hidden'; thumb.style.background='linear-gradient(180deg, rgba(28,44,88,.06), rgba(28,44,88,.02))'; body.insertBefore(thumb, body.firstChild); }
+          if(!thumb){ thumb = document.createElement('div'); thumb.className = 'thumb'; thumb.style.width='100%'; thumb.style.height='36px'; thumb.style.borderRadius='12px'; thumb.style.overflow='hidden'; thumb.style.background='linear-gradient(180deg, rgba(28,44,88,.06), rgba(28,44,88,.02))'; body.insertBefore(thumb, body.firstChild); }
           let img = thumb.querySelector('img');
           if(!img){ img = document.createElement('img'); img.alt = (name||''); img.loading='lazy'; img.style.width='100%'; img.style.height='100%'; img.style.objectFit='cover'; thumb.appendChild(img); }
           if(imgUrl.indexOf('images.unsplash.com') !== -1){
