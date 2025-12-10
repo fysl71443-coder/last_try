@@ -130,9 +130,9 @@
             <tbody>
               {% for r in data.asset_rows_detail %}
               <tr>
-                <td>{{ r.code }} – {{ r.name }}</td>
+                <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-10-01&end_date={{ data.date }}" class="text-decoration-none">{{ r.code }} – {{ r.name }}</a></td>
                 <td>{{ 'متداول' if r.class=='Current' else 'غير متداول' }} / {{ r.class }}</td>
-                <td class="text-end">{{ '%.2f'|format(r.balance or 0) }}</td>
+                <td class="text-end"><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-10-01&end_date={{ data.date }}" class="text-decoration-none">{{ '%.2f'|format(r.balance or 0) }}</a></td>
               </tr>
               {% endfor %}
             </tbody>
@@ -155,9 +155,9 @@
             <tbody>
               {% for r in data.liability_rows_detail %}
               <tr>
-                <td>{{ r.code }} – {{ r.name }}</td>
+                <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-10-01&end_date={{ data.date }}" class="text-decoration-none">{{ r.code }} – {{ r.name }}</a></td>
                 <td>{{ 'متداول' if r.class=='Current' else 'غير متداول' }} / {{ r.class }}</td>
-                <td class="text-end">{{ '%.2f'|format(r.balance or 0) }}</td>
+                <td class="text-end"><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-10-01&end_date={{ data.date }}" class="text-decoration-none">{{ '%.2f'|format(r.balance or 0) }}</a></td>
               </tr>
               {% endfor %}
             </tbody>

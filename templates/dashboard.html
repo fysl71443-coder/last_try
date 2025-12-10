@@ -3,14 +3,15 @@
 {% block content %}
 
 <style>
-:root{ --brand-brown:#8b5e3c; --brand-brown-dark:#6f482e; --card-bg:#ffffff; --card-border:rgba(0,0,0,.08); --glow-color:rgba(255,255,255,.75); --card-height:calc(clamp(110px, 13vw, 150px)); --icon-size:calc(clamp(28px, 3.4vw, 44px)) }
-.bg-image{ position:fixed; inset:0; z-index:-2; background-image:url('{{ url_for('static', filename='images/logo.png') }}'); background-size:cover; background-position:center; filter:saturate(115%) contrast(105%); transform:scale(1.02) }
-.bg-overlay{ position:fixed; inset:0; z-index:-1; background:linear-gradient(160deg, rgba(247,251,255,.7) 0%, rgba(238,243,249,.7) 50%, rgba(231,237,246,.7) 100%) }
-.dashboard-panel{ background:#fff; border-radius:20px; box-shadow:0 20px 60px rgba(18,22,33,.08); padding:24px; max-width:100%; margin:0 auto; min-height:92vh; height:100% }
-.dashboard-side{ background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:16px; box-shadow:0 6px 16px rgba(18,22,33,.06); padding:12px }
-.dashboard-side .side-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; color:#2a2a2a; text-decoration:none; transition:background .2s ease, transform .2s ease }
-.dashboard-side .side-item:hover{ background:#f7f7f9; transform:translateX(2px) }
-.dashboard-side .side-icon{ width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; background:#eef2f7; color:#356; font-size:16px }
+:root{ --card-bg:#ffffff; --card-border:rgba(0,0,0,.08); --glow-color:rgba(255,255,255,.75); --card-height:calc(clamp(100px, 11vw, 130px)); --icon-size:calc(clamp(28px, 3.2vw, 36px)) }
+.dashboard-panel{ background:#fff; border-radius:20px; box-shadow:0 20px 60px rgba(18,22,33,.08); padding:12px 24px 24px 24px; max-width:1400px; margin:0 auto; min-height:92vh; height:100% }
+.dashboard-side{ background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,.06); border-radius:16px; box-shadow:0 6px 16px rgba(18,22,33,.12); padding:12px }
+.dashboard-side .side-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; color:#e2e8f0; text-decoration:none; transition:background .1s ease, transform .1s ease }
+.dashboard-side .side-item:hover{ background:#1e293b; transform:translateX(2px) }
+.dashboard-side .side-icon{ width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; background:#1f2937; color:#93c5fd; font-size:16px }
+.dashboard-side .side-nested{ list-style:none; padding-left:8px; margin:6px 0 10px 0; display:none }
+.dashboard-side .side-nested li a{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; color:#cbd5e1; text-decoration:none }
+.dashboard-side .side-nested li a:hover{ background:#0b1220 }
 .stats-row{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin-bottom:14px }
 .stat-card{ background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:16px; box-shadow:0 8px 20px rgba(18,22,33,.06); padding:14px; display:flex; align-items:center; gap:12px; min-height:64px }
 .stat-card .stat-icon{ width:36px; height:36px; border-radius:12px; background:linear-gradient(180deg,#4caf50,#2e7d32); color:#fff; display:flex; align-items:center; justify-content:center; filter:drop-shadow(0 6px 12px rgba(0,0,0,.18)) }
@@ -19,12 +20,6 @@
 .stat-card .stat-text{ line-height:1.1 }
 .stat-card .value{ font-weight:800; font-size:1.1rem }
 .stat-card .label{ font-size:.8rem; opacity:.7 }
-.autumn-scene{ position:fixed; inset:0; pointer-events:none; z-index:0 }
-.autumn-scene .shape{ position:absolute; opacity:.22; filter:blur(1px); animation:float 12s linear infinite, drift 14s ease-in-out infinite }
-.autumn-scene .shape.square{ width:22px; height:22px; background:#8b5e3c; border-radius:6px }
-.autumn-scene .shape.circle{ width:16px; height:16px; background:#f2a65a; border-radius:50% }
-@keyframes float{ 0%{ transform:translateY(0) rotate(0deg) } 50%{ transform:translateY(-18px) rotate(6deg) } 100%{ transform:translateY(0) rotate(0deg) } }
-@keyframes drift{ 0%{ transform:translateX(0) } 50%{ transform:translateX(24px) } 100%{ transform:translateX(0) } }
 .card-link{ text-decoration:none; display:block }
 .dashboard-card{ position:relative; border-radius:18px; padding:12px; text-align:center; overflow:hidden; box-shadow:0 10px 24px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.06); background:var(--card-bg); border:1px solid var(--card-border); transform:translateY(10px) scale(.98); opacity:0; will-change:transform,opacity; transition:transform .25s ease, opacity .25s ease, box-shadow .25s ease; display:flex; align-items:center; justify-content:center; flex-direction:column; height:var(--card-height); perspective:800px; transform-style:preserve-3d }
 .dashboard-card.reveal{ transform:translateY(0) scale(1); opacity:1 }
@@ -50,72 +45,106 @@
   .dashboard-card{ transition:none }
   .dashboard-card:hover{ transform:none }
 }
-/* Layout tuning: sidebar outside cards at far right */
-.layout-row{ display:grid; grid-template-columns: 320px minmax(0,1fr); gap:16px; align-items:stretch; min-height:92vh }
-.sidebar-col{ width:320px }
-.content-col{ min-width:0 }
-@media (max-width: 768px){ .layout-row{ grid-template-columns: 240px minmax(0,1fr) } }
-.dashboard-side{ position:sticky; top:12px }
+/* Layout: sidebar and content parallel */
+.layout-row{ display:grid; grid-template-columns: 280px 1fr; gap:18px; min-height:calc(100vh - 40px); align-items:stretch }
+.sidebar-col,.content-col{ display:flex; flex-direction:column }
+.content-col{ min-width:0; width:100%; max-width:100% }
+.dashboard-side{ height:100% }
+.dashboard-panel{ height:100%; display:flex; flex-direction:column; overflow-x:hidden }
+.accordion#dashAccordion{ display:none }
+.dashboard-side .side-item.active{ background:#eef2f7 }
+.group-card{ display:block !important; margin:0; width:100% !important }
+#cards-grid{ display:grid !important; grid-template-columns: repeat(4, 1fr); gap:12px; min-height:320px; margin-top:0; width:100%; padding:0 24px; box-sizing:border-box }
+#cards-grid > .group-card{ width:100% !important; max-width:none !important; margin:0 !important }
+#kpi-row{ grid-column: 1 / -1 }
+.stat-card.loading{ position:relative; overflow:hidden }
+.stat-card.loading::after{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.35) 50%, rgba(255,255,255,0) 100%); animation: shimmer 1.5s infinite }
+@keyframes shimmer{ 0%{ transform:translateX(-100%) } 100%{ transform:translateX(100%) } }
+#cards-grid{ display:grid !important; grid-template-columns: repeat(4, 1fr); gap:12px; padding:0 24px }
+@media (max-width: 1200px) { #cards-grid{ grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px) { #cards-grid{ grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { #cards-grid{ grid-template-columns: 1fr; gap:10px; } }
+
+/* تنسيقات إضافية لضمان عرض البطاقات */
+.dashboard-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+    margin: 0 !important;
+    padding: 10px !important;
+}
+
+.group-card {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box;
+}
+
+.dashboard-card .title {
+    font-size: 0.9rem !important;
+    margin: 6px 0 0 0 !important;
+}
+
+.dashboard-card .icon-3d {
+    margin-bottom: 0.2rem !important;
+}
 </style>
 
-<div class="bg-image"></div>
-<div class="bg-overlay"></div>
-<div class="autumn-scene">
-  <div class="shape square" style="left:18%; top:22%"></div>
-  <div class="shape circle" style="left:34%; top:38%"></div>
-  <div class="shape square" style="left:56%; top:26%"></div>
-  <div class="shape circle" style="left:72%; top:52%"></div>
-</div>
 <div class="container-fluid py-4">
-  <div class="row layout-row mb-3">
-    <div class="col-md-3 sidebar-col">
+  <div class="layout-row">
+    <div class="sidebar-col">
       <div class="dashboard-side">
-          <div class="d-flex align-items-center gap-2 mb-2"><div class="side-icon">🏠</div><strong>{{ _('Dashboard / لوحة التحكم') }}</strong></div>
-          {% if can('sales','view') %}<a class="side-item" href="{{ url_for('main.sales') }}"><div class="side-icon">💰</div><span>{{ _('Sales / المبيعات') }}</span></a>{% endif %}
-          {% if can('purchases','view') %}<a class="side-item" href="{{ url_for('main.purchases') }}"><div class="side-icon">🛒</div><span>{{ _('Purchases / المشتريات') }}</span></a>{% endif %}
-          {% if can('suppliers','view') %}<a class="side-item" href="{{ url_for('main.suppliers') }}"><div class="side-icon">🤝</div><span>{{ _('Suppliers / الموردون') }}</span></a>{% endif %}
-          {% if can('reports','view') %}<a class="side-item" href="{{ url_for('main.reports') }}"><div class="side-icon">📊</div><span>{{ _('Reports / التقارير') }}</span></a>{% endif %}
-          <a class="side-item" href="{{ url_for('main.archive') }}"><div class="side-icon">🗂️</div><span>{{ _('Archive / الأرشيف') }}</span></a>
-          {% if can('financials','view') %}<a class="side-item" href="{{ url_for('financials.income_statement') }}"><div class="side-icon">📘</div><span>{{ _('Financial Statements / القوائم المالية') }}</span></a>{% endif %}
-          {% if can('inventory','view') %}<a class="side-item" href="{{ url_for('main.inventory') }}"><div class="side-icon">📦</div><span>{{ _('Inventory / المخزون') }}</span></a>{% endif %}
-          {% if can('expenses','view') %}<a class="side-item" href="{{ url_for('main.expenses') }}"><div class="side-icon">🧾</div><span>{{ _('Expenses / المصروفات') }}</span></a>{% endif %}
-          
-          {% if can('payments','view') %}<a class="side-item" href="{{ url_for('main.payments') }}"><div class="side-icon">💳</div><span>{{ _('Payments / المدفوعات') }}</span></a>{% endif %}
-          {% if can('invoices','view') %}<a class="side-item" href="{{ url_for('main.invoices') }}"><div class="side-icon">🧾</div><span>{{ _('Invoices / الفواتير') }}</span></a>{% endif %}
-          {% if can('customers','view') %}<a class="side-item" href="{{ url_for('main.customers') }}"><div class="side-icon">🧑‍🤝‍🧑</div><span>{{ _('Customers / العملاء') }}</span></a>{% endif %}
-          {% if can('menu','view') %}<a class="side-item" href="{{ url_for('main.menu') }}"><div class="side-icon">🍽️</div><span>{{ _('Menu / المنيو') }}</span></a>{% endif %}
-          {% if can('settings','view') %}<a class="side-item" href="{{ url_for('main.settings') }}"><div class="side-icon">⚙️</div><span>{{ _('Settings / الإعدادات') }}</span></a>{% endif %}
-          {% if can('table_settings','view') %}<a class="side-item" href="{{ url_for('main.table_settings') }}"><div class="side-icon">🪑</div><span>{{ _('Table Settings / إعداد الطاولات') }}</span></a>{% endif %}
-          {% if can('users','view') %}<a class="side-item" href="{{ url_for('main.users') }}"><div class="side-icon">👤</div><span>{{ _('Users / المستخدمون') }}</span></a>{% endif %}
-          {% if can('vat','view') %}<a class="side-item" href="{{ url_for('vat.vat_dashboard') }}"><div class="side-icon">🧮</div><span>{{ _('VAT / ضريبة القيمة المضافة') }}</span></a>{% endif %}
-          {% if can('journal','view') %}<a class="side-item" href="{{ url_for('journal.list_entries') }}"><div class="side-icon">📓</div><span>{{ _('Journal / اليومية') }}</span></a>{% endif %}
-          
-          
-        </div>
+        <div class="d-flex align-items-center gap-2 mb-2"><div class="side-icon">🏠</div><strong>{{ _('Dashboard / لوحة التحكم') }}</strong></div>
+        <a class="side-item active" href="#" data-group="sales"><div class="side-icon">💼</div><span>{{ _('Sales & Commercial / المبيعات والعمليات التجارية') }}</span></a>
+        <ul class="side-nested" data-group="sales">
+          {% if can('sales','view') %}<li><a href="{{ url_for('main.sales') }}">💰 {{ _('Sales / المبيعات') }}</a></li>{% endif %}
+          {% if can('invoices','view') %}<li><a href="{{ url_for('main.invoices') }}">🧾 {{ _('Invoices / الفواتير') }}</a></li>{% endif %}
+          {% if can('customers','view') %}<li><a href="{{ url_for('main.customers') }}">🤝 {{ _('Customers / العملاء') }}</a></li>{% endif %}
+          {% if can('menu','view') %}<li><a href="{{ url_for('main.menu') }}">🍽️ {{ _('Menu / المنيو') }}</a></li>{% endif %}
+          {% if can('payments','view') %}<li><a href="{{ url_for('main.payments') }}">💳 {{ _('Payments / المدفوعات') }}</a></li>{% endif %}
+          {% if can('expenses','view') %}<li><a href="{{ url_for('main.expenses') }}">🧾 {{ _('Expenses / المصروفات') }}</a></li>{% endif %}
+        </ul>
+        <a class="side-item" href="#" data-group="proc"><div class="side-icon">🛍️</div><span>{{ _('Procurement & Suppliers / المشتريات والموردون') }}</span></a>
+        <ul class="side-nested" data-group="proc">
+          {% if can('purchases','view') %}<li><a href="{{ url_for('main.purchases') }}">🛒 {{ _('Purchases / المشتريات') }}</a></li>{% endif %}
+          {% if can('suppliers','view') %}<li><a href="{{ url_for('main.suppliers') }}">🤝 {{ _('Suppliers / الموردون') }}</a></li>{% endif %}
+          {% if can('payments','view') %}<li><a href="{{ url_for('main.payments') }}">💳 {{ _('Payments & Receivables / المدفوعات والمستحقات') }}</a></li>{% endif %}
+        </ul>
+        <a class="side-item" href="#" data-group="acct"><div class="side-icon">📒</div><span>{{ _('Accounting & Finance / المحاسبة والمالية') }}</span></a>
+        <ul class="side-nested" data-group="acct">
+          <li><a href="{{ url_for('financials.accounts_hub') }}">📚 {{ _('Accounts / الحسابات') }}</a></li>
+          {% if can('journal','view') %}<li><a href="{{ url_for('journal.list_entries') }}">📓 {{ _('Journal / قيود اليومية') }}</a></li>{% endif %}
+          {% if can('financials','view') %}<li><a href="{{ url_for('financials.trial_balance') }}">📊 {{ _('Trial Balance / ميزان المراجعة') }}</a></li>{% endif %}
+          <li><a href="{{ url_for('financials.accounts_hub') }}#tab-ledger">📑 {{ _('Ledger / دفتر الأستاذ') }}</a></li>
+          {% if can('vat','view') %}<li><a href="{{ url_for('vat.vat_dashboard') }}">🧮 {{ _('VAT / ضريبة القيمة المضافة') }}</a></li>{% endif %}
+          {% if can('financials','view') %}<li><a href="{{ url_for('financials.income_statement') }}">📘 {{ _('Financial Statements / القوائم المالية') }}</a></li>{% endif %}
+          {% if can('reports','view') %}<li><a href="{{ url_for('main.reports') }}">📊 {{ _('Reports / التقارير') }}</a></li>{% endif %}
+        </ul>
+        <a class="side-item" href="#" data-group="inv"><div class="side-icon">📦</div><span>{{ _('Inventory & Resources / المخزون وإدارة الموارد') }}</span></a>
+        <ul class="side-nested" data-group="inv">
+          {% if can('inventory','view') %}<li><a href="{{ url_for('main.inventory') }}">📦 {{ _('Inventory / المخزون') }}</a></li>{% endif %}
+          {% if can('inventory','view') %}<li><a href="{{ url_for('main.inventory') }}">🧮 {{ _('Inventory & Costs / إدارة التكاليف') }}</a></li>{% endif %}
+        </ul>
+        <a class="side-item" href="#" data-group="sys"><div class="side-icon">⚙️</div><span>{{ _('System & Configuration / النظام والإعدادات') }}</span></a>
+        <ul class="side-nested" data-group="sys">
+          {% if can('settings','view') %}<li><a href="{{ url_for('main.settings') }}">⚙️ {{ _('Settings / الإعدادات') }}</a></li>{% endif %}
+          {% if can('table_settings','view') %}<li><a href="{{ url_for('main.table_settings') }}">🪑 {{ _('Table Settings / إعدادات الطاولات') }}</a></li>{% endif %}
+          {% if can('users','view') %}<li><a href="{{ url_for('main.users') }}">👤 {{ _('Users & Permissions / المستخدمون والصلاحيات') }}</a></li>{% endif %}
+        </ul>
       </div>
-    <div class="col-md-9 content-col">
+    </div>
+    <div class="content-col">
       <div class="dashboard-panel">
-        <div class="section-header mb-3">
-          <h3 class="mb-0">{{ _('Dashboard / لوحة التحكم') }}</h3>
-        </div>
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-icon">📈</div>
-          <div class="stat-text"><div class="value">{{ '%.2f'|format((stats.total_earnings or 0.0)) }} {{ _('ريال') }}</div><div class="label">{{ _('Total Earnings') }}</div></div>
-          </div>
-          <div class="stat-card orange">
-            <div class="stat-icon">💳</div>
-          <div class="stat-text"><div class="value">{{ '%.2f'|format((stats.avg_order_value or 0.0)) }} {{ _('ريال') }}</div><div class="label">{{ _('Average Order Value') }}</div></div>
-          </div>
-          <div class="stat-card purple">
-            <div class="stat-icon">✅</div>
-            <div class="stat-text"><div class="value">{{ stats.orders_count or 0 }}</div><div class="label">{{ _('Orders') }}</div></div>
-          </div>
-        </div>
+        <div id="cards-grid">
 
-        <div class="row g-3 mt-2">
+        
+        
+
     {% if can('sales','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="sales">
       <a href="{{ url_for('main.sales') }}" class="card-link">
         <div class="dashboard-card kind-sales" data-target="{{ url_for('main.sales') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCoin" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffd77a"/><stop offset="100%" stop-color="#ff9a3c"/></linearGradient></defs><circle cx="32" cy="32" r="22" fill="url(#gCoin)"/><circle cx="32" cy="32" r="18" fill="#fff3"/><path d="M26 36c0 4 12 4 12 0s-12-4-12 0z" fill="#fff8"/></svg>
@@ -128,7 +157,7 @@
     {% endif %}
 
     {% if can('purchases','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="proc">
       <a href="{{ url_for('main.purchases') }}" class="card-link">
         <div class="dashboard-card kind-purchases" data-target="{{ url_for('main.purchases') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCart" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffb3b3"/><stop offset="100%" stop-color="#ff6b6b"/></linearGradient></defs><rect x="16" y="22" width="32" height="18" rx="4" fill="url(#gCart)"/><circle cx="24" cy="44" r="4" fill="#333"/><circle cx="40" cy="44" r="4" fill="#333"/></svg>
@@ -141,7 +170,7 @@
     {% endif %}
 
     {% if can('suppliers','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="proc">
       <a href="{{ url_for('main.suppliers') }}" class="card-link">
         <div class="dashboard-card kind-suppliers" data-target="{{ url_for('main.suppliers') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gHandshake" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#b2ebf2"/><stop offset="100%" stop-color="#00bcd4"/></linearGradient></defs><path d="M22 32l10 6 10-6" fill="none" stroke="url(#gHandshake)" stroke-width="6" stroke-linecap="round"/></svg>
@@ -153,7 +182,7 @@
 
 
     {% if can('expenses','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="sales">
       <a href="{{ url_for('main.expenses') }}" class="card-link">
         <div class="dashboard-card kind-expenses" data-target="{{ url_for('main.expenses') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gExpense" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffccbc"/><stop offset="100%" stop-color="#ff7043"/></linearGradient></defs><rect x="18" y="20" width="28" height="24" rx="6" fill="url(#gExpense)"/><circle cx="32" cy="32" r="6" fill="#fff8"/></svg>
@@ -164,7 +193,7 @@
     {% endif %}
 
     {% if can('invoices','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="sales">
       <a href="{{ url_for('main.invoices') }}" class="card-link">
         <div class="dashboard-card kind-reports" data-target="{{ url_for('main.invoices') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gDoc" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d1c4e9"/><stop offset="100%" stop-color="#9575cd"/></linearGradient></defs><rect x="18" y="14" width="28" height="36" rx="6" fill="url(#gDoc)"/><rect x="24" y="22" width="16" height="4" rx="2" fill="#fff9"/><rect x="24" y="30" width="16" height="4" rx="2" fill="#fff6"/></svg>
@@ -175,7 +204,7 @@
     {% endif %}
 
     {% if can('inventory','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="sales inv">
       <a href="{{ url_for('main.inventory') }}" class="card-link">
         <div class="dashboard-card kind-inventory" data-target="{{ url_for('main.inventory') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gBox" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#b2dfdb"/><stop offset="100%" stop-color="#26a69a"/></linearGradient></defs><path d="M16 24l16-10 16 10v20l-16 10-16-10z" fill="url(#gBox)"/></svg>
@@ -188,7 +217,7 @@
     
 
     {% if can('payments','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="sales proc">
       <a href="{{ url_for('main.payments') }}" class="card-link">
         <div class="dashboard-card kind-payments" data-target="{{ url_for('main.payments') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCard" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c5e1a5"/><stop offset="100%" stop-color="#8bc34a"/></linearGradient></defs><rect x="14" y="20" width="36" height="24" rx="6" fill="url(#gCard)"/><rect x="18" y="26" width="20" height="4" rx="2" fill="#fff9"/></svg>
@@ -205,7 +234,7 @@
     
 
     {% if can('reports','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="acct">
       <a href="{{ url_for('main.reports') }}" class="card-link">
         <div class="dashboard-card kind-reports" data-target="{{ url_for('main.reports') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gChart" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d1c4e9"/><stop offset="100%" stop-color="#7e57c2"/></linearGradient></defs><rect x="20" y="30" width="6" height="14" rx="2" fill="url(#gChart)"/><rect x="30" y="24" width="6" height="20" rx="2" fill="url(#gChart)"/><rect x="40" y="34" width="6" height="10" rx="2" fill="url(#gChart)"/></svg>
@@ -216,7 +245,7 @@
     {% endif %}
 
     {% if can('archive','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="acct">
       <a href="{{ url_for('main.archive') }}" class="card-link">
         <div class="dashboard-card kind-archive" data-target="{{ url_for('main.archive') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gFolder" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#cfd8dc"/><stop offset="100%" stop-color="#90a4ae"/></linearGradient></defs><path d="M14 24h16l4 6h16v20H14z" fill="url(#gFolder)"/></svg>
@@ -227,7 +256,7 @@
     {% endif %}
 
     {% if can('vat','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+    <div class="group-card" data-group="acct">
       <a href="{{ url_for('vat.vat_dashboard') }}" class="card-link">
         <div class="dashboard-card kind-vat" data-target="{{ url_for('vat.vat_dashboard') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gVat" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffe082"/><stop offset="100%" stop-color="#ffca28"/></linearGradient></defs><circle cx="32" cy="24" r="10" fill="url(#gVat)"/><rect x="20" y="36" width="24" height="10" rx="5" fill="#fff6"/></svg>
@@ -237,19 +266,19 @@
     </div>
     {% endif %}
 
-    {% if can('financials','view') %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12">
-      <a href="{{ url_for('financials.income_statement') }}" class="card-link">
-        <div class="dashboard-card kind-financials" data-target="{{ url_for('financials.income_statement') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gBook" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#b3e5fc"/><stop offset="100%" stop-color="#03a9f4"/></linearGradient></defs><rect x="18" y="16" width="30" height="32" rx="6" fill="url(#gBook)"/><rect x="24" y="22" width="18" height="2" rx="1" fill="#fff9"/></svg>
-          <h6>{{ _('Financial Statements / القوائم المالية') }}</h6>
+    
+
+    <div class="group-card" data-group="acct">
+      <a href="{{ url_for('financials.accounts_hub') }}" class="card-link">
+        <div class="dashboard-card kind-financials" data-target="{{ url_for('financials.accounts_hub') }}">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gAcc" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#a5d6a7"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><rect x="18" y="18" width="28" height="28" rx="6" fill="url(#gAcc)"/><rect x="22" y="24" width="20" height="4" rx="2" fill="#fff9"/><rect x="22" y="32" width="20" height="4" rx="2" fill="#fff6"/></svg>
+          <h6>{{ _('Accounts / الحسابات') }}</h6>
         </div>
       </a>
     </div>
-    {% endif %}
 
     {% if can('journal','view') %}
-    <div class="col-md-3 col-sm-6">
+    <div class="group-card" data-group="acct">
       <a href="{{ url_for('journal.list_entries') }}" class="card-link">
         <div class="dashboard-card kind-journal" data-target="{{ url_for('journal.list_entries') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gJournal" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c8e6c9"/><stop offset="100%" stop-color="#66bb6a"/></linearGradient></defs><rect x="20" y="16" width="28" height="32" rx="6" fill="url(#gJournal)"/><circle cx="28" cy="32" r="3" fill="#fff9"/><circle cx="40" cy="32" r="3" fill="#fff9"/></svg>
@@ -260,7 +289,7 @@
     {% endif %}
 
     {% if can('customers','view') %}
-    <div class="col-md-3 col-sm-6">
+    <div class="group-card" data-group="sales">
       <a href="{{ url_for('main.customers') }}" class="card-link">
         <div class="dashboard-card kind-customers" data-target="{{ url_for('main.customers') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCust" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f8bbd0"/><stop offset="100%" stop-color="#ec407a"/></linearGradient></defs><circle cx="24" cy="26" r="7" fill="url(#gCust)"/><circle cx="40" cy="26" r="7" fill="url(#gCust)"/><rect x="18" y="36" width="28" height="10" rx="5" fill="#fff6"/></svg>
@@ -271,7 +300,7 @@
     {% endif %}
 
     {% if can('menu','view') %}
-    <div class="col-md-3 col-sm-6">
+    <div class="group-card" data-group="sales">
       <a href="{{ url_for('main.menu') }}" class="card-link">
         <div class="dashboard-card kind-menu" data-target="{{ url_for('main.menu') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gMenu" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fff59d"/><stop offset="100%" stop-color="#fbc02d"/></linearGradient></defs><path d="M20 18h24v28H20z" fill="url(#gMenu)"/><rect x="24" y="24" width="16" height="3" rx="1.5" fill="#fff9"/><rect x="24" y="30" width="16" height="3" rx="1.5" fill="#fff6"/></svg>
@@ -282,7 +311,7 @@
     {% endif %}
 
     {% if can('settings','view') %}
-    <div class="col-md-3 col-sm-6">
+    <div class="group-card" data-group="sys">
       <a href="{{ url_for('main.settings') }}" class="card-link">
         <div class="dashboard-card kind-settings" data-target="{{ url_for('main.settings') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gGear" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#b0bec5"/><stop offset="100%" stop-color="#607d8b"/></linearGradient></defs><circle cx="32" cy="32" r="8" fill="#fff6"/><path d="M32 16l4 6 6 4-6 4-4 6-4-6-6-4 6-4z" fill="url(#gGear)"/></svg>
@@ -293,7 +322,7 @@
     {% endif %}
 
     {% if can('table_settings','view') %}
-    <div class="col-md-3 col-sm-6">
+    <div class="group-card" data-group="sys">
       <a href="{{ url_for('main.table_settings') }}" class="card-link">
         <div class="dashboard-card kind-tables" data-target="{{ url_for('main.table_settings') }}">
           <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gChair" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#aed581"/><stop offset="100%" stop-color="#7cb342"/></linearGradient></defs><rect x="20" y="24" width="24" height="8" rx="2" fill="url(#gChair)"/><rect x="24" y="32" width="16" height="12" rx="2" fill="#fff6"/></svg>
@@ -302,16 +331,7 @@
       </a>
     {% endif %}
     </div>
-
-    {% if can('users','view') %}
-    <div class="col-md-3 col-sm-6">
-      <a href="{{ url_for('main.users') }}" class="card-link">
-        <div class="dashboard-card kind-users" data-target="{{ url_for('main.users') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gKey" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#b0c4de"/><stop offset="100%" stop-color="#5c6bc0"/></linearGradient></defs><circle cx="28" cy="28" r="8" fill="url(#gKey)"/><rect x="36" y="26" width="12" height="4" rx="2" fill="#fff9"/></svg>
-          <h6>{{ _('Users & Permissions / إدارة المستخدمين والصلاحيات') }}</h6>
-        </div>
-      </a>
-    {% endif %}
+    <div class="stats-row" id="kpi-row"></div>
     </div>
   </div>
 
@@ -327,39 +347,60 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  var v = document.getElementById('bgVideo');
-  if(v){
-    v.addEventListener('error', function(){ v.style.display='none'; });
-    try{ v.play().catch(function(){ v.style.display='none'; }); }catch(e){}
-    var s = v.querySelector('source');
-    if(s){
-      s.addEventListener('error', function(){ v.style.display='none'; });
-      try{
-        var u = s.src;
-        if(u){ fetch(u, { method:'HEAD' }).then(function(r){ if(!r.ok) v.style.display='none'; }).catch(function(){ v.style.display='none'; }); }
-      }catch(_){}
+
+  function showGroup(group){
+    document.querySelectorAll('.side-nested').forEach(function(ul){
+      ul.style.display = (ul.dataset.group === group) ? 'block' : 'none';
+    });
+
+    document.querySelectorAll('.group-card').forEach(function(card){
+      var groups = String(card.dataset.group||'').split(' ');
+      card.style.display = groups.includes(group) ? 'block' : 'none';
+    });
+
+    buildKpiCards(group);
+  }
+  document.querySelectorAll('.dashboard-side .side-item').forEach(function(it){
+    it.addEventListener('click', function(ev){ ev.preventDefault(); var g = this.getAttribute('data-group'); document.querySelectorAll('.dashboard-side .side-item').forEach(function(x){ x.classList.remove('active'); }); this.classList.add('active'); showGroup(g); });
+  });
+  showGroup('sales');
+
+
+  async function buildKpiCards(group){
+    var grid = document.getElementById('kpi-row');
+    if(!grid) return;
+    grid.innerHTML = '';
+
+    function card(icon, title, value){
+      var div = document.createElement('div');
+      div.className = 'stat-card';
+      div.innerHTML = '<div class="stat-icon">'+icon+'</div>'+
+                      '<div class="stat-text">'+
+                        '<div class="value">'+value+'</div>'+
+                        '<div class="label">'+title+'</div>'+
+                      '</div>';
+      return div;
+    }
+
+    var today = null;
+    try{
+      today = await fetch('/api/kpi/dashboard_full').then(function(r){ return r.json(); }).catch(function(){ return null; });
+    }catch(e){ today = null; }
+    if(!today) return;
+
+    if(group === 'sales'){
+      Object.keys(today.branches || {}).forEach(function(branch){
+        var val = Number((today.branches[branch]||{}).sales || 0).toFixed(2) + ' '+ '{{ _("ريال") }}';
+        grid.appendChild(card('🏪', 'مبيعات '+branch, val));
+      });
+
+      grid.appendChild(card('💵', 'إجمالي الكاش', Number(today.payment_cash||0).toFixed(2) + ' '+ '{{ _("ريال") }}'));
+      grid.appendChild(card('🏦', 'إجمالي البنك', Number(today.payment_bank||0).toFixed(2) + ' '+ '{{ _("ريال") }}'));
+      grid.appendChild(card('🧾', 'عدد الفواتير', String(today.invoices_count||0)));
+      grid.appendChild(card('🍽️', 'عدد الوجبات', String(today.items_sold||0)));
     }
   }
-  var io = new IntersectionObserver(function(entries){
-    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('reveal'); io.unobserve(e.target); } });
-  }, { threshold:.15 });
-  document.querySelectorAll('.dashboard-card').forEach(function(card){ io.observe(card); });
-  document.querySelectorAll('.dashboard-card').forEach(function(card){
-    var link = card.closest('a.card-link');
-    if(!link) return;
-    link.addEventListener('click', function(ev){
-      ev.preventDefault();
-      var target = card.getAttribute('data-target') || link.getAttribute('href');
-      card.classList.add('open');
-      setTimeout(function(){ window.location.href = target; }, 420);
-    }, { once:false });
-  });
 });
 </script>
 
 {% endblock %}
-/* Layout width tuning: sidebar + content */
-.layout-row{ display:flex; gap:12px }
-.sidebar-col{ flex:0 0 36%; max-width:36% }
-.content-col{ flex:0 0 64%; max-width:64% }
-@media (max-width: 992px){ .layout-row{ flex-direction:column } .sidebar-col, .content-col{ flex:0 0 100%; max-width:100% } }

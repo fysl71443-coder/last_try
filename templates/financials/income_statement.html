@@ -89,9 +89,10 @@
             <tbody>
               {% for br, agg in (data.branch_totals or {}).items() %}
               <tr>
+                {% set code = '4011' if br=='china_town' else ('4012' if br=='place_india' else None) %}
                 <td>{% if br=='china_town' %}China Town{% elif br=='place_india' %}Place India{% else %}{{ br }}{% endif %}</td>
-                <td class="text-end">{{ '%.2f'|format(agg.gross or 0) }}</td>
-                <td class="text-end">{{ '%.2f'|format(agg.discount or 0) }}</td>
+                <td class="text-end">{% if code %}<a href="{{ url_for('financials.account_statement') }}?code={{ code }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(agg.gross or 0) }}</a>{% else %}{{ '%.2f'|format(agg.gross or 0) }}{% endif %}</td>
+                <td class="text-end"><a href="{{ url_for('financials.account_statement') }}?code=4140&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(agg.discount or 0) }}</a></td>
               </tr>
               {% endfor %}
             </tbody>
@@ -117,9 +118,10 @@
             <tbody>
               {% for ch, agg in chans.items() %}
               <tr>
+                {% set ch_code = '4013' if ch=='keeta' else ('4014' if ch=='hunger' else ( '4011' if br=='china_town' else ('4012' if br=='place_india' else None))) %}
                 <td>{% if ch=='keeta' %}Keeta Online{% elif ch=='hunger' %}Hunger Online{% elif ch=='offline' %}Offline{% else %}{{ ch }}{% endif %}</td>
-                <td class="text-end">{{ '%.2f'|format(agg.gross or 0) }}</td>
-                <td class="text-end">{{ '%.2f'|format(agg.discount or 0) }}</td>
+                <td class="text-end">{% if ch_code %}<a href="{{ url_for('financials.account_statement') }}?code={{ ch_code }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(agg.gross or 0) }}</a>{% else %}{{ '%.2f'|format(agg.gross or 0) }}{% endif %}</td>
+                <td class="text-end"><a href="{{ url_for('financials.account_statement') }}?code=4140&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(agg.discount or 0) }}</a></td>
                 <td class="text-end">{{ agg.count or 0 }}</td>
               </tr>
               {% endfor %}

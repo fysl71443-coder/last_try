@@ -5,7 +5,7 @@ import io
 
 # Import db and models without circular imports
 from extensions import db
-from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Settings
+from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice, Settings, JournalLine, Account
 
 bp = Blueprint('vat', __name__, url_prefix='/vat')
 
@@ -54,10 +54,13 @@ def vat_dashboard():
             start_date = date(today.year, today.month, 1)
             end_date = today
     else:
-        # quarterly default
-        year = int(year or default_year)
-        quarter = int(quarter or default_quarter)
-        start_date, end_date = quarter_start_end(year, quarter)
+        # default: 2025-10-01 to today
+        try:
+            start_date = date(2025, 10, 1)
+            end_date = today
+        except Exception:
+            start_date = date(today.year, today.month, 1)
+            end_date = today
 
     # Settings
     s = Settings.query.first()
@@ -110,6 +113,39 @@ def vat_dashboard():
     input_vat = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.tax_amount), 0)).filter(PurchaseInvoice.date.between(start_date, end_date)).scalar() or 0.0) \
                + float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.tax_amount), 0)).filter(ExpenseInvoice.date.between(start_date, end_date)).scalar() or 0.0)
     net_vat = output_vat - input_vat
+    # Journals VAT reconciliation
+    try:
+        from models import JournalLine, Account
+        j_out = float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0))
+            .join(Account, JournalLine.account_id == Account.id)
+            .filter(Account.code == '2024')
+            .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0.0)
+    except Exception:
+        j_out = 0.0
+    try:
+        j_in = float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
+            .join(Account, JournalLine.account_id == Account.id)
+            .filter(Account.code == '6200')
+            .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0.0)
+    except Exception:
+        j_in = 0.0
+    j_net = j_out - j_in
+    # Journals VAT for reconciliation
+    try:
+        journal_vat_out = float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0))
+            .join(Account, JournalLine.account_id == Account.id)
+            .filter(Account.code == '2024')
+            .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0.0)
+    except Exception:
+        journal_vat_out = 0.0
+    try:
+        journal_vat_in = float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
+            .join(Account, JournalLine.account_id == Account.id)
+            .filter(Account.code == '6200')
+            .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0.0)
+    except Exception:
+        journal_vat_in = 0.0
+    journal_vat_net = journal_vat_out - journal_vat_in
 
     data = {
         'period': period,
@@ -130,6 +166,9 @@ def vat_dashboard():
         'output_vat': output_vat,
         'input_vat': input_vat,
         'net_vat': net_vat,
+        'journal_vat_out': journal_vat_out,
+        'journal_vat_in': journal_vat_in,
+        'journal_vat_net': journal_vat_net,
         'vat_rate': vat_rate,
     }
 
@@ -236,6 +275,7 @@ def vat_print():
                                purchases_total=float(purchases_total or 0),
                                expenses_total=float(expenses_total or 0),
                                output_vat=output_vat, input_vat=input_vat, net_vat=net_vat,
+                               journal_vat_out=j_out, journal_vat_in=j_in, journal_vat_net=j_net,
                                vat_rate=VAT_RATE,
                                company_name=company_name, tax_number=tax_number,
                                place_lbl=place_lbl, china_lbl=china_lbl, currency=currency)

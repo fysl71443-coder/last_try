@@ -60,6 +60,24 @@
       <td colspan="2"></td>
       <td>{{ '%.2f'|format(net_vat) }}</td>
     </tr>
+    <tr>
+      <th colspan="4">المصالحة مع القيود / Journals Reconciliation</th>
+    </tr>
+    <tr>
+      <td>Journals Output VAT</td>
+      <td colspan="2"></td>
+      <td>{{ '%.2f'|format(journal_vat_out or 0) }}</td>
+    </tr>
+    <tr>
+      <td>Journals Input VAT</td>
+      <td colspan="2"></td>
+      <td>{{ '%.2f'|format(journal_vat_in or 0) }}</td>
+    </tr>
+    <tr>
+      <td>Journals Net VAT</td>
+      <td colspan="2"></td>
+      <td>{{ '%.2f'|format(journal_vat_net or 0) }}</td>
+    </tr>
   </table>
 </body>
 </html>

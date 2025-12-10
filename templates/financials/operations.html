@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8"/>
+  <title>العمليات والحركات</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+</head>
+<body class="p-3">
+  <div class="container">
+    <h5 class="mb-3">العمليات والحركات</h5>
+    <div class="card p-3 mb-3">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">نوع العملية</label>
+          <select id="op-type" class="form-select">
+            <option value="supplier_payment">دفعة لمورد</option>
+            <option value="supplier_ap">إنشاء ذمة مورد</option>
+            <option value="customer_receipt">استلام من عميل</option>
+            <option value="employee_advance">سلفة موظف</option>
+            <option value="owner_draw">مسحوبات شخصية</option>
+            <option value="operating_expense">مصروف تشغيل</option>
+            <option value="bank_deposit">إيداع بالبنك</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">التاريخ</label>
+          <input type="date" id="op-date" class="form-control"/>
+          <small class="text-muted">يوم/شهر/سنة</small>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">المبلغ</label>
+          <input type="number" step="0.01" id="op-amount" class="form-control"/>
+        </div>
+      </div>
+      <div class="row g-3 mt-2">
+        <div class="col-md-4" id="grp-supplier" style="display:none">
+          <label class="form-label">المورد</label>
+          <select id="op-supplier" class="form-select"></select>
+          <div class="mt-2">
+            <label class="form-label">تصنيف</label>
+            <select id="op-category" class="form-select"><option value="inventory">مشتريات مخزون</option><option value="expense">مصروف</option></select>
+          </div>
+        </div>
+        <div class="col-md-4" id="grp-customer" style="display:none">
+          <label class="form-label">العميل</label>
+          <select id="op-customer" class="form-select"></select>
+        </div>
+        <div class="col-md-4" id="grp-method">
+          <label class="form-label">طريقة الدفع</label>
+          <select id="op-method" class="form-select">
+            <option value="cash">نقد</option>
+            <option value="bank">بنك</option>
+            <option value="card">نقاط بيع</option>
+            <option value="wallet">محفظة</option>
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">ملاحظة (اختياري)</label>
+          <input type="text" id="op-note" class="form-control" placeholder="تفاصيل العملية (شراء منتجات/خدمة/وصف المصروف)"/>
+        </div>
+      </div>
+      <div class="mt-3 d-flex gap-2">
+        <button class="btn btn-primary" id="op-submit">إنشاء العملية</button>
+        <div id="op-result" class="ms-2"></div>
+      </div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    async function fetchJSON(u){ const r = await fetch(u); return await r.json(); }
+    async function loadSuppliers(){ const j = await fetchJSON('/financials/api/list_suppliers'); const sel=document.getElementById('op-supplier'); sel.innerHTML=''; (j.suppliers||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.name; o.textContent=s.name; sel.appendChild(o); }); }
+    async function loadCustomers(){ const j = await fetchJSON('/financials/api/list_customers'); const sel=document.getElementById('op-customer'); sel.innerHTML=''; (j.customers||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; sel.appendChild(o); }); }
+    function showFields(){ const t=document.getElementById('op-type').value; const sup=document.getElementById('grp-supplier'); const cus=document.getElementById('grp-customer'); const mth=document.getElementById('grp-method'); sup.style.display='none'; cus.style.display='none'; mth.style.display=''; if(t==='supplier_ap' || t==='supplier_payment'){ sup.style.display=''; loadSuppliers(); document.getElementById('op-category').parentElement.style.display = (t==='supplier_ap') ? '' : 'none'; } else if(t==='customer_receipt'){ cus.style.display=''; loadCustomers(); } else if(t==='bank_deposit'){ mth.style.display='none'; }
+    }
+    document.getElementById('op-type').addEventListener('change', showFields);
+    showFields();
+    document.getElementById('op-submit').addEventListener('click', async function(){
+      try{
+        const type = document.getElementById('op-type').value;
+        const date = document.getElementById('op-date').value || new Date().toISOString().slice(0,10);
+        const amount = parseFloat(document.getElementById('op-amount').value||0);
+        const method = document.getElementById('op-method').value || '';
+        const note = document.getElementById('op-note').value || '';
+        const out=document.getElementById('op-result');
+        if(!(amount>0)){ out.innerHTML = `<div class='alert alert-warning'>أدخل مبلغًا صالحًا</div>`; return; }
+        let party=''; let category='';
+        if(type==='supplier_ap'){ party = document.getElementById('op-supplier').value || ''; category = document.getElementById('op-category').value || ''; }
+        if(type==='customer_receipt'){ party = document.getElementById('op-customer').value || ''; }
+        const payload = { date, rows: [{ type, party, amount, method, description: note, category }] };
+        const r = await fetch('/financials/api/batch/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        if(!r.ok){ out.innerHTML = `<div class='alert alert-danger'>فشل الاتصال بالخادم (HTTP ${r.status})</div>`; return; }
+        const j = await r.json();
+        if(j && j.ok){ out.innerHTML = `<div class='alert alert-success'>تم إنشاء العملية — قيود منشأة: ${ (j.created||[]).join(', ') }</div>`; }
+        else { out.innerHTML = `<div class='alert alert-danger'>فشل: ${ (j && j.error) ? j.error : 'استجابة غير متوقعة' }</div>`; }
+      }catch(e){
+        const out=document.getElementById('op-result');
+        out.innerHTML = `<div class='alert alert-danger'>خطأ: ${e}</div>`;
+      }
+    });
+  </script>
+</body>
+</html>

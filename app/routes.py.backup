@@ -8185,89 +8185,47 @@ def register_payment_ajax():
             else:
                 inv.status = inv.status or ('unpaid' if invoice_type=='purchase' else 'paid')
         db.session.commit()
-        
-        # === التحسين الجديد: إنشاء قيود محاسبية متوافقة ===
         try:
-            # Create Journal Entry for payment using correct AR account
+            # Ledger postings
+            if invoice_type == 'purchase':
+                _post_ledger(get_saudi_now().date(), 'AP', 'Accounts Payable', 'liability', amt, 0.0, f'PAY PUR {inv_id}')
+            elif invoice_type == 'sales':
+                _post_ledger(get_saudi_now().date(), 'AR', 'Accounts Receivable', 'asset', 0.0, amt, f'PAY SALES {inv_id}')
+            else:
+                _post_ledger(get_saudi_now().date(), 'AP', 'Accounts Payable', 'liability', amt, 0.0, f'PAY EXP {inv_id}')
+            ca = _pm_account(payment_method)
+            if ca:
+                _post_ledger(get_saudi_now().date(), ca.code, ca.name, 'asset', 0.0, amt, f'PAY {invoice_type.upper()} {inv_id}')
+        except Exception:
+            pass
+        try:
+            # Create Journal Entry for AP payment
             from models import JournalEntry, JournalLine
-            
-            # تحديد حساب المدينين الصحيح بناءً على القيد الأصلي
-            ar_account_code = get_original_ar_account_code(inv_id, invoice_type)
-            ar_acc = _account(ar_account_code, CHART_OF_ACCOUNTS.get(ar_account_code, {'name':'Accounts Receivable','type':'ASSET'}).get('name','Accounts Receivable'), 'ASSET')
-            
-            # حساب النقدية المناسب
-            cash_account_code = '1013' if payment_method in ('BANK','TRANSFER','CARD','VISA','MASTERCARD') else '1011'
-            cash_acc = _account(cash_account_code, CHART_OF_ACCOUNTS.get(cash_account_code, {'name':'Cash','type':'ASSET'}).get('name','Cash'), 'ASSET')
-            
-            # إنشاء قيد التحصيل
-            base_en = f"JE-REC-{invoice_type}-{inv_id}"
+            ap_acc = _account('2110', CHART_OF_ACCOUNTS.get('2110', {'name':'Accounts Payable','type':'LIABILITY'}).get('name','Accounts Payable'), 'LIABILITY')
+            ca = _pm_account(payment_method)
+            base_en = f"JE-PAY-{('PUR' if invoice_type=='purchase' else 'EXP')}-{inv_id}"
             en = base_en
             i = 2
             from sqlalchemy import func
             while JournalEntry.query.filter(func.lower(JournalEntry.entry_number) == en.lower()).first():
                 en = f"{base_en}-{i}"; i += 1
-            
-            je = JournalEntry(
-                entry_number=en,
-                date=get_saudi_now().date(),
-                branch_code=None,
-                description=f"Receipt {invoice_type} #{inv_id}",
-                status='posted',
-                total_debit=amt,
-                total_credit=amt,
-                created_by=getattr(current_user,'id',None),
-                posted_by=getattr(current_user,'id',None),
-                invoice_id=int(inv_id),
-                invoice_type=f"{invoice_type}_payment"
-            )
+            je = JournalEntry(entry_number=en, date=get_saudi_now().date(), branch_code=None, description=f"PAY {invoice_type.upper()} {inv_id}", status='posted', total_debit=amt, total_credit=amt, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=int(inv_id), invoice_type=f"{invoice_type}_payment")
             db.session.add(je); db.session.flush()
-            
-            # استخدام نفس حساب المدينين من القيد الأصلي
-            db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=cash_acc.id, debit=amt, credit=0, description=f"Cash receipt {inv_id}", line_date=get_saudi_now().date()))
-            db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ar_acc.id, debit=0, credit=amt, description=f"Clear AR {inv_id}", line_date=get_saudi_now().date()))
+            ln = 1
+            if ap_acc:
+                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ap_acc.id, debit=amt, credit=0.0, description=f"Pay AP {inv_id}", line_date=get_saudi_now().date())); ln += 1
+            if ca:
+                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ca.id, debit=0.0, credit=amt, description=f"Cash/Bank {inv_id}", line_date=get_saudi_now().date()))
             db.session.commit()
-            
-            # تسجيل في audit log
+        except Exception:
             try:
-                from models import JournalAudit
-                db.session.add(JournalAudit(journal_id=je.id, action='create', user_id=getattr(current_user,'id',None), before_json=None, after_json=json.dumps({'entry_number': je.entry_number, 'total_debit': float(je.total_debit or 0), 'total_credit': float(je.total_credit or 0)})))
-                db.session.commit()
+                db.session.rollback()
             except Exception:
                 pass
-                
-        except Exception as e:
-            print(f"Warning: Failed to create journal entry for payment: {e}")
-            db.session.rollback()
-        
         return jsonify({'status': 'success', 'invoice_id': inv_id, 'amount': amt, 'paid': paid, 'total': total, 'new_status': getattr(inv, 'status', None)})
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 400
-
-def get_original_ar_account_code(invoice_id, invoice_type):
-    """الحصول على رمز حساب المدينين المستخدم في القيد الأصلي"""
-    try:
-        # البحث عن القيد المحاسبي الأصلي
-        original_je = JournalEntry.query.filter_by(
-            invoice_id=invoice_id,
-            invoice_type=invoice_type
-        ).first()
-        
-        if original_je:
-            # البحث عن سجل المدينين في القيد الأصلي
-            ar_line = JournalLine.query.filter(
-                JournalLine.journal_id == original_je.id,
-                JournalLine.debit > 0,
-                JournalLine.description.like('%AR%')
-            ).first()
-            
-            if ar_line and ar_line.account:
-                return ar_line.account.code
-    except Exception as e:
-        print(f"خطأ في الحصول على حساب المدينين الأصلي: {e}")
-    
-    # القيمة الافتراضية
-    return '1020'  # حساب المدينين العام), 400
 
 
 

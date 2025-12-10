@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8"/>
+  <title>Cash Flow</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+</head>
+<body class="p-3">
+  <div class="container">
+    <h5 class="mb-3">تدفّق نقدي / Cash Flow</h5>
+    <div class="mb-2 text-muted">الفترة: {{ data.start_date }} → {{ data.end_date }}</div>
+    <div class="row g-3">
+      <div class="col-md-4"><div class="border rounded p-2">Inflow: <strong>{{ '%.2f'|format(data.inflow or 0) }}</strong></div></div>
+      <div class="col-md-4"><div class="border rounded p-2">Outflow: <strong>{{ '%.2f'|format(data.outflow or 0) }}</strong></div></div>
+      <div class="col-md-4"><div class="border rounded p-2">Net: <strong>{{ '%.2f'|format(data.net or 0) }}</strong></div></div>
+    </div>
+    <hr/>
+    <table class="table table-sm table-striped">
+      <thead><tr><th>Account</th><th>Date</th><th class="text-end">Debit</th><th class="text-end">Credit</th></tr></thead>
+      <tbody>
+        {% for r in data.rows %}
+        <tr>
+          <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ r.code }} – {{ r.name }}</a></td>
+          <td>{{ r.date }}</td>
+          <td class="text-end">{{ '%.2f'|format(r.debit or 0) }}</td>
+          <td class="text-end">{{ '%.2f'|format(r.credit or 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

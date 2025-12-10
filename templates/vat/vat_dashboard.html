@@ -159,28 +159,53 @@
       </div>
     </div>
 
-    <div class="col-12">
-      <div class="card p-3">
-        <h6 class="mb-2">Summary</h6>
-        {% set out_v = (data.output_vat or 0)|float %}
-        {% set in_v  = (data.input_vat or 0)|float %}
-        {% set net_v = (out_v - in_v)|float %}
-        <div class="row g-3">
-          <div class="col-md-4">
-            <div class="border rounded p-2">Output VAT: <strong>{{ '%.2f'|format(out_v) }}</strong></div>
-          </div>
-          <div class="col-md-4">
-            <div class="border rounded p-2">Input VAT: <strong>{{ '%.2f'|format(in_v) }}</strong></div>
-          </div>
-          <div class="col-md-4">
-            <div class="border rounded p-2">
-              Net VAT Payable: <strong>{{ '%.2f'|format(net_v) }}</strong>
-              {% if net_v < 0 %}<span class="badge bg-info ms-2">رصيد مسترد</span>{% endif %}
-            </div>
+  <div class="col-12">
+    <div class="card p-3">
+      <h6 class="mb-2">Summary</h6>
+      {% set out_v = (data.output_vat or 0)|float %}
+      {% set in_v  = (data.input_vat or 0)|float %}
+      {% set net_v = (out_v - in_v)|float %}
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="border rounded p-2">Output VAT: <strong><a href="{{ url_for('financials.account_statement') }}?code=2024&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(out_v) }}</a></strong></div>
+        </div>
+        <div class="col-md-4">
+          <div class="border rounded p-2">Input VAT: <strong><a href="{{ url_for('financials.account_statement') }}?code=6200&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(in_v) }}</a></strong></div>
+        </div>
+        <div class="col-md-4">
+          <div class="border rounded p-2">
+            Net VAT Payable: <strong>{{ '%.2f'|format(net_v) }}</strong>
+            {% if net_v < 0 %}<span class="badge bg-info ms-2">رصيد مسترد</span>{% endif %}
           </div>
         </div>
       </div>
     </div>
+  </div>
+  <div class="col-12">
+    <div class="card p-3">
+      <h6 class="mb-2">Reconciliation / المصالحة</h6>
+      {% set j_out = (data.journal_vat_out or 0)|float %}
+      {% set j_in  = (data.journal_vat_in or 0)|float %}
+      {% set j_net = (data.journal_vat_net or 0)|float %}
+      <div class="row g-3">
+        <div class="col-md-4"><div class="border rounded p-2">Journals Output VAT: <strong>{{ '%.2f'|format(j_out) }}</strong></div></div>
+        <div class="col-md-4"><div class="border rounded p-2">Journals Input VAT: <strong>{{ '%.2f'|format(j_in) }}</strong></div></div>
+        <div class="col-md-4"><div class="border rounded p-2">Journals Net VAT: <strong>{{ '%.2f'|format(j_net) }}</strong></div></div>
+      </div>
+      {% set diff_out = (out_v - j_out)|float %}
+      {% set diff_in  = (in_v - j_in)|float %}
+      {% set diff_net = (net_v - j_net)|float %}
+      <div class="mt-3">
+        <div class="d-flex justify-content-between"><span>Diff Output VAT</span><span class="fw-bold {% if diff_out|abs > 0.01 %}text-danger{% else %}text-success{% endif %}">{{ '%.2f'|format(diff_out) }}</span></div>
+        <div class="d-flex justify-content-between"><span>Diff Input VAT</span><span class="fw-bold {% if diff_in|abs > 0.01 %}text-danger{% else %}text-success{% endif %}">{{ '%.2f'|format(diff_in) }}</span></div>
+        <div class="d-flex justify-content-between"><span>Diff Net VAT</span><span class="fw-bold {% if diff_net|abs > 0.01 %}text-danger{% else %}text-success{% endif %}">{{ '%.2f'|format(diff_net) }}</span></div>
+      </div>
+      <div class="mt-3">
+        <label class="form-label">Notes</label>
+        <textarea class="form-control" rows="3" placeholder="أدخل ملاحظات — لا تغيير للأرقام"></textarea>
+      </div>
+    </div>
+  </div>
   </div>
 
   <div class="mt-4">

@@ -209,6 +209,16 @@
       <label for="remember" class="form-check-label">{{ _('Remember Me / تذكرني') }}</label>
     </div>
 
+    <div class="mb-3 input-group">
+      <span class="input-group-text input-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="8" fill="#8b5e3c"/>
+          <text x="12" y="16" text-anchor="middle" font-size="10" fill="#fff">OTP</text>
+        </svg>
+      </span>
+      <input type="text" name="otp" class="form-control" placeholder="{{ _('2FA Code / رمز التحقق') }}" inputmode="numeric" />
+    </div>
+
     <div class="d-grid">
       <button type="submit" class="btn btn-primary btn-lg">{{ _('Login / تسجيل الدخول') }}</button>
     </div>
@@ -230,9 +240,15 @@
   clone.addEventListener('submit', function(e){
     const u = clone.querySelector('input[name="username"]');
     const p = clone.querySelector('input[name="password"]');
+    const o = clone.querySelector('input[name="otp"]');
     if(!u || !p || !u.value.trim() || !p.value.trim()){
       e.preventDefault();
       alert('{{ _("Please fill all required fields / يرجى ملء جميع الحقول المطلوبة") }}');
+      return;
+    }
+    if(o && o.value && !/^\d{6}$/.test(o.value.trim())){
+      e.preventDefault();
+      alert('{{ _("Invalid OTP format / صيغة رمز غير صحيحة") }}');
       return;
     }
   }, { once:false });

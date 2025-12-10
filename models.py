@@ -18,6 +18,8 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(255), unique=True, nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default='user')
+    twofa_enabled = db.Column(db.Boolean, default=False)
+    twofa_secret = db.Column(db.String(64), nullable=True)
     language_pref = db.Column(db.String(10), default='en')
     last_login_at = db.Column(db.DateTime, nullable=True)
     active = db.Column(db.Boolean, default=True)
@@ -83,6 +85,37 @@ class SalesInvoice(db.Model):
 
     def __repr__(self):
         return f'<SalesInvoice {self.invoice_number}>'
+
+    def to_journal_entries(self):
+        rows = []
+        try:
+            branch = (self.branch or '').strip()
+            cust = (self.customer_name or '').strip().lower()
+            def _channel(n: str):
+                s = (n or '').lower()
+                if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s):
+                    return 'hunger'
+                if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s):
+                    return 'keeta'
+                return 'offline'
+            ch = _channel(cust)
+            rev_code = '4012' if branch=='place_india' else '4011'
+            if ch == 'keeta': rev_code = '4013'
+            if ch == 'hunger': rev_code = '4014'
+            cash_code = '1013' if (str(self.payment_method or '').strip().upper() in ('BANK','TRANSFER','CARD','VISA','MASTERCARD')) else '1011'
+            total_before = float(self.total_before_tax or 0)
+            discount_amt = float(self.discount_amount or 0)
+            tax_amt = float(self.tax_amount or 0)
+            net_rev = max(0.0, total_before - discount_amt)
+            total_inc_tax = round(net_rev + tax_amt, 2)
+            rows.append({'account_code': cash_code, 'debit': total_inc_tax, 'credit': 0.0, 'description': f'Receipt {self.invoice_number}', 'ref_type': 'sales', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            if net_rev > 0:
+                rows.append({'account_code': rev_code, 'debit': 0.0, 'credit': net_rev, 'description': f'Revenue {self.invoice_number}', 'ref_type': 'sales', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            if tax_amt > 0:
+                rows.append({'account_code': '2024', 'debit': 0.0, 'credit': tax_amt, 'description': f'VAT Output {self.invoice_number}', 'ref_type': 'sales', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+        except Exception:
+            pass
+        return rows
 
 class SalesInvoiceItem(db.Model):
     __tablename__ = 'sales_invoice_items'
@@ -246,6 +279,21 @@ class PurchaseInvoice(db.Model):
     def __repr__(self):
         return f'<PurchaseInvoice {self.invoice_number}>'
 
+    def to_journal_entries(self):
+        rows = []
+        try:
+            total_before = float(self.total_before_tax or 0)
+            tax_amt = float(self.tax_amount or 0)
+            total_inc_tax = round(total_before + tax_amt, 2)
+            # Inventory or expense depending on production flag (not stored here) — default inventory 1210
+            rows.append({'account_code': '1210', 'debit': (total_before if total_before>0 else 0.0), 'credit': 0.0, 'description': 'Purchase', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            if tax_amt > 0:
+                rows.append({'account_code': '6200', 'debit': tax_amt, 'credit': 0.0, 'description': 'VAT Input', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            rows.append({'account_code': '2110', 'debit': 0.0, 'credit': total_inc_tax, 'description': 'Accounts Payable', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+        except Exception:
+            pass
+        return rows
+
 class PurchaseInvoiceItem(db.Model):
     __tablename__ = 'purchase_invoice_items'
     id = db.Column(db.Integer, primary_key=True)
@@ -282,6 +330,55 @@ class ExpenseInvoice(db.Model):
 
     def __repr__(self):
         return f'<ExpenseInvoice {self.invoice_number}>'
+
+    def to_journal_entries(self):
+        rows = []
+        try:
+            total_before = float(self.total_before_tax or 0)
+            tax_amt = float(self.tax_amount or 0)
+            total_inc_tax = round(total_before + tax_amt, 2)
+            # Map expense to proper account (payroll recorded via expenses)
+            def _exp_code(inv):
+                try:
+                    txt = ''
+                    try:
+                        txt += ' ' + (inv.notes or '')
+                    except Exception:
+                        pass
+                    try:
+                        for it in (inv.items or []):
+                            txt += ' ' + (getattr(it, 'description', '') or '')
+                    except Exception:
+                        pass
+                    s = (txt or '').strip().lower()
+                    if ('رواتب' in s) or ('اجور' in s) or ('أجور' in s) or ('salary' in s) or ('payroll' in s):
+                        return '5010'
+                    if ('رسوم' in s and 'حكومية' in s) or ('government' in s):
+                        return '5100'
+                    if ('ادوات' in s and 'مكتبية' in s) or ('office' in s):
+                        return '5060'
+                    if ('تنظيف' in s) or ('clean' in s):
+                        return '5070'
+                    if ('عمولات' in s) or ('bank fee' in s) or ('commission' in s):
+                        return '5090'
+                except Exception:
+                    pass
+                return '5100'
+            rows.append({'account_code': _exp_code(self), 'debit': (total_before if total_before>0 else 0.0), 'credit': 0.0, 'description': 'Expense', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            if tax_amt > 0:
+                rows.append({'account_code': '6200', 'debit': tax_amt, 'credit': 0.0, 'description': 'VAT Input', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            rows.append({'account_code': '2110', 'debit': 0.0, 'credit': total_inc_tax, 'description': 'Accounts Payable', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            try:
+                pm = (self.payment_method or '').strip().upper()
+                cash_code = '1013' if pm in ('BANK','TRANSFER','CARD','VISA','MASTERCARD') else '1011'
+                # immediate payment: clear AP and credit cash/bank
+                rows.append({'account_code': '2110', 'debit': total_inc_tax, 'credit': 0.0, 'description': 'Pay AP', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+                rows.append({'account_code': cash_code, 'debit': 0.0, 'credit': total_inc_tax, 'description': 'Cash/Bank', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            except Exception:
+                pass
+        except Exception:
+            pass
+        return rows
 
 class ExpenseInvoiceItem(db.Model):
     __tablename__ = 'expense_invoice_items'
@@ -402,6 +499,16 @@ class Salary(db.Model):
     previous_salary_due = db.Column(db.Numeric(12, 2), default=0)  # رواتب من شهور سابقة
     total_salary = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(db.String(20), default='due')  # paid/due/partial
+
+    def to_journal_entries(self):
+        rows = []
+        try:
+            total = float(self.total_salary or 0)
+            rows.append({'account_code': '5010', 'debit': total, 'credit': 0.0, 'description': 'Payroll expense', 'ref_type': 'salary', 'ref_id': int(self.id), 'date': str(get_saudi_now().date())})
+            rows.append({'account_code': '2130', 'debit': 0.0, 'credit': total, 'description': 'Salaries payable', 'ref_type': 'salary', 'ref_id': int(self.id), 'date': str(get_saudi_now().date())})
+        except Exception:
+            pass
+        return rows
 
 
 
