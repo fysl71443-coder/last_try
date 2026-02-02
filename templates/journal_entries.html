@@ -99,6 +99,9 @@
                 {% endfor %}
               </select>
             </div>
+            <div class="col-auto d-flex align-items-end">
+              <button type="button" class="btn btn-primary" id="journalFilterApply"><i class="fa-solid fa-filter me-1"></i>تطبيق الفلتر</button>
+            </div>
           </form>
           <div class="d-flex flex-wrap gap-2 mt-2 align-items-center">
             <a href="{{ url_for('main.chart_of_accounts') }}" class="btn btn-outline-secondary btn-sm">🌳 شجرة الحسابات</a>
@@ -257,7 +260,7 @@
             {% if mode=='edit' %}
             <div class="d-flex gap-2">
               {% if entry.status != 'posted' %}
-              <button formaction="{{ url_for('journal.post_entry', jid=entry.id) }}" class="btn btn-warning">ترحيل</button>
+              <button formaction="{{ url_for('journal.post_entry', jid=entry.id) }}" class="btn btn-warning"><i class="fa-solid fa-paper-plane me-1"></i>{{ 'إعادة النشر' if entry.status == 'draft' else 'ترحيل' }}</button>
               {% endif %}
               <form method="POST" action="{{ url_for('journal.delete_entry', jid=entry.id) }}" style="display:inline" onsubmit="return confirm('هل تريد حذف هذا القيد؟');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -292,6 +295,8 @@
   f.querySelectorAll('select,input').forEach(el=>{
     el.addEventListener('change', apply);
   });
+  const applyBtn = document.getElementById('journalFilterApply');
+  if (applyBtn) applyBtn.addEventListener('click', function(){ apply(); });
 })();
 </script>
 <script>
@@ -362,14 +367,14 @@ document.addEventListener('DOMContentLoaded', recalcTotals);
     let html = '<div class="je-header">';
     html += '<div class="d-flex flex-wrap align-items-center gap-2 mb-2"><strong>قيد #' + (e.id || '') + ' – ' + dd + '</strong> ' + statusBadge + '</div>';
     html += '<div class="text-muted small mb-2">' + (op.source || '') + ' ' + (op.doc_number || '') + '</div>';
-    html += '<div class="d-flex flex-wrap gap-2">';
+    html += '<div class="d-flex flex-wrap gap-2 align-items-center">';
     if ((e.status || '').toLowerCase() !== 'posted') {
-      html += '<form method="POST" action="/journal/' + jid + '/post" style="display:inline"><input type="hidden" name="csrf_token" value="' + csrf() + '"><button type="submit" class="btn btn-sm btn-warning">نشر</button></form>';
+      html += '<form method="POST" action="/journal/' + jid + '/post" style="display:inline"><input type="hidden" name="csrf_token" value="' + csrf() + '"><button type="submit" class="btn btn-sm btn-warning"><i class="fa-solid fa-paper-plane me-1"></i>إعادة النشر</button></form>';
     } else {
-      html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="alert(\'قريباً\')" title="إرجاع لمسودة">إرجاع لمسودة</button>';
-      html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="alert(\'قريباً\')" title="عكس القيد">عكس القيد</button>';
+      html += '<button type="button" class="btn btn-sm btn-outline-secondary journal-btn-revert" data-entry-number="' + (e.entry_number || '') + '" data-jid="' + jid + '" title="إرجاع لمسودة"><i class="fa-solid fa-undo me-1"></i>إرجاع لمسودة</button>';
+      html += '<button type="button" class="btn btn-sm btn-outline-secondary journal-btn-reverse" data-entry-number="' + (e.entry_number || '') + '" data-jid="' + jid + '" title="عكس القيد"><i class="fa-solid fa-exchange-alt me-1"></i>عكس القيد</button>';
     }
-    html += '<a href="/journal/' + jid + '" class="btn btn-sm btn-outline-primary">تعديل</a>';
+    html += '<a href="/journal/' + jid + '" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen me-1"></i>تعديل</a>';
     html += '<form method="POST" action="/journal/' + jid + '/delete" style="display:inline" onsubmit="return confirm(\'هل تريد حذف هذا القيد؟\');"><input type="hidden" name="csrf_token" value="' + csrf() + '"><button type="submit" class="btn btn-sm btn-outline-danger">حذف</button></form>';
     html += '</div></div>';
     html += '<div class="je-badges">';
@@ -405,10 +410,53 @@ document.addEventListener('DOMContentLoaded', recalcTotals);
   }
   document.addEventListener('click', function(ev) {
     const btn = ev.target.closest('.journal-btn-view');
-    if (!btn) return;
-    ev.preventDefault();
-    const jid = btn.getAttribute('data-jid');
-    if (jid) toggleDetail(jid);
+    if (btn) {
+      ev.preventDefault();
+      const jid = btn.getAttribute('data-jid');
+      if (jid) toggleDetail(jid);
+      return;
+    }
+    const revBtn = ev.target.closest('.journal-btn-revert');
+    if (revBtn) {
+      ev.preventDefault();
+      const entryNumber = revBtn.getAttribute('data-entry-number');
+      const jid = revBtn.getAttribute('data-jid');
+      if (!entryNumber || !jid) return;
+      revBtn.disabled = true;
+      fetch('/journal/api/journals/revert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entry_number: entryNumber }), credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(j => {
+          if (j && j.ok) {
+            const inner = document.querySelector('.journal-detail-inner[data-jid="' + jid + '"]');
+            if (inner) {
+              fetch('/journal/' + jid + '/detail', { credentials: 'same-origin' }).then(r => r.json()).then(d => {
+                if (d && d.ok) inner.innerHTML = buildDetail(d);
+              }).catch(() => {});
+            }
+          } else { alert(j.message || j.error || 'فشل إرجاع لمسودة'); }
+        })
+        .catch(() => alert('خطأ في الاتصال'))
+        .finally(() => { revBtn.disabled = false; });
+      return;
+    }
+    const reverseBtn = ev.target.closest('.journal-btn-reverse');
+    if (reverseBtn) {
+      ev.preventDefault();
+      const entryNumber = reverseBtn.getAttribute('data-entry-number');
+      const jid = reverseBtn.getAttribute('data-jid');
+      if (!entryNumber || !jid) return;
+      if (!confirm('إنشاء قيد معكوس منشور لهذا القيد؟')) return;
+      reverseBtn.disabled = true;
+      fetch('/journal/api/journals/reverse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entry_number: entryNumber }), credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(j => {
+          if (j && j.ok) { alert('تم إنشاء القيد المعكوس: ' + (j.entry_number || '')); window.location.reload(); }
+          else { alert(j.message || j.error || 'فشل عكس القيد'); }
+        })
+        .catch(() => alert('خطأ في الاتصال'))
+        .finally(() => { reverseBtn.disabled = false; });
+      return;
+    }
   });
   const pmFilter = document.getElementById('filterPaymentMethod');
   if (pmFilter) {
