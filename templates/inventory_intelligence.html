@@ -1,13 +1,14 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Inventory & Production Cost Intelligence / ذكاء المخزون وتكلفة الإنتاج') }}{% endblock %}
+{% block title %}{{ _('Inventory & Production Cost Intelligence') }}{% endblock %}
 {% block content %}
 
 <style>
 :root{
-  --bg:#ffffff; --card:#fff; --muted:#5c6773; --accent:#0d6efd; --danger:#dc3545; --ok:#28a745; --warn:#ffc107;
+  --bg:#f1f5f9; --card:#fff; --muted:#5c6773; --accent:#1565c0; --accent-dark:#0d47a1; --danger:#dc3545; --ok:#28a745; --warn:#ffc107;
 }
 .intel-wrap{ max-width:1440px; margin:0 auto; padding:16px }
-.sec{ background:var(--card); border:1px solid rgba(0,0,0,.06); border-radius:20px; box-shadow:0 14px 40px rgba(18,22,33,.06); padding:18px; margin-bottom:16px }
+.intel-wrap.ops-layout.hub-wrap{ background:var(--bg); }
+.sec{ background:var(--card); border:1px solid rgba(13,71,161,.08); border-radius:var(--ops-card-radius, 12px); box-shadow:0 2px 10px rgba(21,101,192,.06); padding:18px; margin-bottom:16px }
 .grid{ display:grid; gap:12px }
 .grid.kpi{ grid-template-columns:repeat(5, minmax(160px, 1fr)) }
 .card{ border-radius:16px; background:#fff; padding:16px; box-shadow:0 10px 26px rgba(18,22,33,.06); display:flex; align-items:center; gap:12px; transition:transform .2s ease }
@@ -26,48 +27,59 @@ table.tbl th{ background:#f8fafc; position:sticky; top:0; z-index:1 }
 .bar-chart{ display:flex; flex-direction:column; gap:6px }
 .bar{ display:flex; align-items:center; gap:8px }
 .bar .name{ width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-.bar .val{ flex:1; background:linear-gradient(90deg, #0d6efd, #6610f2); height:10px; border-radius:6px; position:relative }
+.bar .val{ flex:1; background:linear-gradient(90deg, var(--accent), var(--accent-dark)); height:10px; border-radius:6px; position:relative }
 .bar .val::after{ content:''; position:absolute; right:0; top:0; bottom:0; width:2px; background:rgba(255,255,255,.9); border-radius:2px }
 .spark{ display:flex; align-items:flex-end; gap:3px; height:42px }
-.spark .pt{ width:12px; background:#0d6efd; border-radius:3px }
+.spark .pt{ width:12px; background:var(--accent); border-radius:3px }
 .alert{ padding:12px 14px; border-radius:12px; background:#fff3cd; border:1px solid #ffeeba; color:#664d03; font-size:13px }
 .flow{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-items:center; text-align:center; margin-top:12px }
 .flow .box{ background:#f8fafc; border:1px dashed rgba(0,0,0,.12); border-radius:12px; padding:12px }
-.arrow{ font-size:22px; color:#0d6efd }
+.arrow{ font-size:22px; color:var(--accent) }
 .risk.low{ color:var(--danger); font-weight:700 }
 .risk.excess{ color:#6610f2; font-weight:700 }
 .risk.ok{ color:var(--ok); font-weight:700 }
 @media (max-width:1024px){ .grid.kpi{ grid-template-columns:repeat(2, 1fr) } }
 </style>
 
-<div class="intel-wrap" dir="auto">
+<div class="intel-wrap container py-4 ops-layout hub-wrap" dir="auto">
+  <div class="ops-header-bar mb-3">
+    <span class="ops-icon"><i class="fa-solid fa-chart-line"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Inventory & Production Cost Intelligence') }}</h1>
+      <span class="ops-subtitle">{{ _('KPIs, purchases summary, meal cost and sales analysis') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('inventory.inventory') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-boxes-stacked me-1"></i>{{ _('Inventory') }}</a>
+    </div>
+  </div>
   <div class="sec">
-    <h5 class="mb-3">{{ _('KPI Overview / المؤشرات الرئيسية') }}</h5>
+    <h5 class="mb-3">{{ _('KPI Overview') }}</h5>
     <div class="grid kpi">
-      <div class="card"><div class="icon">📦</div><div><div class="label">{{ _('Total Inventory Cost / إجمالي تكلفة المخزون') }}</div><div class="num">{{ '{:,.2f}'.format(kpi.total_inventory_cost or 0) }}</div><div class="cmp up">{{ _('vs last period / مقارنة بالفترة السابقة') }}</div></div></div>
-      <div class="card"><div class="icon">🧾</div><div><div class="label">{{ _('Ingredient Purchases (This Month) / مشتريات المواد (هذا الشهر)') }}</div><div class="num">{{ '{:,.2f}'.format(kpi.total_purchases_month or 0) }}</div><div class="cmp up">{{ _('trend / الاتجاه') }}</div></div></div>
-      <div class="card"><div class="icon">🍽</div><div><div class="label">{{ _('Meals Sold (This Month) / الوجبات المباعة (هذا الشهر)') }}</div><div class="num">{{ '{:,.0f}'.format(kpi.total_meals_sold_month or 0) }}</div><div class="cmp up">{{ _('live / فوري') }}</div></div></div>
-      <div class="card"><div class="icon">💰</div><div><div class="label">{{ _('Estimated Meal Cost / تقدير تكلفة الإنتاج') }}</div><div class="num">{{ '{:,.2f}'.format(kpi.estimated_total_meal_cost or 0) }}</div><div class="cmp down">⚠ {{ _('cost based on latest recipe prices / التكلفة حسب آخر أسعار المكونات') }}</div></div></div>
-      <div class="card"><div class="icon">📊</div><div><div class="label">{{ _('Total Profit (Sales - Prod Cost) / إجمالي الربح') }}</div><div class="num">{{ '{:,.2f}'.format(kpi.total_profit_generated or 0) }}</div><div class="cmp up">{{ _('live margin / هامش فوري') }}</div></div></div>
+      <div class="card"><div class="icon"><i class="fa-solid fa-boxes-stacked"></i></div><div><div class="label">{{ _('Total Inventory Cost') }}</div><div class="num">{{ '{:,.2f}'.format(kpi.total_inventory_cost or 0) }}</div><div class="cmp up">{{ _('vs last period') }}</div></div></div>
+      <div class="card"><div class="icon"><i class="fa-solid fa-receipt"></i></div><div><div class="label">{{ _('Ingredient Purchases (This Month)') }}</div><div class="num">{{ '{:,.2f}'.format(kpi.total_purchases_month or 0) }}</div><div class="cmp up">{{ _('trend') }}</div></div></div>
+      <div class="card"><div class="icon"><i class="fa-solid fa-utensils"></i></div><div><div class="label">{{ _('Meals Sold (This Month)') }}</div><div class="num">{{ '{:,.0f}'.format(kpi.total_meals_sold_month or 0) }}</div><div class="cmp up">{{ _('live') }}</div></div></div>
+      <div class="card"><div class="icon"><i class="fa-solid fa-coins"></i></div><div><div class="label">{{ _('Estimated Meal Cost') }}</div><div class="num">{{ '{:,.2f}'.format(kpi.estimated_total_meal_cost or 0) }}</div><div class="cmp down"><i class="fa-solid fa-triangle-exclamation me-1"></i>{{ _('cost based on latest recipe prices') }}</div></div></div>
+      <div class="card"><div class="icon"><i class="fa-solid fa-chart-line"></i></div><div><div class="label">{{ _('Total Profit (Sales - Prod Cost)') }}</div><div class="num">{{ '{:,.2f}'.format(kpi.total_profit_generated or 0) }}</div><div class="cmp up">{{ _('live margin') }}</div></div></div>
     </div>
   </div>
 
   <div class="sec">
-    <h5 class="mb-2">{{ _('Purchases Summary / ملخص المشتريات') }}</h5>
+    <h5 class="mb-2">{{ _('Purchases Summary') }}</h5>
     <div class="filters">
-      <span class="chip">{{ _('Date Range / نطاق التاريخ') }}</span>
-      <span class="chip">{{ _('Supplier / المورد') }}</span>
-      <span class="chip">{{ _('Ingredient Category / فئة المكون') }}</span>
+      <span class="chip">{{ _('Date Range') }}</span>
+      <span class="chip">{{ _('Supplier') }}</span>
+      <span class="chip">{{ _('Ingredient Category') }}</span>
     </div>
     <div class="table-responsive">
       <table class="tbl">
         <thead>
           <tr>
-            <th>{{ _('Date / التاريخ') }}</th>
-            <th>{{ _('Invoice No / رقم الفاتورة') }}</th>
-            <th>{{ _('Supplier / المورد') }}</th>
-            <th>{{ _('Payment / الدفع') }}</th>
-            <th>{{ _('Status / الحالة') }}</th>
+            <th>{{ _('Date') }}</th>
+            <th>{{ _('Invoice No') }}</th>
+            <th>{{ _('Supplier') }}</th>
+            <th>{{ _('Payment') }}</th>
+            <th>{{ _('Status') }}</th>
             <th class="text-end">{{ _('Subtotal') }}</th>
             <th class="text-end">{{ _('VAT') }}</th>
             <th class="text-end">{{ _('Discount') }}</th>
@@ -95,7 +107,7 @@ table.tbl th{ background:#f8fafc; position:sticky; top:0; z-index:1 }
     </div>
     <div class="row mt-3">
       <div class="col-md-6">
-        <h6 class="mb-2">{{ _('Top Purchased Ingredients / أكثر المكونات شراءً') }}</h6>
+        <h6 class="mb-2">{{ _('Top Purchased Ingredients') }}</h6>
         <div class="bar-chart">
           {% for b in top_ingredients %}
             <div class="bar">
@@ -108,7 +120,7 @@ table.tbl th{ background:#f8fafc; position:sticky; top:0; z-index:1 }
         </div>
       </div>
       <div class="col-md-6">
-        <h6 class="mb-2">{{ _('Purchase Trend / اتجاه المشتريات') }}</h6>
+        <h6 class="mb-2">{{ _('Purchase Trend') }}</h6>
         <div class="spark">
           {% for p in purchase_trend %}
           {% set h = (p.total / (purchase_trend|map(attribute='total')|max if purchase_trend else 1)) * 38 %}
@@ -120,22 +132,22 @@ table.tbl th{ background:#f8fafc; position:sticky; top:0; z-index:1 }
   </div>
 
   <div class="sec">
-    <h5 class="mb-2">{{ _('Meal Cost & Sales Analysis / تحليل تكلفة الوجبات والمبيعات') }}</h5>
-    <div class="alert mb-2">⚠ {{ _('Cost may vary due to outdated ingredient prices / قد تختلف التكلفة بسبب أسعار قديمة') }}</div>
+    <h5 class="mb-2">{{ _('Meal Cost & Sales Analysis') }}</h5>
+    <div class="alert mb-2"><i class="fa-solid fa-triangle-exclamation me-2"></i>{{ _('Cost may vary due to outdated ingredient prices') }}</div>
     {% if outdated_meals and outdated_meals|length > 0 %}
-      <div class="alert">⚠ {{ _('Meals using ingredients with outdated cost data / وجبات تحتوي مكونات بسعر قديم') }}: {{ outdated_meals|join(', ') }}</div>
+      <div class="alert"><i class="fa-solid fa-triangle-exclamation me-2"></i>{{ _('Meals using ingredients with outdated cost data') }}: {{ outdated_meals|join(', ') }}</div>
     {% endif %}
     <div class="table-responsive">
       <table class="tbl">
         <thead>
           <tr>
-            <th>{{ _('Meal / الوجبة') }}</th>
-            <th class="text-center">{{ _('Sales Count / عدد المبيعات') }}</th>
-            <th class="text-end">{{ _('Consumption Cost / تكلفة الاستهلاك') }}</th>
-            <th class="text-end">{{ _('Revenue / الإيراد') }}</th>
-            <th class="text-end">{{ _('Profit / الربح') }}</th>
-            <th class="text-end">{{ _('Margin % / الهامش %') }}</th>
-            <th>{{ _('Contribution / المساهمة') }}</th>
+            <th>{{ _('Meal') }}</th>
+            <th class="text-center">{{ _('Sales Count') }}</th>
+            <th class="text-end">{{ _('Consumption Cost') }}</th>
+            <th class="text-end">{{ _('Revenue') }}</th>
+            <th class="text-end">{{ _('Profit') }}</th>
+            <th class="text-end">{{ _('Margin %%') }}</th>
+            <th>{{ _('Contribution') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -159,22 +171,22 @@ table.tbl th{ background:#f8fafc; position:sticky; top:0; z-index:1 }
   </div>
 
   <div class="sec">
-    <h5 class="mb-2">{{ _('Dynamic Stock Analysis / تحليل المخزون الديناميكي') }}</h5>
+    <h5 class="mb-2">{{ _('Dynamic Stock Analysis') }}</h5>
     <div class="flow">
-      <div class="box">📦 {{ _('Initial Stock / المخزون الابتدائي') }}</div>
+      <div class="box"><i class="fa-solid fa-boxes-stacked me-2"></i>{{ _('Initial Stock') }}</div>
       <div class="arrow">➕ ➖</div>
-      <div class="box">{{ _('Purchases ➖ Estimated Usage / المشتريات ➖ الاستهلاك التقديري') }}</div>
+      <div class="box">{{ _('Purchases ➖ Estimated Usage') }}</div>
     </div>
     <div class="table-responsive mt-2">
       <table class="tbl">
         <thead>
           <tr>
-            <th>{{ _('Ingredient / المكون') }}</th>
-            <th class="text-end">{{ _('Opening Qty / الكمية الافتتاحية') }}</th>
-            <th class="text-end">{{ _('Purchases Qty / كمية المشتريات') }}</th>
-            <th class="text-end">{{ _('Estimated Usage / الاستهلاك التقديري') }}</th>
-            <th class="text-end">{{ _('Expected Stock / المخزون المتوقع') }}</th>
-            <th>{{ _('Risk / المخاطر') }}</th>
+            <th>{{ _('Ingredient') }}</th>
+            <th class="text-end">{{ _('Opening Qty') }}</th>
+            <th class="text-end">{{ _('Purchases Qty') }}</th>
+            <th class="text-end">{{ _('Estimated Usage') }}</th>
+            <th class="text-end">{{ _('Expected Stock') }}</th>
+            <th>{{ _('Risk') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -185,7 +197,7 @@ table.tbl th{ background:#f8fafc; position:sticky; top:0; z-index:1 }
             <td class="text-end">{{ '{:,.3f}'.format(r.purchases_qty or 0) }}</td>
             <td class="text-end">{{ '{:,.3f}'.format(r.estimated_usage or 0) }}</td>
             <td class="text-end">{{ '{:,.3f}'.format(r.expected_stock or 0) }}</td>
-            <td><span class="risk {{ r.risk }}">{{ r.risk|capitalize }}</span></td>
+            <td><span class="risk {{ r.risk }}">{% if r.risk == 'ok' %}{{ _('Ok') }}{% elif r.risk == 'low' %}{{ _('Low') }}{% elif r.risk == 'excess' %}{{ _('Excess') }}{% else %}{{ r.risk|capitalize }}{% endif %}</span></td>
           </tr>
           {% endfor %}
         </tbody>

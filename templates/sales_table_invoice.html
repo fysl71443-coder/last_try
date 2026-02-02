@@ -69,7 +69,7 @@
   }
 </style>
 
-{% if current_user.is_authenticated %}{% set back_url = url_for('main.sales_tables', branch_code=branch_code) %}{% else %}{% set back_url = '#' %}{% endif %}
+{% if current_user.is_authenticated %}{% set back_url = url_for('sales.sales_tables', branch_code=branch_code) %}{% else %}{% set back_url = '#' %}{% endif %}
 
 {% set currency_src = None %}
 {% if settings and settings.currency_image %}
@@ -131,8 +131,9 @@
             <div class="col-md-8">
               <div class="d-flex align-items-center justify-content-between">
                 <label class="form-label mb-0">Customer</label>
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAddCustomerModalTable()">➕ {{ _('New Customer / عميل جديد') }}</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAddCustomerModalTable()">➕ {{ _('New Customer') }}</button>
               </div>
+              <input type="hidden" id="custId" value="">
               <input id="custName" type="text" class="form-control mt-1" placeholder="Type name or phone...">
               <div id="custList" class="list-group position-absolute w-50" style="z-index:10; display:none;"></div>
             </div>
@@ -148,12 +149,13 @@
               <label class="form-label">Tax %</label>
               <input id="taxPct" type="number" step="0.01" value="{{ vat_rate }}" class="form-control">
             </div>
-            <div class="col-md-4">
-              <label class="form-label">Payment</label>
+            <div class="col-md-4" id="payMethodWrap">
+              <label class="form-label">Payment / طريقة الدفع</label>
               <select id="payMethod" class="form-select">
                 <option value="">-- اختر طريقة الدفع --</option>
                 <option value="CASH">CASH</option>
                 <option value="CARD">CARD</option>
+                <option value="CREDIT">Credit / آجل</option>
               </select>
             </div>
           </div>
@@ -265,26 +267,33 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="addCustomerTableModalLabel">{{ _('Add Customer / إضافة عميل') }}</h5>
+        <h5 class="modal-title" id="addCustomerTableModalLabel">{{ _('Add Customer') }} / إضافة عميل</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <div class="mb-2">
-          <label class="form-label">{{ _('Name / الاسم') }}</label>
-          <input id="tblNewCustName" class="form-control" placeholder="{{ _('Customer name') }}">
+          <label class="form-label">الاسم / {{ _('Customer name') }}</label>
+          <input id="tblNewCustName" class="form-control" placeholder="اسم العميل" required>
         </div>
         <div class="mb-2">
-          <label class="form-label">{{ _('Phone / الهاتف') }}</label>
-          <input id="tblNewCustPhone" class="form-control" placeholder="{{ _('Phone (optional)') }}">
+          <label class="form-label">نوع العميل</label>
+          <select id="tblNewCustType" class="form-select">
+            <option value="cash">نقدي</option>
+            <option value="credit">آجل</option>
+          </select>
         </div>
         <div class="mb-2">
-          <label class="form-label">{{ _('Discount %% / نسبة الخصم') }}</label>
-          <input id="tblNewCustDisc" type="number" min="0" max="100" step="0.01" class="form-control" value="0">
+          <label class="form-label">الهاتف أو الرقم الضريبي / {{ _('Phone (optional)') }}</label>
+          <input id="tblNewCustPhone" class="form-control" placeholder="Phone (optional)">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">الخصم % / {{ _('Discount %%') }}</label>
+          <input id="tblNewCustDisc" type="number" min="0" max="100" step="0.01" class="form-control" value="0" placeholder="0.00">
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Close / إغلاق') }}</button>
-        <button type="button" class="btn btn-primary" onclick="submitNewCustomerTable()">{{ _('Save / حفظ') }}</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Close') }}</button>
+        <button type="button" class="btn btn-primary" onclick="submitNewCustomerTable()">{{ _('Save') }} / حفظ</button>
       </div>
     </div>
   </div>
@@ -294,6 +303,7 @@
   function openAddCustomerModalTable(){
     try{
       document.getElementById('tblNewCustName').value = '';
+      document.getElementById('tblNewCustType').value = 'cash';
       document.getElementById('tblNewCustPhone').value = '';
       document.getElementById('tblNewCustDisc').value = '0';
       const m = new bootstrap.Modal(document.getElementById('addCustomerTableModal'));
@@ -302,27 +312,38 @@
   }
   async function submitNewCustomerTable(){
     const name = (document.getElementById('tblNewCustName').value||'').trim();
-    const phone = (document.getElementById('tblNewCustPhone').value||'').trim();
+    const customerType = (document.getElementById('tblNewCustType').value||'cash').toLowerCase();
+    const phone = (document.getElementById('tblNewCustPhone').value||'').trim() || null;
     const discount = parseFloat(document.getElementById('tblNewCustDisc').value||'0')||0;
     if(!name){ alert('Name is required / الاسم مطلوب'); return; }
     try{
       const res = await fetch('{{ url_for('main.api_customers_create') }}', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({name, phone, discount_percent: discount})
+        body: JSON.stringify({
+          name: name,
+          phone: phone,
+          customer_type: customerType,
+          discount_percent: discount
+        })
       });
       const j = await res.json();
       if(!res.ok || !j || j.ok !== true){ throw new Error((j && j.error) || 'Failed'); }
       const c = j.customer || {};
-      // Populate fields on the invoice form
       const nameInput = document.getElementById('custName');
       const phoneInput = document.getElementById('custPhone');
       const discInput = document.getElementById('discountPct');
+      const custIdEl = document.getElementById('custId');
       if(nameInput) nameInput.value = c.name || name;
       if(phoneInput) phoneInput.value = c.phone || phone || '';
       if(discInput){
         const d = (typeof c.discount_percent !== 'undefined') ? c.discount_percent : discount;
         discInput.value = (parseFloat(d||0) || 0).toString();
       }
+      if(custIdEl && c.id){ custIdEl.value = String(c.id); custIdEl.setAttribute('data-customer-type', customerType === 'credit' ? 'credit' : 'cash'); }
+      var isCredit = (customerType === 'credit');
+      var discVal = isCredit ? (parseFloat(c.discount_percent) || parseFloat(discount) || 0) : 0;
+      if(typeof window.setDiscountFieldForCustomer === 'function') window.setDiscountFieldForCustomer(isCredit, discVal);
+      if(typeof window.updatePaymentMethodFromCustomer === 'function') window.updatePaymentMethodFromCustomer();
       try{ bootstrap.Modal.getInstance(document.getElementById('addCustomerTableModal')).hide(); }catch(_){ }
     }catch(e){ alert(String(e.message||e)); }
   }
@@ -332,7 +353,7 @@
   (function(){
     const el = document.getElementById('btnPrintOrder');
     if(!el) return;
-    const url = '{{ url_for('main.print_order_slip', branch=branch_code, table=table_number) }}';
+    const url = '{{ url_for('sales.print_order_slip', branch=branch_code, table=table_number) }}';
     el.addEventListener('click', function(){
       try{
         window.open(url, 'order_print', 'width=520,height=800');
@@ -366,7 +387,7 @@
   function getGrandTbl(){ const el=document.getElementById('grand'); return parseMoneyTxtTbl(el && el.textContent || '0'); }
   function computeCashChangeTbl(){
     const box = document.getElementById('cashCalcTbl'); if(!box) return;
-    const pm = (document.getElementById('payMethod')?.value||'');
+    const pm = (document.getElementById('payMethod')?.value||'').toUpperCase();
     const force = !!window.cashCalcForceShowTbl;
     box.style.display = (force || pm==='CASH') ? 'block' : 'none';
     const total = getGrandTbl();

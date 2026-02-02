@@ -1,0 +1,18 @@
+{
+  "name": "accounting-service",
+  "version": "1.0.0",
+  "description": "Single Source of Truth for accounting. Integrates with Flask POS via REST.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "init-db": "node scripts/init-db.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "pg": "^8.11.3"
+  }
+}

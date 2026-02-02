@@ -1,12 +1,289 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Branch Sales Report Print</title>
-  </head>
-  <body>
-    <h3>Branch Sales Report Print ({{ branch }}) - {{ year }}/{{ month }}</h3>
-    <p>Minimal print view for smoke tests.</p>
-  </body>
-</html>
+<!DOCTYPE html>
+{% set loc = get_locale() or 'ar' %}
+<html lang="{{ loc }}" dir="{{ 'rtl' if loc == 'ar' else 'ltr' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ _('Branch Sales Report') }} — {{ branch_label }} — {{ year }}/{{ month }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0d47a1;
+      --primary-light: #1565c0;
+      --header-bg: #e3f2fd;
+      --accent-border: #1976d2;
+      --chip-bg: #e8f4fd;
+      --row-alt: #f8fbfe;
+      --text: #1a1a2e;
+      --text-muted: #455a64;
+      --footer-border: #90caf9;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      margin: 0;
+      padding: 24px;
+      color: var(--text);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    @page { size: A4; margin: 18mm; }
 
+    .header-card {
+      background: linear-gradient(135deg, #e3f2fd 0%, #f5f9ff 100%);
+      border: 1px solid var(--accent-border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(13, 71, 161, 0.08);
+    }
+    .header-card .flex-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .header-card .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .print-brand {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 0 0 6px 0;
+      letter-spacing: 0.02em;
+    }
+    .print-meta {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin: 0;
+    }
+    .print-date {
+      font-size: 0.9rem;
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .report-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 0 0 12px 0;
+      padding-bottom: 10px;
+      border-bottom: 3px solid var(--primary);
+      letter-spacing: 0.01em;
+    }
+    .report-sub {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .chip {
+      display: inline-block;
+      padding: 6px 14px;
+      background: var(--chip-bg);
+      border: 1px solid var(--accent-border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    .table-wrap {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--accent-border);
+      box-shadow: 0 2px 6px rgba(13, 71, 161, 0.06);
+    }
+    .table-print {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    .table-print thead th {
+      background: linear-gradient(180deg, #1565c0 0%, #0d47a1 100%);
+      color: #fff;
+      padding: 14px 16px;
+      text-align: right;
+      font-weight: 700;
+      font-size: 0.95rem;
+      border: none;
+    }
+    .table-print thead th:first-child { border-radius: 0; }
+    .table-print td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e0e0e0;
+      text-align: right;
+      color: var(--text);
+    }
+    .table-print tbody tr:nth-child(even) {
+      background: var(--row-alt);
+    }
+    .table-print tbody tr:hover {
+      background: #e8f4fd;
+    }
+    .table-print tfoot tr {
+      background: var(--header-bg);
+      border-top: 2px solid var(--primary);
+    }
+    .table-print tfoot td {
+      padding: 14px 16px;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--primary);
+      border-bottom: none;
+    }
+    .text-end { text-align: right; }
+    .note-box {
+      margin-top: 24px;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #f5f9ff 0%, #e8f4fd 100%);
+      border: 1px solid #bbdefb;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .note-box .en { font-size: 0.8rem; margin-top: 8px; color: #607d8b; }
+    .footer {
+      margin-top: 28px;
+      padding-top: 16px;
+      border-top: 2px solid var(--footer-border);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+    .report-logo {
+      height: 52px;
+      max-width: 150px;
+      object-fit: contain;
+    }
+    .no-data {
+      margin-top: 16px;
+      padding: 20px;
+      text-align: center;
+      background: var(--row-alt);
+      border-radius: 10px;
+      color: var(--text-muted);
+    }
+
+    @media print {
+      .no-print { display: none !important; }
+      body { padding: 0; }
+      .header-card {
+        box-shadow: none;
+        border: 1px solid #333;
+        background: #e8f4fd !important;
+      }
+      .table-print thead th {
+        background: #1565c0 !important;
+        color: #fff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .table-print tbody tr:nth-child(even) {
+        background: #f5f9ff !important;
+      }
+      .table-print tfoot tr {
+        background: #e3f2fd !important;
+        border-top-color: #0d47a1 !important;
+      }
+      .table-print tfoot td { color: #0d47a1 !important; }
+      .report-title { color: #0d47a1 !important; border-bottom-color: #0d47a1 !important; }
+      .print-brand { color: #0d47a1 !important; }
+      .chip { background: #e3f2fd !important; border-color: #1976d2 !important; color: #0d47a1 !important; }
+      .note-box { background: #f0f7ff !important; border-color: #90caf9 !important; }
+      table { page-break-inside: auto; }
+      tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-card">
+    <div class="flex-row">
+      <div class="brand-row">
+        {% if settings and settings.show_logo and settings.logo_url %}
+          <img src="{{ settings.logo_url }}" alt="" class="report-logo" />
+        {% endif %}
+        <div>
+          {% set company_display = (settings.company_name or '') | trim %}
+          {% if not company_display or company_display == 'Company' %}
+            {% set company_display = 'مطعم تشاينيز بلايت لتقديم الوجبات' %}
+          {% endif %}
+          <h1 class="print-brand">{{ company_display }}</h1>
+          <p class="print-meta">{% if settings.tax_number %}الرقم الضريبي: {{ settings.tax_number }}{% endif %}{% if settings.address %} — {{ settings.address }}{% endif %}</p>
+        </div>
+      </div>
+      <div class="print-date">تاريخ الطباعة: {{ generated_at }}</div>
+    </div>
+  </div>
+
+  <h2 class="report-title">تقرير مبيعات الفرع — Branch Sales Report</h2>
+  <div class="report-sub">
+    <span class="chip">الفترة: {{ year }}/{{ month }}</span>
+    <span class="chip">الفرع: {{ branch_label }}</span>
+  </div>
+
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="table-print">
+      <thead>
+        <tr>
+          <th>{{ _('Date') }}</th>
+          <th class="text-end">{{ _('Invoices count') }}</th>
+          <th class="text-end">{{ _('Total') }} (SAR)</th>
+          <th class="text-end">{{ _('Average') }} (SAR)</th>
+          <th>{{ _('Payment Methods') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.date }}</td>
+          <td class="text-end">{{ r.count }}</td>
+          <td class="text-end">{{ '%.2f'|format(r.total) }}</td>
+          <td class="text-end">{{ '%.2f'|format(r.avg) }}</td>
+          <td>
+            {% if r.methods %}
+              {% for k, v in r.methods.items() %}
+                <span style="margin-left:8px;">{{ k }}: {{ '%.2f'|format(v) }}</span>
+              {% endfor %}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>{{ _('Total') }}</td>
+          <td class="text-end">{{ total_count }}</td>
+          <td class="text-end">{{ '%.2f'|format(grand_total) }}</td>
+          <td></td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="no-data">{{ _('No sales data for the selected period.') }}</div>
+  {% endif %}
+
+  <div class="note-box">
+    {{ _('For detailed data (invoices and line items), use the Branch Sales by Day screen, select period and branch, then print from there.') }}
+  </div>
+
+  <div class="footer">{{ _('Prepared by system') }} — {{ _('Printed') }}: {{ generated_at }}</div>
+
+  <div class="no-print" style="margin-top: 20px; text-align: center;">
+    <button type="button" onclick="window.print()" style="padding: 10px 28px; cursor: pointer; font-size: 15px; font-family: inherit; font-weight: 600; background: #1565c0; color: #fff; border: none; border-radius: 8px;">{{ _('Print') }}</button>
+  </div>
+
+</body>
+</html>

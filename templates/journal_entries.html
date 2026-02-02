@@ -1,235 +1,280 @@
 {% extends "base.html" %}
+{% block title %}قيود اليومية{% endblock %}
 {% block content %}
-<div class="container py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">📘 قيود اليومية</h3>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('journal.new_entry') }}" class="btn btn-primary">➕ قيد جديد</a>
-      <a href="{{ url_for('journal.list_entries') }}" class="btn btn-outline-secondary">📄 القائمة</a>
-      <a href="{{ url_for('journal.backfill_missing_all') }}" class="btn btn-outline-dark">⚙️ إنشاء قيود الفترة السابقة</a>
-      <a href="{{ url_for('main.chart_of_accounts') }}" class="btn btn-outline-dark">🌳 شجرة الحسابات</a>
-      <a href="{{ url_for('journal.print_all_pdf') }}?branch={{ branch }}&q={{ request.args.get('q') or '' }}&start_date={{ request.args.get('start_date') or '' }}&end_date={{ request.args.get('end_date') or '' }}" target="_blank" class="btn btn-success">🖨️ طباعة كل القيود (PDF)</a>
-      <a href="{{ url_for('journal.export_all') }}?branch={{ branch }}&q={{ request.args.get('q') or '' }}&start_date={{ request.args.get('start_date') or '' }}&end_date={{ request.args.get('end_date') or '' }}" class="btn btn-outline-success">📥 تصدير XLS</a>
+{% set _jq = request.args.get('q') or '' %}
+{% set _jstart = request.args.get('start_date') or '' %}
+{% set _jend = request.args.get('end_date') or '' %}
+{% set _jparams = 'branch=' ~ (branch or 'all') ~ '&q=' ~ _jq ~ '&start_date=' ~ _jstart ~ '&end_date=' ~ _jend %}
+
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-pen-ruler"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">قيود اليومية</h1>
+      <span class="ops-subtitle">إدخال وسجل القيود المحاسبية</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2">
+      <a href="{{ url_for('journal.new_entry') }}" class="btn btn-sm btn-primary"><i class="fa-solid fa-plus me-1"></i>{{ _('New entry') }}</a>
+      <a href="{{ url_for('journal.list_entries') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-list me-1"></i>{{ _('List') }}</a>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm" data-partial-links><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('journal.backfill_missing_all') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>{{ _('Backfill period') }}</a>
+      <a href="{{ url_for('main.chart_of_accounts') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-sitemap me-1"></i>{{ _('Chart of accounts') }}</a>
+      <a href="{{ url_for('journal.print_all_pdf') }}?{{ _jparams }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-file-pdf me-1"></i>PDF</a>
+      <a href="{{ url_for('journal.export_all') }}?{{ _jparams }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-file-excel me-1"></i>XLS</a>
     </div>
   </div>
 
-  {% if mode == 'list' %}
-  <form method="get" class="row g-2 align-items-end mb-3" id="journalFilters">
-    <div class="col-auto">
-      <label class="form-label mb-0">الفرع</label>
-      <select class="form-select" name="branch" style="min-width:180px">
-        <option value="all" {% if branch=='all' %}selected{% endif %}>الكل</option>
-        <option value="china_town" {% if branch=='china_town' %}selected{% endif %}>China Town</option>
-        <option value="place_india" {% if branch=='place_india' %}selected{% endif %}>Place India</option>
-      </select>
-    </div>
-    <div class="col-auto">
-      <label class="form-label mb-0">بحث</label>
-      <input type="text" class="form-control" name="q" value="{{ request.args.get('q') or '' }}" placeholder="وصف القيد">
-    </div>
-    <div class="col-auto">
-      <label class="form-label mb-0">من</label>
-      <input type="date" class="form-control" name="start_date" value="{{ request.args.get('start_date') or '' }}">
-    </div>
-    <div class="col-auto">
-      <label class="form-label mb-0">إلى</label>
-      <input type="date" class="form-control" name="end_date" value="{{ request.args.get('end_date') or '' }}">
-    </div>
-    <div class="col-auto">
-      <label class="form-label mb-0">عدد لكل صفحة</label>
-      {% set _pp = (request.args.get('per_page') or '50') %}
-      <select class="form-select" name="per_page">
-        <option value="20" {% if _pp=='20' %}selected{% endif %}>20</option>
-        <option value="50" {% if _pp=='50' %}selected{% endif %}>50</option>
-        <option value="100" {% if _pp=='100' %}selected{% endif %}>100</option>
-        <option value="200" {% if _pp=='200' %}selected{% endif %}>200</option>
-        <option value="500" {% if _pp=='500' %}selected{% endif %}>500</option>
-        <option value="all" {% if _pp=='all' %}selected{% endif %}>عرض الكل</option>
-      </select>
-    </div>
-    <div class="col-auto">
-      <label class="form-label mb-0">نوع القيد</label>
-      {% set _type = (request.args.get('type') or '').lower() %}
-      <select class="form-select" name="type" style="min-width:160px">
-        <option value="">الكل</option>
-        <option value="sales" {% if _type=='sales' %}selected{% endif %}>مبيعات</option>
-        <option value="purchase" {% if _type=='purchase' %}selected{% endif %}>مشتريات</option>
-        <option value="expense" {% if _type=='expense' %}selected{% endif %}>مصروفات</option>
-        <option value="salary" {% if _type=='salary' %}selected{% endif %}>رواتب</option>
-      </select>
-    </div>
-    <div class="col-auto">
-      <label class="form-label mb-0">الحالة</label>
-      {% set _status = (request.args.get('status') or '').lower() %}
-      <select class="form-select" name="status" style="min-width:140px">
-        <option value="">الكل</option>
-        <option value="posted" {% if _status=='posted' %}selected{% endif %}>مرحّل</option>
-        <option value="draft" {% if _status=='draft' %}selected{% endif %}>مسودة</option>
-      </select>
-    </div>
-    <div class="col-auto">
-      <label class="form-label mb-0">الموظف</label>
-      <select class="form-select" name="emp_id" style="min-width:200px">
-        <option value="">الكل</option>
-        {% for e in employees %}
-        <option value="{{ e.id }}" {% if (request.args.get('emp_id')|int) == e.id %}selected{% endif %}>{{ e.full_name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </form>
-  <div class="d-flex gap-2 mb-3">
-    <a href="{{ url_for('main.chart_of_accounts') }}" class="btn btn-outline-dark">🌳 شجرة الحسابات</a>
-  </div>
-
-  <div class="table-responsive">
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>رقم القيد</th>
-          <th>التاريخ</th>
-          <th>الفرع</th>
-          <th>الوصف</th>
-          <th>مدين</th>
-          <th>دائن</th>
-          <th>الحالة</th>
-          <th>إجراءات</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for e in entries %}
-        <tr>
-          <td>{{ e.id }}</td>
-          <td>{{ e.entry_number }}</td>
-          <td>{{ e.date }}</td>
-          <td>{{ e.branch_code or '-' }}</td>
-          <td>{{ e.description }}</td>
-          <td>{{ '%.2f'|format(e.total_debit or 0) }}</td>
-          <td>{{ '%.2f'|format(e.total_credit or 0) }}</td>
-          <td><span class="badge {% if e.status=='posted' %}bg-success{% else %}bg-secondary{% endif %}">{{ e.status }}</span></td>
-          <td>
-            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('journal.edit_entry', jid=e.id) }}">فتح</a>
-            <form method="POST" action="{{ url_for('journal.delete_entry', jid=e.id) }}" style="display:inline" onsubmit="return confirm('هل تريد حذف هذا القيد؟');">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-sm btn-outline-danger">حذف</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <div class="d-flex justify-content-between align-items-center mt-2">
-    <div>صفحة {{ page }} / {{ pages }} — إجمالي {{ total }}</div>
-    <div class="d-flex gap-2">
-      <a class="btn btn-sm btn-outline-dark" href="{{ url_for('main.chart_of_accounts') }}">🌳 شجرة الحسابات</a>
-      {% if page > 1 %}
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('journal.list_entries', page=page-1, branch=branch, q=request.args.get('q') or '', start_date=request.args.get('start_date') or '', end_date=request.args.get('end_date') or '', per_page=request.args.get('per_page') or '50') }}">السابق</a>
-      {% endif %}
-      {% if page < pages %}
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('journal.list_entries', page=page+1, branch=branch, q=request.args.get('q') or '', start_date=request.args.get('start_date') or '', end_date=request.args.get('end_date') or '', per_page=request.args.get('per_page') or '50') }}">التالي</a>
-      {% endif %}
+  <div class="ops-tabs-wrap">
+    <div class="ops-tabs" role="tablist">
+      <a href="{{ url_for('journal.new_entry') }}" class="ops-tab {{ 'active' if mode in ['new','edit'] else '' }}">قيد جديد</a>
+      <a href="{{ url_for('journal.list_entries') }}" class="ops-tab {{ 'active' if mode == 'list' else '' }}">سجل القيود</a>
     </div>
   </div>
-  {% endif %}
 
-  {% if mode in ['new','edit'] %}
-  <form method="post" enctype="multipart/form-data" class="card">
-    <div class="card-body">
-      <div class="row g-2 mb-3">
-        <div class="col-md-3">
-          <label class="form-label">تاريخ القيد</label>
-          <input type="date" class="form-control" name="date" value="{{ (entry.date if entry else today) or '' }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">الفرع</label>
-          <select class="form-select" name="branch">
-            <option value="">-</option>
-            <option value="china_town" {% if entry and entry.branch_code=='china_town' %}selected{% endif %}>China Town</option>
-            <option value="place_india" {% if entry and entry.branch_code=='place_india' %}selected{% endif %}>Place India</option>
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">وصف القيد</label>
-          <input type="text" class="form-control" name="description" value="{{ entry.description if entry else '' }}" required>
-        </div>
-      </div>
-
-      <div class="table-responsive">
-        <table class="table table-bordered align-middle" id="lines-table">
-          <thead class="table-light">
-            <tr>
-              <th style="width:40px">#</th>
-              <th style="min-width:220px">الحساب</th>
-              <th style="width:140px">مدين</th>
-              <th style="width:140px">دائن</th>
-              <th style="min-width:180px">مركز تكلفة</th>
-              <th style="min-width:220px">وصف السطر</th>
-              <th style="min-width:160px">تاريخ السطر</th>
-              <th style="min-width:180px">الموظف</th>
-              <th style="min-width:160px">مرفق</th>
-              <th style="width:80px">إزالة</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% set lines = entry.lines if entry else [] %}
-            {% if not lines %}
-            {% set lines = [None, None] %}
-            {% endif %}
-            {% for ln in lines %}
-            {% set idx = loop.index0 %}
-            <tr>
-              <td>{{ loop.index }}</td>
-              <td>
-                <select class="form-select account-select" name="lines-{{ idx }}-account_id" data-current="{{ ln.account_id if ln else '' }}" required>
-                  <option value="">اختر الحساب</option>
-                </select>
-              </td>
-              <td><input type="number" step="0.01" class="form-control" name="lines-{{ idx }}-debit" value="{{ ln.debit if ln else '' }}"></td>
-              <td><input type="number" step="0.01" class="form-control" name="lines-{{ idx }}-credit" value="{{ ln.credit if ln else '' }}"></td>
-              <td><input type="text" class="form-control" name="lines-{{ idx }}-cost_center" value="{{ ln.cost_center if ln else '' }}"></td>
-              <td><input type="text" class="form-control" name="lines-{{ idx }}-description" value="{{ ln.description if ln else '' }}" required></td>
-              <td><input type="date" class="form-control" name="lines-{{ idx }}-date" value="{{ ln.line_date if ln else '' }}"></td>
-              <td>
-                <select class="form-select employee-select" name="lines-{{ idx }}-employee_id" data-current="{{ ln.employee_id if ln else '' }}">
-                  <option value="">-</option>
-                </select>
-              </td>
-              <td><input type="file" class="form-control" name="lines-{{ idx }}-attachment"></td>
-              <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">حذف</button></td>
-            </tr>
-            {% endfor %}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th colspan="2" class="text-end">الإجمالي</th>
-              <th id="total-debit">0.00</th>
-              <th id="total-credit">0.00</th>
-              <th colspan="6"></th>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <div class="d-flex justify-content-between">
-        {% if mode=='edit' %}
-        <div>
-          {% if entry.status != 'posted' %}
-          <button formaction="{{ url_for('journal.post_entry', jid=entry.id) }}" class="btn btn-warning">ترحيل</button>
-          {% endif %}
-          <form method="POST" action="{{ url_for('journal.delete_entry', jid=entry.id) }}" style="display:inline" onsubmit="return confirm('هل تريد حذف هذا القيد؟');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-danger">حذف القيد</button>
+  <div class="ops-body ops-body-no-sidebar">
+    <main class="ops-main">
+      {% if mode == 'list' %}
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Journal filters') }}</div>
+        <div class="ops-form-body">
+          <form method="get" class="row g-3 align-items-end" id="journalFilters">
+            <div class="col-auto">
+              <label class="form-label mb-0">الفرع</label>
+              <select class="form-select" name="branch" style="min-width:160px">
+                <option value="all" {% if branch=='all' %}selected{% endif %}>الكل</option>
+                <option value="china_town" {% if branch=='china_town' %}selected{% endif %}>China Town</option>
+                <option value="place_india" {% if branch=='place_india' %}selected{% endif %}>Place India</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0">بحث</label>
+              <input type="text" class="form-control" name="q" value="{{ _jq }}" placeholder="وصف القيد">
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0">من</label>
+              <input type="date" class="form-control" name="start_date" value="{{ _jstart }}">
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0">إلى</label>
+              <input type="date" class="form-control" name="end_date" value="{{ _jend }}">
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0">عدد/صفحة</label>
+              {% set _pp = (request.args.get('per_page') or '50') %}
+              <select class="form-select" name="per_page">
+                <option value="20" {% if _pp=='20' %}selected{% endif %}>20</option>
+                <option value="50" {% if _pp=='50' %}selected{% endif %}>50</option>
+                <option value="100" {% if _pp=='100' %}selected{% endif %}>100</option>
+                <option value="200" {% if _pp=='200' %}selected{% endif %}>200</option>
+                <option value="500" {% if _pp=='500' %}selected{% endif %}>500</option>
+                <option value="all" {% if _pp=='all' %}selected{% endif %}>عرض الكل</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0">نوع العملية</label>
+              {% set _type = (request.args.get('type') or '').lower() %}
+              <select class="form-select" name="type" style="min-width:140px">
+                <option value="">الكل</option>
+                <option value="sales" {% if _type=='sales' %}selected{% endif %}>بيع</option>
+                <option value="purchase" {% if _type=='purchase' %}selected{% endif %}>شراء</option>
+                <option value="expense" {% if _type=='expense' %}selected{% endif %}>مصروف</option>
+                <option value="salary" {% if _type=='salary' %}selected{% endif %}>رواتب</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0">الحالة</label>
+              {% set _status = (request.args.get('status') or '').lower() %}
+              <select class="form-select" name="status" style="min-width:120px">
+                <option value="">الكل</option>
+                <option value="posted" {% if _status=='posted' %}selected{% endif %}>منشورة</option>
+                <option value="draft" {% if _status=='draft' %}selected{% endif %}>مسودة</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0">الموظف</label>
+              <select class="form-select" name="emp_id" style="min-width:180px">
+                <option value="">الكل</option>
+                {% for e in employees %}
+                <option value="{{ e.id }}" {% if (request.args.get('emp_id')|int) == e.id %}selected{% endif %}>{{ e.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </form>
-        </div>
-        {% endif %}
-        <div>
-          <button type="submit" class="btn btn-success">حفظ</button>
+          <div class="d-flex flex-wrap gap-2 mt-2 align-items-center">
+            <a href="{{ url_for('main.chart_of_accounts') }}" class="btn btn-outline-secondary btn-sm">🌳 شجرة الحسابات</a>
+            <span class="text-muted small">فلترة سريعة:</span>
+            <select class="form-select form-select-sm" id="filterPaymentMethod" style="width:auto">
+              <option value="">طريقة الدفع — الكل</option>
+              <option value="نقداً">نقداً</option>
+              <option value="بنك">بنك</option>
+              <option value="آجل">آجل</option>
+              <option value="موردين">موردين</option>
+            </select>
+          </div>
         </div>
       </div>
-    </div>
-  </form>
-  {% endif %}
+
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Journal log') }}</div>
+        <div class="ops-form-body p-0">
+          <div class="table-responsive screen-table-wrap">
+            <table class="table table-hover align-middle screen-table mb-0" id="journalTable">
+              <thead>
+                <tr>
+                  <th>رقم القيد</th>
+                  <th>التاريخ</th>
+                  <th>النوع</th>
+                  <th>المرجع</th>
+                  <th class="text-end">مدين</th>
+                  <th class="text-end">دائن</th>
+                  <th>الحالة</th>
+                  <th>إجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% set _meta = entry_meta or {} %}
+                {% for e in entries %}
+                {% set m = _meta.get(e.id) or {} %}
+                <tr class="journal-row {% if m.get('op_type')=='sales' %}je-type-sales{% elif m.get('op_type')=='purchase' %}je-type-purchase{% elif m.get('op_type')=='expense' %}je-type-expense{% elif m.get('op_type')=='salary' %}je-type-salary{% endif %}" data-jid="{{ e.id }}" data-op-type="{{ m.get('op_type') or '' }}" data-payment-method="{{ m.get('payment_method') or '' }}">
+                  <td>{{ e.entry_number }}</td>
+                  <td>{{ e.date }}</td>
+                  <td>{{ m.get('op_type_ar') or '-' }}</td>
+                  <td>{{ m.get('ref') or '-' }}</td>
+                  <td class="text-end">{{ '%.2f'|format(e.total_debit or 0) }}</td>
+                  <td class="text-end">{{ '%.2f'|format(e.total_credit or 0) }}</td>
+                  <td><span class="badge {% if e.status=='posted' %}bg-primary{% else %}bg-warning text-dark{% endif %}">{% if e.status=='posted' %}منشورة{% else %}مسودة{% endif %}</span></td>
+                  <td>
+                    <button type="button" class="btn btn-sm btn-outline-primary journal-btn-view" data-jid="{{ e.id }}">عرض</button>
+                  </td>
+                </tr>
+                <tr class="journal-detail-row" id="detail-{{ e.id }}" data-jid="{{ e.id }}" style="display:none">
+                  <td colspan="8" class="p-0 bg-light">
+                    <div class="journal-detail-inner p-3" data-jid="{{ e.id }}"></div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+            <div class="small">صفحة {{ page }} / {{ pages }} — إجمالي {{ total }}</div>
+            <div class="d-flex gap-2">
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.chart_of_accounts') }}">🌳 شجرة الحسابات</a>
+              {% if page > 1 %}
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('journal.list_entries', page=page-1, branch=branch, q=_jq, start_date=_jstart, end_date=_jend, per_page=request.args.get('per_page') or '50', type=request.args.get('type') or '', status=request.args.get('status') or '', emp_id=request.args.get('emp_id') or '') }}">السابق</a>
+              {% endif %}
+              {% if page < pages %}
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('journal.list_entries', page=page+1, branch=branch, q=_jq, start_date=_jstart, end_date=_jend, per_page=request.args.get('per_page') or '50', type=request.args.get('type') or '', status=request.args.get('status') or '', emp_id=request.args.get('emp_id') or '') }}">التالي</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if mode in ['new','edit'] %}
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ 'تعديل القيد' if mode == 'edit' else 'قيد جديد' }}</div>
+        <div class="ops-form-body">
+        <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="row g-2 mb-3">
+            <div class="col-md-3">
+              <label class="form-label">تاريخ القيد</label>
+              <input type="date" class="form-control" name="date" value="{{ (entry.date if entry else today) or '' }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">الفرع</label>
+              <select class="form-select" name="branch">
+                <option value="">-</option>
+                <option value="china_town" {% if entry and entry.branch_code=='china_town' %}selected{% endif %}>China Town</option>
+                <option value="place_india" {% if entry and entry.branch_code=='place_india' %}selected{% endif %}>Place India</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">وصف القيد</label>
+              <input type="text" class="form-control" name="description" value="{{ entry.description if entry else '' }}" required>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-bordered align-middle" id="lines-table">
+              <thead>
+                <tr>
+                  <th style="width:40px">#</th>
+                  <th style="min-width:220px">الحساب</th>
+                  <th style="width:120px">مدين</th>
+                  <th style="width:120px">دائن</th>
+                  <th style="min-width:140px">مركز تكلفة</th>
+                  <th style="min-width:160px">وصف السطر</th>
+                  <th style="min-width:120px">تاريخ السطر</th>
+                  <th style="min-width:140px">الموظف</th>
+                  <th style="min-width:120px">مرفق</th>
+                  <th style="width:70px">إزالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% set lines = entry.lines if entry else [] %}
+                {% if not lines %}
+                {% set lines = [None, None] %}
+                {% endif %}
+                {% for ln in lines %}
+                {% set idx = loop.index0 %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>
+                    <select class="form-select account-select" name="lines-{{ idx }}-account_id" data-current="{{ ln.account_id if ln else '' }}" required>
+                      <option value="">اختر الحساب</option>
+                    </select>
+                  </td>
+                  <td><input type="number" step="0.01" class="form-control" name="lines-{{ idx }}-debit" value="{{ ln.debit if ln else '' }}"></td>
+                  <td><input type="number" step="0.01" class="form-control" name="lines-{{ idx }}-credit" value="{{ ln.credit if ln else '' }}"></td>
+                  <td><input type="text" class="form-control" name="lines-{{ idx }}-cost_center" value="{{ ln.cost_center if ln else '' }}"></td>
+                  <td><input type="text" class="form-control" name="lines-{{ idx }}-description" value="{{ ln.description if ln else '' }}" required></td>
+                  <td><input type="date" class="form-control" name="lines-{{ idx }}-date" value="{{ ln.line_date if ln else '' }}"></td>
+                  <td>
+                    <select class="form-select employee-select" name="lines-{{ idx }}-employee_id" data-current="{{ ln.employee_id if ln else '' }}">
+                      <option value="">-</option>
+                    </select>
+                  </td>
+                  <td><input type="file" class="form-control form-control-sm" name="lines-{{ idx }}-attachment"></td>
+                  <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">حذف</button></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th colspan="2" class="text-end">الإجمالي</th>
+                  <th id="total-debit">0.00</th>
+                  <th id="total-credit">0.00</th>
+                  <th colspan="6"></th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div class="d-flex justify-content-between mt-3">
+            {% if mode=='edit' %}
+            <div class="d-flex gap-2">
+              {% if entry.status != 'posted' %}
+              <button formaction="{{ url_for('journal.post_entry', jid=entry.id) }}" class="btn btn-warning">ترحيل</button>
+              {% endif %}
+              <form method="POST" action="{{ url_for('journal.delete_entry', jid=entry.id) }}" style="display:inline" onsubmit="return confirm('هل تريد حذف هذا القيد؟');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger">حذف القيد</button>
+              </form>
+            </div>
+            {% else %}
+            <div></div>
+            {% endif %}
+            <button type="submit" class="btn btn-success">حفظ</button>
+          </div>
+        </form>
+        </div>
+      </div>
+      {% endif %}
+    </main>
+  </div>
 </div>
 
 <script>
@@ -239,7 +284,7 @@
   function apply(){
     const params = new URLSearchParams(window.location.search);
     ['branch','q','start_date','end_date','per_page','type','status','emp_id'].forEach(name=>{
-      const el = f.querySelector(`[name="${name}"]`);
+      const el = f.querySelector('[name="'+name+'"]');
       if(el){ params.set(name, el.value || ''); }
     });
     window.location.search = params.toString();
@@ -249,7 +294,6 @@
   });
 })();
 </script>
-
 <script>
 function removeRow(btn){ const tr = btn.closest('tr'); tr.parentNode.removeChild(tr); recalcTotals(); }
 function recalcTotals(){
@@ -257,47 +301,137 @@ function recalcTotals(){
   if(!table) return;
   let td=0, tc=0;
   table.querySelectorAll('tbody tr').forEach(tr=>{
-    const d = parseFloat((tr.querySelector('[name$="-debit"]').value||'0').toString());
-    const c = parseFloat((tr.querySelector('[name$="-credit"]').value||'0').toString());
+    const de = tr.querySelector('[name$="-debit"]');
+    const ce = tr.querySelector('[name$="-credit"]');
+    const d = parseFloat((de && de.value||'0').toString());
+    const c = parseFloat((ce && ce.value||'0').toString());
     td += isNaN(d)?0:d; tc += isNaN(c)?0:c;
   });
   const tdEl = document.getElementById('total-debit');
   const tcEl = document.getElementById('total-credit');
-  if(!tdEl || !tcEl) return;
-  tdEl.innerText = td.toFixed(2);
-  tcEl.innerText = tc.toFixed(2);
+  if(tdEl) tdEl.innerText = td.toFixed(2);
+  if(tcEl) tcEl.innerText = tc.toFixed(2);
 }
-document.addEventListener('input', (e)=>{ const n=(e.target&&e.target.name)||''; if(n.endsWith('-debit')||n.endsWith('-credit')) recalcTotals(); });
-let _employeesLoaded=false; async function loadEmployees(){ if(_employeesLoaded) return; try{ const r=await fetch('/journal/employees'); const arr=await r.json(); document.querySelectorAll('.employee-select').forEach(sel=>{ const cur=sel.getAttribute('data-current')||''; arr.forEach(o=>{ const opt=document.createElement('option'); opt.value=o.id; opt.textContent=o.full_name; sel.appendChild(opt); }); if(cur){ sel.value=cur; } }); _employeesLoaded=true; }catch(e){} }
-let _accountsLoaded=false; async function loadAccounts(){ if(_accountsLoaded) return; try{ const r=await fetch('/journal/accounts'); const arr=await r.json(); document.querySelectorAll('.account-select').forEach(sel=>{ const cur=sel.getAttribute('data-current')||''; arr.forEach(o=>{ const opt=document.createElement('option'); opt.value=o.id; opt.textContent=`${o.code} – ${o.name}`; sel.appendChild(opt); }); if(cur){ sel.value=cur; } }); _accountsLoaded=true; }catch(e){} }
-document.addEventListener('DOMContentLoaded', ()=>{ loadEmployees(); loadAccounts(); });
-let _dirty=false; if({{ 'true' if mode in ['new','edit'] else 'false' }}){
-  document.addEventListener('input', ()=>{_dirty=true});
-  const form=document.querySelector('form.card');
-  if(form){ form.addEventListener('submit', ()=>{_dirty=false}); }
-  window.addEventListener('beforeunload', (e)=>{ if(_dirty){ e.preventDefault(); e.returnValue=''; } });
-}
+document.addEventListener('input', function(e){ const n=(e.target&&e.target.name)||''; if(n.endsWith('-debit')||n.endsWith('-credit')) recalcTotals(); });
+let _employeesLoaded=false;
+async function loadEmployees(){ if(_employeesLoaded) return; try{ const r=await fetch('/journal/employees'); const arr=await r.json(); document.querySelectorAll('.employee-select').forEach(sel=>{ const cur=sel.getAttribute('data-current')||''; sel.innerHTML='<option value="">-</option>'; arr.forEach(o=>{ const opt=document.createElement('option'); opt.value=o.id; opt.textContent=o.full_name; sel.appendChild(opt); }); if(cur) sel.value=cur; }); _employeesLoaded=true; }catch(e){} }
+let _accountsLoaded=false;
+async function loadAccounts(){ if(_accountsLoaded) return; try{ const r=await fetch('/journal/accounts'); const arr=await r.json(); document.querySelectorAll('.account-select').forEach(sel=>{ const cur=sel.getAttribute('data-current')||''; sel.innerHTML='<option value="">اختر الحساب</option>'; arr.forEach(o=>{ const opt=document.createElement('option'); opt.value=o.id; opt.textContent=o.code+' – '+o.name; sel.appendChild(opt); }); if(cur) sel.value=cur; }); _accountsLoaded=true; }catch(e){} }
+document.addEventListener('DOMContentLoaded', function(){ loadEmployees(); loadAccounts(); });
+{% if mode in ['new','edit'] %}
+let _dirty=false;
+document.addEventListener('input', function(){ _dirty=true; });
+document.querySelector('form[method="post"]')?.addEventListener('submit', function(){ _dirty=false; });
+window.addEventListener('beforeunload', function(e){ if(_dirty){ e.preventDefault(); e.returnValue=''; } });
+{% endif %}
 document.addEventListener('DOMContentLoaded', recalcTotals);
 </script>
-
 {% if mode == 'list' %}
+<style>
+  .je-type-sales { border-left: 3px solid #1565C0; }
+  .je-type-purchase { border-left: 3px solid #27AE60; }
+  .je-type-expense { border-left: 3px solid #f0ad4e; }
+  .je-type-salary { border-left: 3px solid #9b59b6; }
+  .journal-detail-inner { font-size: 0.9rem; }
+  .journal-detail-inner .je-header { margin-bottom: 1rem; }
+  .journal-detail-inner .je-badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+  .journal-detail-inner .je-badge { padding: 0.25rem 0.5rem; background: #e3f2fd; border-radius: 6px; font-size: 0.85rem; }
+  .journal-detail-inner .je-financial { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
+  .journal-detail-inner .je-fin-item { padding: 0.4rem 0.75rem; border-radius: 8px; font-weight: 600; }
+  .je-fin-net { background: #e8f5e9; color: #2e7d32; }
+  .je-fin-discount { background: #fff8e1; color: #f57c00; }
+  .je-fin-tax { background: #e3f2fd; color: #1565c0; }
+  .je-fin-total { background: #f3e5f5; color: #7b1fa2; }
+  .journal-detail-inner .je-lines-table { width: 100%; max-width: 720px; }
+</style>
 <script>
 (function(){
-  let lastId = 0;
-  try{
-    const rows = document.querySelectorAll('tbody tr');
-    rows.forEach(r=>{ const t=r.querySelector('td'); const v=parseInt((t&&t.textContent)||'0'); if(!isNaN(v)&&v>lastId) lastId=v; });
-  }catch(e){ lastId = 0; }
-  async function ping(){
-    try{
-      const r = await fetch('/journal/latest_meta', { credentials:'same-origin' });
-      const j = await r.json();
-      if(j && j.ok){
-        if(parseInt(j.latest_id||0) > lastId || parseInt(j.count||0) !== document.querySelectorAll('tbody tr').length){
-          window.location.reload();
-        }
+  const csrf = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  function fmt(v) { return (typeof v === 'number' && !isNaN(v)) ? v.toFixed(2) : (v || '0.00'); }
+  function buildDetail(d) {
+    const e = d.entry || {};
+    const op = d.operational || {};
+    const fin = d.financial;
+    const lines = d.lines || [];
+    const jid = e.id;
+    const dateStr = (e.date || '').slice(0, 10);
+    const dd = dateStr ? dateStr.split('-').reverse().join('-') : '';
+    const statusBadge = (e.status || '').toLowerCase() === 'posted'
+      ? '<span class="badge bg-primary">منشورة</span>'
+      : '<span class="badge bg-warning text-dark">مسودة</span>';
+    let html = '<div class="je-header">';
+    html += '<div class="d-flex flex-wrap align-items-center gap-2 mb-2"><strong>قيد #' + (e.id || '') + ' – ' + dd + '</strong> ' + statusBadge + '</div>';
+    html += '<div class="text-muted small mb-2">' + (op.source || '') + ' ' + (op.doc_number || '') + '</div>';
+    html += '<div class="d-flex flex-wrap gap-2">';
+    if ((e.status || '').toLowerCase() !== 'posted') {
+      html += '<form method="POST" action="/journal/' + jid + '/post" style="display:inline"><input type="hidden" name="csrf_token" value="' + csrf() + '"><button type="submit" class="btn btn-sm btn-warning">نشر</button></form>';
+    } else {
+      html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="alert(\'قريباً\')" title="إرجاع لمسودة">إرجاع لمسودة</button>';
+      html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="alert(\'قريباً\')" title="عكس القيد">عكس القيد</button>';
+    }
+    html += '<a href="/journal/' + jid + '" class="btn btn-sm btn-outline-primary">تعديل</a>';
+    html += '<form method="POST" action="/journal/' + jid + '/delete" style="display:inline" onsubmit="return confirm(\'هل تريد حذف هذا القيد؟\');"><input type="hidden" name="csrf_token" value="' + csrf() + '"><button type="submit" class="btn btn-sm btn-outline-danger">حذف</button></form>';
+    html += '</div></div>';
+    html += '<div class="je-badges">';
+    ['نوع العملية: ' + (op.op_type_ar || '-'), 'المصدر: ' + (op.source || '-'), 'الفرع: ' + (op.branch || '-'), 'طريقة الدفع: ' + (op.payment_method || '-'), 'الطرف: ' + (op.party || '-'), 'رقم المستند: ' + (op.doc_number || '-')].forEach(t => { html += '<span class="je-badge">' + t + '</span>'; });
+    html += '</div>';
+    if (fin && (fin.total != null)) {
+      html += '<div class="je-financial">';
+      html += '<span class="je-fin-item je-fin-net">صافي المبيعات: SAR ' + fmt(fin.net_sales) + '</span>';
+      if (fin.discount != null && fin.discount > 0) html += '<span class="je-fin-item je-fin-discount">الخصم (' + (fin.discount_pct || 0) + '%): SAR ' + fmt(fin.discount) + '</span>';
+      if (fin.tax != null && fin.tax > 0) html += '<span class="je-fin-item je-fin-tax">الضريبة (15%): SAR ' + fmt(fin.tax) + '</span>';
+      html += '<span class="je-fin-item je-fin-total">الإجمالي: SAR ' + fmt(fin.total) + '</span></div>';
+    }
+    html += '<table class="table table-bordered je-lines-table"><thead><tr><th>الحساب</th><th class="text-end">مدين</th><th class="text-end">دائن</th></tr></thead><tbody>';
+    lines.forEach(l => { html += '<tr><td>' + (l.account_code || '') + ' – ' + (l.account_name || '') + '</td><td class="text-end">' + fmt(l.debit) + '</td><td class="text-end">' + fmt(l.credit) + '</td></tr>'; });
+    html += '</tbody></table>';
+    return html;
+  }
+  function toggleDetail(jid) {
+    const row = document.getElementById('detail-' + jid);
+    const inner = row && row.querySelector('.journal-detail-inner');
+    if (!row || !inner) return;
+    if (row.style.display === 'none') {
+      if (!inner.innerHTML.trim()) {
+        inner.innerHTML = '<div class="text-muted">جاري التحميل...</div>';
+        fetch('/journal/' + jid + '/detail', { credentials: 'same-origin' }).then(r => r.json()).then(j => {
+          if (j && j.ok) inner.innerHTML = buildDetail(j); else inner.innerHTML = '<div class="text-danger">فشل تحميل التفاصيل</div>';
+        }).catch(() => { inner.innerHTML = '<div class="text-danger">خطأ في الاتصال</div>'; });
       }
-    }catch(e){}
+      row.style.display = 'table-row';
+    } else {
+      row.style.display = 'none';
+    }
+  }
+  document.addEventListener('click', function(ev) {
+    const btn = ev.target.closest('.journal-btn-view');
+    if (!btn) return;
+    ev.preventDefault();
+    const jid = btn.getAttribute('data-jid');
+    if (jid) toggleDetail(jid);
+  });
+  const pmFilter = document.getElementById('filterPaymentMethod');
+  if (pmFilter) {
+    pmFilter.addEventListener('change', function() {
+      const val = (this.value || '').trim();
+      document.querySelectorAll('tbody tr.journal-row').forEach(function(tr) {
+        const pm = (tr.getAttribute('data-payment-method') || '').trim();
+        const match = !val || pm === val;
+        tr.style.display = match ? '' : 'none';
+        const jid = tr.getAttribute('data-jid');
+        const detail = jid ? document.getElementById('detail-' + jid) : null;
+        if (detail) detail.style.display = match ? (detail.style.display === 'table-row' ? 'table-row' : 'none') : 'none';
+      });
+    });
+  }
+  let lastId = 0;
+  try { document.querySelectorAll('tbody tr.journal-row').forEach(r => { const v = parseInt(r.getAttribute('data-jid') || '0'); if (!isNaN(v) && v > lastId) lastId = v; }); } catch(e) {}
+  async function ping() {
+    try {
+      const r = await fetch('/journal/latest_meta', { credentials: 'same-origin' });
+      const j = await r.json();
+      if (j && j.ok && parseInt(j.latest_id || 0) > lastId) window.location.reload();
+    } catch(e) {}
   }
   setInterval(ping, 8000);
 })();

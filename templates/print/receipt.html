@@ -9,7 +9,7 @@
     {% set fs = (settings.receipt_font_size if settings and settings.receipt_font_size else 12) %}
     {% set logo_h = (settings.receipt_logo_height if settings and settings.receipt_logo_height else 100) %}
     {% set extra_bottom = (settings.receipt_extra_bottom_mm if settings and (settings.receipt_extra_bottom_mm is not none) else 15) %}
-    {% set effective_logo_height = branch_settings.receipt_logo_height if branch_settings and branch_settings.receipt_logo_height else logo_h %}
+    {% set effective_logo_height = (branch_settings.receipt_logo_height if (branch_settings is defined and branch_settings and branch_settings.receipt_logo_height) else logo_h) %}
     
     body{
       font-family: Arial, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
@@ -152,6 +152,7 @@
   {% elif settings and settings.currency and (settings.currency.startswith('http') or settings.currency.startswith('/')) %}
     {% set currency_src = settings.currency %}
   {% endif %}
+  {% set receipt_currency = (settings.currency if settings and settings.currency else 'SAR') %}
   <div class="wrap">
     <div class="center">
       {% set branch_code_top = (inv.branch or inv.branch_code or '')|lower %}
@@ -165,9 +166,9 @@
       {% endif %}
       {% if logo_data_url %}
       <img src="{{ logo_data_url }}" alt="logo" class="logo-img"/>
-      {% elif branch_settings and branch_settings.receipt_show_logo and branch_settings.branch_data_url %}
+      {% elif branch_settings is defined and branch_settings and branch_settings.receipt_show_logo and branch_settings.branch_data_url %}
       <img src="{{ branch_settings.branch_data_url }}" alt="logo" class="logo-img"/>
-      {% elif branch_settings and branch_settings.receipt_show_logo and branch_settings.logo_url %}
+      {% elif branch_settings is defined and branch_settings and branch_settings.receipt_show_logo and branch_settings.logo_url %}
       <img src="{{ branch_settings.logo_url }}" alt="logo" class="logo-img"/>
       {% elif branch_logo_url and (not settings or settings.receipt_show_logo) %}
       <img src="{{ branch_logo_url }}" alt="logo" class="logo-img"/>
@@ -236,7 +237,7 @@
         <tr>
           <td class="left">{{ r.product_name }}</td>
           <td class="center-text">{{ (r.quantity or 0)|int }}</td>
-          <td class="right">{{ '%.2f'|format(r.total_price or 0) }}</td>
+          <td class="right">{{ '%.2f'|format(r.total_price or 0) }} {{ receipt_currency }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -247,30 +248,30 @@
       <tr class="total-row">
         <td class="left">{{ _('Subtotal') }}</td>
         <td></td>
-        <td class="right">{{ '%.2f'|format(inv.total_before_tax or 0) }}</td>
+        <td class="right">{{ '%.2f'|format(inv.total_before_tax or 0) }} {{ receipt_currency }}</td>
       </tr>
       <tr class="total-row">
         <td class="left">{{ _('VAT') }}</td>
         <td></td>
-        <td class="right">{{ '%.2f'|format(inv.tax_amount or 0) }}</td>
+        <td class="right">{{ '%.2f'|format(inv.tax_amount or 0) }} {{ receipt_currency }}</td>
       </tr>
       {% if inv.discount_amount and inv.discount_amount > 0 %}
       <tr class="total-row">
         <td class="left">{{ _('Discount') }}</td>
         <td></td>
-        <td class="right">-{{ '%.2f'|format(inv.discount_amount) }}</td>
+        <td class="right">-{{ '%.2f'|format(inv.discount_amount) }} {{ receipt_currency }}</td>
       </tr>
       {% endif %}
       <tr class="total-row grand-total">
         <td class="left">{{ _('Total') }}</td>
         <td></td>
-        <td class="right">{{ '%.2f'|format(inv.total_after_tax_discount or 0) }}</td>
+        <td class="right">{{ '%.2f'|format(inv.total_after_tax_discount or 0) }} {{ receipt_currency }}</td>
       </tr>
     </table>
 
     {% if inv.payment_method %}
-    {% set pm = (inv.payment_method or '')|lower %}
-    <div class="center small">{{ _('Payment') }}: {{ 'CASH' if pm == 'cash' else 'BANK' }}</div>
+    {% set pm = (inv.payment_method or '')|upper %}
+    <div class="center small">{{ _('Payment') }} / طريقة الدفع: {{ pm }}</div>
     {% endif %}
 
     {% if qr_data_url %}

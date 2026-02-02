@@ -1,113 +1,77 @@
 {% extends 'base.html' %}
 {% set back_url = url_for('main.dashboard') %}
 
-{% block title %}{{ _('Purchases / المشتريات') }}{% endblock %}
+{% block title %}{{ _('Purchases') }}{% endblock %}
 {% block content %}
 
-<style>
-body {
-  background: #f4f6f9;
-}
-.purchases-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
-.status-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: bold;
-}
-.status-unpaid { background: #ffeaa7; color: #2d3436; }
-.status-partial { background: #fab1a0; color: #2d3436; }
-.status-paid { background: #00b894; color: white; }
-.item-row {
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 0.5rem;
-  background: #f8f9fa;
-}
-.stock-info {
-  font-size: 0.8rem;
-  color: #6c757d;
-  font-style: italic;
-}
-</style>
+<style>.stock-info{ font-size:0.8rem; color:var(--muted); } .status-unpaid{ background:rgba(253,203,110,.3); color:#856404; } .status-partial{ background:rgba(255,193,7,.25); color:#856404; } .status-paid{ background:rgba(39,174,96,.2); color:#27ae60; }</style>
 
-<div class="container py-4">
-    <!-- شريط التنقل السريع -->
-    <div class="section-header mb-3">
-        <h3 class="mb-0">🛒 {{ _('Purchases / المشتريات') }}</h3>
-        <div class="d-flex flex-wrap gap-2">
-            <a href="{{ url_for('main.raw_materials') }}" class="btn btn-outline-success">
-                🥘 {{ _('Raw Materials / المواد الخام') }}
-            </a>
-            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info">
-                💰 {{ _('Sales / المبيعات') }}
-            </a>
-            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
-                🏠 {{ _('Dashboard / لوحة التحكم') }}
-            </a>
+<div class="container py-4 ops-layout hub-wrap">
+    <div class="ops-header-bar">
+        <span class="ops-icon"><i class="fa-solid fa-cart-shopping"></i></span>
+        <div>
+            <h1 class="ops-title mb-0">{{ _('Purchases') }}</h1>
+            <span class="ops-subtitle">{{ _('Create and manage purchase invoices') }}</span>
+        </div>
+        <div class="ops-actions d-flex flex-wrap gap-2">
+            <a href="{{ url_for('purchases.raw_materials') }}" class="btn btn-sm btn-primary"><i class="fa-solid fa-bowl-food me-1"></i>{{ _('Raw Materials') }}</a>
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
         </div>
     </div>
 
-    <!-- نموذج إنشاء فاتورة شراء جديدة -->
-    <div class="purchases-card">
-        <h5 class="mb-3">{{ _('Create New Purchase Invoice / إنشاء فاتورة شراء جديدة') }}</h5>
-
+    <div class="ops-body ops-body-no-sidebar">
+        <main class="ops-main">
+    <div class="ops-form-card mt-0">
+        <div class="ops-form-head">{{ _('Create New Purchase Invoice') }}</div>
+        <div class="ops-form-body">
         <form method="POST" id="purchase-form">
             {{ form.hidden_tag() }}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
-            <!-- بيانات المورد -->
-            <div class="card mb-3">
-              <div class="card-header bg-light fw-semibold">{{ _('Supplier Info / بيانات المورد') }}</div>
-              <div class="card-body">
+            <div class="ops-form-card mb-3">
+              <div class="ops-form-head">{{ _('Supplier Info') }}</div>
+              <div class="ops-form-body">
                 <div class="row g-3 align-items-end">
                   <div class="col-md-3">
-                    <label class="form-label">{{ _('Invoice Type / نوع الفاتورة') }}</label>
+                    <label class="form-label">{{ _('Invoice Type') }}</label>
                     <select id="invoice_type" name="invoice_type" class="form-select">
-                      <option value="VAT">{{ _('VAT / ضريبة قيمة مضافة') }}</option>
+                      <option value="VAT">{{ _('VAT') }}</option>
                       <option value="NO_VAT">{{ _('بدون VAT') }}</option>
                     </select>
                   </div>
                   <div class="col-md-3">
-                    <label class="form-label">{{ _('Supplier / المورد') }}</label>
+                    <label class="form-label">{{ _('Supplier') }}</label>
                     <select name="supplier_name" id="supplier_select" class="form-select">
-                      <option value="">{{ _('Select Supplier / اختر المورد') }}</option>
+                      <option value="">{{ _('Select Supplier') }}</option>
                       {% for s in suppliers_list or [] %}
                         <option value="{{ s.name }}" data-id="{{ s.id }}">{{ s.name }}</option>
                       {% endfor %}
                     </select>
                   </div>
                   <div class="col-md-3" id="supplier_free_box" style="display:none;">
-                    <label class="form-label">{{ _('Supplier / المورد أو الجهة') }}</label>
+                    <label class="form-label">{{ _('Supplier') }}</label>
                     <input name="supplier_name_free" id="supplier_free" class="form-control" placeholder="{{ _('اكتب اسم المورد أو الجهة') }}">
                   </div>
                   <div class="col-md-4">
-                    <label class="form-label">{{ _('Phone / رقم الهاتف') }}</label>
+                    <label class="form-label">{{ _('Phone') }}</label>
                     <input id="s_phone" class="form-control" value="" readonly>
                   </div>
                   <div class="col-md-4">
-                    <label class="form-label">{{ _('Tax Number / الرقم الضريبي') }}</label>
+                    <label class="form-label">{{ _('Tax Number') }}</label>
                     <input id="s_tax" class="form-control" value="" readonly>
                   </div>
                 </div>
                 <div class="row g-3 align-items-end mt-1">
                   <div class="col-md-6">
-                    <label class="form-label">{{ _('Address / الموقع') }}</label>
+                    <label class="form-label">{{ _('Address') }}</label>
                     <input id="s_address" class="form-control" value="" readonly>
                   </div>
                   <div class="col-md-3">
-                    <label class="form-label">{{ _('CR Number / السجل التجاري') }}</label>
+                    <label class="form-label">{{ _('CR Number') }}</label>
                     <input id="s_cr" class="form-control" value="" readonly>
                   </div>
                   <div class="col-md-3">
-                    <label class="form-label">{{ _('IBAN / الآيبان') }}</label>
+                    <label class="form-label">{{ _('IBAN') }}</label>
                     <input id="s_iban" class="form-control" value="" readonly>
                   </div>
                 </div>
@@ -115,10 +79,9 @@ body {
               </div>
             </div>
 
-            <!-- بيانات الفاتورة -->
-            <div class="card mb-3">
-              <div class="card-header bg-light fw-semibold">{{ _('Invoice Info / بيانات الفاتورة') }}</div>
-              <div class="card-body">
+            <div class="ops-form-card mb-3">
+              <div class="ops-form-head">{{ _('Invoice Info') }}</div>
+              <div class="ops-form-body">
                 <div class="row g-3 align-items-end mb-2">
                   <div class="col-md-3">
                     {{ form.date.label(class_='form-label') }}
@@ -130,52 +93,50 @@ body {
                   </div>
                   
                   <div class="col-md-3" style="display:none;">
-                    <label class="form-label">{{ _('Invoice No / رقم الفاتورة') }}</label>
-                    <input class="form-control" value="{{ _('Auto on save (e.g. INV-PUR-YYYY-0001) / يُولّد تلقائياً عند الحفظ (مثال: INV-PUR-YYYY-0001)') }}" readonly>
+                    <label class="form-label">{{ _('Invoice No') }}</label>
+                    <input class="form-control" value="{{ _('Auto on save (e.g. INV-PUR-YYYY-0001)') }}" readonly>
                   </div>
                 </div>
                 <div class="row g-3 align-items-end mb-2">
                   <div class="col-md-3">
-                    <label class="form-label">{{ _('Supplier Invoice No / رقم فاتورة المورد') }}</label>
+                    <label class="form-label">{{ _('Supplier Invoice No') }}</label>
                     <input name="supplier_invoice_number" class="form-control" placeholder="{{ _('إن وجد') }}">
                   </div>
                   <div class="col-md-9">
-                    <label class="form-label">{{ _('Notes / ملاحظات') }}</label>
+                    <label class="form-label">{{ _('Notes') }}</label>
                     <input name="notes" class="form-control" placeholder="{{ _('ملاحظات إضافية (اختياري)') }}">
                   </div>
                 </div>
                 <div class="row g-3 mt-1">
                   <div class="col-md-3">
-                    <label class="form-label">{{ _('Payment Status / حالة الدفع') }}</label>
+                    <label class="form-label">{{ _('Payment Status') }}</label>
                     <select name="status" id="purchase-status" class="form-select">
-                      <option value="unpaid">{{ _('Unpaid / غير مدفوع') }}</option>
-                      <option value="partial">{{ _('Partial / مدفوع جزئياً') }}</option>
-                      <option value="paid">{{ _('Paid / مدفوع') }}</option>
+                      <option value="unpaid">{{ _('Unpaid') }} / غير مدفوع</option>
+                      <option value="partial">{{ _('Partial') }} / مدفوع جزئي</option>
+                      <option value="paid">{{ _('Paid') }} / مدفوع</option>
                     </select>
                   </div>
                   <div class="col-md-3" id="partial-paid-box" style="display:none;">
-                    <label class="form-label">{{ _('Paid Amount (Partial) / المبلغ المدفوع (جزئي)') }}</label>
+                    <label class="form-label">{{ _('Paid Amount (Partial)') }} / المبلغ المدفوع (جزئي)</label>
                     <input name="partial_paid_amount" id="partial-paid-amount" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
-                    <div class="form-text">{{ _('Max is Final Total / الحد الأقصى هو الإجمالي النهائي') }}: <span id="partial-max"></span></div>
+                    <div class="form-text">{{ _('Max is Final Total') }}: <span id="partial-max"></span></div>
                   </div>
                 </div>
 
 
-            <!-- عناصر الفاتورة (مواد خام تدخل في تكوين الوجبات) -->
-            <div class="card mb-3">
-              <div class="card-header bg-light fw-semibold">{{ _('Purchase Items / بنود الشراء') }}</div>
-              <div class="card-body" id="items-container">
+            <div class="ops-form-card mb-3">
+              <div class="ops-form-head">{{ _('Purchase Items') }}</div>
+              <div class="ops-form-body" id="items-container">
                 {% for item_form in form.items %}
-                <div class="item-row">
-                  <div class="row g-3 align-items-end">
-                    <div class="col-md-3">
+                <div class="screen-item-row item-row d-flex align-items-end gap-2 mb-2">
+                  <div class="row g-3 align-items-end flex-grow-1 mb-0">
+                    <div class="col-md-2">
                       {{ item_form.category.label(class_='form-label') }}
                       {{ item_form.category(class_='form-select category-select') }}
                     </div>
                     <div class="col-md-4">
-                      {{ item_form.raw_material_id.label(class_='form-label') }}
-                      {{ item_form.raw_material_id(class_='form-select material-select') }}
-                      <div class="stock-info"></div>
+                      {{ item_form.item_name.label(class_='form-label') }}
+                      {{ item_form.item_name(class_='form-control', placeholder=_('Item name or description')) }}
                     </div>
                     <div class="col-md-2">
                       {{ item_form.quantity.label(class_='form-label') }}
@@ -185,7 +146,6 @@ body {
                       {{ item_form.price_before_tax.label(class_='form-label') }}
                       {{ item_form.price_before_tax(class_='form-control', step='0.01', type='text', inputmode='decimal', dir='ltr', pattern='[0-9٠-٩۰-۹.,٫،]+' ) }}
                     </div>
-                    <!-- إخفاء حقول الخصم والضريبة لكل بند لتبسيط الإدخال -->
                     <div class="col-md-2" style="display:none;">
                       {{ item_form.discount.label(class_='form-label') }}
                       {{ item_form.discount(class_='form-control', step='0.01') }}
@@ -195,60 +155,60 @@ body {
                       <input type="number" step="0.01" class="form-control" name="items-{{ loop.index0 }}-tax_pct" value="0">
                     </div>
                   </div>
+                  <div class="mb-0">
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-item-btn" title="{{ _('Remove row') }} / حذف البند" aria-label="{{ _('Remove') }}">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
                 </div>
                 {% endfor %}
                 <div class="d-flex justify-content-end">
-                  <button type="button" class="btn btn-outline-success" id="add-item-btn">{{ _('Add Item / إضافة بند') }}</button>
+                  <button type="button" class="btn btn-outline-success" id="add-item-btn">{{ _('Add Item') }}</button>
                 </div>
               </div>
             </div>
 
-            <!-- ملخص مبسط حسب المتطلبات الجديدة -->
-            <div class="card mb-3">
-              <div class="card-header bg-light fw-semibold">{{ _('Totals / الإجماليات') }}</div>
-              <div class="card-body">
+            <div class="ops-form-card mb-3">
+              <div class="ops-form-head">{{ _('Totals') }}</div>
+              <div class="ops-form-body">
                 <div class="row g-3">
                   <div class="col-md-3" style="display:none;">
-                    <label class="form-label">{{ _('Items Count / عدد الأصناف') }}</label>
+                    <label class="form-label">{{ _('Items Count') }}</label>
                     <input type="number" id="items_count" name="items_count" class="form-control" value="">
                   </div>
                   <div class="col-md-3">
-                    <label class="form-label">{{ _('Inventory Kind / نوع المخزون') }}</label>
+                    <label class="form-label">{{ _('Inventory Kind') }}</label>
                     <select id="inventory_kind" name="inventory_kind" class="form-select">
-                      <option value="">{{ _('None / بدون') }}</option>
-                      <option value="FOOD">{{ _('Food Materials / مواد غذائية') }}</option>
-                      <option value="OTHER">{{ _('Other Supplies / مستلزمات أخرى') }}</option>
+                      <option value="">{{ _('None') }}</option>
+                      <option value="FOOD">{{ _('Food Materials') }}</option>
+                      <option value="OTHER">{{ _('Other Supplies') }}</option>
                     </select>
                     <div class="form-check mt-2">
                       <input class="form-check-input" type="checkbox" id="production_flag" name="production_flag">
-                      <label class="form-check-label" for="production_flag">{{ _('Goes to Production / تدخل الإنتاج') }}</label>
+                      <label class="form-check-label" for="production_flag">{{ _('Goes to Production') }}</label>
                     </div>
                   </div>
                 </div>
                 <hr/>
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div>{{ _('Purchases Total / إجمالي المشتريات') }}: <strong id="final-total"></strong></div>
-                        <div>{{ _('VAT Total / إجمالي الضريبة') }}: <strong id="display_vat"></strong></div>
+                        <div>{{ _('Purchases Total') }}: <strong id="final-total"></strong></div>
+                        <div>{{ _('VAT Total') }}: <strong id="display_vat"></strong></div>
                     </div>
                     <div>
-                        <button type="submit" class="btn btn-primary">{{ _('Save / حفظ') }}</button>
-                        <button type="reset" class="btn btn-outline-secondary">{{ _('Clear / مسح') }}</button>
+                        <button type="submit" class="btn btn-primary">{{ _('Save') }}</button>
+                        <button type="reset" class="btn btn-outline-secondary">{{ _('Clear') }}</button>
                     </div>
                 </div>
               </div>
             </div>
         </form>
     </div>
-
-</div>
+        </main>
+    </div>
 
 <!-- SocketIO and JavaScript -->
 <script>
-    // Materials data for calculations and stock info
-    const materials = {{ materials_json | safe }};
-
-
     // حساب الإجماليات تلقائيًا من بنود الفاتورة
     function toAsciiDigits(str){
         let s = String(str || '');
@@ -280,30 +240,9 @@ body {
         try{ if(typeof updatePartialMax==='function') updatePartialMax(); }catch(e){}
     }
 
-    // Show stock info when material is selected
-    function updateStockInfoByName(inputEl) {
-        const val = (inputEl.value || '').trim().toLowerCase();
-        const stockInfoDiv = inputEl.parentElement.querySelector('.stock-info');
-        const unitInput = inputEl.closest('.row').querySelector('.unit-input');
-        let match = null;
-        for (const m of materials) {
-            const dn = (m.name || '').toLowerCase();
-            const en = dn.split('/')[0].trim();
-            if (dn === val || en === val) { match = m; break; }
-        }
-        if (match) {
-            stockInfoDiv.textContent = `Current stock: ${match.stock_quantity} ${match.unit} | Cost: ﷼${match.cost_per_unit}/unit`;
-            if (unitInput && !unitInput.value) unitInput.value = match.unit || '';
-        } else {
-            stockInfoDiv.textContent = '';
-        }
-    }
-
-
-    // Event listeners
     document.addEventListener('input', e => {
-        if (e.target && /items-\d+-(quantity|price_before_tax|discount)/.test(e.target.name||'')) {
-            try{ e.target.value = toAsciiDigits(e.target.value); }catch(err){}
+        if (e.target && /items-\d+-(quantity|price_before_tax|discount|item_name)/.test(e.target.name||'')) {
+            try{ if(/quantity|price_before_tax|discount/.test(e.target.name||'')) e.target.value = toAsciiDigits(e.target.value); }catch(err){}
             calculateTotals();
         }
     });
@@ -312,84 +251,7 @@ body {
     (function(){
       const container = document.getElementById('items-container');
       const addBtn = document.getElementById('add-item-btn');
-      async function fetchMaterialsByCategory(cat){
-        try{
-          const url = cat ? (`/api/raw_materials?category=${encodeURIComponent(cat)}`) : '/api/raw_materials';
-          const resp = await fetch(url);
-          if(!resp.ok) throw new Error('HTTP '+resp.status);
-          const j = await resp.json();
-          return (j && j.ok) ? (j.items||[]) : [];
-        }catch(e){ return []; }
-      }
-      async function fetchCategories(){
-        try{
-          const resp = await fetch('/api/raw_materials/categories');
-          if(!resp.ok) throw new Error('HTTP '+resp.status);
-          const j = await resp.json();
-          return (j && j.ok) ? (j.categories||[]) : [];
-        }catch(e){ return []; }
-      }
-      function populateCategorySelect(sel, cats){
-        const current = sel.value;
-        sel.innerHTML = '';
-        const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = '{{ _('Select Category / اختر الفئة') }}'; sel.appendChild(opt0);
-        cats.forEach(c=>{ const opt=document.createElement('option'); opt.value = c.name; opt.textContent = c.label; sel.appendChild(opt); });
-        if(current){ sel.value=current; }
-      }
-      function populateMaterialsSelect(sel, arr){
-        const current = sel.value;
-        sel.innerHTML = '';
-        const opt0 = document.createElement('option'); opt0.value = '0'; opt0.textContent = '{{ _('Select Raw Material / اختر المادة الخام') }}'; sel.appendChild(opt0);
-        arr.forEach(o=>{ const opt=document.createElement('option'); opt.value = o.id; opt.textContent = o.name; sel.appendChild(opt); });
-        if(current){ sel.value=current; }
-      }
-      async function onCategoryChange(e){
-        const row = e.target.closest('.item-row');
-        const matSel = row?.querySelector('.material-select');
-        const cat = e.target.value;
-        const arr = await fetchMaterialsByCategory(cat);
-        populateMaterialsSelect(matSel, arr);
-        // Reset unit when category changes
-        const unitInput = row?.querySelector('.unit-input');
-        if(unitInput){ unitInput.value=''; }
-      }
-      async function onMaterialChange(e){
-        const row = e.target.closest('.item-row');
-        const catSel = row?.querySelector('.category-select');
-        const unitInput = row?.querySelector('.unit-input');
-        const stockInfoDiv = row?.querySelector('.stock-info');
-        const cat = catSel?.value || '';
-        const id = e.target.value;
-        if(!id){ if(unitInput) unitInput.value=''; if(stockInfoDiv) stockInfoDiv.textContent=''; return; }
-        const arr = await fetchMaterialsByCategory(cat);
-        const item = arr.find(o => String(o.id) === String(id));
-        if(item){
-          if(unitInput) unitInput.value = item.unit || '';
-          if(stockInfoDiv) stockInfoDiv.textContent = `Current stock: ${item.stock_quantity} ${item.unit} | Cost: ﷼${Number(item.cost_per_unit||0).toFixed(2)}/unit`;
-        } else {
-          if(unitInput) unitInput.value='';
-          if(stockInfoDiv) stockInfoDiv.textContent='';
-        }
-      }
-      async function attachRowEvents(row){
-        const catSel = row.querySelector('.category-select');
-        const matSel = row.querySelector('.material-select');
-        if(catSel){
-          const cats = await fetchCategories();
-          populateCategorySelect(catSel, cats);
-          catSel.addEventListener('change', onCategoryChange);
-        }
-        if(matSel && catSel){
-          const arr = await fetchMaterialsByCategory(catSel.value||'');
-          populateMaterialsSelect(matSel, arr);
-          matSel.addEventListener('change', onMaterialChange);
-          // Initialize unit/stock for current selection
-          await onMaterialChange({ target: matSel });
-        }
-      }
-      function nextIndex(){
-        const rows = container.querySelectorAll('.item-row'); return rows.length;
-      }
+      function nextIndex(){ return container.querySelectorAll('.item-row').length; }
       function cloneLast(){
         const rows = container.querySelectorAll('.item-row');
         if (rows.length===0) return;
@@ -403,17 +265,34 @@ body {
           }
           if(el.tagName==='SELECT') el.selectedIndex=0; else el.value='';
         });
+        clone.querySelectorAll('.remove-item-btn').forEach(btn=>{ btn.onclick = removeRow; });
         container.insertBefore(clone, addBtn.parentElement);
-        attachRowEvents(clone);
+        updateRemoveButtonsVisibility();
       }
+      function removeRow(ev){
+        const btn = ev && ev.target ? ev.target.closest('.remove-item-btn') : null;
+        const row = btn && btn.closest('.item-row');
+        if(!row) return;
+        const rows = container.querySelectorAll('.item-row');
+        if(rows.length <= 1) return;
+        row.remove();
+        calculateTotals();
+        updateRemoveButtonsVisibility();
+      }
+      function updateRemoveButtonsVisibility(){
+        const rows = container.querySelectorAll('.item-row');
+        rows.forEach((r, i)=>{
+          const btn = r.querySelector('.remove-item-btn');
+          if(btn){ btn.style.visibility = rows.length > 1 ? 'visible' : 'hidden'; btn.disabled = rows.length <= 1; }
+        });
+      }
+      container.addEventListener('click', function(ev){
+        if(ev.target && ev.target.closest('.remove-item-btn')) removeRow(ev);
+      });
       addBtn?.addEventListener('click', function(){ cloneLast(); calculateTotals(); });
-      // Attach events for initial rows
-      container.querySelectorAll('.item-row').forEach(row=>{ attachRowEvents(row); });
+      updateRemoveButtonsVisibility();
       calculateTotals();
     })();
-
-    // Remove item functionality
-    // No per-item remove under the new design
 
     </script>
 

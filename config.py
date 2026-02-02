@@ -1,37 +1,24 @@
 import os
 from sqlalchemy.pool import NullPool
 
-
-# Resolve database configuration dynamically so Render (PostgreSQL) works
+# ─── استخدام SQLite المحلي فقط – لا Render ولا PostgreSQL ───
+USE_ONLY_LOCAL_SQLITE = True
 _base_dir = os.path.abspath(os.path.dirname(__file__))
-_project_root = os.path.abspath(os.path.join(_base_dir, '..'))
+_project_root = _base_dir
 _instance_dir = os.path.join(_project_root, 'instance')
 os.makedirs(_instance_dir, exist_ok=True)
-
 _default_sqlite_path = os.getenv('LOCAL_SQLITE_PATH') or os.path.join(_instance_dir, 'accounting_app.db')
-_database_url = os.getenv('DATABASE_URL')
-if _database_url:
-    # Render supplies postgres://, but SQLAlchemy needs postgresql://
-    if _database_url.startswith('postgres://'):
-        _database_url = _database_url.replace('postgres://', 'postgresql://', 1)
-else:
-    _database_url = f"sqlite:///{_default_sqlite_path}"
+# تجاهل DATABASE_URL تماماً – لا نقرأ من Render أبداً
+_database_url = f"sqlite:///{_default_sqlite_path}"
 
 
 def _engine_options_for(db_uri: str):
-    """Return SQLAlchemy engine options suited for the current backend."""
-    if db_uri.startswith('sqlite'):
-        return {
-            "poolclass": NullPool,  # Avoid connection pooling issues on SQLite
-            "connect_args": {"check_same_thread": False},
-            "echo": False,
-        }
-    # Default options for PostgreSQL / other production databases
+    """Return SQLAlchemy engine options for SQLite only."""
+    # استخدام SQLite فقط - لا حاجة لخيارات PostgreSQL
     return {
-        "pool_pre_ping": True,
-        "pool_recycle": int(os.getenv('DB_POOL_RECYCLE', '280')),
-        "pool_size": int(os.getenv('DB_POOL_SIZE', '5')),
-        "max_overflow": int(os.getenv('DB_MAX_OVERFLOW', '10')),
+        "poolclass": NullPool,  # Avoid connection pooling issues on SQLite
+        "connect_args": {"check_same_thread": False},
+        "echo": False,
     }
 
 
@@ -53,5 +40,20 @@ class Config:
     # Admin settings
     ADMIN_DELETE_PASSWORD = os.getenv('ADMIN_DELETE_PASSWORD', '1991')
 
+    # Phase 3 – Cache (Redis when REDIS_URL set, else SimpleCache for local dev)
+    _redis_url = os.getenv('REDIS_URL', '').strip()
+    if _redis_url and _redis_url.startswith('redis://'):
+        CACHE_TYPE = 'redis'
+        CACHE_REDIS_URL = _redis_url
+    else:
+        CACHE_TYPE = 'simple'
+    CACHE_DEFAULT_TIMEOUT = 300  # 5 min default
+    CACHE_KEY_PREFIX = 'ctpi_'
+
     SQLALCHEMY_DATABASE_URI = _database_url
     SQLALCHEMY_ENGINE_OPTIONS = _engine_options_for(SQLALCHEMY_DATABASE_URI)
+
+    # Babel / i18n — تبديل اللغة (عربي / إنجليزي)
+    BABEL_DEFAULT_LOCALE = os.getenv('BABEL_DEFAULT_LOCALE', 'ar')
+    BABEL_SUPPORTED_LOCALES = ['ar', 'en']
+    BABEL_TRANSLATION_DIRECTORIES = os.getenv('BABEL_TRANSLATION_DIRECTORIES') or os.path.join(_project_root, 'translations')

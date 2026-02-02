@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ get_locale() or 'ar' }}" dir="{{ 'rtl' if (get_locale() or 'ar') == 'ar' else 'ltr' }}">
 <head>
   <meta charset="UTF-8">
-  <title>{{ report_title or 'Print Report' }}</title>
+  <title>{{ report_title or _('Print Report') }}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <style>
     @page { size: A4; margin: 12mm; }
@@ -15,8 +15,9 @@
       body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       button, .btn { color: #000 !important; background: none !important; border: 1px solid #000 !important; box-shadow: none !important; }
       tfoot, .totals-row, .grand-total { color: #000 !important; font-weight: bold !important; background: #fff !important; border-color: #000 !important; }
-      .table-print th, .table-print td { border-color: #bbb !important; }
-      .table-print thead th { background: #fff !important; color:#000 !important; }
+      .table-print th, .table-print td { border-color: #333 !important; }
+      .table-print thead th { background: #e8e8e8 !important; color: #000 !important; }
+      .muted, .text-muted { color: #000 !important; }
       table { page-break-inside: auto; }
       tr { page-break-inside: avoid; page-break-after: auto; }
     }

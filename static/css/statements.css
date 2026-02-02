@@ -1,0 +1,87 @@
+/* توحيد تصميم القوائم المالية – قائمة الدخل، ميزان المراجعة، الميزانية، التدفق النقدي */
+.stmt-report {
+  font-family: 'Cairo', 'Tajawal', sans-serif;
+  --stmt-text: #1e293b;
+  --stmt-heading: #0f172a;
+  --stmt-border: #e2e8f0;
+  --stmt-bg: #f8fafc;
+  --stmt-card: #fff;
+  --stmt-muted: #64748b;
+  --stmt-primary: #1565c0;
+  --stmt-primary-dark: #0d47a1;
+  color: var(--stmt-text);
+  background: var(--stmt-bg);
+  padding: 1rem;
+  border-radius: 12px;
+}
+.stmt-report .stmt-header {
+  background: var(--stmt-card);
+  border: 1px solid var(--stmt-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.stmt-report .stmt-title { font-size: 1.1rem; font-weight: 700; color: var(--stmt-heading); margin: 0 0 0.25rem 0; }
+.stmt-report .stmt-meta { font-size: 0.85rem; color: var(--stmt-muted); }
+.stmt-report .stmt-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.stmt-report .stmt-card {
+  min-width: 140px;
+  padding: 1rem 1.25rem;
+  border-radius: 10px;
+  border: 1px solid var(--stmt-border);
+  background: var(--stmt-card);
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.stmt-report .stmt-card .val { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stmt-report .stmt-card .lbl { font-size: 0.8rem; color: var(--stmt-muted); margin-top: 0.25rem; }
+.stmt-report .stmt-panel {
+  background: var(--stmt-card);
+  border: 1px solid var(--stmt-border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.stmt-report .stmt-panel-head {
+  font-size: 1rem; font-weight: 700; padding: 0.75rem 1rem;
+  background: #f1f5f9; border-bottom: 1px solid var(--stmt-border);
+}
+.stmt-report .stmt-section-toggle {
+  cursor: pointer; user-select: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  padding: 0.6rem 1rem; font-weight: 600; font-size: 0.9rem;
+  background: #f8fafc; transition: background .15s;
+}
+.stmt-report .stmt-section-toggle:hover { background: #f1f5f9; }
+.stmt-report .stmt-section-toggle .chevron { transition: transform .2s; color: var(--stmt-muted); }
+.stmt-report .stmt-section-toggle.collapsed .chevron { transform: rotate(-90deg); }
+.stmt-report .stmt-section-detail { padding: 0 1rem 0.75rem; background: var(--stmt-card); }
+.stmt-report .stmt-section-detail.collapsed { display: none; }
+.stmt-report .stmt-table {
+  width: 100%; border-collapse: collapse; font-size: 0.9rem;
+}
+.stmt-report .stmt-table th,
+.stmt-report .stmt-table td {
+  padding: 0.4rem 0.6rem; text-align: right; border-bottom: 1px solid #f1f5f9; vertical-align: middle;
+}
+.stmt-report .stmt-table thead th {
+  background: var(--stmt-primary); color: #fff; font-weight: 600;
+}
+.stmt-report .stmt-table td:nth-child(n+3) { font-variant-numeric: tabular-nums; direction: ltr; }
+.stmt-report .stmt-link { color: var(--stmt-primary); text-decoration: none; }
+.stmt-report .stmt-link:hover { text-decoration: underline; }
+.stmt-report .stmt-total-row {
+  font-weight: 700; padding: 0.75rem 1rem;
+  border-top: 2px solid var(--stmt-border); background: #f8fafc;
+}
+.stmt-report .stmt-num { font-variant-numeric: tabular-nums; direction: ltr; }
+.stmt-report .stmt-rev { color: #0d6efd; }
+.stmt-report .stmt-exp { color: #6c757d; }
+.stmt-report .stmt-profit { color: #198754; }
+.stmt-report .stmt-loss { color: #dc3545; }

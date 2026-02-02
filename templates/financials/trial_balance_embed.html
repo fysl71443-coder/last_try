@@ -1,0 +1,50 @@
+{% extends 'financials/base_statement_embed.html' %}
+{% block title %}{{ _('Trial balance') }}{% endblock %}
+{% block content %}
+<div class="stmt-header">
+  <h2 class="stmt-title">{{ data.company_name }}</h2>
+  <div class="stmt-meta">{{ _('Trial balance') }} — {{ _('As of') }} {{ data.date.strftime('%Y-%m-%d') }}</div>
+</div>
+<div class="d-flex flex-wrap gap-2 mb-2">
+  <span class="badge bg-light text-dark border">{{ _('Debit') }}: {{ '{:,.2f}'.format(data.total_debit or 0) }}</span>
+  <span class="badge bg-light text-dark border">{{ _('Credit') }}: {{ '{:,.2f}'.format(data.total_credit or 0) }}</span>
+</div>
+<div class="stmt-panel">
+  <div class="stmt-panel-head">{{ _('Trial balance') }}</div>
+  {% for g in (data.tb_groups or []) %}
+  <div class="stmt-section-toggle collapsed" data-bs-toggle="collapse" data-bs-target="#tb-{{ g.group_key }}" aria-expanded="false" style="cursor:pointer;">
+    <span>{{ g.group_name }} <span class="text-muted small">({{ (g.accounts or [])|length }})</span></span>
+    <span class="stmt-num">{{ _('Debit') }} {{ '{:,.2f}'.format(g.debit or 0) }} · {{ _('Credit') }} {{ '{:,.2f}'.format(g.credit or 0) }} <i class="fa-solid fa-chevron-down chevron ms-1"></i></span>
+  </div>
+  <div class="collapse stmt-section-detail" id="tb-{{ g.group_key }}">
+    <table class="stmt-table">
+      <thead><tr><th>{{ _('Code') }}</th><th>{{ _('Account') }}</th><th>{{ _('Debit') }}</th><th>{{ _('Credit') }}</th></tr></thead>
+      <tbody>
+        {% for a in (g.accounts or []) %}
+        <tr>
+          <td>{{ a.code }}</td>
+          <td>{{ a.name }}</td>
+          <td class="stmt-num">{{ '{:,.2f}'.format(a.debit or 0) }}</td>
+          <td class="stmt-num">{{ '{:,.2f}'.format(a.credit or 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+  {% if not (data.tb_groups or []) %}
+  <div class="p-3 text-center text-muted">{{ _('No accounts with movement.') }}</div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('.stmt-section-toggle[data-bs-toggle="collapse"]').forEach(function(t){
+  var target = document.querySelector(t.getAttribute('data-bs-target'));
+  if (target) {
+    target.addEventListener('show.bs.collapse', function(){ t.classList.remove('collapsed'); var ch = t.querySelector('.chevron'); if(ch) ch.style.transform = 'rotate(0deg)'; });
+    target.addEventListener('hide.bs.collapse', function(){ t.classList.add('collapsed'); var ch = t.querySelector('.chevron'); if(ch) ch.style.transform = 'rotate(-90deg)'; });
+  }
+});
+</script>
+{% endblock %}

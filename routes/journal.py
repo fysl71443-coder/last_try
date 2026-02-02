@@ -3,8 +3,88 @@ import json
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import login_required, current_user
+from sqlalchemy.orm import selectinload, joinedload
 from extensions import db, csrf
 from models import Account, LedgerEntry, Employee, JournalEntry, JournalLine, JournalAudit, get_saudi_now
+
+def _journal_with_lines_options(q):
+    """Eager-load lines and account to avoid N+1 in print/export/templates."""
+    return q.options(selectinload(JournalEntry.lines).joinedload(JournalLine.account))
+
+
+def _journal_list_entry_meta(entries):
+    """Build ref, op_type_ar, payment_method per entry for compact list. Batch-fetches invoices."""
+    from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice
+    meta = {}
+    sales_ids = []
+    purch_ids = []
+    exp_ids = []
+    for e in entries:
+        it = (getattr(e, 'invoice_type') or '').strip().lower()
+        iid = getattr(e, 'invoice_id', None)
+        sid = getattr(e, 'salary_id', None)
+        br = getattr(e, 'branch_code', None) or '-'
+        if sid:
+            meta[e.id] = {'ref': f'رواتب {sid}', 'op_type_ar': 'رواتب', 'op_type': 'salary', 'payment_method': '-', 'source': 'Salary', 'tax_amount': 0, 'discount_amount': 0, 'branch': br}
+            continue
+        if not it or not iid:
+            meta[e.id] = {'ref': '-', 'op_type_ar': 'قيد يدوي', 'op_type': 'manual', 'payment_method': '-', 'source': 'Manual', 'tax_amount': 0, 'discount_amount': 0, 'branch': br}
+            continue
+        try:
+            iid = int(iid)
+        except Exception:
+            meta[e.id] = {'ref': '-', 'op_type_ar': it, 'op_type': it, 'payment_method': '-', 'source': it, 'tax_amount': 0, 'discount_amount': 0, 'branch': br}
+            continue
+        if it == 'sales':
+            sales_ids.append((e.id, iid))
+        elif it == 'purchase':
+            purch_ids.append((e.id, iid))
+        elif it == 'expense':
+            exp_ids.append((e.id, iid))
+        else:
+            meta[e.id] = {'ref': '-', 'op_type_ar': it, 'op_type': it, 'payment_method': '-', 'source': it, 'tax_amount': 0, 'discount_amount': 0, 'branch': br}
+    sales_invs = {}
+    if sales_ids:
+        ids = list({x[1] for x in sales_ids})
+        for inv in SalesInvoice.query.filter(SalesInvoice.id.in_(ids)).all():
+            sales_invs[inv.id] = inv
+    purch_invs = {}
+    if purch_ids:
+        ids = list({x[1] for x in purch_ids})
+        for inv in PurchaseInvoice.query.filter(PurchaseInvoice.id.in_(ids)).all():
+            purch_invs[inv.id] = inv
+    exp_invs = {}
+    if exp_ids:
+        ids = list({x[1] for x in exp_ids})
+        for inv in ExpenseInvoice.query.filter(ExpenseInvoice.id.in_(ids)).all():
+            exp_invs[inv.id] = inv
+    pm_labels = {'CASH': 'نقداً', 'BANK': 'بنك', 'CARD': 'بطاقة', 'VISA': 'فيزا', 'MADA': 'مدى', 'TRANSFER': 'تحويل', 'CREDIT': 'آجل', 'creditor': 'موردين'}
+    def _pm(pm):
+        k = (pm or '').strip().upper()
+        return pm_labels.get(k) or pm_labels.get((pm or '').strip().lower()) or (pm or '-')
+    for eid, iid in sales_ids:
+        inv = sales_invs.get(iid)
+        br = next((getattr(e, 'branch_code', None) or '-' for e in entries if e.id == eid), '-')
+        if inv:
+            meta[eid] = {'ref': getattr(inv, 'invoice_number', None) or '-', 'op_type_ar': 'بيع', 'op_type': 'sales', 'payment_method': _pm(getattr(inv, 'payment_method', None)), 'source': 'Invoice', 'tax_amount': float(getattr(inv, 'tax_amount', 0) or 0), 'discount_amount': float(getattr(inv, 'discount_amount', 0) or 0), 'branch': br}
+        else:
+            meta[eid] = {'ref': '-', 'op_type_ar': 'بيع', 'op_type': 'sales', 'payment_method': '-', 'source': 'Invoice', 'tax_amount': 0, 'discount_amount': 0, 'branch': br}
+    for eid, iid in purch_ids:
+        inv = purch_invs.get(iid)
+        br = next((getattr(e, 'branch_code', None) or '-' for e in entries if e.id == eid), '-')
+        if inv:
+            meta[eid] = {'ref': getattr(inv, 'invoice_number', None) or '-', 'op_type_ar': 'شراء', 'op_type': 'purchase', 'payment_method': _pm(getattr(inv, 'payment_method', None)), 'source': 'Purchase', 'tax_amount': float(getattr(inv, 'tax_amount', 0) or 0), 'discount_amount': float(getattr(inv, 'discount_amount', 0) or 0), 'branch': br}
+        else:
+            meta[eid] = {'ref': '-', 'op_type_ar': 'شراء', 'op_type': 'purchase', 'payment_method': '-', 'source': 'Purchase', 'tax_amount': 0, 'discount_amount': 0, 'branch': br}
+    for eid, iid in exp_ids:
+        inv = exp_invs.get(iid)
+        br = next((getattr(e, 'branch_code', None) or '-' for e in entries if e.id == eid), '-')
+        if inv:
+            meta[eid] = {'ref': getattr(inv, 'invoice_number', None) or '-', 'op_type_ar': 'مصروف', 'op_type': 'expense', 'payment_method': _pm(getattr(inv, 'payment_method', None)), 'source': 'Expense', 'tax_amount': float(getattr(inv, 'tax_amount', 0) or 0), 'discount_amount': float(getattr(inv, 'discount_amount', 0) or 0), 'branch': br}
+        else:
+            meta[eid] = {'ref': '-', 'op_type_ar': 'مصروف', 'op_type': 'expense', 'payment_method': '-', 'source': 'Expense', 'tax_amount': 0, 'discount_amount': 0, 'branch': br}
+    return meta
+
 
 bp = Blueprint('journal', __name__, url_prefix='/journal')
 
@@ -22,12 +102,16 @@ def _can(screen, perm, branch_scope=None):
         return False
 
 def _ensure_accounts():
+    """التأكد من وجود جميع الحسابات من الشجرة الجديدة فقط."""
     try:
         from app.routes import CHART_OF_ACCOUNTS
-        keys = list((CHART_OF_ACCOUNTS or {}).keys())
+        from data.coa_new_tree import build_coa_dict
+        # استخدام الشجرة الجديدة فقط
+        new_coa = build_coa_dict()
+        keys = list(new_coa.keys())
         existing = {code for (code,) in db.session.query(Account.code).filter(Account.code.in_(keys)).all()}
         missing = []
-        for code, meta in (CHART_OF_ACCOUNTS or {}).items():
+        for code, meta in new_coa.items():
             if code not in existing:
                 missing.append((code, meta))
         if missing:
@@ -85,22 +169,31 @@ def create_missing_journal_entries():
     from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice
     from sqlalchemy import func
     def _acc_by_code(code: str):
+        """الحصول على حساب من الشجرة الجديدة فقط."""
         try:
             from app.routes import CHART_OF_ACCOUNTS
+            from data.coa_new_tree import build_coa_dict
+            # استخدام الشجرة الجديدة فقط
+            new_coa = build_coa_dict()
         except Exception:
-            CHART_OF_ACCOUNTS = {}
+            new_coa = {}
         c = (code or '').strip().upper()
         a = Account.query.filter(func.lower(Account.code) == c.lower()).first()
         if not a:
-            meta = CHART_OF_ACCOUNTS.get(c, {'name':'','type':'EXPENSE'})
-            a = Account(code=c, name=meta.get('name','') or c, type=meta.get('type','EXPENSE'))
-            db.session.add(a); db.session.flush()
+            # إنشاء حساب فقط إذا كان في الشجرة الجديدة
+            if c in new_coa:
+                meta = new_coa[c]
+                a = Account(code=c, name=meta.get('name','') or c, type=meta.get('type','EXPENSE'))
+                db.session.add(a); db.session.flush()
+            else:
+                # إذا لم يكن في الشجرة الجديدة، استخدام افتراضي
+                raise ValueError(f"Account code {c} not in new COA tree")
         return a
     def _cash_or_bank(pm: str):
         p = (pm or 'CASH').strip().upper()
         if p in ('BANK','CARD','VISA','MASTERCARD','TRANSFER'):
-            return _acc_by_code('1013')
-        return _acc_by_code('1012')
+            return _acc_by_code('1121')
+        return _acc_by_code('1112')
     def _has_journal(inv_id: int, inv_type: str, inv_number: str):
         try:
             exists = JournalEntry.query.filter(
@@ -143,17 +236,10 @@ def create_missing_journal_entries():
                         return 'keeta'
                     return ''
                 grp = _grp(cust)
-                if grp == 'keeta':
-                    ar_acc = _acc_by_code('1130')
-                    rev_code = '4013'
-                elif grp == 'hunger':
-                    ar_acc = _acc_by_code('1140')
-                    rev_code = '4014'
-                else:
-                    ar_acc = _acc_by_code('1013')
-                    rev_code = '4012' if (inv.branch or '') == 'place_india' else '4011'
+                ar_acc = _acc_by_code('1141')
+                rev_code = '4112' if (getattr(inv, 'payment_method', '') or '').upper() in ('CREDIT','CREDITOR','آجل') else '4111'
                 rev_acc = _acc_by_code(rev_code)
-                vat_out_acc = _acc_by_code('2024')
+                vat_out_acc = _acc_by_code('2141')
                 cash_acc = None if grp in ('keeta','hunger') else _cash_or_bank(inv.payment_method)
                 je = JournalEntry(
                     entry_number=f"JE-SAL-{inv_num}",
@@ -193,9 +279,9 @@ def create_missing_journal_entries():
                 total_before = float(inv.total_before_tax or 0)
                 tax_amt = float(inv.tax_amount or 0)
                 total_inc_tax = round(total_before + tax_amt, 2)
-                exp_acc = _acc_by_code('1210')
-                vat_in_acc = _acc_by_code('6200')
-                ap_acc = _acc_by_code('2110')
+                exp_acc = _acc_by_code('1161')
+                vat_in_acc = _acc_by_code('1170')
+                ap_acc = _acc_by_code('2111')
                 cash_acc = _cash_or_bank(inv.payment_method)
                 je = JournalEntry(
                     entry_number=f"JE-PUR-{inv_num}",
@@ -235,9 +321,9 @@ def create_missing_journal_entries():
                 total_before = float(inv.total_before_tax or 0)
                 tax_amt = float(inv.tax_amount or 0)
                 total_inc_tax = round(total_before + tax_amt, 2)
-                exp_acc = _acc_by_code('5100')
-                vat_in_acc = _acc_by_code('6200')
-                ap_acc = _acc_by_code('2110')
+                exp_acc = _acc_by_code('5110')
+                vat_in_acc = _acc_by_code('1170')
+                ap_acc = _acc_by_code('2111')
                 cash_acc = _cash_or_bank(inv.payment_method)
                 je = JournalEntry(
                     entry_number=f"JE-EXP-{inv_num}",
@@ -300,7 +386,8 @@ def backfill_missing():
         except Exception:
             pass
         flash(f"Backfill failed: {e}", 'danger')
-    return render_template('journal_entries.html', entries=JournalEntry.query.order_by(JournalEntry.date.desc(), JournalEntry.id.desc()).limit(50).all(), page=1, pages=1, total=JournalEntry.query.count(), accounts=[], employees=[], branch='all', mode='list')
+    entries = JournalEntry.query.order_by(JournalEntry.date.desc(), JournalEntry.id.desc()).limit(50).all()
+    return render_template('journal_entries.html', entries=entries, page=1, pages=1, total=JournalEntry.query.count(), accounts=[], employees=[], branch='all', mode='list', entry_meta=_journal_list_entry_meta(entries))
 
 def create_missing_journal_entries_for(kind: str):
     _ensure_journal_link_columns()
@@ -310,22 +397,31 @@ def create_missing_journal_entries_for(kind: str):
     kind = (kind or '').strip().lower()
     from sqlalchemy import func
     def _acc_by_code(code: str):
+        """الحصول على حساب من الشجرة الجديدة فقط."""
         try:
             from app.routes import CHART_OF_ACCOUNTS
+            from data.coa_new_tree import build_coa_dict
+            # استخدام الشجرة الجديدة فقط
+            new_coa = build_coa_dict()
         except Exception:
-            CHART_OF_ACCOUNTS = {}
+            new_coa = {}
         c = (code or '').strip().upper()
         a = Account.query.filter(func.lower(Account.code) == c.lower()).first()
         if not a:
-            meta = CHART_OF_ACCOUNTS.get(c, {'name':'','type':'EXPENSE'})
-            a = Account(code=c, name=meta.get('name','') or c, type=meta.get('type','EXPENSE'))
-            db.session.add(a); db.session.flush()
+            # إنشاء حساب فقط إذا كان في الشجرة الجديدة
+            if c in new_coa:
+                meta = new_coa[c]
+                a = Account(code=c, name=meta.get('name','') or c, type=meta.get('type','EXPENSE'))
+                db.session.add(a); db.session.flush()
+            else:
+                # إذا لم يكن في الشجرة الجديدة، استخدام افتراضي
+                raise ValueError(f"Account code {c} not in new COA tree")
         return a
     def _cash_or_bank(pm: str):
         p = (pm or 'CASH').strip().upper()
         if p in ('BANK','CARD','VISA','MASTERCARD','TRANSFER'):
-            return _acc_by_code('1013')
-        return _acc_by_code('1012')
+            return _acc_by_code('1121')
+        return _acc_by_code('1112')
     def _has_journal(inv_id: int, inv_type: str, inv_number: str):
         try:
             exists = JournalEntry.query.filter(
@@ -376,17 +472,10 @@ def create_missing_journal_entries_for(kind: str):
                         return 'keeta'
                     return ''
                 grp = _grp(cust)
-                if grp == 'keeta':
-                    ar_acc = _acc_by_code('1130')
-                    rev_code = '4013'
-                elif grp == 'hunger':
-                    ar_acc = _acc_by_code('1140')
-                    rev_code = '4014'
-                else:
-                    ar_acc = _acc_by_code('1013')
-                    rev_code = '4012' if (inv.branch or '') == 'place_india' else '4011'
+                ar_acc = _acc_by_code('1141')
+                rev_code = '4112' if (getattr(inv, 'payment_method', '') or '').upper() in ('CREDIT','CREDITOR','آجل') else '4111'
                 rev_acc = _acc_by_code(rev_code)
-                vat_out_acc = _acc_by_code('2024')
+                vat_out_acc = _acc_by_code('2141')
                 cash_acc = None if grp in ('keeta','hunger') else _cash_or_bank(inv.payment_method)
                 je = JournalEntry(entry_number=f"JE-SAL-{inv_num}", date=(inv.date or get_saudi_now().date()), branch_code=getattr(inv, 'branch', None), description=f"Sales {inv_num}", status='posted', total_debit=total_inc_tax * 2 if cash_acc else total_inc_tax, total_credit=total_inc_tax * 2 if cash_acc else total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=int(inv.id), invoice_type='sales')
                 db.session.add(je); db.session.flush()
@@ -417,9 +506,9 @@ def create_missing_journal_entries_for(kind: str):
                 total_before = float(inv.total_before_tax or 0)
                 tax_amt = float(inv.tax_amount or 0)
                 total_inc_tax = round(total_before + tax_amt, 2)
-                exp_acc = _acc_by_code('1210')
-                vat_in_acc = _acc_by_code('6200')
-                ap_acc = _acc_by_code('2110')
+                exp_acc = _acc_by_code('1161')
+                vat_in_acc = _acc_by_code('1170')
+                ap_acc = _acc_by_code('2111')
                 cash_acc = _cash_or_bank(inv.payment_method)
                 je = JournalEntry(entry_number=f"JE-PUR-{inv_num}", date=(inv.date or get_saudi_now().date()), branch_code=None, description=f"Purchase {inv_num}", status='posted', total_debit=total_inc_tax * 2 if cash_acc else total_inc_tax, total_credit=total_inc_tax * 2 if cash_acc else total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=int(inv.id), invoice_type='purchase')
                 db.session.add(je); db.session.flush()
@@ -449,9 +538,9 @@ def create_missing_journal_entries_for(kind: str):
                 total_before = float(inv.total_before_tax or 0)
                 tax_amt = float(inv.tax_amount or 0)
                 total_inc_tax = round(total_before + tax_amt, 2)
-                exp_acc = _acc_by_code('5100')
-                vat_in_acc = _acc_by_code('6200')
-                ap_acc = _acc_by_code('2110')
+                exp_acc = _acc_by_code('5110')
+                vat_in_acc = _acc_by_code('1170')
+                ap_acc = _acc_by_code('2111')
                 cash_acc = _cash_or_bank(inv.payment_method)
                 je = JournalEntry(entry_number=f"JE-EXP-{inv_num}", date=(inv.date or get_saudi_now().date()), branch_code=None, description=f"Expense {inv_num}", status='posted', total_debit=total_inc_tax * 2 if cash_acc else total_inc_tax, total_credit=total_inc_tax * 2 if cash_acc else total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=int(inv.id), invoice_type='expense')
                 db.session.add(je); db.session.flush()
@@ -483,7 +572,7 @@ def create_missing_journal_entries_for(kind: str):
             try:
                 total = float(sal.total_salary or 0)
                 sal_exp = _acc_by_code('5310')
-                sal_pay = _acc_by_code('2130')
+                sal_pay = _acc_by_code('2121')
                 je = JournalEntry(entry_number=f"JE-SAL-{sal.year}{int(sal.month):02d}-{int(sal.employee_id)}", date=get_saudi_now().date(), branch_code=None, description=f"Salary accrual {int(sal.employee_id)}", status='posted', total_debit=total, total_credit=total, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), salary_id=int(sal.id))
                 db.session.add(je); db.session.flush()
                 db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=sal_exp.id, debit=total, credit=0, description='Salary expense', line_date=get_saudi_now().date()))
@@ -524,7 +613,7 @@ def api_fix_aggregator_receipts():
                 desc = (getattr(ln,'description','') or '').lower()
                 acc = Account.query.filter(Account.id == ln.account_id).first()
                 code = (getattr(acc,'code','') or '').strip()
-                if desc.startswith('receipt ') and code in ('1012','1013'):
+                if desc.startswith('receipt ') and code in ('1112','1121'):
                     to_delete.append(ln)
                 if desc.startswith('clear ar '):
                     to_delete.append(ln)
@@ -576,7 +665,8 @@ def backfill_missing_kind(kind):
         except Exception:
             pass
         flash(str(e) or 'Backfill failed', 'danger')
-    return render_template('journal_entries.html', entries=JournalEntry.query.order_by(JournalEntry.date.desc(), JournalEntry.id.desc()).limit(50).all(), page=1, pages=1, total=JournalEntry.query.count(), accounts=[], employees=[], branch='all', mode='list')
+    entries = JournalEntry.query.order_by(JournalEntry.date.desc(), JournalEntry.id.desc()).limit(50).all()
+    return render_template('journal_entries.html', entries=entries, page=1, pages=1, total=JournalEntry.query.count(), accounts=[], employees=[], branch='all', mode='list', entry_meta=_journal_list_entry_meta(entries))
 
 @csrf.exempt
 @bp.route('/backfill_missing_all', methods=['GET'])
@@ -624,11 +714,11 @@ def remap_sales_channels():
             grp = _grp(cust)
             try:
                 if grp == 'keeta':
-                    rev_acc = Account.query.filter(Account.code=='4120').first() or _acc_by_code('4120')
-                    ar_acc = Account.query.filter(Account.code=='1130').first() or _acc_by_code('1130')
+                    rev_acc = Account.query.filter(Account.code=='4111').first() or _acc_by_code('4111')
+                    ar_acc = Account.query.filter(Account.code=='1141').first() or _acc_by_code('1141')
                 elif grp == 'hunger':
-                    rev_acc = Account.query.filter(Account.code=='4130').first() or _acc_by_code('4130')
-                    ar_acc = Account.query.filter(Account.code=='1140').first() or _acc_by_code('1140')
+                    rev_acc = Account.query.filter(Account.code=='4111').first() or _acc_by_code('4111')
+                    ar_acc = Account.query.filter(Account.code=='1141').first() or _acc_by_code('1141')
                 else:
                     rev_acc = None
                     ar_acc = None
@@ -673,7 +763,7 @@ def list_entries():
     page = int(request.args.get('page') or 1)
     per_page_arg = (request.args.get('per_page') or '').strip()
     if per_page_arg.lower() == 'all':
-        per_page = 100000
+        per_page = 2000
     else:
         try:
             per_page = int(per_page_arg or 50)
@@ -711,9 +801,9 @@ def list_entries():
         from sqlalchemy import distinct
         query = query.join(JournalLine, JournalLine.journal_id == JournalEntry.id).filter(JournalLine.employee_id == int(emp_id)).group_by(JournalEntry.id)
     pag = query.paginate(page=page, per_page=per_page, error_out=False)
-    accounts = Account.query.order_by(Account.code.asc()).all()
-    employees = []
-    return render_template('journal_entries.html', entries=pag.items, page=pag.page, pages=pag.pages, total=pag.total, accounts=[], employees=employees, branch=branch, mode='list')
+    employees = Employee.query.order_by(Employee.full_name).limit(500).all()
+    entry_meta = _journal_list_entry_meta(pag.items)
+    return render_template('journal_entries.html', entries=pag.items, page=pag.page, pages=pag.pages, total=pag.total, accounts=[], employees=employees, branch=branch, mode='list', entry_meta=entry_meta)
 
 @bp.route('/print/all', methods=['GET'])
 @login_required
@@ -747,7 +837,8 @@ def print_all():
             pass
     if user_id:
         query = query.filter((JournalEntry.created_by == user_id) | (JournalEntry.posted_by == user_id) | (JournalEntry.updated_by == user_id))
-    entries = query.all()
+    query = _journal_with_lines_options(query)
+    entries = query.limit(2000).all()
     return render_template('journal_print_all.html', entries=entries, branch=branch, q=q, sd=sd, ed=ed)
 
 @bp.route('/print/all/pdf', methods=['GET'])
@@ -783,6 +874,7 @@ def print_all_pdf():
             pass
     if user_id:
         query = query.filter((JournalEntry.created_by == user_id) | (JournalEntry.posted_by == user_id) | (JournalEntry.updated_by == user_id))
+    query = _journal_with_lines_options(query)
     if limit_arg and limit_arg != 'all':
         try:
             query = query.limit(int(limit_arg))
@@ -795,28 +887,66 @@ def print_all_pdf():
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, KeepTogether
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         import io
+
+        def _register_ar_font():
+            try:
+                from reportlab.pdfbase import pdfmetrics
+                from reportlab.pdfbase.ttfonts import TTFont
+                candidates = [
+                    os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'Fonts', 'trado.ttf'),
+                    os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'Fonts', 'arial.ttf'),
+                    os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'Fonts', 'Tahoma.ttf'),
+                    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                    '/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf',
+                ]
+                for fp in candidates:
+                    if os.path.exists(fp):
+                        pdfmetrics.registerFont(TTFont('JournalArabic', fp))
+                        return 'JournalArabic'
+            except Exception:
+                pass
+            return None
+
+        ar_font = _register_ar_font()
+        styles = getSampleStyleSheet()
+        if ar_font:
+            styles.add(ParagraphStyle(name='JournalTitle', fontName=ar_font, fontSize=16, spaceAfter=6))
+            styles.add(ParagraphStyle(name='JournalNormal', fontName=ar_font, fontSize=10, spaceAfter=4))
+            styles.add(ParagraphStyle(name='JournalHeading', fontName=ar_font, fontSize=12, spaceAfter=4))
+            style_title, style_norm, style_h3 = 'JournalTitle', 'JournalNormal', 'JournalHeading'
+        else:
+            style_title, style_norm, style_h3 = 'Title', 'Normal', 'Heading3'
+
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=A4, title="Journal Entries")
-        styles = getSampleStyleSheet()
         elements = []
-        elements.append(Paragraph("قيود اليومية", styles['Title']))
+        elements.append(Paragraph("قيود اليومية", styles[style_title]))
         meta = []
         meta.append(f"الفرع: {branch}")
         if q: meta.append(f"بحث: {q}")
         if sd: meta.append(f"من: {sd}")
         if ed: meta.append(f"إلى: {ed}")
-        elements.append(Paragraph(" ".join(meta), styles['Normal']))
+        elements.append(Paragraph(" ".join(meta), styles[style_norm]))
         elements.append(Spacer(1, 6))
+        table_font = ar_font or 'Helvetica'
+        table_style_list = [
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('FONTNAME', (0, 0), (-1, -1), table_font),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ALIGN', (5, 1), (6, -1), 'RIGHT'),
+        ]
         for je in entries:
             block = []
-            block.append(Paragraph(f"رقم القيد: {je.entry_number}", styles['Heading3']))
-            block.append(Paragraph(f"التاريخ: {je.date}", styles['Normal']))
-            block.append(Paragraph(f"الفرع: {je.branch_code or '-'}", styles['Normal']))
-            block.append(Paragraph(f"الحالة: {je.status}", styles['Normal']))
-            block.append(Paragraph(f"الوصف: {je.description}", styles['Normal']))
-            data = [["#","الحساب","الوصف","مركز تكلفة","تاريخ السطر","مدين","دائن"]]
+            block.append(Paragraph(f"رقم القيد: {je.entry_number}", styles[style_h3]))
+            block.append(Paragraph(f"التاريخ: {je.date}", styles[style_norm]))
+            block.append(Paragraph(f"الفرع: {je.branch_code or '-'}", styles[style_norm]))
+            block.append(Paragraph(f"الحالة: {je.status}", styles[style_norm]))
+            block.append(Paragraph(f"الوصف: {je.description}", styles[style_norm]))
+            data = [["#", "الحساب", "الوصف", "مركز تكلفة", "تاريخ السطر", "مدين", "دائن"]]
             for ln in je.lines:
                 try:
                     acc_label = f"{ln.account.code} – {ln.account.name}"
@@ -832,16 +962,10 @@ def print_all_pdf():
                     f"{float(ln.credit or 0):.2f}"
                 ])
             tbl = Table(data, repeatRows=1)
-            tbl.setStyle(TableStyle([
-                ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-                ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('ALIGN', (5,1), (6,-1), 'RIGHT'),
-                ('FONTSIZE', (0,0), (-1,-1), 8),
-            ]))
+            tbl.setStyle(TableStyle(table_style_list))
             block.append(tbl)
             block.append(Spacer(1, 6))
-            block.append(Paragraph(f"الإجمالي مدين: {float(je.total_debit or 0):.2f} — الإجمالي دائن: {float(je.total_credit or 0):.2f}", styles['Normal']))
+            block.append(Paragraph(f"الإجمالي مدين: {float(je.total_debit or 0):.2f} — الإجمالي دائن: {float(je.total_credit or 0):.2f}", styles[style_norm]))
             elements.append(KeepTogether(block))
             elements.append(Spacer(1, 10))
         doc.build(elements)
@@ -883,7 +1007,8 @@ def export_all():
             pass
     if user_id:
         query = query.filter((JournalEntry.created_by == user_id) | (JournalEntry.posted_by == user_id) | (JournalEntry.updated_by == user_id))
-    entries = query.all()
+    query = _journal_with_lines_options(query)
+    entries = query.limit(2000).all()
     html = render_template('journal_print_all.html', entries=entries, branch=branch, q=q, sd=sd, ed=ed)
     headers = {
         'Content-Disposition': 'attachment; filename=journal_entries.xls'
@@ -1073,6 +1198,81 @@ def delete_entry(jid):
         flash(msg, 'danger')
     return redirect(url_for('journal.list_entries'))
 
+@bp.route('/<int:jid>/detail', methods=['GET'])
+@login_required
+def entry_detail_json(jid):
+    """JSON detail for expandable row: entry, lines, operational, financial."""
+    je = _journal_with_lines_options(JournalEntry.query).filter_by(id=jid).first_or_404()
+    if not _can('journal', 'view'):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    from models import SalesInvoice, PurchaseInvoice, ExpenseInvoice
+    branch = (je.branch_code or '-')
+    branch_label = {'china_town': 'China Town', 'place_india': 'Place India'}.get((branch or '').strip().lower()) or branch
+    op = {'op_type': 'manual', 'op_type_ar': 'قيد يدوي', 'source': 'Manual', 'branch': branch_label, 'payment_method': '-', 'party': '-', 'doc_number': '-'}
+    financial = None
+    it = (getattr(je, 'invoice_type') or '').strip().lower()
+    iid = getattr(je, 'invoice_id', None)
+    sid = getattr(je, 'salary_id', None)
+    if sid:
+        op.update({'op_type': 'salary', 'op_type_ar': 'رواتب', 'source': 'Salary', 'party': 'موظفون'})
+    elif it and iid:
+        try:
+            iid = int(iid)
+        except Exception:
+            iid = None
+        if it == 'sales' and iid:
+            inv = SalesInvoice.query.get(iid)
+            if inv:
+                op['doc_number'] = getattr(inv, 'invoice_number', None) or '-'
+                op['source'] = 'Invoice'
+                op['op_type'] = 'sales'
+                op['op_type_ar'] = 'بيع'
+                op['party'] = 'العملاء'
+                pm = (getattr(inv, 'payment_method', None) or '').strip().upper()
+                op['payment_method'] = 'آجل' if pm in ('CREDIT', 'creditor') else ('بنك' if pm in ('BANK', 'CARD', 'VISA', 'MADA', 'TRANSFER') else 'نقداً')
+                total_bt = float(inv.total_before_tax or 0)
+                discount_amt = float(inv.discount_amount or 0)
+                tax_amt = float(inv.tax_amount or 0)
+                net = max(0.0, total_bt - discount_amt)
+                total = round(net + tax_amt, 2)
+                discount_pct = round((discount_amt / total_bt * 100), 1) if total_bt else 0
+                tax_pct = 15.0
+                financial = {'net_sales': round(net, 2), 'discount': round(discount_amt, 2), 'discount_pct': discount_pct, 'tax': round(tax_amt, 2), 'tax_pct': tax_pct, 'total': total}
+        elif it == 'purchase' and iid:
+            inv = PurchaseInvoice.query.get(iid)
+            if inv:
+                op['doc_number'] = getattr(inv, 'invoice_number', None) or '-'
+                op['source'] = 'Purchase'
+                op['op_type'] = 'purchase'
+                op['op_type_ar'] = 'شراء'
+                op['party'] = 'موردون'
+                pm = (getattr(inv, 'payment_method', None) or '').strip().upper()
+                op['payment_method'] = 'آجل' if pm in ('CREDIT',) else ('بنك' if pm in ('BANK', 'CARD', 'VISA', 'MADA', 'TRANSFER') else 'نقداً')
+        elif it == 'expense' and iid:
+            inv = ExpenseInvoice.query.get(iid)
+            if inv:
+                op['doc_number'] = getattr(inv, 'invoice_number', None) or '-'
+                op['source'] = 'Expense'
+                op['op_type'] = 'expense'
+                op['op_type_ar'] = 'مصروف'
+                op['party'] = 'موردون'
+                pm = (getattr(inv, 'payment_method', None) or '').strip().upper()
+                op['payment_method'] = 'بنك' if pm in ('BANK', 'CARD', 'VISA', 'MADA', 'TRANSFER') else 'نقداً'
+    lines = []
+    for ln in sorted(je.lines or [], key=lambda x: (x.line_no or 0)):
+        acc = ln.account
+        code = (getattr(acc, 'code', None) or '')
+        name = (getattr(acc, 'name', None) or '')
+        lines.append({'account_code': code, 'account_name': name, 'debit': float(ln.debit or 0), 'credit': float(ln.credit or 0)})
+    return jsonify({
+        'ok': True,
+        'entry': {'id': je.id, 'entry_number': je.entry_number, 'date': str(je.date or ''), 'branch_code': je.branch_code, 'description': je.description or '', 'status': je.status or 'draft', 'total_debit': float(je.total_debit or 0), 'total_credit': float(je.total_credit or 0), 'invoice_id': je.invoice_id, 'invoice_type': je.invoice_type, 'salary_id': je.salary_id},
+        'lines': lines,
+        'operational': op,
+        'financial': financial,
+    })
+
+
 @csrf.exempt
 @bp.route('/new', methods=['GET','POST'])
 @login_required
@@ -1142,7 +1342,7 @@ def new_entry():
             emp_id_val = None
         acc = Account.query.get(acc_id)
         code = (acc.code or '') if acc else ''
-        if code in {'1.1.4.2','2030','2.1.2.1','2130','5320'} and not emp_id_val:
+        if code in {'1151','2121','5310'} and not emp_id_val:
             flash('اختر الموظف عند استخدام حساب السلف أو الرواتب.', 'danger')
             return redirect(url_for('journal.new_entry'))
         f = request.files.get(f'lines-{idx}-attachment')
@@ -1184,14 +1384,38 @@ def employees_api():
 @bp.route('/accounts', methods=['GET'])
 @login_required
 def accounts_api():
-    rows = db.session.query(Account.id, Account.code, Account.name).order_by(Account.code.asc()).all()
-    return jsonify([{'id': rid, 'code': code, 'name': name} for (rid, code, name) in rows])
+    """تُرجع فقط الحسابات من الشجرة الجديدة (الحسابات الورقية فقط)."""
+    try:
+        from data.coa_new_tree import leaf_coa_dict
+        from models import Account
+        coa = leaf_coa_dict()
+        # الحصول على الحسابات من DB التي تطابق الشجرة الجديدة
+        codes = list(coa.keys())
+        rows = db.session.query(Account.id, Account.code, Account.name)\
+            .filter(Account.code.in_(codes))\
+            .order_by(Account.code.asc()).all()
+        # إذا لم تكن موجودة في DB، إنشاؤها من الشجرة
+        result = []
+        for code in sorted(codes):
+            # البحث في النتائج من DB
+            db_row = next((r for r in rows if str(r[1]) == code), None)
+            if db_row:
+                result.append({'id': db_row[0], 'code': str(db_row[1]), 'name': db_row[2]})
+            else:
+                # استخدام بيانات الشجرة
+                info = coa.get(code, {})
+                result.append({'id': None, 'code': code, 'name': info.get('name', code)})
+        return jsonify(result)
+    except Exception as e:
+        # Fallback: استخدام DB فقط
+        rows = db.session.query(Account.id, Account.code, Account.name).order_by(Account.code.asc()).all()
+        return jsonify([{'id': rid, 'code': code, 'name': name} for (rid, code, name) in rows])
 
 @csrf.exempt
 @bp.route('/<int:jid>', methods=['GET','POST'])
 @login_required
 def edit_entry(jid):
-    je = JournalEntry.query.get_or_404(jid)
+    je = _journal_with_lines_options(JournalEntry.query).filter_by(id=jid).first_or_404()
     if request.method == 'GET':
         if not _can('journal','view'):
             flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
@@ -1221,7 +1445,7 @@ def edit_entry(jid):
 @bp.route('/<int:jid>/post', methods=['POST'])
 @login_required
 def post_entry(jid):
-    je = JournalEntry.query.get_or_404(jid)
+    je = _journal_with_lines_options(JournalEntry.query).filter_by(id=jid).first_or_404()
     if not _can('journal','edit'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
         return redirect(url_for('journal.edit_entry', jid=je.id))
@@ -1237,8 +1461,11 @@ def post_entry(jid):
         flash('لا يمكن ترحيل القيد لأن مجموع المدين لا يساوي مجموع الدائن.', 'danger')
         return redirect(url_for('journal.edit_entry', jid=je.id))
     for ln in je.lines:
-        acc = Account.query.get(ln.account_id)
-        db.session.add(LedgerEntry(date=ln.line_date, account_id=acc.id, debit=ln.debit, credit=ln.credit, description=f'JE {je.entry_number} L{ln.line_no} {ln.description}'))
+        acc = ln.account
+        if not acc:
+            acc = Account.query.get(ln.account_id)
+        if acc:
+            db.session.add(LedgerEntry(date=ln.line_date, account_id=acc.id, debit=ln.debit, credit=ln.credit, description=f'JE {je.entry_number} L{ln.line_no} {ln.description}'))
     je.status = 'posted'
     je.posted_by = getattr(current_user,'id',None)
     db.session.add(JournalAudit(journal_id=je.id, action='post', user_id=getattr(current_user,'id',None), before_json=None, after_json=json.dumps({'status': 'posted'}, ensure_ascii=False)))
@@ -1252,7 +1479,7 @@ def print_entry(jid):
     if not _can('journal','print'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
         return redirect(url_for('journal.list_entries'))
-    je = JournalEntry.query.get_or_404(jid)
+    je = _journal_with_lines_options(JournalEntry.query).filter_by(id=jid).first_or_404()
     db.session.add(JournalAudit(journal_id=je.id, action='print', user_id=getattr(current_user,'id',None), before_json=None, after_json=None))
     db.session.commit()
     if (request.args.get('pdf') or '').strip() == '1':
@@ -1305,8 +1532,8 @@ def create_capital_entry():
     except Exception:
         amt = 2000.0
     branch = (request.args.get('branch') or 'china_town').strip()
-    cash_acc = _acc_by_code('1110')
-    cap_acc = _acc_by_code('3000')
+    cash_acc = _acc_by_code('1111')
+    cap_acc = _acc_by_code('3110')
     je = JournalEntry(entry_number=f"JE-CAP-{int(time.time())}", date=get_saudi_now().date(), branch_code=branch, description=f"Capital Injection {amt}", status='posted', total_debit=amt, total_credit=amt, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
     db.session.add(je); db.session.flush()
     db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=cash_acc.id, description='Capital Cash', line_date=je.date, debit=amt, credit=0.0))
@@ -1344,12 +1571,12 @@ def close_period():
             lines.append(('CR', acc.id, amt, 'إقفال مصروف/تكلفة'))
             total_cr += amt
     net = total_dr - total_cr
-    pl_acc = _acc_by_code('3030')
+    pl_acc = _acc_by_code('3220')
     if net>0:
-        lines.append(('CR', pl_acc.id, net, 'صافي الربح إلى 3030'))
+        lines.append(('CR', pl_acc.id, net, 'صافي الربح إلى 3220'))
         total_cr += net
     elif net<0:
-        lines.append(('DR', pl_acc.id, -net, 'صافي الخسارة من 3030'))
+        lines.append(('DR', pl_acc.id, -net, 'صافي الخسارة من 3220'))
         total_dr += (-net)
     je = JournalEntry(entry_number=f"JE-CLOSE-{int(time.time())}", date=end_date, branch_code=(None if branch=='all' else branch), description=f"إقفال الفترة {period}", status='posted', total_debit=total_dr, total_credit=total_cr, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
     db.session.add(je); db.session.flush()
@@ -1387,10 +1614,12 @@ def api_journals():
             q = q.filter(JournalEntry.status == posted)
         if source:
             try:
-                q = q.filter(JournalEntry.source_ref_type == source)
+                if hasattr(JournalEntry, 'source_ref_type'):
+                    q = q.filter(JournalEntry.source_ref_type == source)
             except Exception:
                 pass
         rows = q.all()
+        meta = _journal_list_entry_meta(rows)
         data = []
         for je in rows:
             d = {
@@ -1404,7 +1633,8 @@ def api_journals():
                 'total_credit': float(getattr(je,'total_credit',0) or 0),
                 'source_ref_type': getattr(je,'source_ref_type',None),
                 'source_ref_id': getattr(je,'source_ref_id',None),
-                'lines': []
+                'lines': [],
+                'operation_detail': meta.get(je.id, {})
             }
             for ln in (getattr(je,'lines',[]) or []):
                 try:
@@ -1515,7 +1745,6 @@ def api_transactions_post():
             db.session.rollback()
         except Exception:
             pass
-        from flask import jsonify
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/reconcile/vat', methods=['POST'])
@@ -1530,8 +1759,8 @@ def api_reconcile_vat():
         out_v = float(db.session.query(func.coalesce(func.sum(SalesInvoice.tax_amount), 0)).filter(SalesInvoice.date.between(start, end)).scalar() or 0)
         in_v = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.tax_amount), 0)).filter(PurchaseInvoice.date.between(start, end)).scalar() or 0) + float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.tax_amount), 0)).filter(ExpenseInvoice.date.between(start, end)).scalar() or 0)
         # Journals VAT
-        j_out = float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0)).join(Account, JournalLine.account_id == Account.id).filter(Account.code == '2024').filter(JournalLine.line_date.between(start, end)).scalar() or 0)
-        j_in = float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0)).join(Account, JournalLine.account_id == Account.id).filter(Account.code == '6200').filter(JournalLine.line_date.between(start, end)).scalar() or 0)
+        j_out = float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0)).join(Account, JournalLine.account_id == Account.id).filter(Account.code == '2141').filter(JournalLine.line_date.between(start, end)).scalar() or 0)
+        j_in = float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0)).join(Account, JournalLine.account_id == Account.id).filter(Account.code == '1170').filter(JournalLine.line_date.between(start, end)).scalar() or 0)
         from flask import jsonify
         return jsonify({'ok': True, 'invoices': {'output_vat': out_v, 'input_vat': in_v, 'net_vat': (out_v-in_v)}, 'journals': {'output_vat': j_out, 'input_vat': j_in, 'net_vat': (j_out-j_in)}, 'diff': {'output_vat': (out_v - j_out), 'input_vat': (in_v - j_in), 'net_vat': ((out_v-in_v) - (j_out-j_in))}})
     except Exception as e:
@@ -1548,10 +1777,10 @@ def api_close_year():
         rev = float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0)).join(Account, JournalLine.account_id == Account.id).filter(Account.type.in_(['REVENUE','OTHER_INCOME'])).filter(JournalLine.line_date.between(start, end)).scalar() or 0)
         exp = float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0)).join(Account, JournalLine.account_id == Account.id).filter(Account.type.in_(['EXPENSE','OTHER_EXPENSE','COGS','TAX'])).filter(JournalLine.line_date.between(start, end)).scalar() or 0)
         net = round(rev - exp, 2)
-        # Create closing entry: move all to Retained Earnings 3200
-        re_acc = Account.query.filter(Account.code == '3200').first()
+        # Create closing entry: move all to 3220 أرباح السنة الحالية
+        re_acc = Account.query.filter(Account.code == '3220').first()
         if not re_acc:
-            re_acc = Account(code='3200', name='Retained Earnings', type='EQUITY'); db.session.add(re_acc); db.session.flush()
+            re_acc = Account(code='3220', name='أرباح السنة الحالية', type='EQUITY'); db.session.add(re_acc); db.session.flush()
         je = JournalEntry(entry_number=f"JE-CLOSE-{year}", date=end, branch_code=None, description=f"Year-end close {year}", status='posted', total_debit=(net if net<0 else 0.0), total_credit=(net if net>0 else 0.0), created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
         db.session.add(je); db.session.flush()
         if net > 0:
@@ -1570,6 +1799,7 @@ def api_close_year():
         return jsonify({'ok': False, 'error': str(e)}), 500
 @bp.route('/api/journals/delete', methods=['POST'])
 @csrf.exempt
+@login_required
 def api_journals_delete():
     try:
         data = request.get_json(silent=True) or {}
@@ -1579,6 +1809,8 @@ def api_journals_delete():
         je = JournalEntry.query.filter(JournalEntry.entry_number == entry_no).first()
         if not je:
             return jsonify({'ok': False, 'error': 'not_found'}), 404
+        if (getattr(je, 'status', None) or '').strip().lower() == 'posted':
+            return jsonify({'ok': False, 'error': 'cannot_delete_posted', 'message': 'لا يمكن حذف قيد منشور. أرجِعْه لمسودة أولاً.'}), 400
         try:
             JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
         except Exception:
@@ -1586,6 +1818,117 @@ def api_journals_delete():
         db.session.delete(je)
         db.session.commit()
         return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/journals/revert', methods=['POST'])
+@csrf.exempt
+@login_required
+def api_journals_revert():
+    """إرجاع لمسودة — منشور فقط."""
+    try:
+        data = request.get_json(silent=True) or {}
+        entry_no = (data.get('entry_number') or request.form.get('entry_number') or '').strip()
+        if not entry_no:
+            return jsonify({'ok': False, 'error': 'missing_entry_number'}), 400
+        je = JournalEntry.query.filter(JournalEntry.entry_number == entry_no).first()
+        if not je:
+            return jsonify({'ok': False, 'error': 'not_found'}), 404
+        if (getattr(je, 'status', None) or '').strip().lower() != 'posted':
+            return jsonify({'ok': False, 'error': 'not_posted', 'message': 'القيد مسودة بالفعل.'}), 400
+        je.status = 'draft'
+        je.updated_by = getattr(current_user, 'id', None)
+        try:
+            db.session.add(JournalAudit(journal_id=je.id, action='revert_to_draft', user_id=getattr(current_user, 'id', None), before_json=json.dumps({'status': 'posted'}, ensure_ascii=False), after_json=json.dumps({'status': 'draft'}, ensure_ascii=False)))
+        except Exception:
+            pass
+        db.session.commit()
+        return jsonify({'ok': True, 'status': 'draft'})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/journals/repost', methods=['POST'])
+@csrf.exempt
+@login_required
+def api_journals_repost():
+    """إعادة نشر — مسودة فقط."""
+    try:
+        data = request.get_json(silent=True) or {}
+        entry_no = (data.get('entry_number') or request.form.get('entry_number') or '').strip()
+        if not entry_no:
+            return jsonify({'ok': False, 'error': 'missing_entry_number'}), 400
+        je = _journal_with_lines_options(JournalEntry.query).filter(JournalEntry.entry_number == entry_no).first()
+        if not je:
+            return jsonify({'ok': False, 'error': 'not_found'}), 404
+        if (getattr(je, 'status', None) or '').strip().lower() == 'posted':
+            return jsonify({'ok': False, 'error': 'already_posted', 'message': 'القيد منشور مسبقاً.'}), 400
+        total_debit = sum(float(getattr(ln, 'debit', 0) or 0) for ln in (getattr(je, 'lines', []) or []))
+        total_credit = sum(float(getattr(ln, 'credit', 0) or 0) for ln in (getattr(je, 'lines', []) or []))
+        if round(total_debit, 2) != round(total_credit, 2) or total_debit <= 0:
+            return jsonify({'ok': False, 'error': 'imbalanced', 'message': 'مجموع المدين لا يساوي مجموع الدائن.'}), 400
+        for ln in (getattr(je, 'lines', []) or []):
+            acc = getattr(ln, 'account', None) or Account.query.get(ln.account_id)
+            if acc:
+                db.session.add(LedgerEntry(date=ln.line_date, account_id=acc.id, debit=ln.debit, credit=ln.credit, description=f'JE {je.entry_number} L{ln.line_no} {ln.description}'))
+        je.status = 'posted'
+        je.posted_by = getattr(current_user, 'id', None)
+        try:
+            db.session.add(JournalAudit(journal_id=je.id, action='post', user_id=getattr(current_user, 'id', None), before_json=None, after_json=json.dumps({'status': 'posted'}, ensure_ascii=False)))
+        except Exception:
+            pass
+        db.session.commit()
+        return jsonify({'ok': True, 'status': 'posted'})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/journals/reverse', methods=['POST'])
+@csrf.exempt
+@login_required
+def api_journals_reverse():
+    """عكس القيد — إنشاء قيد معكوس منشور."""
+    try:
+        data = request.get_json(silent=True) or {}
+        entry_no = (data.get('entry_number') or request.form.get('entry_number') or '').strip()
+        if not entry_no:
+            return jsonify({'ok': False, 'error': 'missing_entry_number'}), 400
+        je = _journal_with_lines_options(JournalEntry.query).filter(JournalEntry.entry_number == entry_no).first()
+        if not je:
+            return jsonify({'ok': False, 'error': 'not_found'}), 404
+        rev_num = f"JE-REV-{je.entry_number}"
+        if JournalEntry.query.filter(JournalEntry.entry_number == rev_num).first():
+            return jsonify({'ok': False, 'error': 'reversal_exists', 'message': 'يوجد قيد معكوس لهذا القيد مسبقاً.'}), 400
+        total_dr = sum(float(getattr(ln, 'debit', 0) or 0) for ln in (getattr(je, 'lines', []) or []))
+        total_cr = sum(float(getattr(ln, 'credit', 0) or 0) for ln in (getattr(je, 'lines', []) or []))
+        rev = JournalEntry(entry_number=rev_num, date=je.date, branch_code=je.branch_code, description=f'عكس قيد {je.entry_number}', status='posted', total_debit=total_cr, total_credit=total_dr, created_by=getattr(current_user, 'id', None), posted_by=getattr(current_user, 'id', None))
+        db.session.add(rev)
+        db.session.flush()
+        for ln in (getattr(je, 'lines', []) or []):
+            acc = getattr(ln, 'account', None) or Account.query.get(ln.account_id)
+            if not acc:
+                continue
+            db.session.add(JournalLine(journal_id=rev.id, line_no=ln.line_no, account_id=acc.id, debit=ln.credit, credit=ln.debit, description=f'عكس {ln.description}', line_date=ln.line_date))
+            db.session.add(LedgerEntry(date=ln.line_date, account_id=acc.id, debit=ln.credit, credit=ln.debit, description=f'JE {rev_num} rev {je.entry_number}'))
+        try:
+            db.session.add(JournalAudit(journal_id=rev.id, action='create', user_id=getattr(current_user, 'id', None), before_json=None, after_json=json.dumps({'reverse_of': je.entry_number}, ensure_ascii=False)))
+        except Exception:
+            pass
+        db.session.commit()
+        return jsonify({'ok': True, 'entry_number': rev_num})
     except Exception as e:
         try:
             db.session.rollback()

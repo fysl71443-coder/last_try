@@ -1,0 +1,386 @@
+# Phase 2 – Customers blueprint. Same URLs.
+from __future__ import annotations
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask_login import login_required
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
+
+from app import db, csrf
+from models import Customer, SalesInvoice, Payment
+
+bp = Blueprint('customers', __name__)
+
+
+def _report_header_context():
+    """ترويسة موحدة للتقارير: اسم الشركة، الرقم الضريبي، البيانات الرسمية."""
+    try:
+        from models import Settings
+        s = Settings.query.first()
+        if not s:
+            return {"company_name": "Company", "tax_number": "", "address": "", "phone": "", "email": "", "logo_url": None, "show_logo": False}
+        return {
+            "company_name": (s.company_name or "Company").strip(),
+            "tax_number": (getattr(s, "tax_number", None) or "").strip(),
+            "address": (getattr(s, "address", None) or "").strip(),
+            "phone": (getattr(s, "phone", None) or "").strip(),
+            "email": (getattr(s, "email", None) or "").strip(),
+            "logo_url": getattr(s, "logo_url", None),
+            "show_logo": bool(getattr(s, "receipt_show_logo", False)),
+        }
+    except Exception:
+        return {"company_name": "Company", "tax_number": "", "address": "", "phone": "", "email": "", "logo_url": None, "show_logo": False}
+
+
+def _customer_search(q: str | None, limit: int = 20):
+    if not q:
+        return Customer.query.filter_by(active=True).order_by(Customer.name.asc()).limit(
+            min(limit, 10)
+        ).all()
+    like = f"%{q}%"
+    return Customer.query.filter(
+        Customer.active == True,
+        (Customer.name.ilike(like)) | (Customer.phone.ilike(like)),
+    ).order_by(Customer.name.asc()).limit(limit).all()
+
+
+@bp.route('/api/customers/search', methods=['GET'], endpoint='api_customers_search')
+@login_required
+def api_customers_search():
+    q = (request.args.get('q') or '').strip()
+    rows = _customer_search(q, 20)
+    data = [{
+        'id': c.id,
+        'name': c.name,
+        'phone': c.phone,
+        'discount_percent': float(c.discount_percent or 0),
+        'customer_type': (getattr(c, 'customer_type', '') or 'cash'),
+    } for c in rows]
+    return jsonify({'results': data})
+
+
+@bp.route('/api/customers/check-credit', methods=['GET'], endpoint='api_customers_check_credit')
+@login_required
+def api_customers_check_credit():
+    """استعلام: هل العميل المدخل مسجل كعميل آجل؟ يُستخدم عند إدخال اسم العميل في فاتورة المبيعات."""
+    q = (request.args.get('q') or request.args.get('name') or '').strip()
+    phone = (request.args.get('phone') or '').strip() or None
+    if not q:
+        return jsonify({'found': False})
+    like = f"%{q}%"
+    query = Customer.query.filter(Customer.active == True)
+    query = query.filter(Customer.name.ilike(like))
+    if phone:
+        query = query.filter(Customer.phone.ilike(f"%{phone}%"))
+    c = query.order_by(Customer.name.asc()).first()
+    if not c:
+        return jsonify({'found': False})
+    ctype = (getattr(c, 'customer_type', '') or 'cash').strip().lower()
+    is_credit = ctype in ('credit', 'آجل')
+    return jsonify({
+        'found': True,
+        'is_credit': is_credit,
+        'id': c.id,
+        'name': c.name,
+        'phone': c.phone or '',
+        'discount_percent': float(c.discount_percent or 0),
+        'customer_type': ctype,
+    })
+
+
+@bp.route('/customers', methods=['GET', 'POST'], endpoint='customers')
+@login_required
+def customers():
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        phone = (request.form.get('phone') or '').strip() or None
+        discount = request.form.get('discount_percent', type=float) or 0.0
+        ctype = (request.form.get('customer_type') or 'cash').strip().lower() or 'cash'
+        ctype = 'credit' if ctype in ('credit', 'آجل') else 'cash'
+        if not name:
+            flash('Name is required', 'danger')
+        else:
+            try:
+                c = Customer(name=name, phone=phone, customer_type=ctype, discount_percent=float(discount or 0))
+                db.session.add(c)
+                db.session.commit()
+                flash('Customer added', 'success')
+            except Exception as e:
+                db.session.rollback()
+                flash('Error adding customer', 'danger')
+        return redirect(url_for('customers.customers'))
+    
+    # Pagination and filtering
+    q = (request.args.get('q') or '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    sort_by = request.args.get('sort', 'name', type=str)
+    sort_order = request.args.get('order', 'asc', type=str)
+    status_filter = request.args.get('status', 'all', type=str)
+    type_filter = request.args.get('type', 'all', type=str)  # all, cash, credit
+    
+    # Build query
+    qry = Customer.query
+    if status_filter == 'active':
+        qry = qry.filter_by(active=True)
+    elif status_filter == 'inactive':
+        qry = qry.filter_by(active=False)
+    if type_filter == 'cash':
+        qry = qry.filter(db.or_(Customer.customer_type == 'cash', Customer.customer_type.is_(None)))
+    elif type_filter == 'credit':
+        qry = qry.filter(Customer.customer_type == 'credit')
+    
+    if q:
+        like = f"%{q}%"
+        qry = qry.filter((Customer.name.ilike(like)) | (Customer.phone.ilike(like)))
+    
+    # Sorting
+    if sort_by == 'name':
+        qry = qry.order_by(Customer.name.asc() if sort_order == 'asc' else Customer.name.desc())
+    elif sort_by == 'phone':
+        qry = qry.order_by(Customer.phone.asc() if sort_order == 'asc' else Customer.phone.desc())
+    elif sort_by == 'discount':
+        qry = qry.order_by(Customer.discount_percent.asc() if sort_order == 'asc' else Customer.discount_percent.desc())
+    else:
+        qry = qry.order_by(Customer.name.asc())
+    
+    # Pagination
+    pagination = qry.paginate(page=page, per_page=per_page, error_out=False)
+    customers_list = pagination.items
+    
+    # Get totals
+    total_customers = Customer.query.count()
+    active_customers = Customer.query.filter_by(active=True).count()
+    
+    return render_template('customers.html', 
+                         customers=customers_list, 
+                         pagination=pagination,
+                         q=q,
+                         sort_by=sort_by,
+                         sort_order=sort_order,
+                         status_filter=status_filter,
+                         type_filter=type_filter,
+                         total_customers=total_customers,
+                         active_customers=active_customers)
+
+
+@bp.route('/customers/<int:cid>/edit', methods=['GET', 'POST'], endpoint='customer_edit')
+@login_required
+def customer_edit(cid):
+    try:
+        c = db.session.get(Customer, cid)
+        if not c:
+            flash('Customer not found', 'warning')
+            return redirect(url_for('customers.customers'))
+        
+        if request.method == 'POST':
+            name = (request.form.get('name') or '').strip()
+            phone = (request.form.get('phone') or '').strip() or None
+            discount = request.form.get('discount_percent', type=float) or 0.0
+            ctype = (request.form.get('customer_type') or 'cash').strip().lower()
+            ctype = 'credit' if ctype in ('credit', 'آجل') else 'cash'
+            
+            if not name:
+                flash('Name is required', 'danger')
+            else:
+                try:
+                    c.name = name
+                    c.phone = phone
+                    c.customer_type = ctype
+                    c.discount_percent = float(discount or 0)
+                    db.session.commit()
+                    flash('Customer updated successfully', 'success')
+                    return redirect(url_for('customers.customers'))
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f'Error updating customer: {e}', 'danger')
+        
+        return render_template('customers_edit.html', c=c)
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {e}', 'danger')
+        return redirect(url_for('customers.customers'))
+
+
+@bp.route('/customers/receivables-statements', methods=['GET'], endpoint='customers_receivables_statements')
+@login_required
+def customers_receivables_statements():
+    """صفحة متابعة المستحقات والكشوفات للعملاء الآجلين: اختيار عميل، فترة، عرض/طباعة كشف الحساب."""
+    try:
+        from datetime import date
+        from models import get_saudi_now
+        today = get_saudi_now().date()
+    except Exception:
+        from datetime import date
+        today = date.today()
+    credit_customers = Customer.query.filter(
+        db.or_(Customer.customer_type == 'credit', Customer.customer_type == 'آجل')
+    ).filter_by(active=True).order_by(Customer.name.asc()).all()
+    return render_template('customers/receivables_statements.html',
+                          customers=credit_customers,
+                          today=today.isoformat())
+
+
+@bp.route('/customers/<int:cid>/statement', methods=['GET'], endpoint='customer_statement')
+@login_required
+def customer_statement(cid):
+    """كشف حساب عميل آجل: فواتير، مسدد، متبقي."""
+    c = db.session.get(Customer, cid)
+    if not c:
+        flash('Customer not found', 'warning')
+        return redirect(url_for('customers.customers'))
+    start = (request.args.get('start_date') or '').strip()
+    end = (request.args.get('end_date') or '').strip()
+    try:
+        from models import get_saudi_now
+        today = get_saudi_now().date()
+    except Exception:
+        from datetime import date
+        today = date.today()
+    if not start:
+        start = today.replace(day=1).isoformat()
+    if not end:
+        end = today.isoformat()
+    rows = []
+    invs = SalesInvoice.query.filter(
+        SalesInvoice.customer_id == cid,
+        SalesInvoice.date >= start,
+        SalesInvoice.date <= end
+    ).order_by(SalesInvoice.date.asc()).all()
+    inv_ids = [i.id for i in invs]
+    opening = 0.0
+    for inv in SalesInvoice.query.filter(SalesInvoice.customer_id == cid, SalesInvoice.date < start).all():
+        opening += float(inv.total_after_tax_discount or 0)
+    try:
+        from datetime import datetime
+        start_dt = datetime.strptime(start, '%Y-%m-%d').date()
+    except Exception:
+        start_dt = today
+    for p in Payment.query.filter(Payment.invoice_type == 'sales').join(SalesInvoice, Payment.invoice_id == SalesInvoice.id).filter(
+        SalesInvoice.customer_id == cid
+    ).all():
+        pd = getattr(p, 'payment_date', None)
+        pdate = (pd.date() if hasattr(pd, 'date') else pd) if pd else None
+        if pdate is None or pdate >= start_dt:
+            continue
+        opening -= float(p.amount_paid or 0)
+    total_invoices = 0.0
+    total_paid = 0.0
+    for inv in invs:
+        amt = float(inv.total_after_tax_discount or 0.0)
+        rows.append({'date': str(inv.date or ''), 'ref': inv.invoice_number, 'desc': "فاتورة مبيعات", 'debit': amt, 'credit': 0.0, 'balance': None})
+        total_invoices += amt
+    pays = Payment.query.filter(Payment.invoice_type == 'sales', Payment.invoice_id.in_(inv_ids)).all() if inv_ids else []
+    for p in pays:
+        inv = SalesInvoice.query.get(p.invoice_id)
+        amt = float(p.amount_paid or 0.0)
+        pd = str(getattr(p, 'payment_date', None) or '')[:10]
+        if start <= pd <= end:
+            rows.append({'date': pd, 'ref': (inv.invoice_number if inv else ''), 'desc': "سداد", 'debit': 0.0, 'credit': amt, 'balance': None})
+            total_paid += amt
+    rows.sort(key=lambda x: (x['date'], x['debit'] > 0))
+    bal = opening
+    for r in rows:
+        bal += (r['debit'] or 0) - (r['credit'] or 0)
+        r['balance'] = round(bal, 2)
+    remaining = max(0.0, bal)
+    try:
+        generated_at = get_saudi_now().strftime('%Y-%m-%d %H:%M')
+    except Exception:
+        from datetime import datetime
+        generated_at = datetime.now().strftime('%Y-%m-%d %H:%M')
+    customer_email = getattr(c, 'email', None) or None
+    return render_template('customers/statement.html',
+        customer=c, customer_email=customer_email, rows=rows, start_date=start, end_date=end,
+        opening_balance=opening, total_invoices=total_invoices,
+        total_paid=total_paid, remaining=remaining, generated_at=generated_at,
+        **_report_header_context())
+
+
+@bp.route('/customers/<int:cid>/toggle', methods=['POST'], endpoint='customer_toggle')
+@login_required
+def customer_toggle(cid):
+    try:
+        c = db.session.get(Customer, cid)
+        if not c:
+            flash('Customer not found', 'warning')
+            return redirect(url_for('customers.customers'))
+        c.active = not bool(getattr(c, 'active', True))
+        db.session.commit()
+        flash('Customer status updated', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating customer: {e}', 'danger')
+    return redirect(url_for('customers.customers'))
+
+
+@bp.route('/customers/<int:cid>/delete', methods=['POST'], endpoint='customer_delete')
+@login_required
+def customer_delete(cid):
+    try:
+        c = db.session.get(Customer, cid)
+        if not c:
+            flash('Customer not found', 'warning')
+        else:
+            try:
+                db.session.delete(c)
+                db.session.commit()
+                flash('Customer deleted', 'success')
+            except IntegrityError:
+                db.session.rollback()
+                c.active = False
+                db.session.commit()
+                flash('Customer has related records; deactivated instead', 'warning')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting customer: {e}', 'danger')
+    return redirect(url_for('customers.customers'))
+
+
+@bp.route('/api/pos/<branch>/customers/search', methods=['GET'], endpoint='api_pos_customers_search')
+@login_required
+def api_pos_customers_search(branch):
+    q = (request.args.get('q') or '').strip()
+    rows = _customer_search(q, 20)
+    return jsonify([{
+        'id': c.id,
+        'name': c.name,
+        'phone': c.phone,
+        'discount_percent': float(c.discount_percent or 0),
+    } for c in rows])
+
+
+@bp.route('/api/customers', methods=['POST'], endpoint='api_customers_create')
+@login_required
+@csrf.exempt
+def api_customers_create():
+    try:
+        if request.is_json:
+            data = request.get_json() or {}
+            name = (data.get('name') or '').strip()
+            phone = (data.get('phone') or '').strip() or None
+            discount = float((data.get('discount_percent') or 0) or 0)
+        else:
+            name = (request.form.get('name') or '').strip()
+            phone = (request.form.get('phone') or '').strip() or None
+            discount = request.form.get('discount_percent', type=float) or 0.0
+        if not name:
+            return jsonify({'ok': False, 'error': 'Name is required'}), 400
+        d = request.get_json(silent=True) or request.form
+        ctype = (d.get('customer_type') or 'cash').strip().lower() or 'cash'
+        ctype = 'credit' if ctype in ('credit', 'آجل') else 'cash'
+        c = Customer(name=name, phone=phone, customer_type=ctype, discount_percent=float(discount or 0))
+        db.session.add(c)
+        db.session.commit()
+        return jsonify({
+            'ok': True,
+            'customer': {
+                'id': c.id,
+                'name': c.name,
+                'phone': c.phone,
+                'discount_percent': float(c.discount_percent or 0),
+            },
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400

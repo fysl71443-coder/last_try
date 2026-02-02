@@ -1,51 +1,72 @@
 {% extends "base.html" %}
+{% block title %}{{ _('Accounts') }}{% endblock %}
 {% block content %}
-<div class="container mt-3">
-  <h4>{{ _('Accounts / الحسابات') }}</h4>
-  <form class="row g-3 mb-3" method="get">
-    <div class="col-md-3">
-      <label class="form-label">{{ _('Start Date / تاريخ البداية') }}</label>
-      <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-book"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Accounts') }}</h1>
+      <span class="ops-subtitle">{{ _('View account balances by period and open statements') }}</span>
     </div>
-    <div class="col-md-3">
-      <label class="form-label">{{ _('End Date / تاريخ النهاية') }}</label>
-      <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+    <div class="ops-actions">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('financials.accounts_hub') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-sitemap me-1"></i>{{ _('Accounts Hub') }}</a>
     </div>
-    <div class="col-md-3 d-flex align-items-end">
-      <button class="btn btn-primary" type="submit">{{ _('Filter / تصفية') }}</button>
-    </div>
-  </form>
-  <table class="table table-striped">
-    <thead>
-      <tr>
-        <th>{{ _('Code') }}</th>
-        <th>{{ _('Account') }}</th>
-        <th>{{ _('Type') }}</th>
-        <th class="text-end">{{ _('Debit') }}</th>
-        <th class="text-end">{{ _('Credit') }}</th>
-        <th class="text-end">{{ _('Balance') }}</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in rows %}
-      {% set bal = (r.debit - r.credit) if r.type != 'LIABILITY' else (r.credit - r.debit) %}
-      <tr>
-        <td>{{ r.code }}</td>
-        <td>{{ r.name }}</td>
-        <td>{{ r.type }}</td>
-        <td class="text-end">{{ '%.2f' % (r.debit or 0) }}</td>
-        <td class="text-end">{{ '%.2f' % (r.credit or 0) }}</td>
-        <td class="text-end">{{ '%.2f' % bal }}</td>
-        <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('financials.account_statement', code=r.code, start_date=start_date, end_date=end_date) }}">{{ _('Details / تفاصيل') }}</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <div class="mt-2">
-    <a class="btn btn-outline-info" href="{{ url_for('financials.trial_balance', date=end_date) }}">{{ _('Trial Balance / ميزان المراجعة') }}</a>
-    <a class="btn btn-outline-info" href="{{ url_for('financials.balance_sheet', date=end_date) }}">{{ _('Balance Sheet / الميزانية') }}</a>
-    <a class="btn btn-outline-info" href="{{ url_for('financials.income_statement', start_date=start_date, end_date=end_date) }}">{{ _('Income Statement / قائمة الدخل') }}</a>
   </div>
+
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Period') }}</div>
+    <div class="ops-form-body">
+      <form class="row g-3 align-items-end" method="get">
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Start Date') }}</label>
+          <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('End Date') }}</label>
+          <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+        </div>
+        <div class="col-md-3">
+          <button class="btn btn-primary" type="submit"><i class="fa-solid fa-filter me-1"></i>{{ _('Filter') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="screen-section">
+    <div class="screen-section-title">{{ _('Account list') }}</div>
+    <div class="screen-section-body">
+      <div class="screen-table-wrap">
+        <table class="table screen-table">
+          <thead>
+            <tr>
+              <th>{{ _('Code') }}</th>
+              <th>{{ _('Account') }}</th>
+              <th>{{ _('Type') }}</th>
+              <th class="text-end">{{ _('Debit') }}</th>
+              <th class="text-end">{{ _('Credit') }}</th>
+              <th class="text-end">{{ _('Balance') }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            {% set bal = (r.debit - r.credit) if r.type != 'LIABILITY' else (r.credit - r.debit) %}
+            <tr>
+              <td>{{ r.code }}</td>
+              <td>{{ r.name }}</td>
+              <td>{{ r.type }}</td>
+              <td class="text-end">{{ '%.2f' % (r.debit or 0) }}</td>
+              <td class="text-end">{{ '%.2f' % (r.credit or 0) }}</td>
+              <td class="text-end">{{ '%.2f' % bal }}</td>
+              <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('financials.account_statement', code=r.code, start_date=start_date, end_date=end_date) }}">{{ _('Details') }}</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

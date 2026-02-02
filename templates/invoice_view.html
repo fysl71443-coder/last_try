@@ -1,36 +1,46 @@
 {% extends 'base.html' %}
-{% set back_url = url_for('main.invoices', type=kind) %}
+{% set back_url = url_for('main.invoices', type=back_type if back_type is defined else kind) %}
 
 {% block title %}{{ _(title) }}{% endblock %}
 {% block content %}
-<div class="container py-4 printable">
-  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
-    <h3 class="mb-0">🧾 {{ _(title) }} — {{ inv.invoice_number }}</h3>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('main.invoices', type=kind) }}" class="btn btn-outline-secondary">⬅️ {{ _('Back / رجوع') }}</a>
-      <a href="#" target="_blank" onclick="window.print()" class="btn btn-success">🖨 {{ _('Print / طباعة') }}</a>
+<div class="container py-4 ops-layout hub-wrap printable">
+  <div class="ops-header-bar no-print">
+    <span class="ops-icon"><i class="fa-solid fa-file-invoice"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _(title) }} — {{ inv.invoice_number }}</h1>
+      <span class="ops-subtitle">{{ _('View and print invoice') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('main.invoices', type=back_type if back_type is defined else kind) }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-arrow-left me-1"></i>{{ _('Back') }}</a>
+      <a href="#" class="btn btn-sm btn-primary" onclick="window.print(); return false;"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
     </div>
   </div>
 
-  <div class="row g-3 mb-3">
-    <div class="col-md-4"><div class="card p-3"><div><strong>{{ _('Date / التاريخ') }}</strong></div><div>{{ inv.date }}</div></div></div>
-    <div class="col-md-4"><div class="card p-3"><div><strong>{{ _('Party / الطرف') }}</strong></div><div>{{ inv.customer_name or inv.supplier_name or '-' }}</div></div></div>
-    <div class="col-md-4"><div class="card p-3"><div><strong>{{ _('Status / الحالة') }}</strong></div><div>{{ inv.status }}</div></div></div>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Invoice info') }}</div>
+    <div class="ops-form-body">
+      <div class="row g-3 mb-0">
+        <div class="col-md-4"><div class="text-muted small">{{ _('Date') }}</div><strong>{{ inv.date }}</strong></div>
+        <div class="col-md-4"><div class="text-muted small">{{ _('Party') }}</div><strong>{{ inv.customer_name or inv.supplier_name or '-' }}</strong></div>
+        <div class="col-md-4"><div class="text-muted small">{{ _('Status') }}</div><strong>{{ inv.status }}</strong></div>
+      </div>
+    </div>
   </div>
 
-  <div class="card mb-3">
-    <div class="card-body">
-      <div class="table-responsive">
-        <table class="table table-striped table-bordered invoice-table">
-          <thead class="table-dark">
+  <div class="screen-section">
+    <div class="screen-section-title">{{ _('Items') }}</div>
+    <div class="screen-section-body">
+      <div class="screen-table-wrap">
+        <table class="table screen-table invoice-table">
+          <thead>
             <tr>
               <th>#</th>
-              <th>{{ _('Item / العنصر') }}</th>
-              <th>{{ _('Qty / الكمية') }}</th>
-              <th>{{ _('Price / السعر') }}</th>
-              <th>{{ _('Tax / الضريبة') }}</th>
-              <th>{{ _('Discount / الخصم') }}</th>
-              <th>{{ _('Total / الإجمالي') }}</th>
+              <th>{{ _('Item') }}</th>
+              <th>{{ _('Qty') }}</th>
+              <th>{{ _('Price') }}</th>
+              <th>{{ _('Tax') }}</th>
+              <th>{{ _('Discount') }}</th>
+              <th>{{ _('Total') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -51,21 +61,23 @@
     </div>
   </div>
 
-  <div class="row g-3">
-    <div class="col-md-3"><div class="card p-3"><div><strong>{{ _('Subtotal / المجموع') }}</strong></div><div>{{ '%.2f'|format(inv.total_before_tax) }}</div></div></div>
-    <div class="col-md-3"><div class="card p-3"><div><strong>{{ _('Tax / الضريبة') }}</strong></div><div>{{ '%.2f'|format(inv.tax_amount) }}</div></div></div>
-    <div class="col-md-3"><div class="card p-3"><div><strong>{{ _('Discount / الخصم') }}</strong></div><div>{{ '%.2f'|format(inv.discount_amount) }}</div></div></div>
-    <div class="col-md-3"><div class="card p-3"><div><strong>{{ _('Total / الإجمالي') }}</strong></div><div>{{ '%.2f'|format(inv.total_after_tax_discount) }}</div></div></div>
-  </div>
-
-  <div class="row g-3 mt-3">
-    <div class="col-md-4"><div class="card p-3"><div><strong>{{ _('Paid / المدفوع') }}</strong></div><div>{{ '%.2f'|format(paid) }}</div></div></div>
-    <div class="col-md-4"><div class="card p-3"><div><strong>{{ _('Remaining / المتبقي') }}</strong></div><div>{{ '%.2f'|format(remaining) }}</div></div></div>
-    <div class="col-md-4 no-print">
-      <div class="card p-3">
-        <div class="d-flex gap-2">
-          <button class="btn btn-success" onclick="payFull('{{ kind }}','{{ inv.id }}','{{ remaining }}')">{{ _('Pay Full') }}</button>
-          <button class="btn btn-outline-success" onclick="payCustom('{{ kind }}','{{ inv.id }}','{{ remaining }}')">{{ _('Enter Amount') }}</button>
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('Totals') }}</div>
+    <div class="ops-form-body">
+      <div class="row g-3 kpi-row">
+        <div class="col-md-3"><div class="text-muted small">{{ _('Subtotal') }}</div><div class="kpi-value">{{ '%.2f'|format(inv.total_before_tax) }}</div></div>
+        <div class="col-md-3"><div class="text-muted small">{{ _('Tax') }}</div><div class="kpi-value">{{ '%.2f'|format(inv.tax_amount) }}</div></div>
+        <div class="col-md-3"><div class="text-muted small">{{ _('Discount') }}</div><div class="kpi-value">{{ '%.2f'|format(inv.discount_amount) }}</div></div>
+        <div class="col-md-3"><div class="text-muted small">{{ _('Total') }}</div><div class="kpi-value">{{ '%.2f'|format(inv.total_after_tax_discount) }}</div></div>
+      </div>
+      <div class="row g-3 mt-2">
+        <div class="col-md-4"><div class="text-muted small">{{ _('Paid') }}</div><div class="kpi-value">{{ '%.2f'|format(paid) }}</div></div>
+        <div class="col-md-4"><div class="text-muted small">{{ _('Remaining') }}</div><div class="kpi-value">{{ '%.2f'|format(remaining) }}</div></div>
+        <div class="col-md-4 no-print">
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary" onclick="payFull('{{ kind }}','{{ inv.id }}','{{ remaining }}')">{{ _('Pay Full') }}</button>
+            <button class="btn btn-outline-primary" onclick="payCustom('{{ kind }}','{{ inv.id }}','{{ remaining }}')">{{ _('Enter Amount') }}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -103,7 +115,7 @@
 
 <script>
 function sendPayment(kind, id, amount){
-  if(!amount || parseFloat(amount)<=0){ alert('{{ _('Invalid amount / مبلغ غير صالح') }}'); return; }
+  if(!amount || parseFloat(amount)<=0){ alert('{{ _('Invalid amount') }}'); return; }
   const form = new FormData();
   form.append('invoice_id', id);
   form.append('invoice_type', kind);
@@ -116,15 +128,15 @@ function sendPayment(kind, id, amount){
 }
 function payFull(kind, id, remaining){
   const amt = parseFloat(remaining||0);
-  if(!amt || amt<=0){ alert('{{ _('Nothing to pay / لا يوجد متبقي للدفع') }}'); return; }
-  if(!confirm('{{ _('Confirm full payment / تأكيد دفع كامل') }}: '+amt)) return;
+  if(!amt || amt<=0){ alert('{{ _('Nothing to pay') }}'); return; }
+  if(!confirm('{{ _('Confirm full payment') }}: '+amt)) return;
   sendPayment(kind, id, amt);
 }
 function payCustom(kind, id, remaining){
-  const input = prompt("{{ _('Enter amount to pay / ادخل مبلغ الدفع') }}\n{{ _('Remaining / المتبقي') }}: "+remaining);
+  const input = prompt("{{ _('Enter amount to pay') }}\n{{ _('Remaining') }}: "+remaining);
   if(!input) return;
   const amt = parseFloat((input||'').toString().replace(',', '.'));
-  if(!amt || isNaN(amt) || amt<=0){ alert('{{ _('Invalid amount / مبلغ غير صالح') }}'); return; }
+  if(!amt || isNaN(amt) || amt<=0){ alert('{{ _('Invalid amount') }}'); return; }
   sendPayment(kind, id, amt);
 }
 </script>

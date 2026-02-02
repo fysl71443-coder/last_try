@@ -1,0 +1,657 @@
+2FA Code	رمز التحقق
+Absence	غياب
+Account	الحساب
+Account list	قائمة الحسابات
+Account Statement	كشف حساب
+Accounting System	النظام المحاسبي
+Accounting System — Journal Entries Print	النظام المحاسبي — طباعة قيود اليومية
+Accounts	الحسابات
+Accounts Hub	شاشة الحسابات
+Actions	إجراءات
+Active	نشط
+Active') if c.active else _('Inactive') }}</span></td>             <td>               <a class="btn btn-sm btn-outline-secondary me-1" href="{{ url_for('menu', cat_id=c.id) }}">{{ _('Manage Items	إدارة الأصناف
+Add	إضافة
+Add a section then select it to manage items	أضف قسماً ثم اختره لإدارة العناصر
+Add and view expense invoices	إضافة وعرض فواتير المصروفات
+Add Category	إضافة قسم
+Add Customer	إضافة عميل
+Add employee	إضافة موظف
+Add employees, payroll, advances, reports	إضافة الموظفين، مسير الرواتب، السلف، التقارير
+Add Ingredient	إضافة مكون
+Add Item	إضافة بند
+Add Meal	إضافة وجبة
+Add New Raw Material	إضافة مادة خام جديدة
+Add Qty	إضافة كمية
+Add Section	إضافة قسم
+Add supplier	إضافة مورد
+Add Supplier	إضافة مورد
+Add user	إضافة مستخدم
+Add your first raw material to start creating meals	أضف أول مادة خام لبدء إنشاء الوجبات
+Address	الموقع
+Advances	سلف واسترجاع
+Advances list & recover	سلف واسترجاع
+All	الكل
+All branches	جميع الفروع
+All Expenses	كل المصروفات
+All in current type tab	كل فواتير النوع الحالي
+All Invoices	كل الفواتير
+All invoices	كل الفواتير
+All payroll runs that have been processed for employees and not yet paid	جميع المسيرات المرحلة للموظف ولم يتم دفعها
+Allowances	بدلات
+Amount	المبلغ
+Apply	تطبيق
+Apply 15%% VAT on subtotal	تطبيق ضريبة 15%% على المجموع الفرعي
+Apply Filters	تطبيق
+Arabic Name	الاسم بالعربية
+Archive	الأرشيف
+Archive Receipts	أرشيف الإيصالات
+Are you sure you want to delete sales invoice") }} "' + invoiceNumber + '"?\n\n{{ _("This action cannot be undone.") }}');         if (confirmed) {             // Ask for password             const password = await showPrompt('{{ _("Enter deletion password	أدخل كلمة سر الحذف
+Are you sure you want to delete this invoice? This action cannot be undone.	هل أنت متأكد من حذف هذه الفاتورة؟ لا يمكن التراجع عن هذا الإجراء.
+Auto from meal (editable)') }}"/>           </div>           <div class="col-md-2">             <label class="form-label form-label-sm">{{ _('Price') }}</label>             <input type="number" step="0.01" name="price" class="form-control form-control-sm" placeholder="{{ _('Auto from meal') }}"/>           </div>           <div class="col-md-1 d-grid">             <button class="btn btn-xs btn-primary" style="padding:4px 8px; font-size:12px">{{ _('Add') }}</button>           </div>         </form>          <div class="table-responsive">           <table class="table table-sm align-middle">             <thead>               <tr>                 <th>#</th>                 <th>#</th>                 <th>{{ _('Item') }}</th>                 <th>{{ _('Price') }}</th>                 <th></th>               </tr>             </thead>             <tbody>               {% for it in items %}               <tr>                 <td>{{ it.id }}</td>                 <td>                   <form method="post" action="{{ url_for('main.menu_item_update', item_id=it.id) }}" class="d-flex gap-2">                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>                     <input type="text" name="name" value="{{ it.name }}" class="form-control form-control-sm" style="max-width:220px"/>                     <input type="number" step="0.01" name="price" value="{{ '%.2f'|format(it.price or 0) }}" class="form-control form-control-sm" style="max-width:120px"/>                     <button class="btn btn-xs btn-outline-primary" style="padding:4px 8px; font-size:12px">{{ _('Save') }}</button>                   </form>                 </td>                 <td></td>                 <td class="text-nowrap">                   <form method="post" action="{{ url_for('main.menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return confirmDeleteItem()">                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>                     <button class="btn btn-xs btn-outline-danger" style="padding:4px 8px; font-size:12px">{{ _('Delete') }}</button>                   </form>                 </td>               </tr>               {% else %}               <tr><td colspan="4" class="text-muted">{{ _('No items	لا توجد عناصر
+Auto on save (e.g. INV-PUR-YYYY-0001)	يُولّد تلقائياً عند الحفظ (مثال: INV-PUR-YYYY-0001)
+Average	المتوسط
+Back	رجوع
+Back to branches	العودة للفروع
+Back to Expenses	العودة للمصروفات
+Back to payroll reports	العودة إلى كشوفات الرواتب
+Back to reports	العودة للتقارير
+Backfill Journals	ترحيل القيود للفترة
+Backfill period	إنشاء قيود الفترة
+Backfill Result	نتيجة الترحيل
+Balance due	المتبقي المستحق
+Balance Sheet	الميزانية
+Balance sheet	المركز المالي
+Bank	بنك
+Bank Transfer	تحويل بنكي
+Base salary	الراتب الأساسي
+Basic	أساسي
+Branch	الفرع
+Branch Sales by Day	مبيعات الفرع حسب اليوم
+Branch Sales Report	تقرير مبيعات الفرع
+Branches	الفروع
+Bulk Import	استيراد جماعي
+Cancel	إلغاء
+Card	بطاقة
+Cash	نقدي
+Cash Calculator	حاسبة الكاش
+Categories	الأقسام
+Category	الفئة
+Category Name	اسم القسم
+Change dates	تغيير الفترة
+Chart of accounts	شجرة الحسابات
+Check	شيك
+Cheque	شيك
+Choose a meal	اختر وجبة
+Choose branch	اختر الفرع
+Choose section to delete	اختر قسماً للحذف
+Clear	مسح
+Clear all orders	مسح جميع الطلبات
+Clear all orders? This cannot be undone.	مسح جميع الطلبات؟ لا يمكن التراجع.
+Clear Filters	مسح الفلاتر
+Clear Form	مسح النموذج
+Clear selection	إلغاء التحديد
+Close	إغلاق
+Code	الرمز
+Code') }}</th>               <th>{{ _('Account') }}</th>               <th>{{ _('Type') }}</th>               <th class="text-end">{{ _('Debit') }}</th>               <th class="text-end">{{ _('Credit') }}</th>               <th class="text-end">{{ _('Balance') }}</th>               <th></th>             </tr>           </thead>           <tbody>             {% for r in rows %}             {% set bal = (r.debit - r.credit) if r.type != 'LIABILITY' else (r.credit - r.debit) %}             <tr>               <td>{{ r.code }}</td>               <td>{{ r.name }}</td>               <td>{{ r.type }}</td>               <td class="text-end">{{ '%.2f' % (r.debit or 0) }}</td>               <td class="text-end">{{ '%.2f' % (r.credit or 0) }}</td>               <td class="text-end">{{ '%.2f' % bal }}</td>               <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('financials.account_statement', code=r.code, start_date=start_date, end_date=end_date) }}">{{ _('Details	تفاصيل
+COGS	تكلفة البضاعة المباعة
+Collect	تحصيل
+Company	الشركة
+Company Name	اسم الشركة
+Confirm	تأكيد
+Confirm full payment	تأكيد دفع كامل
+Confirm toggle status?	تأكيد تغيير الحالة؟
+Confirm toggle?	تأكيد التبديل؟
+Consumption Cost	تكلفة الاستهلاك
+Contact Person	شخص التواصل
+Contribution	المساهمة
+Cost	التكلفة
+cost based on latest recipe prices	التكلفة حسب آخر أسعار المكونات
+Cost may vary due to outdated ingredient prices	قد تختلف التكلفة بسبب أسعار قديمة
+Cost per Unit	التكلفة لكل وحدة
+Cost Summary	ملخص التكاليف
+Count	العدد
+CR	السجل
+CR Number	السجل التجاري
+Create a new customer record	إنشاء سجل عميل جديد
+Create and manage purchase invoices	إنشاء وإدارة فواتير الشراء
+Create and manage sales invoices	إنشاء وإدارة فواتير المبيعات
+Create Meals	إنشاء الوجبات
+Create New Invoice	إنشاء فاتورة جديدة
+Create New Meal	إنشاء وجبة جديدة
+Create New Purchase Invoice	إنشاء فاتورة شراء جديدة
+Create your first invoice to get started	أنشئ أول فاتورة للبدء
+Created journal entries	قيود منشأة
+Credit	آجل
+Credit customer statement (invoices and payments)	كشف حساب عميل آجل (فواتير مبيعات وسداد)
+Credit') }}	دائن</th>             <th class="text-end mono">{{ _('Balance
+Currency	العملة
+Current Qty	الكمية الحالية
+Current Section') }}: <strong>{{ current_section.name }}</strong></div>{% endif %}           {% if current_section %}<button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#importMealsModal"><i class="fa-solid fa-file-import me-1"></i>{{ _('Import Meals (Excel)	استيراد الوجبات (إكسل)
+Currently, you can only edit basic invoice information. Item editing will be available in a future update.	حالياً، يمكنك تعديل معلومات الفاتورة الأساسية فقط. تعديل العناصر سيكون متاحاً في تحديث مستقبلي.
+Customer	العميل
+Customer added	تم إضافة العميل
+Customer data	بيانات العميل
+Customer Details	تفاصيل العميل
+Customer Discount %	نسبة خصم العميل
+Customer name	اسم العميل
+Customer name') }}">                 </div>                 <div class="mb-2">                   <label class="form-label">{{ _('Phone	الهاتف
+Customer name') }}">         </div>         <div class="mb-2">           <label class="form-label">{{ _('Phone	الهاتف
+Customer Statement	كشف حساب عميل
+Customers	العملاء
+customers	عملاء
+Customers List	قائمة العملاء
+Daily summary date	ملخص يومي للتاريخ
+Daily totals	الإجماليات اليومية
+Dark	ليلي
+Dashboard	الرئيسية
+Date	التاريخ
+Date Range	نطاق التاريخ
+Date') }}</th>             <th>{{ _('Entry') }}</th>             <th>{{ _('Description') }}</th>             <th class="text-end">{{ _('Debit') }}</th>             <th class="text-end">{{ _('Credit') }}</th>             <th class="text-end">{{ _('Running Balance') }}</th>           </tr>         </thead>         <tbody>           {% set running = (opening_balance|float) %}           {% for ln, entry_number, desc in entries %}           {% set change = ((ln.debit - ln.credit) if acc.type != 'LIABILITY' else (ln.credit - ln.debit))|float %}           {% set running = running + change %}           <tr>             <td>{{ ln.line_date }}</td>             <td>{{ entry_number }}</td>             <td>{{ desc }}</td>             <td class="text-end">{{ '%.2f' % (ln.debit or 0) }}</td>             <td class="text-end">{{ '%.2f' % (ln.credit or 0) }}</td>             <td class="text-end">{{ '%.2f' % running }}</td>           </tr>           {% endfor %}         </tbody>       </table>     </div>     </div>   </div>   {% else %}   <div class="ops-form-card">     <div class="ops-form-body">       <div class="alert alert-danger mb-0"><i class="fa-solid fa-circle-exclamation me-2"></i>{{ _('Account not found	الحساب غير موجود
+Day	اليوم
+Debt	الدين
+Debtors due	مستحقات المدينين
+Deductions	استقطاعات
+Default theme	سمة الواجهة الافتراضية
+Default VAT rate (%%)	نسبة VAT الافتراضية
+Delete	حذف
+Delete Invoices	حذف الفواتير
+Delete Section	حذف قسم
+Delete section') }}</button>           </div>         </form>         </div>       </div>     </div>      <div class="col-lg-7">       <div class="ops-form-card">         <div class="ops-form-head">{{ _('Section Items	عناصر القسم
+Delete selected invoices? This cannot be undone.	حذف الفواتير المحددة؟ لا يمكن التراجع.
+Delete this customer?	حذف هذا العميل؟
+Delete this employee?	حذف هذا الموظف؟
+Delete this expense invoice?	حذف فاتورة المصروفات هذه؟
+Delete this section?	حذف هذا القسم؟
+Delete this supplier?	حذف هذا المورد؟
+Delete') }}</button>                             </form>                           </td>                         </tr>                         {% else %}                         <tr><td colspan="5" class="text-center">{{ _('No items	لا توجد عناصر
+Delete') }}</button>               </form>             </td>           </tr>           {% else %}           <tr><td colspan="5" class="text-center">{{ _('No items	لا توجد عناصر
+Department	القسم
+Description	الوصف
+Description') }}	البيان</th>             <th class="text-end mono">{{ _('Debit
+Detailed View	العرض التفصيلي
+Details	تفاصيل
+Discount	الخصم
+Discount %%	الخصم %%
+Discounts	الخصومات
+Download	تنزيل
+Due	مستحق
+Dynamic Stock Analysis	تحليل المخزون الديناميكي
+e.g., Office rent, Electricity bill	مثل: إيجار المكتب، فاتورة الكهرباء
+Edit	تعديل
+Edit Customer	تعديل عميل
+Edit Expense Invoice	تعديل فاتورة المصروفات
+Edit Invoice Details	تعديل تفاصيل الفاتورة
+Edit Supplier	تعديل المورد
+Edit this expense invoice?	تعديل فاتورة المصروفات هذه؟
+Email	البريد
+Employee	الموظف
+Employee name	اسم الموظف
+Employees	الموظفين
+Employees list	قائمة الموظفين
+End Date	تاريخ النهاية
+Enter Amount	ادخال مبلغ
+Enter amount to pay	ادخل مبلغ الدفع
+Enter customer discount %')) }}                     <div class="form-text">{{ _('Applied to all items when a customer-specific discount is set.') }}</div>                 </div>             </div>               <!-- عناصر الفاتورة -->             <h6 class="mb-3">{{ _('Invoice Items (Ready Meals)	عناصر الفاتورة (الوجبات الجاهزة)
+Enter date and amount	أدخل التاريخ والمبلغ
+Enter last 4 digits	أدخل آخر 4 أرقام
+Enter Quantities	ادخال الكميات
+Entry No.	قيد رقم
+Error deleting invoice	خطأ في حذف الفاتورة
+Error — Payroll Statement	خطأ — كشف رواتب
+Estimated Meal Cost	تكلفة الإنتاج التقديرية
+Estimated Usage	الاستهلاك التقديري
+Excel file with customer data	ملف Excel يحتوي على بيانات العملاء
+Expected Stock	المخزون المتوقع
+Expense Details	تفاصيل المصروف
+Expense Invoice	فاتورة مصروفات
+Expense Invoice Details	تفاصيل فاتورة المصروفات
+Expense Invoices	سجل المصروفات
+Expense Items	بنود المصروفات
+Expense list	قائمة المصروفات
+Expense No.	رقم المصروف
+Expenses	المصروفات
+Expenses (invoice + journal)	مصروفات (فاتورة + قيد)
+Expenses (Itemized)	مصروفات مفصلة
+Export	تصدير
+Export CSV	تصدير
+Extra	إضافي
+Failed to load	فشل التحميل
+Failed to load payroll statement	فشل تحميل كشف الرواتب
+Filter	تصفية
+Filter and view order invoices	تصفية وعرض فواتير الطلبات
+Filter, pay and track invoices	تصفية ودفع ومتابعة الفواتير
+Filters	فلاتر البحث
+Filters & actions	الفلاتر والإجراءات
+Final Total	الإجمالي النهائي
+Financial Control Center	مركز القوائم المالية
+Financial Statements	القوائم المالية
+Financial Summary	الملخص المالي
+Food Materials	مواد غذائية
+Forgot Password?	نسيت كلمة المرور؟
+Format: name, phone, discount_percent	التنسيق: الاسم، الهاتف، نسبة الخصم
+From	من
+From date	من تاريخ
+From month	من شهر
+From year	من سنة
+From – To	من – إلى
+Full name	الاسم
+Generated on	تم الإنشاء في
+Goes to Production	تدخل الإنتاج
+Grant	منح
+Grant advance	منح سلفة
+Granted	مُنح
+Granted.	تمت المنح.
+Gross Profit	الربح الإجمالي
+Hide	إخفاء
+Hide Items	إخفاء العناصر
+Hire date	تاريخ التعيين
+IBAN	الآيبان
+Import	استيراد
+Import CSV	استيراد CSV
+Import Excel	استيراد Excel
+Import Meals	استيراد الوجبات
+Inactive	غير نشط
+Incentive	حافز
+Income Statement	قائمة الدخل
+Ingredient	المكون
+Ingredient Category	فئة المكون
+Ingredient Purchases (This Month)	مشتريات هذا الشهر
+Ingredients	المكونات
+ingredients	مكونات
+Initial Stock	المخزون الابتدائي
+Input VAT	ضريبة المدخلات
+Input VAT') }}: {{ '%.2f'|format(input_vat) }}</div>         </div>         <div class="kpi-card kpi-card--blue">           <div class="kpi-value">{{ '%.2f'|format(expenses_before) }}</div>           <div class="kpi-label">{{ _('Expenses (Before VAT)	المصروفات قبل الضريبة
+Invalid amount	مبلغ غير صالح
+Invalid OTP format (6 digits)	رمز التحقق غير صحيح
+Inventory	المخزون
+Inventory & Cost Management	المخزون وإدارة التكاليف
+Inventory & Production Cost Intelligence	ذكاء المخزون وتكلفة الإنتاج
+Inventory Kind	نوع المخزون
+Invoice	الفاتورة
+Invoice info	بيانات الفاتورة
+Invoice Info	بيانات الفاتورة
+Invoice Information	معلومات الفاتورة
+Invoice Items	بنود الفاتورة
+Invoice No	رقم الفاتورة
+Invoice No') }}</th>                             <th>{{ _('Type') }}</th>                             <th>{{ _('Customer/Supplier') }}</th>                             <th>{{ _('Total') }}</th>                             <th>{{ _('Paid') }}</th>                             <th>{{ _('Remaining') }}</th>                             <th>{{ _('Status') }}</th>                             <th>{{ _('Due Date') }}</th>                             <th>{{ _('Pay') }}</th>                             <th>{{ _('View') }}</th>                             <th>{{ _('Actions	الإجراءات
+Invoice No.	رقم الفاتورة
+Invoice Number	رقم الفاتورة
+Invoice number cannot be changed	لا يمكن تغيير رقم الفاتورة
+Invoice Type	نوع الفاتورة
+invoices	فواتير
+Invoices	الفواتير
+Invoices list	قائمة الفواتير
+Issue date	تاريخ الإصدار
+Item	الصنف
+Items	العناصر
+items	عناصر
+Items Count	عدد العناصر
+Items in section') }}: {{ selected_category.name }}</h5>     </div>      <form method="post" action="#" class="row g-2 align-items-end mb-3">       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>       <input type="hidden" name="section_id" value="{{ selected_category.id }}"/>       <div class="col-md-6">         <label class="form-label">{{ _('Meal	الوجبة
+Items in section') }}: {{ selected_category.name }}</h6>                   </div>                    <form method="post" action="#" class="row g-2 align-items-end mb-3">                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>                     <input type="hidden" name="section_id" value="{{ selected_category.id }}"/>                     <div class="col-md-6">                       <label class="form-label">{{ _('Meal	الوجبة
+Items summary	ملخص الأصناف
+Journal Entries	قيود اليومية
+Journal entries created for the selected period	تم إنشاء قيود اليومية للفترة المحددة
+Journal Entries Print	طباعة قيود اليومية
+Journal Entry	قيد يومية
+Journal Entry Print	طباعة قيد يومية
+Journal filters	فلاتر سجل القيود
+Journal log	سجل القيود
+KPI Overview	المؤشرات الرئيسية
+KPIs, purchases summary, meal cost and sales analysis	المؤشرات، ملخص المشتريات، تكلفة الوجبات وتحليل المبيعات
+Leave empty = All. Select one or more employees.	لا تحدد = الكل. حدد موظفاً أو عدة موظفين.
+Liabilities	الالتزامات
+Light	نهاري
+List	قائمة
+live	فوري
+live margin	هامش فوري
+Load	تحميل
+Loading...	جار التحميل...
+Log	سجل
+Login	تسجيل الدخول
+Manage and search customers	إدارة وبحث العملاء
+Manage categories and menu items	إدارة الأقسام وأصناف المنيو
+Manage customers and contacts	إدارة العملاء والجهات
+Manage Meals	إدارة الوجبات
+Manage meals, ingredients and cost	إدارة الوجبات والمكونات والتكلفة
+Manage menu sections and items	إدارة أقسام وعناصر المنيو
+Manage raw materials and quantities	إدارة المواد الخام والكميات
+Manage sections, rows, and table numbers. Drag and drop freely, then save.	إدارة الأقسام والصفوف وأرقام الطاولات. اسحب وأفلت ثم احفظ.
+Manage supplier information	إدارة معلومات الموردين
+Manage suppliers and procurement	إدارة الموردين والمشتريات
+Manage tables and layout per branch	إدارة الطاولات والتخطيط حسب الفرع
+Manage tables, sections, and layout for') }} {{ branch_label }}</p>             <a href="{{ url_for('main.table_manager', branch_code=branch_code) }}" class="btn btn-primary">               <i class="fa-solid fa-cog me-2"></i>{{ _('Manage Tables	إدارة الطاولات
+Margin %%	الهامش %%
+Mark Sales Paid	ترحيل مبيعات
+Max is Final Total	الحد الأقصى هو الإجمالي النهائي
+Meal	الوجبة
+Meal Cost & Sales Analysis	تحليل تكلفة الوجبات والمبيعات
+Meal Ingredients	مكونات الوجبة
+Meal Name	اسم الوجبة
+Meal') }}</th><th>{{ _('Price') }}</th><th>{{ _('# Order') }}</th><th></th>                       </tr></thead>                       <tbody>                         {% for it in items %}                         {% set price = it.price_override if it.price_override is not none else it.meal.selling_price %}                         <tr>                           <td>{{ it.id }}</td>                           <td>{{ it.meal.display_name }}</td>                           <td>                             <form method="post" action="#" class="d-flex gap-2">                               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>                               <input type="number" step="0.01" name="price_override" value="{{ '%.2f'|format(price or 0) }}" class="form-control" style="max-width:150px">                               <input type="number" name="display_order" value="{{ it.display_order or 0 }}" class="form-control" style="max-width:120px">                               <button class="btn btn-outline-primary">{{ _('Save') }}</button>                             </form>                           </td>                           <td></td>                           <td class="text-nowrap">                             <form method="post" action="{{ url_for('menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Remove item?	حذف العنصر؟
+Meal') }}</th><th>{{ _('Price') }}</th><th>{{ _('# Order') }}</th><th></th>         </tr></thead>         <tbody>           {% for it in items %}           {% set price = it.price_override if it.price_override is not none else it.meal.selling_price %}           <tr>             <td>{{ it.id }}</td>             <td>{{ it.meal.display_name }}</td>             <td>               <form method="post" action="#" class="d-flex gap-2">                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>                 <input type="number" step="0.01" name="price_override" value="{{ '%.2f'|format(price or 0) }}" class="form-control" style="max-width:150px">                 <input type="number" name="display_order" value="{{ it.display_order or 0 }}" class="form-control" style="max-width:120px">                 <button class="btn btn-outline-primary">{{ _('Save') }}</button>               </form>             </td>             <td></td>             <td class="text-nowrap">               <form method="post" action="{{ url_for('menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Remove item?	حذف العنصر؟
+Meals	الوجبات
+Meals are automatically loaded from Cost Management system with calculated prices	الوجبات يتم تحميلها تلقائياً من نظام إدارة التكاليف مع الأسعار المحسوبة
+Meals Management	إدارة الوجبات
+Meals Sold (This Month)	الوجبات المباعة
+Meals using ingredients with outdated cost data	وجبات تحتوي مكونات بسعر قديم
+Menu	المنيو
+Menu Management	إدارة القائمة
+Menu sections	أقسام المنيو
+Method	الطريقة
+Month	الشهر
+Movements	حركات
+Name	الاسم
+Name is required	الاسم مطلوب
+Name') }}" required/>           </div>           <div class="col-md-4">             <input type="number" name="display_order" class="form-control form-control-sm" placeholder="# (order)"/>           </div>           <div class="col-12 d-flex gap-2">             <button class="btn btn-xs btn-success" style="padding:4px 8px; font-size:12px">{{ _('Add') }}</button>             <a class="btn btn-xs btn-outline-secondary" style="padding:4px 8px; font-size:12px" href="{{ url_for('main.menu') }}">{{ _('All sections	جميع الأقسام
+Name, Name (Arabic), Selling Price	الاسم، الاسم بالعربية، سعر البيع
+National ID	الرقم الوطني
+Net Profit	صافي الربح
+Net VAT	الضريبة المستحقة
+Net VAT Due	صافي الضريبة المستحقة
+Network error	خطأ في الشبكة
+New Customer	عميل جديد
+New entry	قيد جديد
+New section name	اسم القسم الجديد
+New Unit Cost	التكلفة لكل وحدة (اختياري)
+Next	التالي
+No branches found. Please contact the administrator.	لم يتم العثور على فروع. يرجى التواصل مع المسؤول.
+No categories	لا توجد أقسام
+No customers found	لم يتم العثور على عملاء
+No data	لا توجد بيانات
+No details	لا توجد تفاصيل
+No employees or payroll data for the selected period.	لا يوجد موظفون أو لا توجد بيانات رواتب للفترة المحددة.
+No employees yet	لا يوجد موظفون بعد
+No expense invoices yet	لا توجد فواتير مصروفات بعد
+No invoices in this period	لا توجد فواتير في هذه الفترة
+No items found	لم يتم العثور على عناصر
+No matching receipts	لا توجد إيصالات مطابقة
+No payments recorded	لا توجد مدفوعات مسجلة
+No raw materials found	لا توجد مواد خام
+No receipts	لا توجد إيصالات
+No sales invoices for this group	لا توجد فواتير مبيعات لهذه المجموعة
+No supplier invoices	لا توجد فواتير للموردين
+No suppliers found	لم يتم العثور على موردين
+None	بدون
+Note	ملاحظة
+Notes	ملاحظات
+Nothing to pay	لا يوجد متبقي للدفع
+of	من
+Open Tables	فتح الطاولات
+Open tables for the selected branch	فتح الطاولات للفرع المحدد
+Opening Balance	رصيد افتتاحي
+Opening Qty	الكمية الافتتاحية
+Opening') }}:</span> <span class="val">{{ '%.2f'|format(opening_balance) }}</span> ر.س</div>       <div class="stmt-summary-item"><span class="text-muted">{{ _('Total Invoices') }}:</span> <span class="val">{{ '%.2f'|format(total_invoices) }}</span> ر.س</div>       <div class="stmt-summary-item"><span class="text-muted">{{ _('Total Paid') }}:</span> <span class="val">{{ '%.2f'|format(total_paid) }}</span> ر.س</div>       <div class="stmt-summary-item remaining"><span class="text-muted">{{ _('Remaining') }}:</span> <span class="val">{{ '%.2f'|format(remaining) }}</span> ر.س</div>     </div>      <div class="table-responsive">       <table class="stmt-table">         <thead>           <tr>             <th>{{ _('Date') }}	التاريخ</th>             <th>{{ _('Ref
+Operating Expenses	المصروفات التشغيلية
+Operations	عمليات
+Operations (journal only): no invoice. Expenses: invoice + journal.	عمليات (قيد فقط، لا فاتورة). مصروفات: فاتورة + قيد.
+Optional') }}">                     </div>                     <div class="col-md-2">                       <label class="form-label">{{ _('# Order') }}</label>                       <input type="number" name="display_order" class="form-control">                     </div>                     <div class="col-md-2">                       <button class="btn btn-success w-100">{{ _('Add Item	إضافة صنف
+Optional') }}">       </div>       <div class="col-md-2">         <label class="form-label">{{ _('# Order') }}</label>         <input type="number" name="display_order" class="form-control">       </div>       <div class="col-md-2">         <button class="btn btn-success w-100">{{ _('Add Item	إضافة صنف
+Order Invoices	فواتير الطلبات
+Other Dues	مستحقات أخرى
+Other Supplies	مستلزمات أخرى
+Output VAT	ضريبة المخرجات
+Output VAT') }}: {{ '%.2f'|format(output_vat) }}</div>         </div>         <div class="kpi-card kpi-card--blue">           <div class="kpi-value">{{ '%.2f'|format(purchases_before) }}</div>           <div class="kpi-label">{{ _('Purchases (Before VAT)	المشتريات قبل الضريبة
+Page	صفحة
+Paid	مدفوع
+Paid Amount (Partial)	المبلغ المدفوع (جزئي)
+Partial	جزئي
+Party	الطرف
+Password	كلمة المرور
+Password required	كلمة السر مطلوبة
+Pay	دفع
+Pay Full	دفع كامل
+Pay Full') }}</button>             <button class="btn btn-outline-primary" onclick="payCustom('{{ kind }}','{{ inv.id }}','{{ remaining }}')">{{ _('Enter Amount') }}</button>           </div>         </div>       </div>     </div>   </div> </div>  <style> @media print {   body {     background: white !important;     color: black !important;   }   .printable, .printable * {     color: black !important;     -webkit-print-color-adjust: exact !important;     print-color-adjust: exact !important;     font-weight: bold !important;   }   .table thead th {     background: black !important;     color: white !important;   }   .table tbody td {     border: 1px solid black !important;   }   .card {     border: 1px solid black !important;     box-shadow: none !important;   }   .no-print {     display: none !important;   } } </style>  <script> function sendPayment(kind, id, amount){   if(!amount || parseFloat(amount)<=0){ alert('{{ _('Invalid amount	مبلغ غير صالح
+Pay Supplier	دفع للمورد
+Pay') }}</button>                                 {% else %}                                     <span class="text-success">✓ {{ _('Paid') }}</span>                                 {% endif %}                                  </td>                             <td>                                   <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.view_invoice', kind=invoice.invoice_type, invoice_id=invoice.id) }}">{{ _('View	عرض
+Payment	الدفع
+Payment method	طريقة الدفع
+Payment Method	طريقة الدفع
+Payment Methods	طرق الدفع
+Payment Status	حالة الدفع
+Payments	المدفوعات
+Payments & Receivables	المدفوعات والمستحقات
+Payments & Statements	متابعة السداد
+Payroll reports	كشوفات رواتب
+Payroll run	مسير رواتب
+Payroll Statement	كشف رواتب
+PDF	ملف
+Pending	معلق
+Per Page	لكل صفحة
+Period	الفترة
+Period & Branch	الفترة والفرع
+Period & view	الفترة والعرض
+Period summary and VAT totals	ملخص الفترة ومجاميع الضريبة
+Permissions	الصلاحيات
+Phone	الهاتف
+Phone (optional)') }}">                 </div>                 <div class="mb-2">                   <label class="form-label">{{ _('Discount %	نسبة الخصم
+Phone (optional)') }}">         </div>         <div class="mb-2">           <label class="form-label">{{ _('Discount %	نسبة الخصم
+Phone (optional)') }}">         </div>         <div class="mb-2">           <label class="form-label">{{ _('Discount %%	نسبة الخصم
+Phone number	رقم الهاتف
+Place India') }}</option>             <option value="china_town" {{ 'selected' if branch=='china_town' }}>{{ _('China Town') }}</option>           </select>         </div>         <div class="col-md-2">           <button class="btn btn-primary" type="submit"><i class="fa-solid fa-filter me-1"></i>{{ _('Apply	تطبيق
+Placeholder for branch sales report	نموذج لتقرير مبيعات الفرع
+Please check the selected period and employees, or review server logs.	يرجى التحقق من الفترة المحددة والموظفين، أو مراجعة سجلات الخادم.
+Please choose a section	يرجى اختيار قسم
+Please fill username and password	يرجى إدخال اسم المستخدم وكلمة المرور
+Please sign in	الرجاء تسجيل الدخول
+POS	نقطة البيع
+Prev	السابق
+Preview	معاينة
+Preview') }}</button></td>         <td>${row.pdf_path ? `<a class="btn btn-sm btn-outline-primary" href="/archive/open/${row.invoice_number}" target="_blank"><i class="fa-solid fa-file-pdf"></i> {{ _('Open') }}</a>` : '<span class="text-muted">-</span>'}</td>       `;       tbody.appendChild(tr);     });   }   document.getElementById('search').addEventListener('click', (ev)=>{ev.preventDefault();load();});   document.getElementById('prev').addEventListener('click', (ev)=>{ev.preventDefault(); if(curPage>1){curPage--; load();}});   document.getElementById('next').addEventListener('click', (ev)=>{ev.preventDefault(); curPage++; load();});   document.getElementById('download').addEventListener('click', (ev)=>{     ev.preventDefault();     const y = document.getElementById('year').value||'';     const q = document.getElementById('quarter').value||'';     const m = document.getElementById('month').value||'';     const d = document.getElementById('day').value||'';     const b = document.getElementById('branch').value||'';     const fmt = document.getElementById('fmt').value||'zip';     const url = `/archive/download?year=${encodeURIComponent(y)}&quarter=${encodeURIComponent(q)}&month=${encodeURIComponent(m)}&day=${encodeURIComponent(d)}&branch=${encodeURIComponent(b)}&fmt=${encodeURIComponent(fmt)}`;     window.location.href = url;   });   load(); </script> <div class="modal fade screen-modal" id="previewModal" tabindex="-1" aria-hidden="true">   <div class="modal-dialog modal-xl">     <div class="modal-content">       <div class="modal-header">         <h5 class="modal-title">{{ _('Receipt Preview	معاينة الإيصال
+Previous due	مستحق سابق
+Previous Invoices	الفواتير السابقة
+Previous Owner	الالتزام تجاه المالك السابق
+Price	السعر
+Price override	سعر مخصص
+Print	طباعة
+Print All	طباعة الكل
+Print daily summary	طباعة ملخص اليوم
+Print PDF	طباعة PDF
+Print Report	تقرير طباعة
+Products & Cost	المنتجات والتكاليف
+Profit	الربح
+Profit Margin	هامش الربح
+Profit/Loss	صافي الربح/الخسارة
+Purchase Invoices	فواتير الشراء
+Purchase Items	بنود الشراء
+Purchase Trend	اتجاه المشتريات
+Purchases	المشتريات
+Purchases for Production (NO VAT)	مشتريات للإنتاج بدون ضريبة
+Purchases Ledger	سجل المشتريات
+Purchases ledger and cost overview	سجل المشتريات وملخص التكاليف
+Purchases Qty	كمية المشتريات
+Purchases Summary	ملخص المشتريات
+Purchases Total	إجمالي المشتريات
+Purchases ➖ Estimated Usage	المشتريات ➖ الاستهلاك التقديري
+Qty	الكمية
+Quantity	الكمية
+Quarter	الربع
+Quick access to Sales, Purchases, Invoices, Inventory, Reports and Settings	الوصول السريع للمبيعات، المشتريات، الفواتير، المخزون، التقارير والإعدادات
+Quick Proof	إثبات مصروف سريع
+Raw Materials	المواد الخام
+Read-only	للقراءة فقط
+Recalculate	إعادة حساب
+Receipt Archive	أرشيف الإيصالات
+Receivables & Statements	متابعة المستحقات والكشوفات
+Record all business expenses (utilities, rent, supplies, etc.).') }}</div>         <form method="POST" id="expense-form">             {{ form.hidden_tag() }}              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>              <!-- معلومات الفاتورة الأساسية -->             <div class="ops-form-card mb-3">                 <div class="ops-form-head"><i class="fa-solid fa-file-invoice me-2"></i>{{ _('Invoice Information	معلومات الفاتورة
+Remaining	متبقي
+Remaining Due	المتبقي للدفع
+Remember Me	تذكرني
+Remove item?	حذف العنصر؟
+Repaid	مُستَرَد
+Repay	استرجاع
+Repay advance	استرجاع سلفة
+Reports	التقارير
+Required columns	الأعمدة المطلوبة
+Reset	إعادة تعيين
+Results	النتائج
+Revenue	الإيراد
+Risk	المخاطر
+Run backfill for journal entries in the selected period	تنفيذ ترحيل القيود للفترة المحددة
+Salaries	رواتب
+Sales	المبيعات
+Sales (Before VAT)	المبيعات قبل الضريبة
+Sales Count	عدد المبيعات
+Sales Debtors	مدينون من المبيعات
+Sales, purchases, expenses	مبيعات، مشتريات، مصروفات
+Sales, purchases, expenses, VAT and profit by period and branch	المبيعات، المشتريات، المصروفات، الضريبة والربح حسب الفترة والفرع
+SAR	ر.س
+Save	حفظ
+Save Changes	حفظ التغييرات
+Save Layout	حفظ التخطيط
+Scope	النطاق
+Search	بحث
+Search and download receipts	البحث وتنزيل الإيصالات
+Search and manage suppliers	البحث وإدارة الموردين
+Search by last 4 digits of invoice number	البحث بآخر 4 أرقام من رقم الفاتورة
+Search by name or phone	ابحث بالاسم أو الهاتف
+Search receipts using the last 4 digits of the invoice number	يتم البحث في الإيصالات باستخدام آخر 4 أرقام من رقم الفاتورة
+Search suppliers	ابحث عن موردين
+Search...	بحث...
+Select	اختر
+Select a credit customer and date range, then View to see the statement (invoices, payments, balance) or Print to open print view.') }}</p>     </div>   </div>    <div class="ops-form-card mt-3">     <div class="ops-form-head">{{ _('Quick links	روابط سريعة
+Select a customer	اختر عميلاً
+Select a supplier	اختر مورداً
+Select a supplier and date range, then View to see the detailed statement (invoices, payments, balance) or Print to open print view.') }}</p>     </div>   </div>    <div class="ops-form-card mt-3">     <div class="ops-form-head">{{ _('Quick links	روابط سريعة
+Select Account	اختر الحساب
+Select all	تحديد الكل
+Select Branch	اختر الفرع
+Select Category	اختر الفئة
+Select customer	اختر العميل
+Select employee and amount.	اختر الموظف والمبلغ.
+Select File	اختر الملف
+Select Ingredient	اختر المكون
+Select invoices and enter total amount to distribute payment equally') }}                     </small>                 </div>             </div>         </form>         </div>     </div>     {% else %}     <div class="ops-form-card">         <div class="ops-form-body text-center py-4">         <h5 class="text-secondary">{{ _('No invoices found	لا توجد فواتير
+Select Meal	اختر الوجبة
+Select Raw Material	اختر المادة الخام
+Select Supplier	اختر المورد
+Select supplier	اختر المورد
+Selected only	المحدد فقط
+Selling Price	سعر البيع
+Settings	الإعدادات
+Show	عرض
+Show Items	عرض العناصر
+Showing	المعروض
+Sign Up	تسجيل حساب
+Signature	التوقيع
+Single month	شهر واحد
+Start Date	تاريخ البداية
+Start Date') }}</label>           <input type="date" class="form-control" name="start_date" value="{{ start_date }}">         </div>         <div class="col-md-3">           <label class="form-label">{{ _('End Date') }}</label>           <input type="date" class="form-control" name="end_date" value="{{ end_date }}">         </div>         <div class="col-md-3">           <button class="btn btn-danger" type="submit"><i class="fa-solid fa-play me-1"></i>{{ _('Run Backfill	تنفيذ الترحيل
+Statement	كشف حساب
+Statement lines	حركات الكشف
+Status	الحالة
+Subtotal	المجموع الفرعي
+Subtotal') }}</th>             <th class="text-end">{{ _('VAT') }}</th>             <th class="text-end">{{ _('Discount') }}</th>             <th class="text-end">{{ _('Final Total') }}</th>             <th class="text-center">{{ _('Items') }}</th>           </tr>         </thead>         <tbody>           {% for r in purchases %}           <tr>             <td>{{ r.date }}</td>             <td>{{ r.invoice_number }}</td>             <td>{{ r.supplier }}</td>             <td>{{ r.payment_method }}</td>             <td>{{ r.status }}</td>             <td class="text-end">{{ '{:,.2f}'.format(r.subtotal or 0) }}</td>             <td class="text-end">{{ '{:,.2f}'.format(r.vat or 0) }}</td>             <td class="text-end">{{ '{:,.2f}'.format(r.discount or 0) }}</td>             <td class="text-end">{{ '{:,.2f}'.format(r.final_total or 0) }}</td>             <td class="text-center">{{ r.items_count }}</td>           </tr>           {% endfor %}         </tbody>       </table>     </div>     <div class="row mt-3">       <div class="col-md-6">         <h6 class="mb-2">{{ _('Top Purchased Ingredients	أكثر المكونات شراءً
+Summary	الملخص
+Supplier	المورد
+Supplier details	بيانات المورد
+Supplier Details	تفاصيل المورد
+Supplier groups	مجموعات الموردين
+Supplier Info	بيانات المورد
+Supplier Invoice No	رقم فاتورة المورد
+Supplier Payments & Statements	متابعة سداد الموردين
+Supplier Statement	كشف حساب مورد
+Suppliers	الموردون
+suppliers	موردين
+Suppliers (Creditors)	الموردون (دائنون)
+Suppliers Due	مستحقات الموردين
+Suppliers List	قائمة الموردين
+Supported formats: Excel (.xlsx, .xls), CSV	الصيغ المدعومة: إكسل، CSV
+Supported: Excel (.xlsx, .xls), CSV	الصيغ المدعومة: إكسل، CSV
+Table Manager	إدارة الطاولات
+Table Settings	الطاولات
+Tax	الضريبة
+Tax Number	الرقم الضريبي
+Tax number	الرقم الضريبي
+The meal form is not available yet in this build. The page is shown for preview only.') }}         </div>         {% endif %}     </div>   </div>    {% if meals %}   <div class="ops-form-card">     <div class="ops-form-head">{{ _('Existing Meals	الوجبات الموجودة
+The raw materials form is not available yet in this build. The page is shown for preview only.') }}         </div>         {% endif %}     </div>      <!-- قائمة المواد الخام الموجودة -->     {% if materials %}     <div class="ops-form-card">         <div class="ops-form-head">{{ _('Existing Raw Materials	المواد الخام الموجودة
+The system could not generate the statement. Technical details:	لم يتمكن النظام من إنشاء الكشف. التفاصيل التقنية:
+This action is irreversible. Related items and payments will be deleted as well.	هذا الإجراء لا يمكن التراجع عنه وسيتم حذف العناصر والمدفوعات المرتبطة أيضاً
+This is a minimal placeholder for smoke tests.	نموذج بسيط لاختبارات الدخان.
+Tip	نصيحة
+to	إلى
+To	إلى
+To date	إلى تاريخ
+To month	إلى شهر
+To year	إلى سنة
+Toggle	تبديل
+Toggle Status	تبديل الحالة
+Total	الإجمالي
+Total Amount	المبلغ الإجمالي
+Total Amount for Selected') }}"                                class="form-control" required>                         <button type="submit" class="btn btn-warning">                             💳 {{ _('Pay Selected	دفع المحدد
+Total cannot be changed here	لا يمكن تغيير الإجمالي هنا
+Total Cost	إجمالي التكلفة
+Total Customers	إجمالي العملاء
+Total debt	إجمالي الديون
+Total Inventory Cost	إجمالي تكلفة المخزون
+Total Materials	إجمالي المواد
+Total paid	إجمالي المدفوع
+Total Profit	إجمالي الربح
+Total Profit (Sales - Prod Cost)	إجمالي الربح
+Total qty	إجمالي الكمية
+Total remaining	إجمالي المتبقي
+Total Suppliers	إجمالي الموردين
+Totals	الإجماليات
+Track payments and print detailed supplier statements	متابعة السداد وطباعة الكشوفات التفصيلية
+Track receivables and print customer statements	متابعة مستحقات العملاء الآجلين وطباعة الكشوفات
+Transfer	تحويل
+trend	الاتجاه
+Trial Balance	ميزان المراجعة
+Trial balance	ميزان المراجعة
+Try different search terms	جرب مصطلحات بحث مختلفة
+Type	النوع
+unit	وحدة
+Unit	الوحدة
+Unit Price	سعر الوحدة
+Unpaid	غير مدفوع
+Unpaid dues	مستحقات غير مدفوعة
+Update	تحديث
+Update Quantities	تحديث الكميات
+Update supplier details	تحديث بيانات المورد
+Username	اسم المستخدم
+Users	المستخدمون
+Users list	قائمة المستخدمين
+VAT	ضريبة القيمة المضافة
+VAT Dashboard	لوحة الضريبة
+VAT Input	ضريبة المدخلات
+VAT Output	ضريبة المخرجات
+VAT Return	الإقرار الضريبي
+VAT Summary	ملخص الضريبة
+VAT Total	إجمالي الضريبة
+VAT') }}</th>                 <th>{{ _('Total	الإجمالي
+VAT') }}</th>               <th class="text-end">{{ _('Discount') }}</th>               <th class="text-end">{{ _('Final Total') }}</th>               <th class="text-center">{{ _('Items') }}</th>             </tr>           </thead>           <tbody>             {% for r in purchases_summary %}             <tr>               <td>{{ r.date }}</td>               <td>{{ r.invoice_number }}</td>               <td>{{ r.supplier }}</td>               <td>{{ r.payment_method }}</td>               <td>{{ r.status }}</td>               <td class="text-end">{{ '{:,.2f}'.format(r.subtotal or 0) }}</td>               <td class="text-end">{{ '{:,.2f}'.format(r.vat or 0) }}</td>               <td class="text-end">{{ '{:,.2f}'.format(r.discount or 0) }}</td>               <td class="text-end">{{ '{:,.2f}'.format(r.final_total or 0) }}</td>               <td class="text-center">{{ r.items_count }}</td>             </tr>             {% endfor %}           </tbody>         </table>       </div>       <div class="row mt-3">         <div class="col-md-6">           <h6 class="mb-2">{{ _('Top Purchased Ingredients	أكثر المكونات شراءً
+VAT') }}</th>               <th class="text-end">{{ _('Total	الإجمالي
+View	عرض
+View account balances by period and open statements	عرض أرصدة الحسابات حسب الفترة وفتح الكشوفات
+View Accounts	عرض الحسابات
+View all invoices by branch	عرض كل الفواتير حسب الفرع
+View and export all expense records	عرض وتصدير سجل المصروفات
+View and print invoice	عرض وطباعة الفاتورة
+View daily sales by branch and month	عرض المبيعات اليومية حسب الفرع والشهر
+View running balance by period	عرض الرصيد الجاري حسب الفترة
+vs last period	مقارنة بالفترة السابقة
+Will be applied automatically when selected.') }}</div>       </div>       <div class="modal-footer">         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Close	إغلاق
+Year	السنة
+Zero-rated and exempt amounts require item-level tagging for precise reporting.') }}</small>       <div class="d-flex justify-content-end gap-2 mt-3">         <a href="#" class="btn btn-outline-primary btn-sm" onclick="window.print();return false;"><i class="fa-solid fa-print me-1"></i>{{ _('Print	طباعة
+أساسي') }}</th>                     <th class="text-end">{{ _('إضافي') }}</th>                     <th class="text-end">{{ _('غياب') }}</th>                     <th class="text-end">{{ _('حافز') }}</th>                     <th class="text-end">{{ _('بدلات') }}</th>                     <th class="text-end">{{ _('استقطاعات') }}</th>                     <th class="text-end">{{ _('إجمالي') }}</th>                     <th class="text-end">{{ _('مدفوع') }}</th>                     <th class="text-end">{{ _('متبقي') }}</th>                     <th>{{ _('Status	الحالة
+إلغاء') }}</button>                   </div>                 </div>                 <small class="text-muted">{{ _('لا تحدد = الكل. حدد موظفاً أو عدة موظفين للطباعة.') }}</small>               </div>               <div class="col-auto"><a href="#" id="rep-print" class="btn btn-primary" target="_blank"><i class="fa-solid fa-print me-1"></i>{{ _('Print	طباعة
+إن وجد') }}">                   </div>                   <div class="col-md-9">                     <label class="form-label">{{ _('Notes	ملاحظات
+إنشاء مسيرات رواتب ناقصة لجميع الموظفين من تاريخ تعيين كل موظف حتى الشهر الحالي؟') : 'Create missing payroll runs for all employees from each hire date to current month?')) return;     btn.disabled = true;     var fd = new FormData();     fd.append('csrf_token', csrfToken());     fetch('/api/payroll/ensure-records', { method: 'POST', headers: { 'X-CSRFToken': csrfToken() }, body: fd }).then(function(r) { return r.json(); }).then(function(j) {       if (j.ok) {         var msg = (typeof _ !== 'undefined' ? _('تم إنشاء') : 'Created ') + (j.created || 0) + (typeof _ !== 'undefined' ? _(' مسير رواتب.') : ' payroll run(s).');         if (j.accruals_created) msg += ' ' + (typeof _ !== 'undefined' ? _('وقيد استحقاق لكل شهر:') : ' Accrual JEs: ') + (j.accruals_created || 0);         alert(msg);         loadPayroll();       } else { alert(j.error || 'Error'); }       btn.disabled = false;     }).catch(function(e) { alert(e.message); btn.disabled = false; });   });    document.getElementById('pay-open-create-run') && document.getElementById('pay-open-create-run').addEventListener('click', function() {     var my = document.getElementById('pay-year');     var mm = document.getElementById('pay-month');     var modalY = document.getElementById('modal-pay-year');     var modalM = document.getElementById('modal-pay-month');     if (my && modalY) modalY.value = my.value;     if (mm && modalM) modalM.value = mm.value;     var modal = new bootstrap.Modal(document.getElementById('modal-create-payroll'));     modal.show();     loadModalPayroll();   });    function loadModalPayroll() {     var y = document.getElementById('modal-pay-year') && document.getElementById('modal-pay-year').value;     var m = document.getElementById('modal-pay-month') && document.getElementById('modal-pay-month').value;     var dept = document.getElementById('modal-pay-dept') && document.getElementById('modal-pay-dept').value;     var u = '/api/payroll?year=' + (y || '') + '&month=' + (m || '');     if (dept) u += '&dept=' + encodeURIComponent(dept);     fetch(u).then(function(r) { return r.json(); }).then(function(j) {       if (j.ok && (j.payrolls || []).length === 0) {         u = '/api/payroll?year=' + (y || '') + '&month=' + (m || '') + '&for_new_run=1';         if (dept) u += '&dept=' + encodeURIComponent(dept);         fetch(u).then(function(r2) { return r2.json(); }).then(function(j2) {           if (j2.ok) fillModalTable(j2.payrolls || []);         }).catch(function() {});         return;       }       if (j.ok) fillModalTable(j.payrolls || []);     }).catch(function() {});   }   function fillModalTable(rows) {       var tbody = document.getElementById('modal-pay-tbody');       if (!tbody) return;       var h = '';       rows.forEach(function(r) {         var basic = (r.basic != null ? r.basic : 0);         var extra = (r.extra != null ? r.extra : 0);         var absence = (r.absence != null ? r.absence : 0);         var incentive = (r.incentive != null ? r.incentive : 0);         var allow = (r.allowances != null ? r.allowances : 0);         var ded = (r.deductions != null ? r.deductions : 0);         var totalRow = basic + extra - absence + incentive + allow - ded;         h += '<tr data-employee-id="' + (r.employee_id || '') + '">' +           '<td><input type="checkbox" class="form-check-input modal-pay-row-select" data-employee-id="' + (r.employee_id || '') + '"></td>' +           '<td>' + (r.employee_name || '') + '</td>' +           '<td>' + (r.department || '—') + '</td>' +           '<td class="text-end"><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end modal-pay-basic" value="' + (typeof basic === "number" ? basic.toFixed(2) : basic) + '" style="min-width:70px"></td>' +           '<td class="text-end"><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end modal-pay-extra" value="' + (typeof extra === "number" ? extra.toFixed(2) : extra) + '" style="min-width:70px"></td>' +           '<td class="text-end"><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end modal-pay-absence" value="' + (typeof absence === "number" ? absence.toFixed(2) : absence) + '" style="min-width:70px"></td>' +           '<td class="text-end"><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end modal-pay-incentive" value="' + (typeof incentive === "number" ? incentive.toFixed(2) : incentive) + '" style="min-width:70px"></td>' +           '<td class="text-end"><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end modal-pay-allowances" value="' + (typeof allow === "number" ? allow.toFixed(2) : allow) + '" style="min-width:70px"></td>' +           '<td class="text-end"><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end modal-pay-deductions" value="' + (typeof ded === "number" ? ded.toFixed(2) : ded) + '" style="min-width:70px"></td>' +           '<td class="text-end modal-pay-total-cell">' + (totalRow >= 0 ? totalRow.toFixed(2) : "0.00") + '</td></tr>';       });       tbody.innerHTML = h || '<tr><td colspan="10" class="text-center text-muted">' + (typeof _ !== "undefined" ? _("لا يوجد موظفون") : "No employees") + '</td></tr>';       document.querySelectorAll('#modal-pay-tbody tr[data-employee-id]').forEach(function(tr) {         ['modal-pay-basic','modal-pay-extra','modal-pay-absence','modal-pay-incentive','modal-pay-allowances','modal-pay-deductions'].forEach(function(cls) {           var inp = tr.querySelector('.' + cls);           if (inp) inp.addEventListener('input', function() {             var b = parseFloat(tr.querySelector('.modal-pay-basic').value || 0) || 0;             var ex = parseFloat(tr.querySelector('.modal-pay-extra').value || 0) || 0;             var ab = parseFloat(tr.querySelector('.modal-pay-absence').value || 0) || 0;             var inc = parseFloat(tr.querySelector('.modal-pay-incentive').value || 0) || 0;             var al = parseFloat(tr.querySelector('.modal-pay-allowances').value || 0) || 0;             var de = parseFloat(tr.querySelector('.modal-pay-deductions').value || 0) || 0;             var tot = b + ex - ab + inc + al - de;             var cell = tr.querySelector('.modal-pay-total-cell');             if (cell) cell.textContent = (tot >= 0 ? tot.toFixed(2) : "0.00");           });         });       });   }    document.getElementById('modal-pay-load') && document.getElementById('modal-pay-load').addEventListener('click', loadModalPayroll);   document.getElementById('modal-pay-select-all') && document.getElementById('modal-pay-select-all').addEventListener('change', function() {     var c = this.checked;     document.querySelectorAll('#modal-pay-tbody .modal-pay-row-select').forEach(function(el) { el.checked = c; });   });   document.getElementById('modal-pay-save') && document.getElementById('modal-pay-save').addEventListener('click', function() {     var y = document.getElementById('modal-pay-year') && document.getElementById('modal-pay-year').value;     var m = document.getElementById('modal-pay-month') && document.getElementById('modal-pay-month').value;     var mm = (String(m).length === 1 ? "0" + m : m);     var rows = [];     document.querySelectorAll('#modal-pay-tbody tr[data-employee-id]').forEach(function(tr) {       var chk = tr.querySelector('.modal-pay-row-select');       if (!chk || !chk.checked) return;       var eid = tr.getAttribute('data-employee-id');       var basic = parseFloat(String((tr.querySelector('.modal-pay-basic') || {}).value || "0").replace(/,/g, ".")) || 0;       var extra = parseFloat(String((tr.querySelector('.modal-pay-extra') || {}).value || "0").replace(/,/g, ".")) || 0;       var absence = parseFloat(String((tr.querySelector('.modal-pay-absence') || {}).value || "0").replace(/,/g, ".")) || 0;       var incentive = parseFloat(String((tr.querySelector('.modal-pay-incentive') || {}).value || "0").replace(/,/g, ".")) || 0;       var allowances = parseFloat(String((tr.querySelector('.modal-pay-allowances') || {}).value || "0").replace(/,/g, ".")) || 0;       var deductions = parseFloat(String((tr.querySelector('.modal-pay-deductions') || {}).value || "0").replace(/,/g, ".")) || 0;       var total = basic + extra - absence + incentive + allowances - deductions;       rows.push({ employee_id: parseInt(eid, 10), selected: true, basic: basic, extra: extra, absence: absence, incentive: incentive, allowances: allowances, deductions: deductions, salary: total });     });     if (rows.length === 0) { alert(typeof _ !== "undefined" ? _("حدد موظفاً واحداً على الأقل.") : "Select at least one employee."); return; }     var fd = new FormData();     fd.append("month", y + "-" + mm);     fd.append("rows", JSON.stringify(rows));     fd.append("csrf_token", csrfToken());     var btn = this;     btn.disabled = true;     fetch("/api/payroll-run", { method: "POST", headers: { "X-CSRFToken": csrfToken() }, body: fd }).then(function(r) { return r.json(); }).then(function(j) {       if (j.ok) {         bootstrap.Modal.getInstance(document.getElementById('modal-create-payroll')).hide();         alert(typeof _ !== "undefined" ? _("تم حفظ المسير. المسير جاهز للترحيل.") : "Saved. Ready to post.");         document.getElementById('pay-year').value = y;         document.getElementById('pay-month').value = m;         loadPayroll();       } else { alert(j.error === "select_at_least_one" ? (typeof _ !== "undefined" ? _("حدد موظفاً واحداً على الأقل.") : "Select at least one.") : (j.error || "Error")); }       btn.disabled = false;     }).catch(function(e) { alert(e.message); btn.disabled = false; });   });    document.getElementById('pay-post-run') && document.getElementById('pay-post-run').addEventListener('click', function() {     var btn = this;     var y = document.getElementById('pay-year').value;     var m = document.getElementById('pay-month').value;     if (!y || !m) { alert(typeof _ !== 'undefined' ? _('اختر السنة والشهر.') : 'Select year and month.'); return; }     btn.disabled = true;     var fd = new FormData();     fd.append('year', y);     fd.append('month', m);     fd.append('csrf_token', csrfToken());     fetch('/api/payroll-post', { method: 'POST', headers: { 'X-CSRFToken': csrfToken() }, body: fd }).then(function(r) { return r.json(); }).then(function(j) {       if (j.ok) { alert(typeof _ !== 'undefined' ? _('تم ترحيل المسير. قيد الاستحقاق أنشئ.') : 'Posted. Accrual JE created.'); loadPayroll(); } else { alert(j.error || 'Error'); btn.disabled = false; }     }).catch(function(e) { alert(e.message); btn.disabled = false; });   });    // Reports: print link — فتح كشف الرواتب في نافذة جديدة مع رسالة عند الفشل   function reportPrintHref() {     const yf = (document.getElementById('rep-y-from') || {}).value || '';     const mf = (document.getElementById('rep-m-from') || {}).value || '';     const yt = (document.getElementById('rep-y-to') || {}).value || '';     const mt = (document.getElementById('rep-m-to') || {}).value || '';     const sel = document.getElementById('rep-employees');     let ids = [];     if (sel && sel.selectedOptions) {       for (var i = 0; i < sel.selectedOptions.length; i++) ids.push(sel.selectedOptions[i].value);     }     let u = "{{ url_for('reports.print_payroll') }}?year_from=" + encodeURIComponent(yf) + "&month_from=" + encodeURIComponent(mf) + "&year_to=" + encodeURIComponent(yt) + "&month_to=" + encodeURIComponent(mt);     if (ids.length > 0) u += '&employee_ids=' + encodeURIComponent(ids.join(','));     return u;   }   var repPrint = document.getElementById('rep-print');   if (repPrint) {     repPrint.href = reportPrintHref();     repPrint.addEventListener('click', function(e) {       this.href = reportPrintHref();       // لا نمنع السلوك الافتراضي — فتح الرابط في نافذة جديدة (target="_blank") عادة لا يُحظر     });   }   ['rep-y-from','rep-m-from','rep-y-to','rep-m-to'].forEach(function(id) {     var el = document.getElementById(id);     if (el) el.addEventListener('change', function() { var p = document.getElementById('rep-print'); if (p) p.href = reportPrintHref(); });   });   document.getElementById('rep-employees') && document.getElementById('rep-employees').addEventListener('change', function() { var p = document.getElementById('rep-print'); if (p) p.href = reportPrintHref(); });   document.getElementById('rep-emp-all') && document.getElementById('rep-emp-all').addEventListener('click', function() {     var sel = document.getElementById('rep-employees');     if (sel) { for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = true; var p = document.getElementById('rep-print'); if (p) p.href = reportPrintHref(); }   });   document.getElementById('rep-emp-clear') && document.getElementById('rep-emp-clear').addEventListener('click', function() {     var sel = document.getElementById('rep-employees');     if (sel) { for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = false; var p = document.getElementById('rep-print'); if (p) p.href = reportPrintHref(); }   });    // Advances   function loadAdvances() {     const start = document.getElementById('adv-start').value;     const end = document.getElementById('adv-end').value;     const emp = document.getElementById('adv-filter-emp').value;     let u = '/api/advances/list?start=' + (start || '') + '&end=' + (end || '');     if (emp) u += '&employee_id=' + emp;     fetch(u).then(function(r) { return r.json(); }).then(function(j) {       if (!j.ok) return;       const rows = j.rows || [];       const tbody = document.getElementById('adv-tbody');       let h = '';       rows.forEach(function(r) {         const empName = (r.employee_name || '').replace(/"/g, '&quot;');         const remaining = parseFloat(r.remaining || 0);         h += '<tr><td>' + (r.employee_name || '') + '</td><td>' + (r.department || '') + '</td><td class="text-end">' + (r.granted || 0).toFixed(2) + '</td><td class="text-end">' + (r.paid || 0).toFixed(2) + '</td><td class="text-end">' + (r.remaining || 0).toFixed(2) + '</td><td><button type="button" class="btn btn-sm btn-outline-primary repay-btn" data-emp-id="' + (r.employee_id || '') + '" data-emp-name="' + empName + '" data-remaining="' + remaining + '">' + (typeof _ !== 'undefined' ? _('Repay	استرجاع
+اختر موظفاً.') : 'Select employee.'); return; }     var fromY = document.getElementById('pay-single-from-year') && document.getElementById('pay-single-from-year').value;     var fromM = document.getElementById('pay-single-from-month') && document.getElementById('pay-single-from-month').value;     var toY = document.getElementById('pay-single-to-year') && document.getElementById('pay-single-to-year').value;     var toM = document.getElementById('pay-single-to-month') && document.getElementById('pay-single-to-month').value;     var u = '/api/employee-unpaid-months?employee_id=' + encodeURIComponent(empId);     if (fromY && fromM) u += '&from_year=' + encodeURIComponent(fromY) + '&from_month=' + encodeURIComponent(fromM);     if (toY && toM) u += '&to_year=' + encodeURIComponent(toY) + '&to_month=' + encodeURIComponent(toM);     fetch(u).then(function(r) { return r.json(); }).then(function(j) {       var tbody = document.getElementById('pay-single-tbody');       var batchBtn = document.getElementById('pay-single-batch');       var hint = document.getElementById('pay-single-hint');       if (!j.ok || !(j.months && j.months.length)) {         tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">' + (typeof _ !== 'undefined' ? _('لا توجد أشهر غير مدفوعة.') : 'No unpaid months.') + '</td></tr>';         if (batchBtn) batchBtn.classList.add('d-none');         if (hint) hint.textContent = '';         return;       }       var h = '';       j.months.forEach(function(m) {         var payUrl = '/employees/' + empId + '/pay?year=' + m.year + '&month=' + m.month;         h += '<tr data-year="' + m.year + '" data-month="' + m.month + '">' +           '<td><input type="checkbox" class="form-check-input pay-single-row-chk"></td>' +           '<td>' + (m.label_ar || m.label) + '</td>' +           '<td class="text-end">' + (m.total != null ? m.total.toFixed(2) : '0.00') + '</td>' +           '<td class="text-end">' + (m.paid != null ? m.paid.toFixed(2) : '0.00') + '</td>' +           '<td class="text-end">' + (m.remaining != null ? m.remaining.toFixed(2) : '0.00') + '</td>' +           '<td><a class="btn btn-sm btn-outline-primary" href="' + payUrl + '">' + (typeof _ !== 'undefined' ? _('سداد شهر واحد') : 'Pay one') + '</a></td></tr>';       });       tbody.innerHTML = h;       if (batchBtn) batchBtn.classList.remove('d-none');       if (hint) hint.textContent = (typeof _ !== 'undefined' ? _('حدد أشهراً ثم انقر «سداد المحدد».') : 'Select months then click Pay selected.');     }).catch(function() {});   });   document.getElementById('pay-single-select-all') && document.getElementById('pay-single-select-all').addEventListener('change', function() {     var c = this.checked;     document.querySelectorAll('#pay-single-tbody .pay-single-row-chk').forEach(function(el) { el.checked = c; });   });   document.getElementById('pay-single-batch') && document.getElementById('pay-single-batch').addEventListener('click', function() {     var empId = document.getElementById('pay-emp-single').value;     if (!empId) return;     var rows = [];     document.querySelectorAll('#pay-single-tbody tr[data-year][data-month]').forEach(function(tr) {       if (tr.querySelector('.pay-single-row-chk') && tr.querySelector('.pay-single-row-chk').checked)         rows.push({ year: parseInt(tr.getAttribute('data-year'), 10), month: parseInt(tr.getAttribute('data-month'), 10) });     });     if (rows.length === 0) { alert(typeof _ !== 'undefined' ? _('حدد شهراً واحداً على الأقل.') : 'Select at least one month.'); return; }     var dateEl = document.getElementById('pay-single-date');     var methodEl = document.getElementById('pay-single-method');     var btn = this;     btn.disabled = true;     fetch('/api/employee-pay-months', {       method: 'POST',       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },       body: JSON.stringify({ employee_id: parseInt(empId, 10), months: rows, date: dateEl ? dateEl.value : '', payment_method: methodEl ? methodEl.value : 'cash' })     }).then(function(r) { return r.json(); }).then(function(j) {       if (j.ok) { alert((typeof _ !== 'undefined' ? _('تم السداد لـ') : 'Paid ') + (j.paid_months || 0) + (typeof _ !== 'undefined' ? _(' شهر.') : ' month(s).')); document.getElementById('pay-load-unpaid-months').click(); } else { alert(j.error || 'Error'); }       btn.disabled = false;     }).catch(function(e) { alert(e.message); btn.disabled = false; });   });    // Payment tab: collective unpaid runs (فلترة: شهر واحد أو عدة أشهر من - إلى)   var payCollectiveRuns = [];   document.getElementById('pay-load-unpaid-runs') && document.getElementById('pay-load-unpaid-runs').addEventListener('click', function() {     var fromY = document.getElementById('pay-collective-from-year') && document.getElementById('pay-collective-from-year').value;     var fromM = document.getElementById('pay-collective-from-month') && document.getElementById('pay-collective-from-month').value;     var toY = document.getElementById('pay-collective-to-year') && document.getElementById('pay-collective-to-year').value;     var toM = document.getElementById('pay-collective-to-month') && document.getElementById('pay-collective-to-month').value;     var u = '/financials/api/unpaid_payroll_runs';     if (fromY && fromM) u += '?from_year=' + encodeURIComponent(fromY) + '&from_month=' + encodeURIComponent(fromM);     if (toY && toM) u += (u.indexOf('?') >= 0 ? '&' : '?') + 'to_year=' + encodeURIComponent(toY) + '&to_month=' + encodeURIComponent(toM);     fetch(u).then(function(r) { return r.json(); }).then(function(j) {       var tbody = document.getElementById('pay-collective-tbody');       var batchBtn = document.getElementById('pay-collective-batch');       var hint = document.getElementById('pay-collective-hint');       if (!j.ok || !(j.runs && j.runs.length)) {         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">' + (typeof _ !== 'undefined' ? _('لا توجد مسيرات غير مدفوعة.') : 'No unpaid runs.') + '</td></tr>';         payCollectiveRuns = [];         if (batchBtn) batchBtn.classList.add('d-none');         if (hint) hint.textContent = '';         return;       }       payCollectiveRuns = j.runs;       var h = '';       j.runs.forEach(function(r, i) {         h += '<tr data-idx="' + i + '">' +           '<td><input type="checkbox" class="form-check-input pay-collective-row-chk"></td>' +           '<td>' + (r.label_ar || r.label) + '</td>' +           '<td class="text-end">' + (r.remaining != null ? r.remaining.toFixed(2) : '0.00') + '</td>' +           '<td>' + (r.n_employees || 0) + '</td>' +           '<td></td></tr>';       });       tbody.innerHTML = h;       if (batchBtn) batchBtn.classList.remove('d-none');       if (hint) hint.textContent = (typeof _ !== 'undefined' ? _('حدد مسيراً أو أكثر ثم انقر «سداد المحدد».') : 'Select run(s) then click Pay selected.');     }).catch(function() {});   });   document.getElementById('pay-collective-select-all') && document.getElementById('pay-collective-select-all').addEventListener('change', function() {     var c = this.checked;     document.querySelectorAll('#pay-collective-tbody .pay-collective-row-chk').forEach(function(el) { el.checked = c; });   });   document.getElementById('pay-collective-batch') && document.getElementById('pay-collective-batch').addEventListener('click', function() {     var dateEl = document.getElementById('pay-collective-date');     var methodEl = document.getElementById('pay-collective-method');     var dateVal = dateEl ? dateEl.value : '';     var methodVal = methodEl ? methodEl.value : 'cash';     var selected = [];     document.querySelectorAll('#pay-collective-tbody tr[data-idx]').forEach(function(tr) {       if (tr.querySelector('.pay-collective-row-chk') && tr.querySelector('.pay-collective-row-chk').checked) {         var idx = parseInt(tr.getAttribute('data-idx'), 10);         if (payCollectiveRuns[idx]) selected.push(payCollectiveRuns[idx]);       }     });     if (selected.length === 0) { alert(typeof _ !== 'undefined' ? _('حدد مسيراً واحداً على الأقل.') : 'Select at least one run.'); return; }     var btn = this;     btn.disabled = true;     var done = 0;     var errs = [];     function doNext(i) {       if (i >= selected.length) {         btn.disabled = false;         if (done) { alert((typeof _ !== 'undefined' ? _('تم السداد لـ') : 'Paid ') + done + (typeof _ !== 'undefined' ? _(' مسير.') : ' run(s).')); document.getElementById('pay-load-unpaid-runs').click(); }         if (errs.length) alert(errs.join('\n'));         return;       }       var r = selected[i];       fetch('/financials/api/quick-txn', {         method: 'POST',         headers: { 'Content-Type': 'application/json' },         body: JSON.stringify({ type: 'pay_liability', liability_code: '2121', payroll_year: r.year, payroll_month: r.month, amount: r.remaining, date: dateVal, payment_method: methodVal })       }).then(function(res) { return res.json(); }).then(function(j) {         if (j && j.ok) done++; else if (j && j.error) errs.push(r.label + ': ' + j.error);         doNext(i + 1);       }).catch(function(e) { errs.push(r.label + ': ' + e.message); doNext(i + 1); });     }     doNext(0);   });    // Add employee   var addForm = document.getElementById('emp-add-form');   if (addForm) addForm.addEventListener('submit', async function(e) {     e.preventDefault();     const fd = new FormData(this);     const msg = document.getElementById('emp-add-msg');     msg.innerHTML = '';     try {       const r = await fetch('/api/employees', { method: 'POST', headers: { 'X-CSRFToken': csrfToken(), 'Accept': 'application/json' }, body: fd });       const j = await r.json().catch(function() { return {}; });       if (j.ok) {         msg.innerHTML = '<div class="alert alert-success mb-0">' + (typeof _ !== 'undefined' ? _('Added.	تمت الإضافة.
+اسم المورد') }}">         </div>         <div class="col-md-3">           <label class="form-label">{{ _('Customer Group	مجموعة العملاء
+اكتب اسم المورد أو الجهة') }}">                   </div>                   <div class="col-md-4">                     <label class="form-label">{{ _('Phone	رقم الهاتف
+الإجمالي') }}</th><th class="text-end">{{ _('مدفوع') }}</th><th class="text-end">{{ _('متبقي') }}</th><th></th></tr></thead>                 <tbody id="pay-single-tbody"></tbody>               </table>             </div>             <div class="mt-2"><button type="button" class="btn btn-success d-none" id="pay-single-batch"><i class="fa-solid fa-money-bill-wave me-1"></i>{{ _('سداد المحدد (كامل)') }}</button> <span class="ms-2 text-muted small" id="pay-single-hint"></span></div>           </div>         </div>         <div class="ops-form-card mt-3">           <div class="ops-form-head">{{ _('السداد الجماعي') }} — {{ _('مسير واحد أو عدة مسيرات (شهر = مسير، سداد كامل للمسير)') }}</div>           <div class="ops-form-body">             <div class="row g-3 align-items-end mb-3">               <div class="col-auto"><label class="form-label">{{ _('From	من
+السداد الفردي') }} — {{ _('موظف واحد، شهر واحد أو عدة أشهر (كل شهر = مسير)') }}</div>           <div class="ops-form-body">             <div class="row g-3 align-items-end mb-3">               <div class="col-md-3"><label class="form-label">{{ _('Employee	الموظف
+الكل') }}</button>                     <button type="button" class="btn btn-sm btn-outline-secondary" id="rep-emp-clear" title="{{ _('Clear	إلغاء
+بدون VAT') }}</option>                     </select>                   </div>                   <div class="col-md-3">                     <label class="form-label">{{ _('Supplier	المورد
+تحديد الكل') }}"></th>                     <th>{{ _('Employee	الموظف
+تحديد الكل') }}"></th><th>{{ _('الشهر	المسير
+تحميل الأشهر غير المدفوعة') }}</button></div>             </div>             <p class="text-muted small mb-2">{{ _('شهر واحد: اختر نفس الشهر في «من» و«إلى». عدة أشهر: من - إلى يعرض جميع المسيرات غير المدفوعة في النطاق.') }}</p>             <div class="row g-2 mb-2">               <div class="col-md-2"><label class="form-label">{{ _('Date	التاريخ
+تحميل المسيرات غير المدفوعة') }}</button></div>               <div class="col-md-2"><label class="form-label">{{ _('Date	التاريخ
+شهر واحد: اختر نفس الشهر في «من» و«إلى». عدة أشهر: من - إلى يعرض جميع المسيرات غير المدفوعة في النطاق.') }} {{ _('يمكنك أيضاً السداد من شاشة العمليات المالية عند اختيار «سداد مستحقات» → رواتب مستحقة.') }}</p>             <div class="table-responsive screen-table-wrap">               <table class="table table-hover screen-table mb-0" id="pay-collective-table">                 <thead><tr><th><input type="checkbox" id="pay-collective-select-all" class="form-check-input" title="{{ _('تحديد الكل') }}"></th><th>{{ _('المسير (الشهر)') }}</th><th class="text-end">{{ _('متبقي') }}</th><th>{{ _('عدد الموظفين') }}</th><th></th></tr></thead>                 <tbody id="pay-collective-tbody"></tbody>               </table>             </div>             <div class="mt-2"><button type="button" class="btn btn-success d-none" id="pay-collective-batch"><i class="fa-solid fa-money-bill-wave me-1"></i>{{ _('سداد المحدد') }}</button> <span class="ms-2 text-muted small" id="pay-collective-hint"></span></div>           </div>         </div>       </div>        <!-- Tab 6: Unpaid dues -->       <div id="panel-unpaid" class="ops-panel d-none" data-panel>         <div class="ops-form-card mt-0">           <div class="ops-form-head">{{ _('Unpaid salary dues	مستحقات رواتب غير مدفوعة
+لا توجد مسيرات لهذا الشهر. البيانات تعتمد على المسيرات المنشأة فقط — أنشئ مسيراً أو اختر شهراً آخر.') : 'No payroll runs for this month. Data is from created runs only.') + '</td></tr>';       tfoot.innerHTML = '<tr><th colspan="3">' + (typeof _ !== 'undefined' ? _('Totals	الإجماليات
+مثال: مطبخ، صالة') }}"></div>               <div class="col-md-4"><label class="form-label">{{ _('Position	الوظيفة
+مسير الرواتب') }} — {{ _('انقر «إنشاء مسير» لفتح النموذج، اختر الشهر، املأ الحقول (الأساسي من بيانات الموظف مع إمكانية التعديل)، ثم احفظ المسير. بعد الحفظ يصبح المسير جاهزاً للترحيل.') }}</div>           <div class="ops-form-body">             <div class="row g-3 align-items-end mb-3">               <div class="col-auto"><label class="form-label">{{ _('Year	السنة
+مسير مرحّل – قيد JE-PR موجود') : 'Posted – JE-PR exists') + '</span>' : '');       let h = '';       rows.forEach(function(r) {         const stLabel = (r.status === 'partial' ? 'جزئي' : 'مستحق');         h += '<tr><td>' + (r.employee_name || '') + '</td><td class="text-end">' + (r.total || 0).toFixed(2) + '</td><td class="text-end">' + (r.paid || 0).toFixed(2) + '</td><td class="text-end">' + (r.remaining || 0).toFixed(2) + '</td><td><span class="badge bg-' + (r.status === 'partial' ? 'warning' : 'danger') + '">' + stLabel + '</span></td></tr>';       });       tbody.innerHTML = h || '<tr><td colspan="5" class="text-center text-muted">' + (typeof _ !== 'undefined' ? _('No unpaid dues	لا توجد مستحقات غير مدفوعة
+مصدر البيانات: المسيرات المنشأة فقط. عدم وجود مسيرات = عدم عرض أي استحقاق. انقر «إنشاء مسير» لفتح النموذج واختيار الشهر وملء الحقول ثم حفظ المسير.') }}</p>             <div class="d-flex flex-wrap gap-2 mt-3 align-items-center">               <button type="button" class="btn btn-outline-secondary" id="pay-ensure-records"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>{{ _('إنشاء مسيرات من تاريخ التعيين') }}</button>               <button type="button" class="btn btn-primary" id="pay-open-create-run"><i class="fa-solid fa-plus me-1"></i>{{ _('إنشاء مسير') }}</button>               <button type="button" class="btn btn-warning d-none" id="pay-post-run"><i class="fa-solid fa-paper-plane me-1"></i>{{ _('ترحيل المسير (إنشاء قيد استحقاق)') }}</button>               <span class="badge bg-secondary ms-2" id="pay-run-status"></span>             </div>           </div>         </div>       </div>        <!-- Modal: إنشاء مسير -->       <div class="modal fade" id="modal-create-payroll" tabindex="-1" aria-labelledby="modal-create-payroll-label" aria-hidden="true">         <div class="modal-dialog modal-xl modal-dialog-scrollable">           <div class="modal-content">             <div class="modal-header">               <h5 class="modal-title" id="modal-create-payroll-label">{{ _('إنشاء مسير') }} — {{ _('اختر الشهر ثم املأ الحقول (الأساسي من بيانات الموظف مع إمكانية التعديل)') }}</h5>               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>             </div>             <div class="modal-body">               <div class="row g-3 mb-3">                 <div class="col-auto"><label class="form-label">{{ _('السنة') }}</label><select id="modal-pay-year" class="form-select">{% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year else '' }}>{{ y }}</option>{% endfor %}</select></div>                 <div class="col-auto"><label class="form-label">{{ _('الشهر') }}</label><select id="modal-pay-month" class="form-select">{% for m in months %}<option value="{{ m.value }}" {{ 'selected' if m.value == month else '' }}>{{ m.label }}</option>{% endfor %}</select></div>                 <div class="col-auto"><label class="form-label">{{ _('القسم') }}</label><select id="modal-pay-dept" class="form-select"><option value="">{{ _('الكل') }}</option>{% for d in dept_options %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select></div>                 <div class="col-auto d-flex align-items-end"><button type="button" class="btn btn-sm btn-outline-primary" id="modal-pay-load">{{ _('تحميل الموظفين') }}</button></div>               </div>               <div class="table-responsive">                 <table class="table table-hover table-sm mb-0" id="modal-pay-table">                   <thead>                     <tr>                       <th><input type="checkbox" id="modal-pay-select-all" class="form-check-input" title="{{ _('تحديد الكل') }}"></th>                       <th>{{ _('الموظف') }}</th>                       <th>{{ _('القسم') }}</th>                       <th class="text-end">{{ _('أساسي') }}</th>                       <th class="text-end">{{ _('إضافي') }}</th>                       <th class="text-end">{{ _('غياب') }}</th>                       <th class="text-end">{{ _('حافز') }}</th>                       <th class="text-end">{{ _('بدلات') }}</th>                       <th class="text-end">{{ _('استقطاعات') }}</th>                       <th class="text-end">{{ _('إجمالي') }}</th>                     </tr>                   </thead>                   <tbody id="modal-pay-tbody"></tbody>                 </table>               </div>             </div>             <div class="modal-footer">               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('إلغاء') }}</button>               <button type="button" class="btn btn-success" id="modal-pay-save"><i class="fa-solid fa-check me-1"></i>{{ _('حفظ المسير') }}</button>             </div>           </div>         </div>       </div>        <!-- Tab 3: Payroll reports -->       <div id="panel-reports" class="ops-panel d-none" data-panel>         <div class="ops-form-card mt-0">           <div class="ops-form-head">{{ _('Payroll reports	كشوفات رواتب
+ملاحظات إضافية (اختياري)') }}">                   </div>                 </div>                 <div class="row g-3 mt-1">                   <div class="col-md-3">                     <label class="form-label">{{ _('Payment Status	حالة الدفع
+يجب ترحيل المسير أولاً: لا توجد قيود تثبت الاستحقاق.') : 'Post payroll first: No journal entry exists.') + ' <button type="button" class="btn btn-sm btn-warning ms-2" id="unp-go-post">' + (typeof _ !== 'undefined' ? _('اذهب لترحيل المسير') : 'Go to Post payroll') + '</button></div>';         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">' + (typeof _ !== 'undefined' ? _('يُعرض فقط المسيرات المرحلة والمرحّلة (لها قيد استحقاق JE-PR).') : 'Only posted payroll runs (with accrual journal JE-PR) are shown here.') + '</td></tr>';         document.getElementById('unp-go-post') && document.getElementById('unp-go-post').addEventListener('click', function() {           document.querySelector('.ops-tab[data-panel="panel-payroll"]').click();           document.getElementById('pay-year').value = y;           document.getElementById('pay-month').value = m;           if (document.getElementById('pay-apply')) document.getElementById('pay-apply').click();         });         return;       }       const totRem = rows.reduce(function(a, r) { return a + (r.remaining || 0); }, 0);       kpis.innerHTML = '<div class="kpi-card kpi-card--blue"><div class="kpi-value">' + rows.length + '</div><div class="kpi-label">' + (typeof _ !== 'undefined' ? _('Unpaid count	عدد غير مدفوع

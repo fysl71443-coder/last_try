@@ -1,33 +1,30 @@
 {% extends 'base.html' %}
 {% block title %}Table Manager · {{ branch_label }}{% endblock %}
 {% block content %}
-<div class="container-fluid py-4" id="manager-root" data-branch="{{ branch_code }}">
-  <div class="section-header mb-4">
+<div class="container py-4 ops-layout hub-wrap" id="manager-root" data-branch="{{ branch_code }}">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-table-cells"></i></span>
     <div>
-      <h3 class="mb-1">{{ branch_label }} — Table Manager</h3>
-      <p class="text-muted mb-0">Manage sections, rows, and table numbers. Drag and drop freely, then save.</p>
+      <h1 class="ops-title mb-0">{{ branch_label }} — {{ _('Table Manager') }}</h1>
+      <span class="ops-subtitle">{{ _('Manage sections, rows, and table numbers. Drag and drop freely, then save.') }}</span>
     </div>
-    <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary" href="{{ url_for('main.table_settings') }}">← Back to branches</a>
-      <button class="btn btn-primary" id="saveLayoutBtn">
-        <i class="fa fa-save me-1"></i> Save Layout
-      </button>
+    <div class="ops-actions">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.table_settings') }}"><i class="fa-solid fa-arrow-left me-1"></i>{{ _('Back to branches') }}</a>
+      <button class="btn btn-sm btn-primary" id="saveLayoutBtn"><i class="fa-solid fa-save me-1"></i>{{ _('Save Layout') }}</button>
     </div>
   </div>
 
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body">
-      <h5 class="card-title">Add Section</h5>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Add Section') }}</div>
+    <div class="ops-form-body">
       <div class="input-group" style="max-width: 420px;">
-        <input id="newSectionName" class="form-control" placeholder="New section name">
-        <button class="btn btn-success" id="addSectionBtn">
-          <i class="fa fa-plus me-1"></i> Add
-        </button>
+        <input id="newSectionName" class="form-control" placeholder="{{ _('New section name') }}">
+        <button class="btn btn-outline-primary" id="addSectionBtn"><i class="fa-solid fa-plus me-1"></i>{{ _('Add') }}</button>
       </div>
     </div>
   </div>
 
-  <div id="sections" class="d-grid gap-3"></div>
+  <div id="sections" class="d-grid gap-3 mt-3"></div>
 </div>
 {% endblock %}
 

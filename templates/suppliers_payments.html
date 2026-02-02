@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Supplier Payments & Statements') }}{% endblock %}
+{% block content %}
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Supplier Payments & Statements') }}</h1>
+      <span class="ops-subtitle">{{ _('Track payments and print detailed supplier statements') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2">
+      <a href="{{ url_for('suppliers.suppliers_list') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-list me-1"></i>{{ _('Suppliers List') }}</a>
+      <a href="{{ url_for('suppliers.suppliers') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-plus me-1"></i>{{ _('Add Supplier') }}</a>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+    </div>
+  </div>
+
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('View') }}</div>
+    <div class="ops-form-body">
+      <form method="get" action="{{ url_for('suppliers.supplier_statement') }}" id="stmt-form" class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">{{ _('Supplier') }} <span class="text-danger">*</span></label>
+          <select name="supplier_id" id="stmt-supplier" class="form-select" required>
+            <option value="">{{ _('Select supplier') }}</option>
+            {% for s in suppliers %}
+            <option value="{{ s.id }}">{{ s.name }}{% if s.contact_person %} ({{ s.contact_person }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">{{ _('From date') }}</label>
+          <input type="date" name="start_date" id="stmt-start" class="form-control" value="{{ request.args.get('start_date') or '2025-01-01' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">{{ _('To date') }}</label>
+          <input type="date" name="end_date" id="stmt-end" class="form-control" value="{{ request.args.get('end_date', today) }}">
+        </div>
+        <div class="col-md-4 d-flex gap-2 align-items-end">
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</button>
+          <button type="button" class="btn btn-outline-primary" id="stmt-print"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</button>
+        </div>
+      </form>
+      <p class="text-muted small mt-2 mb-0">{{ _('Select a supplier and date range, then View to see the detailed statement (invoices, payments, balance) or Print to open print view.') }}</p>
+    </div>
+  </div>
+
+  <div class="ops-form-card mt-3">
+    <div class="ops-form-head">{{ _('Quick links') }}</div>
+    <div class="ops-form-body">
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('purchases.purchases') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-cart-shopping me-1"></i>{{ _('Purchases') }}</a>
+        <a href="{{ url_for('payments.payments') if url_for('payments.payments') is defined else url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-money-bill-wave me-1"></i>{{ _('Payments') }}</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var form = document.getElementById('stmt-form');
+  var sel = document.getElementById('stmt-supplier');
+  if (form && sel) {
+    form.addEventListener('submit', function(e) {
+      if (!sel.value) { e.preventDefault(); alert('{{ _("Select a supplier") }}'); return; }
+    });
+  }
+  document.getElementById('stmt-print') && document.getElementById('stmt-print').addEventListener('click', function() {
+    var sid = document.getElementById('stmt-supplier').value;
+    if (!sid) { alert('{{ _("Select a supplier") }}'); return; }
+    var start = document.getElementById('stmt-start').value;
+    var end = document.getElementById('stmt-end').value;
+    var u = '{{ url_for("suppliers.supplier_statement") }}?supplier_id=' + sid + '&start_date=' + (start || '2025-01-01') + '&end_date=' + (end || '');
+    window.open(u, '_blank', 'width=900,height=700');
+  });
+  var today = new Date().toISOString().slice(0, 10);
+  var endEl = document.getElementById('stmt-end');
+  if (endEl && !endEl.value) endEl.value = today;
+})();
+</script>
+{% endblock %}

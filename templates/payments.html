@@ -1,91 +1,111 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Payments / المدفوعات') }}{% endblock %}
+{% block title %}{{ _('Payments') }}{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <div class="section-header mb-3">
-    <h3 class="mb-0">💳 {{ _('Payments & Receivables / المدفوعات والمستحقات') }}</h3>
-    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
+<style>
+  .pay-section { border: 2px solid #0d47a1; border-radius: 12px; margin-bottom: 2rem; overflow: hidden; }
+  .pay-section-head { background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); color: #fff; padding: 1rem 1.25rem; font-size: 1.15rem; font-weight: 700; }
+  .pay-section-head.collect { background: linear-gradient(135deg, #2e7d32 0%, #43a047 100%); }
+  .pay-section-body { padding: 1.25rem; background: #fff; }
+  .pay-kpi-row { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
+  .pay-kpi-card { min-width: 140px; padding: 0.75rem 1rem; border-radius: 8px; text-align: center; }
+  .pay-kpi-card.creditors { background: #e3f2fd; border: 1px solid #1976d2; }
+  .pay-kpi-card.debtors { background: #e8f5e9; border: 1px solid #43a047; }
+  .pay-kpi-card .val { font-size: 1.25rem; font-weight: 700; }
+  .pay-kpi-card .lbl { font-size: 0.85rem; color: #555; }
+</style>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-credit-card"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Payments & Receivables') }}</h1>
+      <span class="ops-subtitle">{{ _('Track supplier payables and customer receivables — two separate sections') }} / متابعة مدفوعات الموردين ومستحقات العملاء — قسمان منفصلان</span>
+    </div>
+    <div class="ops-actions" data-partial-links>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.dashboard') }}"><i class="fa-solid fa-house"></i> {{ _('Dashboard') }}</a>
+    </div>
   </div>
 
-  <!-- Filters -->
-  <form method="GET" class="row g-2 mb-3">
-    <div class="col-md-3">
-      <label class="form-label">{{ _('Status / الحالة') }}</label>
-      <select name="status" class="form-select">
-        <option value="">{{ _('All / الكل') }}</option>
-        <option value="paid" {{ 'selected' if (status_f or '')=='paid' else '' }}>{{ _('Paid / مدفوع') }}</option>
-        <option value="partial" {{ 'selected' if (status_f or '')=='partial' else '' }}>{{ _('Partial / جزئي') }}</option>
-        <option value="unpaid" {{ 'selected' if (status_f or '')=='unpaid' else '' }}>{{ _('Unpaid / غير مدفوع') }}</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">{{ _('Type / النوع') }}</label>
-      <select name="type" class="form-select">
-        <option value="">{{ _('All / الكل') }}</option>
-        <option value="sales" {{ 'selected' if (type_f or '')=='sales' else '' }}>{{ _('Sales / مبيعات') }}</option>
-        <option value="purchase" {{ 'selected' if (type_f or '')=='purchase' else '' }}>{{ _('Purchases / مشتريات') }}</option>
-        <option value="expense" {{ 'selected' if (type_f or '')=='expense' else '' }}>{{ _('Expenses / مصروفات') }}</option>
-        <option value="salary" {{ 'selected' if (type_f or '')=='salary' else '' }}>{{ _('Salaries / رواتب') }}</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">{{ _('Start Date / تاريخ البداية') }}</label>
-      <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">{{ _('End Date / تاريخ النهاية') }}</label>
-      <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">{{ _('Supplier / المورد') }}</label>
-      <input type="text" name="supplier" class="form-control" placeholder="{{ _('Enter supplier name / أدخل اسم المورد') }}">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">{{ _('Customer Group / مجموعة العملاء') }}</label>
-      <select name="cust_group" class="form-select">
-        <option value="all" {{ 'selected' if (group_f or '')=='all' else '' }}>{{ _('All / الكل') }}</option>
-        <option value="keeta" {{ 'selected' if (group_f or '')=='keeta' else '' }}>keeta</option>
-        <option value="hunger" {{ 'selected' if (group_f or '')=='hunger' else '' }}>hunger</option>
-      </select>
-    </div>
-    <div class="col-md-3 d-flex align-items-end">
-      <button class="btn btn-secondary">{{ _('Filter / تصفية') }}</button>
-    </div>
-  </form>
-
-  <div class="d-flex gap-2 mb-3">
-    <a class="btn btn-outline-primary" target="_blank" href="{{ url_for('main.payments_export', format='pdf', start_date=start_date, end_date=end_date, cust_group=(group_f or 'all')) }}">🖨️ {{ _('Print PDF / طباعة PDF') }}</a>
-    <a class="btn btn-outline-success" target="_blank" href="{{ url_for('main.payments_export', format='excel', start_date=start_date, end_date=end_date, cust_group=(group_f or 'all')) }}">⬇️ {{ _('Export Excel / تصدير Excel') }}</a>
-  </div>
-
-  <div class="card">
-    <div class="card-body">
-      <div class="mb-3">
-        <h5 class="mb-2">📦 {{ _('Suppliers (Creditors) / الموردون (دائنون)') }}</h5>
-        <div class="mb-2">
-          <span class="badge bg-secondary">{{ _('Groups / المجموعات') }}: {{ suppliers_totals.count }}</span>
-          <span class="badge bg-warning text-dark">{{ _('Total Debt / إجمالي الديون') }}: {{ '%.2f'|format(suppliers_totals.remaining) }}</span>
-          <span class="badge bg-info text-dark">{{ _('Total Paid / إجمالي المدفوع') }}: {{ '%.2f'|format(suppliers_totals.paid) }}</span>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Filters') }}</div>
+    <div class="ops-form-body">
+      <form method="GET" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label">{{ _('Start Date') }}</label>
+          <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
         </div>
+        <div class="col-md-2">
+          <label class="form-label">{{ _('End Date') }}</label>
+          <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">{{ _('Status') }}</label>
+          <select name="status" class="form-select">
+            <option value="">{{ _('All') }}</option>
+            <option value="paid" {{ 'selected' if (status_f or '')=='paid' else '' }}>{{ _('Paid') }}</option>
+            <option value="partial" {{ 'selected' if (status_f or '')=='partial' else '' }}>{{ _('Partial') }}</option>
+            <option value="unpaid" {{ 'selected' if (status_f or '')=='unpaid' else '' }}>{{ _('Unpaid') }}</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">{{ _('Supplier') }}</label>
+          <input type="text" name="supplier" class="form-control" placeholder="{{ _('اسم المورد') }}" value="{{ supplier_f or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">{{ _('Customer Group') }}</label>
+          <select name="cust_group" class="form-select">
+            <option value="all" {{ 'selected' if (group_f or '')=='all' else '' }}>{{ _('All') }}</option>
+            <option value="keeta" {{ 'selected' if (group_f or '')=='keeta' else '' }}>keeta</option>
+            <option value="hunger" {{ 'selected' if (group_f or '')=='hunger' else '' }}>hunger</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end gap-2 flex-wrap">
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-filter me-1"></i>{{ _('Filter') }}</button>
+          <a class="btn btn-outline-primary btn-sm" target="_blank" href="{{ url_for('payments.payments_export', format='pdf', start_date=start_date, end_date=end_date, cust_group=(group_f or 'all')) }}"><i class="fa-solid fa-file-pdf me-1"></i>PDF</a>
+          <a class="btn btn-outline-success btn-sm" target="_blank" href="{{ url_for('payments.payments_export', format='excel', start_date=start_date, end_date=end_date, cust_group=(group_f or 'all')) }}"><i class="fa-solid fa-file-excel me-1"></i>Excel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- القسم الأول: الموردون (الدائنون) — مدفوعات الموردين فقط -->
+  <div class="pay-section">
+    <div class="pay-section-head"><i class="fa-solid fa-truck me-2"></i>{{ _('Suppliers (Creditors)') }} — {{ _('Payables & payments') }}</div>
+    <div class="pay-section-body">
+      <div class="pay-kpi-row">
+        <div class="pay-kpi-card creditors">
+          <div class="val">{{ suppliers_totals.count or 0 }}</div>
+          <div class="lbl">{{ _('Supplier groups') }}</div>
+        </div>
+        <div class="pay-kpi-card creditors">
+          <div class="val">{{ '%.2f'|format(suppliers_totals.remaining or 0) }}</div>
+          <div class="lbl">{{ _('Total debt') }}</div>
+        </div>
+        <div class="pay-kpi-card creditors">
+          <div class="val">{{ '%.2f'|format(suppliers_totals.paid or 0) }}</div>
+          <div class="lbl">{{ _('Total paid') }}</div>
+        </div>
+      </div>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Suppliers (Creditors)') }}</div>
+    <div class="ops-form-body">
+      <div class="mb-3">
         {% if not suppliers_groups or suppliers_totals.count == 0 %}
-        <div class="text-muted">{{ _('No supplier invoices / لا توجد فواتير للموردين') }}</div>
+        <div class="text-muted">{{ _('No supplier invoices') }}</div>
         {% endif %}
         {% for g in suppliers_groups %}
         {% if g.invoices %}
-        <div class="card mb-3">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <div>
-              <strong>{{ g.supplier }}</strong>
-            </div>
-            <div class="d-flex gap-2">
-              <span class="badge bg-warning text-dark">{{ _('Debt / الدين') }}: {{ '%.2f'|format(g.remaining) }}</span>
-              <span class="badge bg-info text-dark">{{ _('Paid / المدفوع') }}: {{ '%.2f'|format(g.paid) }}</span>
+        <div class="ops-form-card mb-3">
+          <div class="ops-form-head d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <strong>{{ g.supplier }}</strong>
+            <div class="ops-actions-list">
+              <span class="badge bg-warning text-dark">{{ _('Debt') }}: {{ '%.2f'|format(g.remaining) }}</span>
+              <span class="badge bg-info text-dark">{{ _('Paid') }}: {{ '%.2f'|format(g.paid) }}</span>
             </div>
           </div>
-          <div class="card-body">
+          <div class="ops-form-body">
             <div class="row g-2 mb-3">
               <div class="col-md-3">
-                <input type="number" step="0.01" min="0" class="form-control" placeholder="{{ _('Amount / المبلغ') }}" id="sup-amt-{{ loop.index0 }}">
+                <input type="number" step="0.01" min="0" class="form-control" placeholder="{{ _('Amount') }}" id="sup-amt-{{ loop.index0 }}">
               </div>
               <div class="col-md-3">
                 <select class="form-select" id="sup-pm-{{ loop.index0 }}">
@@ -95,21 +115,21 @@
                 </select>
               </div>
               <div class="col-md-3">
-                <button class="btn btn-sm btn-primary" onclick="paySupplier('{{ g.supplier }}', '{{ loop.index0 }}')">{{ _('Pay Supplier / دفع للمورد') }}</button>
+                <button class="btn btn-sm btn-primary" onclick="paySupplier('{{ g.supplier }}', '{{ loop.index0 }}')">{{ _('Pay Supplier') }}</button>
               </div>
             </div>
-            <div class="table-responsive">
-              <table class="table table-sm table-striped align-middle">
-                <thead class="table-light">
+            <div class="table-responsive screen-table-wrap">
+              <table class="table table-sm table-hover align-middle screen-table">
+                <thead>
                   <tr>
                     <th>#</th>
-                    <th>{{ _('Invoice No / رقم') }}</th>
-                    <th>{{ _('Total / الإجمالي') }}</th>
-                    <th>{{ _('Paid / المدفوع') }}</th>
-                    <th>{{ _('Remaining / المتبقي') }}</th>
-                    <th>{{ _('Status / الحالة') }}</th>
-                    <th>{{ _('Date / التاريخ') }}</th>
-                    <th>{{ _('Actions / الإجراءات') }}</th>
+                    <th>{{ _('Invoice No') }}</th>
+                    <th>{{ _('Total') }}</th>
+                    <th>{{ _('Paid') }}</th>
+                    <th>{{ _('Remaining') }}</th>
+                    <th>{{ _('Status') }}</th>
+                    <th>{{ _('Date') }}</th>
+                    <th>{{ _('Actions') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -133,9 +153,9 @@
                         {% endfor %}
                       </select>
                       <div class="btn-group" role="group">
-                        <button class="btn btn-sm btn-success" onclick="payFull('{{ i.id }}','purchase','{{ remaining }}')">{{ _('Pay Full / دفع كامل') }}</button>
-                        <button class="btn btn-sm btn-outline-success" onclick="openPaymentCustom('{{ i.id }}','purchase','{{ remaining }}')">{{ _('Enter Amount / ادخال مبلغ') }}</button>
-                        <button class="btn btn-sm btn-outline-primary" onclick="viewDetails('{{ i.id }}','purchase')">{{ _('Details / تفاصيل') }}</button>
+                        <button class="btn btn-sm btn-success" onclick="payFull('{{ i.id }}','purchase','{{ remaining }}')">{{ _('Pay Full') }}</button>
+                        <button class="btn btn-sm btn-outline-success" onclick="openPaymentCustom('{{ i.id }}','purchase','{{ remaining }}')">{{ _('Enter Amount') }}</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewDetails('{{ i.id }}','purchase')">{{ _('Details') }}</button>
                       </div>
                     </td>
                   </tr>
@@ -148,38 +168,55 @@
         {% endif %}
         {% endfor %}
       </div>
-      <div class="mb-3">
-        <h5 class="mb-2">🧾 {{ _('Sales Debtors / مدينون من المبيعات') }} — (keeta, hunger)</h5>
-        <div class="mb-2">
-          <span class="badge bg-secondary">{{ _('Groups / المجموعات') }}: {{ debtors_totals.count }}</span>
-          <span class="badge bg-warning text-dark">{{ _('Total Due / إجمالي المستحق') }}: {{ '%.2f'|format(debtors_totals.remaining) }}</span>
-          <span class="badge bg-info text-dark">{{ _('Total Paid / إجمالي المدفوع') }}: {{ '%.2f'|format(debtors_totals.paid) }}</span>
+    </div>
+  </div>
+    </div>
+  </div>
+
+  <!-- القسم الثاني: مستحقات المدينين — تحصيل من العملاء فقط -->
+  <div class="pay-section">
+    <div class="pay-section-head collect"><i class="fa-solid fa-receipt me-2"></i>{{ _('Debtors due') }} — {{ _('Receivables & collections') }}</div>
+    <div class="pay-section-body">
+      <div class="pay-kpi-row">
+        <div class="pay-kpi-card debtors">
+          <div class="val">{{ '%.2f'|format(debtors_totals.remaining or 0) }}</div>
+          <div class="lbl">{{ _('Debtors due') }}</div>
         </div>
+        <div class="pay-kpi-card debtors">
+          <div class="val">{{ '%.2f'|format(debtors_totals.paid or 0) }}</div>
+          <div class="lbl">{{ _('Collected') }}</div>
+        </div>
+        <div class="pay-kpi-card debtors">
+          <div class="val">{{ debtors_totals.count or 0 }}</div>
+          <div class="lbl">{{ _('Groups with invoices') }}</div>
+        </div>
+      </div>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head"><i class="fa-solid fa-receipt me-2"></i>{{ _('Sales Debtors') }} — (keeta, hunger)</div>
+    <div class="ops-form-body">
         {% for g in debtors_groups %}
-        <div class="card mb-3">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <div>
-              <strong>{{ g.group|upper }}</strong>
-            </div>
-            <div class="d-flex gap-2">
-              <span class="badge bg-warning text-dark">{{ _('Due / المستحق') }}: {{ '%.2f'|format(g.remaining) }}</span>
-              <span class="badge bg-info text-dark">{{ _('Paid / المدفوع') }}: {{ '%.2f'|format(g.paid) }}</span>
+        <div class="ops-form-card mb-3">
+          <div class="ops-form-head d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <strong>{{ g.group|upper }}</strong>
+            <div class="ops-actions-list">
+              <span class="badge bg-warning text-dark">{{ _('Due') }}: {{ '%.2f'|format(g.remaining) }}</span>
+              <span class="badge bg-info text-dark">{{ _('Paid') }}: {{ '%.2f'|format(g.paid) }}</span>
             </div>
           </div>
-          <div class="card-body">
+          <div class="ops-form-body">
             {% if g.invoices %}
-            <div class="table-responsive">
-              <table class="table table-sm table-striped align-middle">
-                <thead class="table-light">
+            <div class="table-responsive screen-table-wrap">
+              <table class="table table-sm table-hover align-middle screen-table">
+                <thead>
                   <tr>
                     <th>#</th>
-                    <th>{{ _('Invoice No / رقم') }}</th>
-                    <th>{{ _('Total / الإجمالي') }}</th>
-                    <th>{{ _('Paid / المدفوع') }}</th>
-                    <th>{{ _('Remaining / المتبقي') }}</th>
-                    <th>{{ _('Status / الحالة') }}</th>
-                    <th>{{ _('Date / التاريخ') }}</th>
-                    <th>{{ _('Actions / الإجراءات') }}</th>
+                    <th>{{ _('Invoice No') }}</th>
+                    <th>{{ _('Total') }}</th>
+                    <th>{{ _('Paid') }}</th>
+                    <th>{{ _('Remaining') }}</th>
+                    <th>{{ _('Status') }}</th>
+                    <th>{{ _('Date') }}</th>
+                    <th>{{ _('Actions') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -198,7 +235,7 @@
                     <td>{{ i.date }}</td>
                     <td>
                       <div class="btn-group" role="group">
-                        <button class="btn btn-sm btn-outline-primary" onclick="viewDetails('{{ i.id }}','sales')">{{ _('Details / تفاصيل') }}</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewDetails('{{ i.id }}','sales')">{{ _('Details') }}</button>
                       </div>
                     </td>
                   </tr>
@@ -207,71 +244,19 @@
               </table>
             </div>
             {% else %}
-            <div class="text-muted">{{ _('No sales invoices for this group / لا توجد فواتير مبيعات لهذه المجموعة') }}</div>
+            <div class="text-muted">{{ _('No sales invoices for this group') }}</div>
             {% endif %}
           </div>
         </div>
         {% endfor %}
-      </div>
-      <!-- Hidden CSRF token for JavaScript -->
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-
-      <div class="table-responsive">
-        <table class="table table-striped">
-          <thead class="table-dark">
-            <tr>
-              <th>#</th>
-              <th>{{ _('Invoice No / رقم') }}</th>
-              <th>{{ _('Type / النوع') }}</th>
-              <th>{{ _('Party / الطرف') }}</th>
-              <th>{{ _('Total / الإجمالي') }}</th>
-              <th>{{ _('Paid / المدفوع') }}</th>
-              <th>{{ _('Remaining / المتبقي') }}</th>
-              <th>{{ _('Status / الحالة') }}</th>
-              <th>{{ _('Date / التاريخ') }}</th>
-              <th>{{ _('Actions / الإجراءات') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for i in invoices %}
-            {% set remaining = (i.total - i.paid) if i.total and i.paid else (i.total or 0) %}
-            <tr>
-              <td>{{ loop.index }}</td>
-              <td>{{ i.invoice_number or i.id }}</td>
-              <td>{{ i.type }}</td>
-              <td>{{ i.party }}</td>
-              <td>{{ '%.2f'|format(i.total) }}</td>
-              <td>{{ '%.2f'|format(i.paid) }}</td>
-              <td class="{{ 'text-danger' if (i.total - i.paid) > 0 else 'text-success' }}">{{ '%.2f'|format(remaining) }}</td>
-              <td>
-                {% set st = (i.status or '').lower() %}
-                <span class="badge {{ 'bg-success' if st=='paid' else ('bg-warning text-dark' if st=='partial' else 'bg-danger') }}">{{ i.status }}</span>
-              </td>
-              <td>{{ i.date }}</td>
-              <td>
-                <select class="form-select form-select-sm pay-method" data-id="{{ i.id }}" data-type="{{ i.type }}">
-                  {% for pm in PAYMENT_METHODS %}
-                  <option value="{{ pm }}">{{ pm }}</option>
-                  {% endfor %}
-                </select>
-
-                <div class="btn-group" role="group">
-                  <button class="btn btn-sm btn-success" onclick="payFull('{{ i.id }}','{{ i.type }}','{{ remaining }}')">{{ _('Pay Full / دفع كامل') }}</button>
-                  <button class="btn btn-sm btn-outline-success" onclick="openPaymentCustom('{{ i.id }}','{{ i.type }}','{{ remaining }}')">{{ _('Enter Amount / ادخال مبلغ') }}</button>
-                  <button class="btn btn-sm btn-outline-primary" onclick="viewDetails('{{ i.id }}','{{ i.type }}')">{{ _('Details / تفاصيل') }}</button>
-                  <button class="btn btn-sm btn-outline-danger" onclick="deleteInvoice('{{ i.id }}','{{ i.type }}')">🗑️ {{ _('Delete / حذف') }}</button>
-                </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+    </div>
+  </div>
     </div>
   </div>
 </div>
 
-<!-- Simple modal prompts -->
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
 <script>
 function currentPayMethod(id){
   const sel = document.querySelector(`select.pay-method[data-id='${id}']`);
@@ -292,16 +277,16 @@ function sendPayment(id, type, amount){
 }
 async function payFull(id, type, remaining){
   const amt = parseFloat(remaining || 0);
-  if (!amt || amt <= 0){ showAlert("{{ _('Nothing to pay / لا يوجد متبقي للدفع') }}", 'warning'); return; }
-  const confirmed = await showConfirm("{{ _('Confirm full payment / تأكيد دفع كامل') }}: " + amt);
+  if (!amt || amt <= 0){ showAlert("{{ _('Nothing to pay') }}", 'warning'); return; }
+  const confirmed = await showConfirm("{{ _('Confirm full payment') }}: " + amt);
   if (!confirmed) return;
   sendPayment(id, type, amt);
 }
 async function openPaymentCustom(id, type, remaining){
-  const input = prompt("{{ _('Enter amount to pay / ادخل مبلغ الدفع') }}\n{{ _('Remaining / المتبقي') }}: " + remaining);
+  const input = prompt("{{ _('Enter amount to pay') }}\n{{ _('Remaining') }}: " + remaining);
   if (!input) return;
   const amt = parseFloat((input || '').toString().replace(',', '.'));
-  if (!amt || isNaN(amt) || amt <= 0){ showAlert("{{ _('Invalid amount / مبلغ غير صالح') }}", 'danger'); return; }
+  if (!amt || isNaN(amt) || amt <= 0){ showAlert("{{ _('Invalid amount') }}", 'danger'); return; }
   sendPayment(id, type, amt);
 }
 function viewDetails(id, type){
@@ -313,7 +298,7 @@ async function paySupplier(name, idx){
   const pmEl = document.getElementById(`sup-pm-${idx}`);
   const amt = parseFloat((amtEl && amtEl.value) || '0');
   const pm = (pmEl && pmEl.value) || 'CASH';
-  if (!amt || amt <= 0){ showAlert("{{ _('Invalid amount / مبلغ غير صالح') }}", 'warning'); return; }
+  if (!amt || amt <= 0){ showAlert("{{ _('Invalid amount') }}", 'warning'); return; }
   const form = new FormData();
   form.append('supplier', name);
   form.append('amount', String(amt));
@@ -333,7 +318,7 @@ async function paySupplier(name, idx){
 }
 
 async function deleteInvoice(id, type) {
-  const confirmed = await showConfirm('{{ _('Are you sure you want to delete this invoice? This action cannot be undone. / هل أنت متأكد من حذف هذه الفاتورة؟ لا يمكن التراجع عن هذا الإجراء.') }}');
+  const confirmed = await showConfirm('{{ _('Are you sure you want to delete this invoice? This action cannot be undone.') }}');
   if (!confirmed) return;
 
   try {
@@ -377,7 +362,7 @@ async function deleteInvoice(id, type) {
     document.body.appendChild(form);
     form.submit();
   } catch (error) {
-    showAlert('{{ _('Error deleting invoice / خطأ في حذف الفاتورة') }}', 'danger');
+    showAlert('{{ _('Error deleting invoice') }}', 'danger');
   }
 }
 </script>

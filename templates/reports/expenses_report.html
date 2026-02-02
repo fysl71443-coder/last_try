@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Expenses Report') }}{% endblock %}
+{% block head %}
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  .er-wrap { font-family: 'Cairo', 'Tajawal', sans-serif; --er-fg: #1f2937; --er-muted: #6b7280; --er-primary: #1565c0; --er-border: #e5e7eb; }
+  .er-title-wrap { text-align: center; margin: 1rem 0 1rem; }
+  .er-title-wrap hr { margin: 0.5rem 0; border-color: var(--er-primary); opacity: 0.4; }
+  .er-title { font-size: 1.35rem; font-weight: 700; color: var(--er-primary); margin: 0; }
+  .er-meta { font-size: 0.9rem; color: var(--er-muted); display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; }
+  .er-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem; }
+  .er-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+  .er-card { background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); color: #fff; border-radius: 10px; padding: 0.85rem 1rem; text-align: center; }
+  .er-card .label { font-size: 0.8rem; opacity: 0.9; margin-bottom: 0.25rem; }
+  .er-card .value { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .er-table-wrap { overflow-x: auto; border: 1px solid var(--er-border); border-radius: 10px; overflow: hidden; }
+  .er-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  .er-table th { background: var(--er-primary); color: #fff; padding: 0.6rem 0.75rem; text-align: right; font-weight: 600; }
+  .er-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--er-border); text-align: right; }
+  .er-table tfoot tr { background: #e3f2fd; font-weight: 700; border-top: 2px solid var(--er-primary); }
+  @media print {
+    .no-print { display: none !important; }
+    .er-actions { display: none !important; }
+    body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .er-meta, .er-title { color: #000 !important; }
+    .er-table th { background: #333 !important; color: #fff !important; }
+    .er-table td, .er-table tfoot tr { border-color: #333 !important; color: #000 !important; }
+    .er-table tfoot tr { background: #e8e8e8 !important; }
+    .er-card { background: #333 !important; color: #fff !important; }
+    .er-card .label { color: rgba(255,255,255,0.95) !important; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container py-4 ops-layout hub-wrap er-wrap" dir="rtl">
+  <div class="ops-header-bar mb-3 no-print">
+    <span class="ops-icon"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Expenses Report') }}</h1>
+      <span class="ops-subtitle">{{ _('View and print expenses report by period and branch') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Home') }}</a>
+      <a href="{{ url_for('reports.reports') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-chart-line me-1"></i>{{ _('Reports') }}</a>
+    </div>
+  </div>
+  {% include 'partials/report_header.html' %}
+  <div class="er-title-wrap no-print">
+    <hr><h2 class="er-title">{{ _('Expenses Report') }}</h2><hr>
+  </div>
+  <div class="er-meta">
+    <span>{{ _('From') }}: {{ start_date.strftime('%Y/%m/%d') if start_date else '—' }}</span>
+    <span>{{ _('To') }}: {{ end_date.strftime('%Y/%m/%d') if end_date else '—' }}</span>
+    <span>{{ _('Branch') }}: {{ branch_label }}</span>
+  </div>
+  <div class="no-print mb-3">
+    <form method="get" action="{{ url_for('reports.reports_expenses') }}" class="row g-2 align-items-end">
+      <div class="col-auto"><label class="form-label small">{{ _('From') }}</label><input type="date" name="from" class="form-control form-control-sm" value="{{ start_date.isoformat() if start_date else '' }}"></div>
+      <div class="col-auto"><label class="form-label small">{{ _('To') }}</label><input type="date" name="to" class="form-control form-control-sm" value="{{ end_date.isoformat() if end_date else '' }}"></div>
+      <div class="col-auto"><label class="form-label small">{{ _('Branch') }}</label><select name="branch" class="form-select form-select-sm"><option value="all" {{ 'selected' if branch == 'all' or not branch else '' }}>{{ _('All') }}</option><option value="china_town" {{ 'selected' if branch == 'china_town' else '' }}>China Town</option><option value="place_india" {{ 'selected' if branch == 'place_india' else '' }}>Place India</option></select></div>
+      <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</button></div>
+    </form>
+  </div>
+  <div class="er-actions no-print">
+    <a href="{{ url_for('reports.reports') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-right me-1"></i>{{ _('Back to reports') }}</a>
+    <a href="{{ url_for('reports.reports_print_all_invoices_expenses') }}?start_date={{ start_date.isoformat() if start_date else '' }}&end_date={{ end_date.isoformat() if end_date else '' }}&branch={{ branch or 'all' }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+  </div>
+  <div class="er-cards">
+    <div class="er-card"><div class="label">{{ _('Invoices count') }}</div><div class="value">{{ data.count or 0 }}</div></div>
+    <div class="er-card"><div class="label">{{ _('Total') }} SAR</div><div class="value">{{ '{:,.2f}'.format(data.total or 0) }}</div></div>
+  </div>
+  <div class="er-table-wrap">
+    <table class="er-table">
+      <thead>
+        <tr><th>{{ _('Date') }}</th><th>{{ _('Invoice No.') }}</th><th>{{ _('Description') }}</th><th>{{ _('Payment method') }}</th><th class="text-end">{{ _('Total') }}</th></tr>
+      </thead>
+      <tbody>
+        {% for r in (data.rows or []) %}
+        <tr>
+          <td>{{ r.date }}</td>
+          <td>{{ r.invoice_number }}</td>
+          <td>{{ r.description }}</td>
+          <td>{{ r.payment_method }}</td>
+          <td>{{ '{:,.2f}'.format(r.total or 0) }}</td>
+        </tr>
+        {% endfor %}
+        {% if not (data.rows or []) %}
+        <tr><td colspan="5" class="text-center text-muted py-4">لا توجد بيانات للفترة المحددة.</td></tr>
+        {% endif %}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="4" class="text-end">{{ _('Total') }}</td><td class="text-end">{{ '{:,.2f}'.format(data.total or 0) }}</td></tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

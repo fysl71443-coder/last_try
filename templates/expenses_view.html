@@ -1,122 +1,90 @@
 {% extends "base.html" %}
 
-{% block title %}{{ _('Expense Invoice Details / تفاصيل فاتورة المصروفات') }} - {{ invoice.invoice_number }}{% endblock %}
+{% block title %}{{ _('Expense Invoice Details') }} - {{ invoice.invoice_number }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-0">📋 {{ _('Expense Invoice Details / تفاصيل فاتورة المصروفات') }}</h2>
-                    <p class="text-muted mb-0">{{ invoice.invoice_number }}</p>
-                </div>
-                <div>
-                    <button class="btn btn-outline-secondary me-2" onclick="window.close()">
-                        ✖️ {{ _('Close / إغلاق') }}
-                    </button>
-                    <button class="btn btn-primary" onclick="window.print()">
-                        🖨️ {{ _('Print / طباعة') }}
-                    </button>
-                </div>
-            </div>
-        </div>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-receipt"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Expense Invoice Details') }}</h1>
+      <span class="ops-subtitle">{{ invoice.invoice_number }}</span>
     </div>
+    <div class="ops-actions">
+      <button class="btn btn-sm btn-outline-secondary" onclick="window.close()"><i class="fa-solid fa-xmark me-1"></i>{{ _('Close') }}</button>
+      <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</button>
+    </div>
+  </div>
 
-    <!-- Invoice Information -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">📄 {{ _('Invoice Information / معلومات الفاتورة') }}</h5>
-                </div>
-                <div class="card-body">
-                    <table class="table table-borderless">
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Invoice Information') }}</div>
+        <div class="ops-form-body">
+          <table class="table table-borderless table-sm mb-0">
                         <tr>
-                            <td><strong>{{ _('Invoice Number / رقم الفاتورة') }}:</strong></td>
+                            <td><strong>{{ _('Invoice Number') }}:</strong></td>
                             <td>{{ invoice.invoice_number }}</td>
                         </tr>
                         <tr>
-                            <td><strong>{{ _('Date / التاريخ') }}:</strong></td>
+                            <td><strong>{{ _('Date') }}:</strong></td>
                             <td>{{ invoice.date.strftime('%Y-%m-%d') }}</td>
                         </tr>
                         <tr>
-                            <td><strong>{{ _('Payment Method / طريقة الدفع') }}:</strong></td>
+                            <td><strong>{{ _('Payment Method') }}:</strong></td>
                             <td>
                                 {% set pm = (invoice.payment_method or '')|lower %}
-                                {% if pm == 'cash' %}
-                                  💰 {{ _('Cash / نقداً') }}
-                                {% else %}
-                                  🏦 {{ _('Bank / بنك') }}
-                                {% endif %}
+                                {% if pm == 'cash' %}{{ _('Cash') }}{% else %}{{ _('Bank') }}{% endif %}
                             </td>
                         </tr>
                         <tr>
-                            <td><strong>{{ _('Status / الحالة') }}:</strong></td>
+                            <td><strong>{{ _('Status') }}:</strong></td>
                             <td>
-                                {% if invoice.status == 'paid' %}
-                                    <span class="badge bg-success">✅ {{ _('Paid / مدفوع') }}</span>
-                                {% elif invoice.status == 'partial' %}
-                                    <span class="badge bg-warning">⚠️ {{ _('Partial / جزئي') }}</span>
-                                {% else %}
-                                    <span class="badge bg-danger">❌ {{ _('Unpaid / غير مدفوع') }}</span>
-                                {% endif %}
+                                {% if invoice.status == 'paid' %}<span class="badge bg-success">{{ _('Paid') }}</span>{% elif invoice.status == 'partial' %}<span class="badge bg-warning">{{ _('Partial') }}</span>{% else %}<span class="badge bg-danger">{{ _('Unpaid') }}</span>{% endif %}
                             </td>
                         </tr>
-                    </table>
-                </div>
-            </div>
+          </table>
         </div>
-        
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">💰 {{ _('Financial Summary / الملخص المالي') }}</h5>
-                </div>
-                <div class="card-body">
-                    <table class="table table-borderless">
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Financial Summary') }}</div>
+        <div class="ops-form-body">
+          <table class="table table-borderless table-sm mb-0">
                         <tr>
-                            <td><strong>{{ _('Subtotal / المجموع الفرعي') }}:</strong></td>
+                            <td><strong>{{ _('Subtotal') }}:</strong></td>
                             <td class="text-end">${{ "%.2f"|format(invoice.total_before_tax) }}</td>
                         </tr>
                         <tr>
-                            <td><strong>{{ _('Tax / الضريبة') }}:</strong></td>
+                            <td><strong>{{ _('Tax') }}:</strong></td>
                             <td class="text-end">${{ "%.2f"|format(invoice.tax_amount) }}</td>
                         </tr>
                         <tr>
-                            <td><strong>{{ _('Discount / الخصم') }}:</strong></td>
+                            <td><strong>{{ _('Discount') }}:</strong></td>
                             <td class="text-end text-danger">-${{ "%.2f"|format(invoice.discount_amount) }}</td>
                         </tr>
-                        <tr class="border-top">
-                            <td><strong class="fs-5">{{ _('Total / الإجمالي') }}:</strong></td>
-                            <td class="text-end"><strong class="fs-5 text-danger">${{ "%.2f"|format(invoice.total_after_tax_discount) }}</strong></td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
+            <tr class="border-top"><td><strong class="fs-5">{{ _('Total') }}:</strong></td><td class="text-end"><strong class="fs-5">${{ "%.2f"|format(invoice.total_after_tax_discount) }}</strong></td></tr>
+          </table>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Items Table -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">🧾 {{ _('Invoice Items / بنود الفاتورة') }}</h5>
-                </div>
-                <div class="card-body">
-                    {% if items %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>{{ _('Description / الوصف') }}</th>
-                                    <th class="text-center">{{ _('Quantity / الكمية') }}</th>
-                                    <th class="text-end">{{ _('Unit Price / سعر الوحدة') }}</th>
-                                    <th class="text-end">{{ _('Tax / الضريبة') }}</th>
-                                    <th class="text-end">{{ _('Discount / الخصم') }}</th>
-                                    <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+  <div class="ops-form-card mt-3">
+    <div class="ops-form-head">{{ _('Invoice Items') }}</div>
+    <div class="ops-form-body">
+      {% if items %}
+      <div class="screen-table-wrap">
+        <table class="table screen-table">
+          <thead>
+            <tr>
+                                    <th>{{ _('Description') }}</th>
+                                    <th class="text-center">{{ _('Quantity') }}</th>
+                                    <th class="text-end">{{ _('Unit Price') }}</th>
+                                    <th class="text-end">{{ _('Tax') }}</th>
+                                    <th class="text-end">{{ _('Discount') }}</th>
+                                    <th class="text-end">{{ _('Total') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -130,29 +98,18 @@
                                     <td class="text-end"><strong>${{ "%.2f"|format(item.total_price) }}</strong></td>
                                 </tr>
                                 {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="text-center py-4">
-                        <p class="text-muted">{{ _('No items found / لم يتم العثور على عناصر') }}</p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted mb-0">{{ _('No items found') }}</p>
+      {% endif %}
     </div>
+  </div>
 
-    <!-- Footer -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="text-center">
-                <small class="text-muted">
-                    {{ _('Generated on / تم الإنشاء في') }}: {{ moment().format('YYYY-MM-DD HH:mm:ss') }}
-                </small>
-            </div>
-        </div>
-    </div>
+  <div class="text-center mt-3">
+    <small class="text-muted">{{ _('Generated on') }}: {{ moment().format('YYYY-MM-DD HH:mm:ss') }}</small>
+  </div>
 </div>
 
 <style>

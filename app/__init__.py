@@ -32,7 +32,7 @@ except Exception:
 # These objects will be imported in models/routes
 # and initialized once per app instance
 
-from extensions import db, bcrypt, login_manager, migrate, babel, csrf
+from extensions import db, bcrypt, login_manager, migrate, babel, csrf, cache
 
 def create_app(config_class=None):
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -61,9 +61,15 @@ def create_app(config_class=None):
     except Exception:
         pass
 
-    # Load configuration (prefers local SQLite when no DATABASE_URL)
-    from config import Config
+    from config import Config, USE_ONLY_LOCAL_SQLITE, _default_sqlite_path
     app.config.from_object(Config)
+    # إجبار SQLite المحلي فقط – لا Render ولا PostgreSQL
+    if USE_ONLY_LOCAL_SQLITE:
+        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{_default_sqlite_path}"
+    else:
+        uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').lower()
+        if 'postgres' in uri or 'render.com' in uri:
+            app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{_default_sqlite_path}"
     # Ensure secrets
     app.config.setdefault('SECRET_KEY', os.getenv('SECRET_KEY', os.urandom(24)))
     app.config.setdefault('WTF_CSRF_SECRET_KEY', app.config['SECRET_KEY'])
@@ -95,68 +101,28 @@ def create_app(config_class=None):
         pass
 
     # Inject common template globals (asset version + CSRF token helper)
+    # Phase 1 – No global load: accounts, settings, permissions MUST NOT be loaded here
+    # or in before_request. Navbar and layout use only these globals (no DB).
+    # Each route/blueprint loads what it needs per screen.
     from flask_wtf.csrf import generate_csrf
     @app.context_processor
     def inject_globals():
-        # Permission helper using AppKV-based storage (user_perms:<scope>:<uid>)
-        import json
-        from flask import request
         from flask_login import current_user
-        from app.models import AppKV
-
-        def _normalize_scope(s: str) -> str:
-            s = (s or '').strip().lower()
-            if s in ('place', 'palace', 'india', 'palace_india'): return 'place_india'
-            if s in ('china', 'china town', 'chinatown'): return 'china_town'
-            return s or 'all'
-
-        def _read_perms(uid: int, scope: str):
-            try:
-                k = f"user_perms:{scope}:{int(uid)}"
-                row = AppKV.query.filter_by(k=k).first()
-                if not row:
-                    return {}
-                data = json.loads(row.v)
-                items = data.get('items') or []
-                out = {}
-                for it in items:
-                    key = it.get('screen_key')
-                    if not key:
-                        continue
-                    out[key] = {
-                        'view': bool(it.get('view')),
-                        'add': bool(it.get('add')),
-                        'edit': bool(it.get('edit')),
-                        'delete': bool(it.get('delete')),
-                        'print': bool(it.get('print')),
-                    }
-                return out
-            except Exception:
-                return {}
 
         def can(screen: str, action: str = 'view', branch_scope: str = None) -> bool:
             try:
-                # Admins can do everything
-                if getattr(current_user, 'is_authenticated', False):
-                    # Treat username 'admin' (or user id==1) as superuser since User has no role field
-                    if getattr(current_user, 'username', '') == 'admin' or getattr(current_user, 'id', None) == 1:
-                        return True
-                    if getattr(current_user, 'role', '') == 'admin':
-                        return True
-                    # Development-friendly: allow authenticated users access by default
-                    return True
-                else:
+                if not getattr(current_user, 'is_authenticated', False):
                     return False
+                if getattr(current_user, 'username', '') == 'admin' or getattr(current_user, 'id', None) == 1:
+                    return True
+                if getattr(current_user, 'role', '') == 'admin':
+                    return True
+                return True
             except Exception:
                 return True
 
-        # simple image chooser for categories
-        def section_image_for(name: str):
-            try:
-                # Use a single existing placeholder image to avoid 404s in development
-                return '/static/logo.svg'
-            except Exception:
-                return '/static/logo.svg'
+        def section_image_for(name: str) -> str:
+            return '/static/logo.svg'
 
         return {
             'ASSET_VERSION': os.getenv('ASSET_VERSION', ''),
@@ -169,13 +135,44 @@ def create_app(config_class=None):
         }
 
 
+    # لغة الواجهة: الجلسة أولاً ثم معامل الطلب ثم المستخدم ثم المتصفح
+    from flask import request, session
+    def get_locale():
+        loc = session.get('locale')
+        if loc in ('ar', 'en'):
+            return loc
+        loc = (request.args.get('lang') or '').strip().lower()
+        if loc in ('ar', 'en'):
+            return loc
+        try:
+            from flask_login import current_user
+            if getattr(current_user, 'is_authenticated', False) and getattr(current_user, 'language_pref', None):
+                return current_user.language_pref
+        except Exception:
+            pass
+        # Default to Arabic so UI is consistent; use EN/ع in navbar to switch
+        return 'ar'
+
+    if babel is not None:
+        try:
+            babel.init_app(app, locale_selector=get_locale)
+        except Exception:
+            babel.init_app(app)
+    else:
+        pass
+
+    @app.context_processor
+    def inject_locale():
+        return {'get_locale': get_locale}
+
     # ربط الكائنات بالتطبيق
     db.init_app(app)
     bcrypt.init_app(app)
     login_manager.init_app(app)
     migrate.init_app(app, db)
-    babel.init_app(app)
     csrf.init_app(app)
+    if cache is not None:
+        cache.init_app(app)
     # Exempt API routes from CSRF
     csrf.exempt('main.api_table_layout')
     # Exempt bulk salary receipt print (HTML POST not sensitive)
@@ -196,20 +193,6 @@ def create_app(config_class=None):
             return db.session.get(User, int(user_id))
         except Exception:
             return None
-
-    # Block legacy employee-related screens globally (allow new UVD and settings/pay)
-    @app.before_request
-    def _blk_emp_screens():
-        from flask import request
-        try:
-            p = (request.path or '').lower()
-        except Exception:
-            p = ''
-        # Block only the legacy payroll dashboard route; allow new salaries/pay and salary receipts
-        if p.startswith('/employees/payroll'):
-            return ('', 404)
-
-
 
     # تسجيل Blueprints
     from app.routes import main, vat
@@ -277,8 +260,52 @@ def create_app(config_class=None):
         app.register_blueprint(financials_bp)
     except Exception:
         pass
+    try:
+        from routes.expenses import bp as expenses_bp
+        app.register_blueprint(expenses_bp)
+    except Exception:
+        pass
+    try:
+        from routes.purchases import bp as purchases_bp
+        app.register_blueprint(purchases_bp)
+    except Exception:
+        pass
+    try:
+        from routes.suppliers import bp as suppliers_bp
+        app.register_blueprint(suppliers_bp)
+    except Exception:
+        pass
+    try:
+        from routes.customers import bp as customers_bp
+        app.register_blueprint(customers_bp)
+        try:
+            csrf.exempt('customers.api_customers_create')
+        except Exception:
+            pass
+    except Exception:
+        pass
+    try:
+        from routes.payments import bp as payments_bp
+        app.register_blueprint(payments_bp)
+    except Exception:
+        pass
+    try:
+        from routes.inventory import bp as inventory_bp
+        app.register_blueprint(inventory_bp)
+    except Exception:
+        pass
+    try:
+        from routes.reports import bp as reports_bp
+        app.register_blueprint(reports_bp)
+    except Exception:
+        pass
+    try:
+        from routes.sales import bp as sales_bp
+        app.register_blueprint(sales_bp)
+    except Exception:
+        pass
 
-    # Ensure tables exist on startup (useful for local SQLite/Postgres runs)
+    # Ensure tables exist on startup (SQLite only)
     try:
         with app.app_context():
             db.create_all()
@@ -300,24 +327,55 @@ def create_app(config_class=None):
                         conn.commit()
             except Exception:
                 pass
-            # Lightweight auto-migration for Postgres: add purchase_invoices.supplier_invoice_number if missing
+            # Lightweight auto-migration for SQLite: add missing columns and indexes
         try:
             from sqlalchemy import text
             with db.engine.connect() as conn:
-                if conn.dialect.name == 'postgresql':
-                    rows = conn.execute(text("""
-                        SELECT column_name FROM information_schema.columns
-                        WHERE table_name='purchase_invoices'
-                    """)).fetchall()
-                    names = {str(r[0]).lower() for r in rows}
+                # Check if supplier_invoice_number column exists
+                try:
+                    rows = conn.execute(text("PRAGMA table_info(purchase_invoices)")).fetchall()
+                    names = {str(r[1]).lower() for r in rows}
                     if 'supplier_invoice_number' not in names:
-                        conn.execute(text("ALTER TABLE purchase_invoices ADD COLUMN supplier_invoice_number VARCHAR(100)"))
+                        conn.execute(text("ALTER TABLE purchase_invoices ADD COLUMN supplier_invoice_number TEXT"))
                         conn.commit()
+                except Exception:
+                    pass
+                # Create indexes for SQLite
+                try:
                     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_payments_type_invoice ON payments (invoice_type, invoice_id)"))
                     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales_invoices (created_at)"))
                     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON purchase_invoices (created_at)"))
                     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON expense_invoices (created_at)"))
                     conn.commit()
+                except Exception:
+                    pass
+                # Ensure settings table has all model columns (fix "no such column" on save)
+                try:
+                    from models import Settings
+                    existing = set()
+                    try:
+                        ri = conn.execute(text("PRAGMA table_info(settings)")).fetchall()
+                        existing = {str(r[1]).lower() for r in ri}
+                    except Exception:
+                        pass
+                    for col in Settings.__table__.c:
+                        c = col.key
+                        if c.lower() in existing:
+                            continue
+                        t = type(col.type).__name__
+                        if "Int" in t or "Bool" in t:
+                            sqltyp = "INTEGER"
+                        elif "Numeric" in t or "Float" in t or "Real" in t:
+                            sqltyp = "REAL"
+                        else:
+                            sqltyp = "TEXT"
+                        try:
+                            conn.execute(text("ALTER TABLE settings ADD COLUMN %s %s" % (c, sqltyp)))
+                            conn.commit()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
         except Exception:
             pass
             if ext_db is not None:

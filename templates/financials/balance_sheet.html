@@ -1,169 +1,408 @@
 {% extends 'base.html' %}
-{% block title %}المركز المالي{% endblock %}
+{% block title %}{{ _('Balance sheet') }}{% endblock %}
+
+{% block head %}
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  .bs-report {
+    font-family: 'Cairo', 'Tajawal', sans-serif;
+    --bs-text: #1e293b;
+    --bs-heading: #0f172a;
+    --bs-border: #e2e8f0;
+    --bs-bg: #f1f5f9;
+    --bs-card: #fff;
+    --bs-muted: #64748b;
+    --bs-primary: #1565c0;
+    --bs-primary-dark: #0d47a1;
+    --bs-asset: #0d47a1;
+    --bs-asset-bg: #e3f2fd;
+    --bs-liab: #3949ab;
+    --bs-liab-bg: #e8eaf6;
+    --bs-equity: #00695c;
+    --bs-equity-bg: #e0f2f1;
+    color: var(--bs-text);
+    background: var(--bs-bg);
+  }
+  .bs-report .bs-header-card {
+    background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+    border: 1px solid var(--bs-border);
+    border-radius: var(--ops-card-radius, 12px);
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--ops-card-shadow, 0 1px 3px rgba(0,0,0,.04));
+  }
+  .bs-report .bs-header-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .bs-report .bs-brand-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .bs-report .bs-logo-wrap {
+    flex-shrink: 0;
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bs-asset-bg);
+    border: 1px solid var(--bs-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .bs-report .bs-logo-wrap img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .bs-report .bs-company { font-size: 1.2rem; font-weight: 700; color: var(--bs-heading); margin: 0 0 0.2rem 0; }
+  .bs-report .bs-title { font-size: 0.95rem; font-weight: 600; color: var(--bs-primary-dark); margin: 0; }
+  .bs-report .bs-meta {
+    font-size: 0.9rem;
+    color: var(--bs-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+  .bs-report .bs-meta span { display: inline-flex; align-items: center; gap: 0.35rem; }
+
+  .bs-report .bs-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.85rem 1.25rem;
+    background: #fff;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--ops-card-radius, 12px);
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .bs-report .bs-actions .btn { font-size: 0.9rem; }
+  .bs-report .bs-actions .btn-primary { background: var(--bs-primary); border-color: var(--bs-primary); }
+
+  .bs-report .bs-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 768px) { .bs-report .bs-cards { grid-template-columns: 1fr; } }
+  .bs-report .bs-kpi-card {
+    background: var(--bs-card);
+    border-radius: var(--ops-card-radius, 12px);
+    padding: 1.35rem 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    border: 1px solid var(--bs-border);
+    border-top: 4px solid var(--bs-primary);
+  }
+  .bs-report .bs-kpi-card.asset-card { border-top-color: var(--bs-asset); background: linear-gradient(180deg, #fff 0%, var(--bs-asset-bg) 100%); }
+  .bs-report .bs-kpi-card.liab-card { border-top-color: var(--bs-liab); background: linear-gradient(180deg, #fff 0%, var(--bs-liab-bg) 100%); }
+  .bs-report .bs-kpi-card.equity-card { border-top-color: var(--bs-equity); background: linear-gradient(180deg, #fff 0%, var(--bs-equity-bg) 100%); }
+  .bs-report .bs-kpi-card .label { font-size: 0.85rem; font-weight: 700; color: var(--bs-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  .bs-report .bs-kpi-card .value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bs-heading); }
+  .bs-report .bs-kpi-card .currency { font-size: 0.8rem; color: var(--bs-muted); margin-top: 0.25rem; font-weight: 600; }
+
+  .bs-report .bs-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  @media (max-width: 992px) { .bs-report .bs-two-col { grid-template-columns: 1fr; } }
+  .bs-report .bs-panel {
+    background: var(--bs-card);
+    border: 1px solid var(--bs-border);
+    border-radius: var(--ops-card-radius, 12px);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .bs-report .bs-panel-head {
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--bs-border);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .bs-report .bs-panel-head.assets { background: var(--bs-asset-bg); color: var(--bs-asset); border-right: 4px solid var(--bs-asset); }
+  .bs-report .bs-panel-head.liab { background: var(--bs-liab-bg); color: var(--bs-liab); border-right: 4px solid var(--bs-liab); }
+
+  .bs-report .bs-section { border-bottom: 1px solid var(--bs-border); }
+  .bs-report .bs-section:last-of-type { border-bottom: none; }
+  .bs-report .bs-section-toggle {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.7rem 1.25rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    background: #f8fafc;
+    transition: background .15s;
+  }
+  .bs-report .bs-section-toggle:hover { background: #f1f5f9; }
+  .bs-report .bs-section-toggle .chevron { transition: transform .2s; color: var(--bs-muted); }
+  .bs-report .bs-section-toggle.collapsed .chevron { transform: rotate(-90deg); }
+  .bs-report .bs-section-toggle .amount { font-variant-numeric: tabular-nums; direction: ltr; }
+  .bs-report .bs-section-detail {
+    padding: 0 1.25rem 0.85rem;
+    background: #fff;
+  }
+  .bs-report .bs-section-detail.collapsed { display: none; }
+  .bs-report .bs-section-detail .bs-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .bs-report .bs-section-detail .bs-table th,
+  .bs-report .bs-section-detail .bs-table td { padding: 0.4rem 0.6rem; text-align: right; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .bs-report .bs-section-detail .bs-table thead th { background: var(--bs-asset-bg); color: var(--bs-asset); font-weight: 600; }
+  .bs-report .bs-panel.liab-panel .bs-section-detail .bs-table thead th { background: var(--bs-liab-bg); color: var(--bs-liab); }
+  .bs-report .bs-section-detail .bs-table td:last-child { text-align: left; font-weight: 600; font-variant-numeric: tabular-nums; direction: ltr; }
+  .bs-report .bs-section-detail .bs-empty { font-size: 0.85rem; color: var(--bs-muted); padding: 0.5rem 0; }
+  .bs-report .bs-link { color: var(--bs-primary); text-decoration: none; }
+  .bs-report .bs-link:hover { text-decoration: underline; }
+
+  .bs-report .bs-total-row {
+    padding: 0.75rem 1.25rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    border-top: 2px solid var(--bs-heading);
+    background: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bs-report .bs-total-row .amount { font-variant-numeric: tabular-nums; direction: ltr; }
+
+  @media print {
+    .bs-report .bs-actions, .no-print { display: none !important; }
+    .bs-report .bs-section-detail.collapsed { display: block !important; }
+    .bs-report .bs-section-toggle { cursor: default; }
+    body, body * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .bs-report .bs-title, .bs-report .bs-meta, .bs-report .text-muted { color: #1a1a1a !important; }
+    .bs-report .bs-table th, .bs-report .bs-table td { border-color: #333 !important; }
+    .bs-report .bs-table thead th { background: #e0e7ff !important; color: #1e1b4b !important; }
+    .bs-report .bs-kpi-card.asset-card { background: #eef2ff !important; }
+    .bs-report .bs-kpi-card.liab-card { background: #e0e7ff !important; }
+    .bs-report .bs-kpi-card.equity-card { background: #ccfbf1 !important; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-2">
-    <h3 class="mb-0">المركز المالي / Balance Sheet</h3>
-    <div class="d-flex gap-2">
-      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="history.back()">رجوع / Back</button>
-      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('financials.income_statement') }}">قائمة الدخل / Income Statement</a>
-      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('financials.trial_balance') }}">ميزان المراجعة / Trial Balance</a>
-      <a target="_blank" class="btn btn-outline-secondary btn-sm" href="{{ url_for('financials.print_balance_sheet', date=data.date) }}">طباعة / Print</a>
-    </div>
-  </div>
-  <form method="get" class="row g-2 align-items-end mb-3">
-    <div class="col-auto">
-      <label class="form-label">حتى تاريخ</label>
-      <input type="date" name="date" class="form-control" value="{{ data.date }}">
-    </div>
-    <div class="col-auto">
-      <button class="btn btn-primary">عرض</button>
-    </div>
-  </form>
-  <div class="d-flex justify-content-end mb-2">
-    <a target="_blank" class="btn btn-outline-secondary btn-sm" href="{{ url_for('financials.print_balance_sheet', date=data.date) }}">طباعة</a>
-  </div>
-
-  <div class="row g-3">
-    <div class="col-md-4"><div class="card shadow-sm p-3 h-100"><h6>الأصول</h6><h4>{{ '%.2f'|format(data.assets) }}</h4></div></div>
-    <div class="col-md-4"><div class="card shadow-sm p-3 h-100"><h6>الخصوم</h6><h4>{{ '%.2f'|format(data.liabilities) }}</h4></div></div>
-    <div class="col-md-4"><div class="card shadow-sm p-3 h-100"><h6>حقوق الملكية (محسوبة)</h6><h4>{{ '%.2f'|format(data.equity) }}</h4></div></div>
-  </div>
-
-  <div class="row g-3 mt-3">
-    <div class="col-md-6">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold">الأصول / Assets</div>
-        <div class="card-body">
-          <table class="table table-sm">
-            <tbody>
-              <tr>
-                <td>أصول متداولة / Current Assets</td>
-                <td class="text-end">{{ '%.2f'|format(data.current_assets or 0) }}</td>
-              </tr>
-              <tr>
-                <td>أصول غير متداولة / Non-current Assets</td>
-                <td class="text-end">{{ '%.2f'|format(data.noncurrent_assets or 0) }}</td>
-              </tr>
-              <tr class="table-light">
-                <th>إجمالي الأصول</th>
-                <th class="text-end">{{ '%.2f'|format((data.assets or 0)) }}</th>
-              </tr>
-            </tbody>
-          </table>
+<div class="container py-4 ops-layout hub-wrap bs-report" dir="rtl">
+  <div class="bs-header-card">
+    <div class="bs-header-row">
+      <div class="bs-brand-row">
+        {% if logo_url is defined and logo_url %}
+        <div class="bs-logo-wrap">
+          <img src="{{ logo_url }}" alt="" />
         </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold">الخصوم وحقوق الملكية / Liabilities & Equity</div>
-        <div class="card-body">
-          <table class="table table-sm">
-            <tbody>
-              <tr>
-                <td>خصوم متداولة / Current Liabilities</td>
-                <td class="text-end">{{ '%.2f'|format(data.current_liabilities or 0) }}</td>
-              </tr>
-              <tr>
-                <td>خصوم غير متداولة / Non-current Liabilities</td>
-                <td class="text-end">{{ '%.2f'|format(data.noncurrent_liabilities or 0) }}</td>
-              </tr>
-              <tr>
-                <td>حقوق الملكية / Equity</td>
-                <td class="text-end">{{ '%.2f'|format(data.equity or 0) }}</td>
-              </tr>
-              <tr class="table-light">
-                <th>إجمالي الخصوم وحقوق الملكية</th>
-                <th class="text-end">{{ '%.2f'|format((data.liabilities or 0) + (data.equity or 0)) }}</th>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="row g-3 mt-3">
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold">تفصيل حسب النوع / Totals by Type</div>
-        <div class="card-body">
-          <div class="table-responsive">
-            <table class="table table-sm align-middle">
-              <thead>
-                <tr>
-                  <th>النوع / Type</th>
-                  <th class="text-end">مدين / Debit</th>
-                  <th class="text-end">دائن / Credit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for t, s in data.type_totals.items() %}
-                <tr>
-                  <td>{{ t }}</td>
-                  <td class="text-end">{{ '%.2f'|format(s.debit or 0) }}</td>
-                  <td class="text-end">{{ '%.2f'|format(s.credit or 0) }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+        {% endif %}
+        <div>
+          <h1 class="bs-company">{{ data.company_name }}</h1>
+          <p class="bs-title">{{ _('Balance sheet') }} — المركز المالي</p>
+          <div class="bs-meta">
+            <span><i class="fa-solid fa-calendar-days"></i> {{ _('As of date') }}: {{ data.date.strftime('%d-%m-%Y') }}</span>
+            <span><i class="fa-solid fa-building"></i> {{ _('Branch') }}: {{ data.branch_label }}</span>
           </div>
         </div>
       </div>
     </div>
   </div>
-</div>
- 
-  <div class="row g-3 mt-3">
-    <div class="col-md-6">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold">تفصيل الأصول / Asset Details</div>
-        <div class="card-body">
-          <table class="table table-sm">
-            <thead>
-              <tr>
-                <th>الحساب / Account</th>
-                <th>التصنيف / Class</th>
-                <th class="text-end">الرصيد / Balance</th>
-              </tr>
-            </thead>
+
+  <div class="bs-actions no-print">
+    <a target="_blank" href="{{ url_for('financials.print_balance_sheet', date=data.date) }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+    <a target="_blank" href="{{ url_for('financials.print_balance_sheet', date=data.date) }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-file-pdf me-1"></i>{{ _('Export PDF') }}</a>
+    <a target="_blank" href="{{ url_for('financials.export_balance_sheet', date=data.date) }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-file-excel me-1"></i>{{ _('Export Excel') }}</a>
+    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+      <form method="get" class="d-flex flex-wrap align-items-center gap-2">
+        <label class="mb-0 small text-muted">{{ _('As of date') }}</label>
+        <input type="date" name="date" class="form-control form-control-sm" value="{{ data.date }}" style="max-width: 11rem;">
+        <label class="mb-0 small text-muted">{{ _('Branch') }}</label>
+        <select name="branch" class="form-select form-select-sm" style="max-width: 10rem;">
+          <option value="all" {% if (data.branch or 'all') == 'all' %}selected{% endif %}>{{ _('All') }}</option>
+          <option value="china_town" {% if data.branch == 'china_town' %}selected{% endif %}>China Town</option>
+          <option value="place_india" {% if data.branch == 'place_india' %}selected{% endif %}>Place India</option>
+        </select>
+        <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-filter me-1"></i>فلترة</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="bs-cards">
+    <div class="bs-card">
+      <div class="label">{{ _('Assets') }}</div>
+      <div class="value">{{ '{:,.2f}'.format(data.assets or 0) }}</div>
+      <div class="currency">SAR</div>
+    </div>
+    <div class="bs-card">
+      <div class="label">{{ _('Liabilities') }}</div>
+      <div class="value">{{ '{:,.2f}'.format(data.liabilities or 0) }}</div>
+      <div class="currency">SAR</div>
+    </div>
+    <div class="bs-card">
+      <div class="label">{{ _('Equity') }}</div>
+      <div class="value">{{ '{:,.2f}'.format(data.equity or 0) }}</div>
+      <div class="currency">SAR</div>
+    </div>
+  </div>
+
+  <div class="bs-two-col">
+    <div class="bs-panel">
+      <div class="bs-panel-head assets"><i class="fa-solid fa-building-columns me-1"></i>{{ _('Assets') }}</div>
+      <div class="bs-section">
+        <div class="bs-section-toggle" data-target="bs-detail-ac">
+          <span>{{ _('Current assets') }} {% if data.n_asset_current %}<span class="text-muted small">({{ data.n_asset_current }} {{ _('accounts') }})</span>{% endif %}</span>
+          <span><span class="amount">{{ '{:,.2f}'.format(data.current_assets or 0) }}</span> <span class="small text-muted">SAR</span> <i class="fa-solid fa-chevron-down chevron"></i></span>
+        </div>
+        <div class="bs-section-detail collapsed" id="bs-detail-ac">
+          {% if data.asset_current_active %}
+          <table class="bs-table">
+            <thead><tr><th>{{ _('Account') }}</th><th>{{ _('Balance') }}</th></tr></thead>
             <tbody>
-              {% for r in data.asset_rows_detail %}
+              {% for r in data.asset_current_active %}
               <tr>
-                <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-10-01&end_date={{ data.date }}" class="text-decoration-none">{{ r.code }} – {{ r.name }}</a></td>
-                <td>{{ 'متداول' if r.class=='Current' else 'غير متداول' }} / {{ r.class }}</td>
-                <td class="text-end"><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-10-01&end_date={{ data.date }}" class="text-decoration-none">{{ '%.2f'|format(r.balance or 0) }}</a></td>
+                <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-01-01&end_date={{ data.date.strftime('%Y-%m-%d') if data.date else '' }}" class="bs-link">{{ r.code }} – {{ r.name }}</a></td>
+                <td>{{ '{:,.2f}'.format(r.balance or 0) }}</td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
+          {% else %}
+          <div class="bs-empty">{{ _('No movements in this period.') }}</div>
+          {% endif %}
         </div>
       </div>
-    </div>
-    <div class="col-md-6">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold">تفصيل الخصوم / Liability Details</div>
-        <div class="card-body">
-          <table class="table table-sm">
-            <thead>
-              <tr>
-                <th>الحساب / Account</th>
-                <th>التصنيف / Class</th>
-                <th class="text-end">الرصيد / Balance</th>
-              </tr>
-            </thead>
+      <div class="bs-section">
+        <div class="bs-section-toggle" data-target="bs-detail-anc">
+          <span>{{ _('Non-current assets') }} {% if data.n_asset_noncurrent %}<span class="text-muted small">({{ data.n_asset_noncurrent }} {{ _('accounts') }})</span>{% endif %}</span>
+          <span><span class="amount">{{ '{:,.2f}'.format(data.noncurrent_assets or 0) }}</span> <span class="small text-muted">SAR</span> <i class="fa-solid fa-chevron-down chevron"></i></span>
+        </div>
+        <div class="bs-section-detail collapsed" id="bs-detail-anc">
+          {% if data.asset_noncurrent_active %}
+          <table class="bs-table">
+            <thead><tr><th>{{ _('Account') }}</th><th>{{ _('Balance') }}</th></tr></thead>
             <tbody>
-              {% for r in data.liability_rows_detail %}
+              {% for r in data.asset_noncurrent_active %}
               <tr>
-                <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-10-01&end_date={{ data.date }}" class="text-decoration-none">{{ r.code }} – {{ r.name }}</a></td>
-                <td>{{ 'متداول' if r.class=='Current' else 'غير متداول' }} / {{ r.class }}</td>
-                <td class="text-end"><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-10-01&end_date={{ data.date }}" class="text-decoration-none">{{ '%.2f'|format(r.balance or 0) }}</a></td>
+                <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-01-01&end_date={{ data.date.strftime('%Y-%m-%d') if data.date else '' }}" class="bs-link">{{ r.code }} – {{ r.name }}</a></td>
+                <td>{{ '{:,.2f}'.format(r.balance or 0) }}</td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
+          {% else %}
+          <div class="bs-empty">{{ _('No movements in this period.') }}</div>
+          {% endif %}
         </div>
+      </div>
+      <div class="bs-total-row">
+        <span>إجمالي الأصول</span>
+        <span class="amount">{{ '{:,.2f}'.format(data.assets or 0) }} SAR</span>
+      </div>
+    </div>
+
+    <div class="bs-panel liab-panel">
+      <div class="bs-panel-head liab"><i class="fa-solid fa-scale-balanced"></i> الالتزامات وحقوق الملكية</div>
+      <div class="bs-section">
+        <div class="bs-section-toggle" data-target="bs-detail-lc">
+          <span>التزامات متداولة {% if data.n_liab_current %}<span class="text-muted small">({{ data.n_liab_current }} حساب ذات حركة)</span>{% endif %}</span>
+          <span><span class="amount">{{ '{:,.2f}'.format(data.current_liabilities or 0) }}</span> <span class="small text-muted">SAR</span> <i class="fa-solid fa-chevron-down chevron"></i></span>
+        </div>
+        <div class="bs-section-detail collapsed" id="bs-detail-lc">
+          {% if data.liab_current_active %}
+          <table class="bs-table">
+            <thead><tr><th>{{ _('Account') }}</th><th>{{ _('Balance') }}</th></tr></thead>
+            <tbody>
+              {% for r in data.liab_current_active %}
+              <tr>
+                <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-01-01&end_date={{ data.date.strftime('%Y-%m-%d') if data.date else '' }}" class="bs-link">{{ r.code }} – {{ r.name }}</a></td>
+                <td>{{ '{:,.2f}'.format(r.balance or 0) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div class="bs-empty">{{ _('No movements in this period.') }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="bs-section">
+        <div class="bs-section-toggle" data-target="bs-detail-lnc">
+          <span>التزامات غير متداولة {% if data.n_liab_noncurrent %}<span class="text-muted small">({{ data.n_liab_noncurrent }} حساب ذات حركة)</span>{% endif %}</span>
+          <span><span class="amount">{{ '{:,.2f}'.format(data.noncurrent_liabilities or 0) }}</span> <span class="small text-muted">SAR</span> <i class="fa-solid fa-chevron-down chevron"></i></span>
+        </div>
+        <div class="bs-section-detail collapsed" id="bs-detail-lnc">
+          {% if data.liab_noncurrent_active %}
+          <table class="bs-table">
+            <thead><tr><th>{{ _('Account') }}</th><th>{{ _('Balance') }}</th></tr></thead>
+            <tbody>
+              {% for r in data.liab_noncurrent_active %}
+              <tr>
+                <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-01-01&end_date={{ data.date.strftime('%Y-%m-%d') if data.date else '' }}" class="bs-link">{{ r.code }} – {{ r.name }}</a></td>
+                <td>{{ '{:,.2f}'.format(r.balance or 0) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div class="bs-empty">{{ _('No movements in this period.') }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="bs-section">
+        <div class="bs-section-toggle" data-target="bs-detail-eq">
+          <span>حقوق الملكية {% if data.n_equity %}<span class="text-muted small">({{ data.n_equity }} حساب ذات حركة)</span>{% endif %}</span>
+          <span><span class="amount">{{ '{:,.2f}'.format(data.equity or 0) }}</span> <span class="small text-muted">SAR</span> <i class="fa-solid fa-chevron-down chevron"></i></span>
+        </div>
+        <div class="bs-section-detail collapsed" id="bs-detail-eq">
+          {% if data.equity_active %}
+          <table class="bs-table">
+            <thead><tr><th>{{ _('Account') }}</th><th>{{ _('Balance') }}</th></tr></thead>
+            <tbody>
+              {% for r in data.equity_active %}
+              <tr>
+                <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date=2025-01-01&end_date={{ data.date.strftime('%Y-%m-%d') if data.date else '' }}" class="bs-link">{{ r.code }} – {{ r.name }}</a></td>
+                <td>{{ '{:,.2f}'.format(r.balance or 0) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div class="bs-empty">لا توجد حركات في هذه الفترة. (يُحسب من الأصول − الالتزامات)</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="bs-total-row">
+        <span>إجمالي الالتزامات وحقوق الملكية</span>
+        <span class="amount">{{ '{:,.2f}'.format((data.liabilities or 0) + (data.equity or 0)) }} SAR</span>
       </div>
     </div>
   </div>
+
+  <div class="d-flex gap-2 mt-3 no-print">
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-house me-1"></i>الرئيسية</a>
+    <a href="{{ url_for('financials.income_statement') }}" class="btn btn-outline-primary btn-sm">قائمة الدخل</a>
+    <a href="{{ url_for('financials.trial_balance') }}" class="btn btn-outline-primary btn-sm">ميزان المراجعة</a>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.bs-section-toggle[data-target]').forEach(function(tog){
+    var id = tog.getAttribute('data-target');
+    var detail = id ? document.getElementById(id) : null;
+    if (!detail) return;
+    tog.classList.add('collapsed');
+    detail.classList.add('collapsed');
+    tog.addEventListener('click', function(){
+      detail.classList.toggle('collapsed');
+      tog.classList.toggle('collapsed');
+    });
+  });
+});
+</script>
 {% endblock %}

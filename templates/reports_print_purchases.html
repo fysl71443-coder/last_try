@@ -2,17 +2,30 @@
 {% block title %}{{ meta.title }}{% endblock %}
 {% block content %}
 <style>
-  @media print { .no-print { display: none !important; } }
-  .report-header { border-bottom: 2px solid #333; margin-bottom: 12px; padding-bottom: 8px; }
+  .report-header { border-bottom: 2px solid #0d47a1; margin-bottom: 12px; padding-bottom: 8px; }
   .muted { color: #666; font-size: 0.9rem; }
+  .print-brand { font-size: 1.1rem; font-weight: 700; color: #0d47a1; }
+  .no-print { display: block; }
+  @media print {
+    .no-print { display: none !important; }
+    body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .muted, .print-brand { color: #000 !important; }
+    .report-header { border-color: #000 !important; }
+    .table-secondary { background: #e8e8e8 !important; color: #000 !important; }
+    th, td { border-color: #333 !important; }
+    @page { margin: 15mm; size: A4; }
+  }
 </style>
-<div class="container py-3">
+<div class="container py-4">
+  <div class="d-flex align-items-center gap-3 mb-2 no-print">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary">{{ _('Dashboard') }}</a>
+  </div>
   <div class="d-flex align-items-center gap-3 mb-2">
     {% if settings and settings.receipt_show_logo and settings.logo_url %}
       <img src="{{ settings.logo_url }}" alt="logo" style="height:48px;max-width:140px;object-fit:contain" />
     {% endif %}
     <div>
-      <div class="fw-bold">{{ settings.company_name or 'Company' }}</div>
+      <div class="print-brand fw-bold">{{ settings.company_name or 'Company' }}</div>
       <div class="muted">VAT: {{ settings.tax_number or '-' }}{% if settings.address %} | {{ settings.address }}{% endif %}</div>
     </div>
   </div>
@@ -28,17 +41,17 @@
   <div class="report-header d-flex justify-content-between align-items-center">
     <div>
       <h4 class="mb-1">{{ meta.title }}</h4>
-      <div class="muted">Range: {{ meta.start_date or 'All' }} → {{ meta.end_date or 'All' }} | PM: {{ meta.payment_method|upper }}</div>
+      <div class="muted">{{ _('Range') }}: {{ meta.start_date or _('All') }} → {{ meta.end_date or _('All') }} | {{ _('PM') }}: {{ meta.payment_method|upper }}</div>
     </div>
     <div class="text-end">
-      <div class="muted">Printed: {{ meta.generated_at }}</div>
-      <button class="btn btn-sm btn-outline-secondary no-print" onclick="window.print()">Print</button>
+      <div class="muted">{{ _('Printed') }}: {{ meta.generated_at }}</div>
+      <button class="btn btn-sm btn-outline-secondary no-print" onclick="window.print()">{{ _('Print') }}</button>
     </div>
   </div>
 
   <div class="table-responsive">
     <table class="table table-bordered table-striped table-sm align-middle">
-      <thead class="table-light">
+      <thead>
         <tr>
           <th>Date</th><th>Invoice No.</th><th>Item</th><th>Qty</th>
           <th>Amount</th><th>Discount</th><th>VAT</th><th>Total</th><th>Payment</th>

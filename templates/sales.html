@@ -1,18 +1,9 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Sales / المبيعات') }}{% endblock %}
+{% block title %}{{ _('Sales') }}{% endblock %}
 {% block content %}
 
 <style>
-body {
-  background: #f4f6f9;
-}
-.sales-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
+body { background: var(--bg, #f8fafc); }
 .branch-badge {
   padding: 0.25rem 0.75rem;
   border-radius: 20px;
@@ -39,31 +30,28 @@ body {
 }
 </style>
 
-<div class="container py-4">
-    <!-- شريط التنقل السريع -->
-    <div class="section-header mb-3">
-        <h3 class="mb-0">💰 {{ _('Sales / المبيعات') }}</h3>
-        <div class="d-flex flex-wrap gap-2">
-            <a href="{{ url_for('main.inventory') }}" class="btn btn-outline-info">
-                📦 {{ _('Inventory / المخزون') }}
-            </a>
-            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning">
-                🛒 {{ _('Purchases / المشتريات') }}
-            </a>
-            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
-                🏠 {{ _('Dashboard / لوحة التحكم') }}
-            </a>
-        </div>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-cash-register"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Sales') }}</h1>
+      <span class="ops-subtitle">{{ _('Create and manage sales invoices') }}</span>
     </div>
+    <div class="ops-actions d-flex flex-wrap gap-2">
+      <a href="{{ url_for('inventory.inventory') }}" class="btn btn-sm">📦 {{ _('Inventory') }}</a>
+      <a href="{{ url_for('purchases.purchases') }}" class="btn btn-sm">🛒 {{ _('Purchases') }}</a>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm">🏠 {{ _('Dashboard') }}</a>
+    </div>
+  </div>
 
-    <!-- نموذج إنشاء فاتورة جديدة -->
-    <div class="sales-card">
-        <h5 class="mb-3">{{ _('Create New Invoice / إنشاء فاتورة جديدة') }}</h5>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Create New Invoice') }}</div>
+    <div class="ops-form-body">
 
         <div class="alert alert-info">
-            <strong>💡 {{ _('Note / ملاحظة') }}:</strong>
-            {{ _('Meals are automatically loaded from Cost Management system with calculated prices / الوجبات يتم تحميلها تلقائياً من نظام إدارة التكاليف مع الأسعار المحسوبة') }}
-            <a href="{{ url_for('main.inventory') }}" class="alert-link">{{ _('Manage Meals / إدارة الوجبات') }}</a>
+            <strong>💡 {{ _('Note') }}:</strong>
+            {{ _('Meals are automatically loaded from Cost Management system with calculated prices') }}
+            <a href="{{ url_for('main.inventory') }}" class="alert-link">{{ _('Manage Meals') }}</a>
         </div>
 
         <form method="POST" id="sales-form">
@@ -90,12 +78,12 @@ body {
                     {{ form.customer_name(class_='form-control') }}
                 </div>
                     <div class="mt-1">
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAddCustomerModalSales()">➕ {{ _('New Customer / عميل جديد') }}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAddCustomerModalSales()">➕ {{ _('New Customer') }}</button>
                     </div>
             </div>
             <div class="row mb-3" id="special-discount-row" style="display:none">
                 <div class="col-md-3">
-                    <label class="form-label">{{ _('Customer Discount % / نسبة خصم العميل') }}</label>
+                    <label class="form-label">{{ _('Customer Discount %') }}</label>
                     {{ form.special_discount_pct(class_='form-control', step='0.01', placeholder=_('Enter customer discount %')) }}
                     <div class="form-text">{{ _('Applied to all items when a customer-specific discount is set.') }}</div>
                 </div>
@@ -103,7 +91,7 @@ body {
 
 
             <!-- عناصر الفاتورة -->
-            <h6 class="mb-3">{{ _('Invoice Items (Ready Meals) / عناصر الفاتورة (الوجبات الجاهزة)') }}</h6>
+            <h6 class="mb-3">{{ _('Invoice Items (Ready Meals)') }}</h6>
             <div id="items-container">
                 {% for item_form in form.items %}
                 <div class="row g-3 mb-2 item-row">
@@ -141,7 +129,7 @@ body {
             <div class="row mb-3">
                 <div class="col-md-6">
                     <button type="button" class="btn btn-secondary" id="add-item">
-                        ➕ {{ _('Add Meal / إضافة وجبة') }}
+                        ➕ {{ _('Add Meal') }}
                     </button>
                     <button type="button" class="btn btn-outline-secondary ms-2" id="print-order">PRINT ORDER-طباعة الطلب</button>
                 </div>
@@ -153,26 +141,26 @@ body {
           <div class="modal-dialog">
             <div class="modal-content">
               <div class="modal-header">
-                <h5 class="modal-title" id="addCustomerSalesModalLabel">{{ _('Add Customer / إضافة عميل') }}</h5>
+                <h5 class="modal-title" id="addCustomerSalesModalLabel">{{ _('Add Customer') }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
               </div>
               <div class="modal-body">
                 <div class="mb-2">
-                  <label class="form-label">{{ _('Name / الاسم') }}</label>
+                  <label class="form-label">{{ _('Name') }}</label>
                   <input id="salesNewCustName" class="form-control" placeholder="{{ _('Customer name') }}">
                 </div>
                 <div class="mb-2">
-                  <label class="form-label">{{ _('Phone / الهاتف') }}</label>
+                  <label class="form-label">{{ _('Phone') }}</label>
                   <input id="salesNewCustPhone" class="form-control" placeholder="{{ _('Phone (optional)') }}">
                 </div>
                 <div class="mb-2">
-                  <label class="form-label">{{ _('Discount % / نسبة الخصم') }}</label>
+                  <label class="form-label">{{ _('Discount %') }}</label>
                   <input id="salesNewCustDisc" type="number" min="0" max="100" step="0.01" class="form-control" value="0">
                 </div>
               </div>
               <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Close / إغلاق') }}</button>
-                <button type="button" class="btn btn-primary" onclick="submitNewCustomerSales()">{{ _('Save / حفظ') }}</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _('Close') }}</button>
+                <button type="button" class="btn btn-primary" onclick="submitNewCustomerSales()">{{ _('Save') }}</button>
               </div>
             </div>
           </div>
@@ -186,21 +174,21 @@ body {
     <!-- قائمة الفواتير السابقة -->
     {% if invoices %}
     <div class="sales-card">
-        <h5 class="mb-3">{{ _('Previous Invoices / الفواتير السابقة') }}</h5>
+        <h5 class="mb-3">{{ _('Previous Invoices') }}</h5>
 
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead class="table-dark">
                     <tr>
-                        <th>{{ _('Invoice No / رقم الفاتورة') }}</th>
-                        <th>{{ _('Date / التاريخ') }}</th>
-                        <th>{{ _('Branch / الفرع') }}</th>
-                        <th>{{ _('Customer / العميل') }}</th>
-                        <th>{{ _('Payment Method / طريقة الدفع') }}</th>
-                        <th>{{ _('Discount / الخصم') }}</th>
-                        <th>{{ _('Total / الإجمالي') }}</th>
-                        <th>{{ _('Status / الحالة') }}</th>
-                        <th>{{ _('Actions / الإجراءات') }}</th>
+                        <th>{{ _('Invoice No') }}</th>
+                        <th>{{ _('Date') }}</th>
+                        <th>{{ _('Branch') }}</th>
+                        <th>{{ _('Customer') }}</th>
+                        <th>{{ _('Payment Method') }}</th>
+                        <th>{{ _('Discount') }}</th>
+                        <th>{{ _('Total') }}</th>
+                        <th>{{ _('Status') }}</th>
+                        <th>{{ _('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -222,13 +210,13 @@ body {
                         <td>{{ invoice.customer_name or '-' }}</td>
                         <td>
                             {% if invoice.payment_method == 'cash' %}
-                                💰 {{ _('Cash / نقداً') }}
+                                💰 {{ _('Cash') }}
                             {% elif invoice.payment_method == 'card' %}
-                                💳 {{ _('Card / بطاقة') }}
+                                💳 {{ _('Card') }}
                             {% elif invoice.payment_method == 'bank_transfer' %}
-                                🏦 {{ _('Bank Transfer / تحويل بنكي') }}
+                                🏦 {{ _('Bank Transfer') }}
                             {% elif invoice.payment_method == 'check' %}
-                                📝 {{ _('Check / شيك') }}
+                                📝 {{ _('Check') }}
                             {% else %}
                                 {{ invoice.payment_method }}
                             {% endif %}
@@ -244,20 +232,20 @@ body {
                         <td>
                             <span class="status-badge status-{{ invoice.status }}">
                                 {% if invoice.status == 'paid' %}
-                                    {{ _('Paid / مدفوع') }}
+                                    {{ _('Paid') }}
                                 {% elif invoice.status == 'partial' %}
-                                    {{ _('Partial / جزئي') }}
+                                    {{ _('Partial') }}
                                 {% else %}
-                                    {{ _('Unpaid / غير مدفوع') }}
+                                    {{ _('Unpaid') }}
                                 {% endif %}
                             </span>
                         </td>
                         <td>
                             <button class="btn btn-sm btn-info me-1" onclick="viewInvoice({{ invoice.id }})">
-                                👁 {{ _('View / عرض') }}
+                                👁 {{ _('View') }}
                             </button>
                             <button class="btn btn-sm btn-danger" onclick="deleteSalesInvoice({{ invoice.id }}, '{{ invoice.invoice_number }}')">
-                                🗑️ {{ _('Delete / حذف') }}
+                                🗑️ {{ _('Delete') }}
                             </button>
                         </td>
                     </tr>
@@ -266,7 +254,8 @@ body {
             </table>
         </div>
     </div>
-    {% endif %}
+  </div>
+  {% endif %}
 </div>
 
 <!-- SocketIO and JavaScript -->
@@ -331,30 +320,30 @@ body {
         newItem.className = 'row g-3 mb-2 item-row fade-in';
         newItem.innerHTML = `
             <div class="col-md-3">
-                <label class="form-label">{{ _('Meal / الوجبة') }}</label>
+                <label class="form-label">{{ _('Meal') }}</label>
                 <select class="form-select" name="items-${itemIndex}-product_id">
-                    <option value="0">{{ _('Select Meal / اختر الوجبة') }}</option>
+                    <option value="0">{{ _('Select Meal') }}</option>
                     ${products.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
                 </select>
             </div>
             <div class="col-md-1">
-                <label class="form-label">{{ _('Quantity / الكمية') }}</label>
+                <label class="form-label">{{ _('Quantity') }}</label>
                 <input class="form-control" name="items-${itemIndex}-quantity" type="number" value="1">
             </div>
             <div class="col-md-2">
-                <label class="form-label">{{ _('Price / السعر') }}</label>
+                <label class="form-label">{{ _('Price') }}</label>
                 <input class="form-control" name="items-${itemIndex}-price_before_tax" readonly>
             </div>
             <div class="col-md-2">
-                <label class="form-label">{{ _('Tax / الضريبة') }}</label>
+                <label class="form-label">{{ _('Tax') }}</label>
                 <input class="form-control" name="items-${itemIndex}-tax_amount" readonly>
             </div>
             <div class="col-md-2">
-                <label class="form-label">{{ _('Discount / الخصم') }}</label>
+                <label class="form-label">{{ _('Discount') }}</label>
                 <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" value="0">
             </div>
             <div class="col-md-1">
-                <label class="form-label">{{ _('Total / الإجمالي') }}</label>
+                <label class="form-label">{{ _('Total') }}</label>
                 <input class="form-control" name="items-${itemIndex}-total_price" readonly>
             </div>
             <div class="col-md-1 d-flex align-items-end">
@@ -446,11 +435,11 @@ body {
         const confirmed = await showConfirm('{{ _("Are you sure you want to delete sales invoice") }} "' + invoiceNumber + '"?\n\n{{ _("This action cannot be undone.") }}');
         if (confirmed) {
             // Ask for password
-            const password = await showPrompt('{{ _("Enter deletion password / أدخل كلمة سر الحذف") }}:');
+            const password = await showPrompt('{{ _("Enter deletion password") }}:');
             if (password === null) return; // User cancelled
 
             if (!password || password.trim() === '') {
-                await showAlert('{{ _("Password required / كلمة السر مطلوبة") }}');
+                await showAlert('{{ _("Password required") }}');
                 return;
             }
 
@@ -483,7 +472,7 @@ body {
         const name = (document.getElementById('salesNewCustName').value||'').trim();
         const phone = (document.getElementById('salesNewCustPhone').value||'').trim();
         const discount = parseFloat(document.getElementById('salesNewCustDisc').value||'0')||0;
-        if(!name){ alert('{{ _("Name is required /  ") if false else _("Name is required /  ") }}'); return; }
+        if(!name){ alert('{{ _("Name is required") if false else _("Name is required") }}'); return; }
         try{
             const tokMeta = document.querySelector("meta[name='csrf-token']");
             const tok = tokMeta ? tokMeta.getAttribute('content') : '';
@@ -553,7 +542,7 @@ window.submitNewCustomerSales = async function(){
   const name = (document.getElementById('salesNewCustName').value||'').trim();
   const phone = (document.getElementById('salesNewCustPhone').value||'').trim();
   const discount = parseFloat(document.getElementById('salesNewCustDisc').value||'0')||0;
-  if(!name){ alert('{{ _('Name is required / الاسم مطلوب') }}'); return; }
+  if(!name){ alert('{{ _('Name is required') }}'); return; }
   try{
     const tokMeta = document.querySelector("meta[name='csrf-token']");
     const tok = tokMeta ? tokMeta.getAttribute('content') : '';

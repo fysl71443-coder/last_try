@@ -1,44 +1,139 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Suppliers / الموردون') }}{% endblock %}
+{% block title %}{{ _('Suppliers List') }}{% endblock %}
 {% block content %}
-<div class="container py-3" style="font-size: 1rem;">
-  <div class="section-header d-flex justify-content-between align-items-center">
-    <h3 class="mb-0">{{ _('Suppliers List / قائمة الموردين') }}</h3>
-    <form class="d-flex gap-2" method="get" action="{{ url_for('main.suppliers_list') }}">
-      <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" placeholder="{{ _('Search... / بحث...') }}" style="min-width: 220px;">
-      <a class="btn btn-outline-secondary" href="{{ url_for('main.suppliers_export', q=request.args.get('q')) }}">{{ _('Export CSV / تصدير CSV') }}</a>
-      <a class="btn btn-outline_secondary" href="{{ url_for('main.suppliers') }}">{{ _('Add Supplier / إضافة مورد') }}</a>
-      <button class="btn btn-primary">{{ _('Search / بحث') }}</button>
-    </form>
+<div class="container py-4 ops-layout hub-wrap suppliers-hub">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-truck"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Suppliers List') }}</h1>
+      <span class="ops-subtitle">{{ _('Search and manage suppliers') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2 align-items-center">
+      <a href="{{ url_for('suppliers.suppliers') }}" class="btn btn-primary btn-sm">
+        <i class="fa-solid fa-plus me-1"></i>{{ _('Add Supplier') }}
+      </a>
+      <a href="{{ url_for('suppliers.suppliers_payments_statements') }}" class="btn btn-outline-primary btn-sm">
+        <i class="fa-solid fa-file-invoice-dollar me-1"></i>{{ _('Payments & Statements') }}
+      </a>
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('main.dashboard') }}" data-partial-links>
+        <i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}
+      </a>
+    </div>
   </div>
 
-  <div class="card"><div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>{{ _('Suppliers / الموردون') }}</th>
-            <th>{{ _('Contact Person / شخص التواصل') }}</th>
-            <th>{{ _('Phone / الهاتف') }}</th>
-            <th>{{ _('Email / البريد الإلكتروني') }}</th>
-            <th>{{ _('Tax Number / الرقم الضريبي') }}</th>
-            <th>{{ _('Payment Method / طريقة الدفع') }}</th>
-            <th>{{ _('CR Number / رقم السجل التجاري') }}</th>
-            <th>{{ _('IBAN / رقم الآيبان') }}</th>
-            <th>{{ _('Address / العنوان') }}</th>
-            <th>{{ _('Notes / ملاحظات') }}</th>
-            <th>{{ _('Active / نشط') }}</th>
-            <th class="text-end" style="width:260px;">{{ _('Actions / إجراءات') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in suppliers %}
-          <tr>
-            <td>{{ s.name }}</td>
-            <td>{{ s.contact_person or '-' }}</td>
-            <td>{{ s.phone or '-' }}</td>
-            <td>{{ s.email or '-' }}</td>
-            <td>{{ s.tax_number or '-' }}</td>
+  <!-- KPI Cards: white background, colored text -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="kpi-card kpi-card--white kpi-card--text-blue">
+        <div class="kpi-value">{{ total_suppliers or 0 }}</div>
+        <div class="kpi-label">{{ _('Total Suppliers') }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="kpi-card kpi-card--white kpi-card--text-green">
+        <div class="kpi-value">{{ active_suppliers or 0 }}</div>
+        <div class="kpi-label">{{ _('Active') }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="kpi-card kpi-card--white kpi-card--text-orange">
+        <div class="kpi-value">{{ (total_suppliers or 0) - (active_suppliers or 0) }}</div>
+        <div class="kpi-label">{{ _('Inactive') }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="kpi-card kpi-card--white kpi-card--text-purple">
+        <div class="kpi-value">{{ pagination.total if pagination else 0 }}</div>
+        <div class="kpi-label">{{ _('Showing') }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ops-form-card">
+    <div class="ops-form-head">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+          <h3 class="mb-0">{{ _('Suppliers') }}</h3>
+          <small class="text-muted">{{ _('Manage supplier information') }}</small>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a class="btn btn-primary btn-sm" href="{{ url_for('suppliers.suppliers_payments_statements') }}">
+            <i class="fa-solid fa-file-invoice-dollar me-1"></i>{{ _('Payments & Statements') }}
+          </a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('suppliers.suppliers_export', q=q or '') }}">
+            <i class="fa-solid fa-download me-1"></i>{{ _('Export CSV') }}
+          </a>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Filters and Search -->
+    <div class="ops-form-body border-bottom">
+      <form method="get" class="row g-3 align-items-end">
+        <input type="hidden" name="page" value="1">
+        <input type="hidden" name="sort" value="{{ sort_by }}">
+        <input type="hidden" name="order" value="{{ sort_order }}">
+        
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">{{ _('Search') }}</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+            <input type="text" name="q" value="{{ q or '' }}" class="form-control" 
+                   placeholder="{{ _('Search suppliers') }}">
+          </div>
+        </div>
+        
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">{{ _('Status') }}</label>
+          <select name="status" class="form-select">
+            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>{{ _('All') }}</option>
+            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>{{ _('Active') }}</option>
+            <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>{{ _('Inactive') }}</option>
+          </select>
+        </div>
+        
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">{{ _('Payment') }}</label>
+          <select name="payment" class="form-select">
+            <option value="all" {% if payment_filter == 'all' %}selected{% endif %}>{{ _('All') }}</option>
+            <option value="cash" {% if payment_filter == 'cash' %}selected{% endif %}>CASH</option>
+            <option value="bank" {% if payment_filter == 'bank' %}selected{% endif %}>BANK</option>
+            <option value="transfer" {% if payment_filter == 'transfer' %}selected{% endif %}>TRANSFER</option>
+          </select>
+        </div>
+        
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">{{ _('Per Page') }}</label>
+          <select name="per_page" class="form-select">
+            <option value="25" {% if request.args.get('per_page', '50') == '25' %}selected{% endif %}>25</option>
+            <option value="50" {% if request.args.get('per_page', '50') == '50' %}selected{% endif %}>50</option>
+            <option value="100" {% if request.args.get('per_page', '50') == '100' %}selected{% endif %}>100</option>
+            <option value="200" {% if request.args.get('per_page', '50') == '200' %}selected{% endif %}>200</option>
+          </select>
+        </div>
+        
+        <div class="col-md-3">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fa-solid fa-filter me-1"></i>{{ _('Apply Filters') }}
+          </button>
+        </div>
+      </form>
+      
+      {% if q or status_filter != 'all' or payment_filter != 'all' %}
+      <div class="mt-2">
+        <a href="{{ url_for('suppliers.suppliers_list') }}" class="btn btn-sm btn-outline-secondary">
+          <i class="fa-solid fa-times me-1"></i>{{ _('Clear Filters') }}
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Cards Grid -->
+    <div class="ops-form-body p-3">
+      <div class="suppliers-cards-container" style="max-height: calc(100vh - 450px); overflow-y: auto; overflow-x: hidden;">
+        {% if suppliers %}
+          <div class="row g-3">
+            {% for s in suppliers %}
             {% set ns = namespace(cr=(s.cr_number|default('')), iban=(s.iban|default(''))) %}
             {% if not ns.cr or not ns.iban %}
               {% for part in (s.notes or '').split('|') %}
@@ -47,33 +142,376 @@
                 {% if (not ns.iban) and p[:5] == 'IBAN:' %}{% set ns.iban = p[5:].strip() %}{% endif %}
               {% endfor %}
             {% endif %}
-            <td>{{ (s.payment_method or 'CASH') }}</td>
-            <td>{{ ns.cr or '-' }}</td>
-            <td>{{ ns.iban or '-' }}</td>
-            <td>{{ s.address or '-' }}</td>
-            <td>{{ s.notes or '-' }}</td>
-            <td>{% if s.active %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}</td>
-            <td class="text-end">
-              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('main.suppliers_edit', sid=s.id) }}">{{ _('Edit / تعديل') }}</a>
-              <form method="post" action="{{ url_for('main.supplier_toggle', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Toggle status? / تبديل الحالة؟') }}')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-sm btn-outline-secondary">{{ _('Toggle / تبديل') }}</button>
-              </form>
-              <form method="post" action="{{ url_for('main.supplier_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this supplier? / حذف هذا المورد؟') }}')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
-              </form>
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="12" class="text-center text-muted">{{ _('No suppliers yet / لا يوجد موردون بعد') }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            <div class="col-md-6 col-lg-4 col-xl-3">
+              <div class="supplier-card card h-100 shadow-sm border-0" onclick="showSupplierDetails({{ s.id }})" style="cursor: pointer; transition: all 0.3s;">
+                <div class="card-body bg-white">
+                  <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="flex-grow-1">
+                      <h5 class="card-title mb-1 fw-bold supplier-card-name">{{ s.name }}</h5>
+                      {% if s.contact_person %}
+                      <p class="small mb-0 supplier-contact-text">
+                        <i class="fa-solid fa-user me-1 supplier-icon-contact"></i>{{ s.contact_person }}
+                      </p>
+                      {% endif %}
+                    </div>
+                    <span class="badge badge-status-{% if s.active %}active{% else %}inactive{% endif %}">
+                      {% if s.active %}{{ _('Active') }}{% else %}{{ _('Inactive') }}{% endif %}
+                    </span>
+                  </div>
+                  
+                  <div class="supplier-info">
+                    {% if s.phone %}
+                    <div class="mb-2">
+                      <i class="fa-solid fa-phone me-2 supplier-icon-phone"></i>
+                      <a href="tel:{{ s.phone }}" class="supplier-link-phone text-decoration-none" onclick="event.stopPropagation();">{{ s.phone }}</a>
+                    </div>
+                    {% endif %}
+                    
+                    {% if s.email %}
+                    <div class="mb-2">
+                      <i class="fa-solid fa-envelope me-2 supplier-icon-email"></i>
+                      <a href="mailto:{{ s.email }}" class="supplier-link-email text-decoration-none text-truncate d-inline-block" style="max-width: 200px;" onclick="event.stopPropagation();" title="{{ s.email }}">{{ s.email }}</a>
+                    </div>
+                    {% endif %}
+                    
+                    {% if s.tax_number %}
+                    <div class="mb-2">
+                      <i class="fa-solid fa-receipt me-2 supplier-icon-tax"></i>
+                      <span class="small supplier-label-muted">{{ _('Tax') }}: <strong class="supplier-value-tax">{{ s.tax_number }}</strong></span>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-2">
+                      <i class="fa-solid fa-credit-card me-2 supplier-icon-payment"></i>
+                      <span class="badge badge-payment">{{ (s.payment_method or 'CASH') }}</span>
+                    </div>
+                    
+                    {% if ns.cr %}
+                    <div class="mb-2">
+                      <i class="fa-solid fa-file-contract me-2 supplier-icon-cr"></i>
+                      <span class="small supplier-label-muted">{{ _('CR') }}: <strong class="supplier-value-cr">{{ ns.cr }}</strong></span>
+                    </div>
+                    {% endif %}
+                  </div>
+                  
+                  <div class="mt-3 pt-3 border-top">
+                    <div class="btn-group w-100" role="group" onclick="event.stopPropagation();">
+                      <a href="{{ url_for('suppliers.supplier_statement_id', sid=s.id) }}" class="btn btn-sm btn-outline-success" title="{{ _('Statement') }}">
+                        <i class="fa-solid fa-file-invoice"></i>
+                      </a>
+                      <a href="{{ url_for('suppliers.suppliers_edit', sid=s.id) }}" class="btn btn-sm btn-outline-primary" title="{{ _('Edit') }}">
+                        <i class="fa-solid fa-edit"></i>
+                      </a>
+                      <form method="post" action="{{ url_for('suppliers.supplier_toggle', sid=s.id, q=q or '', page=pagination.page if pagination else 1) }}" class="d-inline" 
+                            onsubmit="return confirm('{{ _('Confirm toggle status?') }}')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="btn btn-sm btn-outline-warning" title="{{ _('Toggle Status') }}">
+                          <i class="fa-solid fa-toggle-{% if s.active %}on{% else %}off{% endif %}"></i>
+                        </button>
+                      </form>
+                      <form method="post" action="{{ url_for('suppliers.supplier_delete', sid=s.id, q=q or '', page=pagination.page if pagination else 1) }}" class="d-inline" 
+                            onsubmit="return confirm('{{ _('Delete this supplier?') }}')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete') }}">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-center py-5">
+            <i class="fa-solid fa-truck fa-3x text-muted mb-3 d-block"></i>
+            <div class="text-muted">{{ _('No suppliers found') }}</div>
+            {% if q %}
+            <small class="text-muted">{{ _('Try different search terms') }}</small>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Pagination -->
+      {% if pagination and pagination.pages > 1 %}
+      <div class="ops-form-body border-top mt-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div class="text-muted small">
+            {{ _('Showing') }} {{ ((pagination.page - 1) * pagination.per_page) + 1 }} 
+            {{ _('to') }} {{ pagination.page * pagination.per_page if pagination.page * pagination.per_page < pagination.total else pagination.total }} 
+            {{ _('of') }} {{ pagination.total }} {{ _('suppliers') }}
+          </div>
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              {% if pagination.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ pagination.prev_num }}&q={{ q or '' }}&status={{ status_filter }}&payment={{ payment_filter }}&sort={{ sort_by }}&order={{ sort_order }}&per_page={{ request.args.get('per_page', '50') }}">
+                  <i class="fa-solid fa-chevron-left"></i>
+                </a>
+              </li>
+              {% else %}
+              <li class="page-item disabled">
+                <span class="page-link"><i class="fa-solid fa-chevron-left"></i></span>
+              </li>
+              {% endif %}
+              
+              {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                  {% if page_num == pagination.page %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                  {% else %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_num }}&q={{ q or '' }}&status={{ status_filter }}&payment={{ payment_filter }}&sort={{ sort_by }}&order={{ sort_order }}&per_page={{ request.args.get('per_page', '50') }}">{{ page_num }}</a>
+                  </li>
+                  {% endif %}
+                {% else %}
+                  <li class="page-item disabled">
+                    <span class="page-link">…</span>
+                  </li>
+                {% endif %}
+              {% endfor %}
+              
+              {% if pagination.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ pagination.next_num }}&q={{ q or '' }}&status={{ status_filter }}&payment={{ payment_filter }}&sort={{ sort_by }}&order={{ sort_order }}&per_page={{ request.args.get('per_page', '50') }}">
+                  <i class="fa-solid fa-chevron-right"></i>
+                </a>
+              </li>
+              {% else %}
+              <li class="page-item disabled">
+                <span class="page-link"><i class="fa-solid fa-chevron-right"></i></span>
+              </li>
+              {% endif %}
+            </ul>
+          </nav>
+        </div>
+      </div>
+      {% endif %}
     </div>
-  </div></div>
+  </div>
 </div>
+
+<!-- Supplier Details Modal -->
+<div class="modal fade" id="supplierModal" tabindex="-1" aria-labelledby="supplierModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="supplierModalLabel">{{ _('Supplier Details') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="supplierModalBody">
+        <!-- Content will be loaded here -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Close') }}</button>
+        <a id="supplierEditBtn" href="#" class="btn btn-primary">
+          <i class="fa-solid fa-edit me-1"></i>{{ _('Edit') }}
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const suppliersData = {
+  {% for s in suppliers %}
+  {% set ns = namespace(cr=(s.cr_number|default('')), iban=(s.iban|default(''))) %}
+  {% if not ns.cr or not ns.iban %}
+    {% for part in (s.notes or '').split('|') %}
+      {% set p = part.strip() %}
+      {% if (not ns.cr) and p[:3] == 'CR:' %}{% set ns.cr = p[3:].strip() %}{% endif %}
+      {% if (not ns.iban) and p[:5] == 'IBAN:' %}{% set ns.iban = p[5:].strip() %}{% endif %}
+    {% endfor %}
+  {% endif %}
+  {{ s.id }}: {
+    id: {{ s.id }},
+    name: {{ s.name|tojson }},
+    contact_person: {{ (s.contact_person or '')|tojson }},
+    phone: {{ (s.phone or '')|tojson }},
+    email: {{ (s.email or '')|tojson }},
+    tax_number: {{ (s.tax_number or '')|tojson }},
+    cr_number: {{ ns.cr|tojson }},
+    iban: {{ ns.iban|tojson }},
+    address: {{ (s.address or '')|tojson }},
+    payment_method: {{ (s.payment_method or 'CASH')|tojson }},
+    active: {{ 'true' if s.active else 'false' }},
+    notes: {{ (s.notes or '')|tojson }},
+    edit_url: {{ url_for('suppliers.suppliers_edit', sid=s.id)|tojson }}
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+};
+
+function showSupplierDetails(id) {
+  const supplier = suppliersData[id];
+  if (!supplier) return;
+  
+  const modalBody = document.getElementById('supplierModalBody');
+  const editBtn = document.getElementById('supplierEditBtn');
+  
+  editBtn.href = supplier.edit_url;
+  
+  modalBody.innerHTML = `
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-building me-2 text-primary"></i>{{ _('Name') }}</label>
+          <div class="detail-value">${supplier.name}</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-user me-2 text-primary"></i>{{ _('Contact Person') }}</label>
+          <div class="detail-value">${supplier.contact_person || '-'}</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-phone me-2 text-success"></i>{{ _('Phone') }}</label>
+          <div class="detail-value">
+            ${supplier.phone ? `<a href="tel:${supplier.phone}" class="text-decoration-none">${supplier.phone}</a>` : '-'}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-envelope me-2 text-info"></i>{{ _('Email') }}</label>
+          <div class="detail-value">
+            ${supplier.email ? `<a href="mailto:${supplier.email}" class="text-decoration-none">${supplier.email}</a>` : '-'}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-receipt me-2 text-warning"></i>{{ _('Tax Number') }}</label>
+          <div class="detail-value">${supplier.tax_number || '-'}</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-file-contract me-2 text-warning"></i>{{ _('CR Number') }}</label>
+          <div class="detail-value">${supplier.cr_number || '-'}</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-university me-2 text-info"></i>{{ _('IBAN') }}</label>
+          <div class="detail-value font-monospace">${supplier.iban || '-'}</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-credit-card me-2 text-secondary"></i>{{ _('Payment Method') }}</label>
+          <div class="detail-value">
+            <span class="badge bg-secondary">${supplier.payment_method}</span>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-map-marker-alt me-2 text-danger"></i>{{ _('Address') }}</label>
+          <div class="detail-value">${supplier.address || '-'}</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-toggle-${supplier.active ? 'on' : 'off'} me-2 text-${supplier.active ? 'success' : 'secondary'}"></i>{{ _('Status') }}</label>
+          <div class="detail-value">
+            <span class="badge ${supplier.active ? 'bg-success' : 'bg-secondary'}">
+              ${supplier.active ? '{{ _("Active") }}' : '{{ _("Inactive") }}'}
+            </span>
+          </div>
+        </div>
+      </div>
+      ${supplier.notes ? `
+      <div class="col-12">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-sticky-note me-2 text-muted"></i>{{ _('Notes') }}</label>
+          <div class="detail-value">${supplier.notes}</div>
+        </div>
+      </div>
+      ` : ''}
+    </div>
+  `;
+  
+  const modal = new bootstrap.Modal(document.getElementById('supplierModal'));
+  modal.show();
+}
+</script>
+
+<style>
+/* Suppliers hub: white cards, colored text */
+.suppliers-hub .kpi-card--white {
+  background: #fff !important;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #cbd5e0;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.suppliers-hub .kpi-card--white .kpi-label { color: #64748b !important; font-weight: 600; }
+.suppliers-hub .kpi-card--text-blue .kpi-value { color: #1565c0 !important; }
+.suppliers-hub .kpi-card--text-blue { border-left-color: #1565c0; }
+.suppliers-hub .kpi-card--text-green .kpi-value { color: #15803d !important; }
+.suppliers-hub .kpi-card--text-green { border-left-color: #15803d; }
+.suppliers-hub .kpi-card--text-orange .kpi-value { color: #c2410c !important; }
+.suppliers-hub .kpi-card--text-orange { border-left-color: #c2410c; }
+.suppliers-hub .kpi-card--text-purple .kpi-value { color: #6b21a8 !important; }
+.suppliers-hub .kpi-card--text-purple { border-left-color: #6b21a8; }
+
+.suppliers-cards-container {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+.suppliers-cards-container::-webkit-scrollbar { width: 8px; }
+.suppliers-cards-container::-webkit-scrollbar-track { background: #f7fafc; border-radius: 4px; }
+.suppliers-cards-container::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 4px; }
+.suppliers-cards-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+.supplier-card {
+  background: #fff !important;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border-left: 4px solid #0d9488;
+  transition: all 0.25s ease;
+}
+.supplier-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(13, 148, 136, 0.12) !important;
+  border-left-color: #0f766e;
+}
+.supplier-card-name { color: #0f766e !important; font-size: 1.05rem; }
+.supplier-contact-text { color: #64748b; }
+.supplier-icon-contact { color: #6b21a8; }
+.supplier-icon-phone { color: #15803d; }
+.supplier-link-phone { color: #166534; font-weight: 500; }
+.supplier-link-phone:hover { color: #0d9488; }
+.supplier-icon-email { color: #0369a1; }
+.supplier-link-email { color: #0c4a6e; }
+.supplier-link-email:hover { color: #0d9488; }
+.supplier-icon-tax { color: #c2410c; }
+.supplier-label-muted { color: #64748b; }
+.supplier-value-tax, .supplier-value-cr { color: #1e293b; }
+.supplier-icon-payment { color: #6b21a8; }
+.supplier-icon-cr { color: #b45309; }
+.badge-payment { background: #f1f5f9; color: #475569; }
+.badge-status-active { background: #dcfce7; color: #15803d; }
+.badge-status-inactive { background: #f1f5f9; color: #64748b; }
+
+.supplier-info { font-size: 0.9rem; }
+.supplier-info i { width: 20px; text-align: center; }
+
+.detail-item { margin-bottom: 1.5rem; }
+.detail-label {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+.detail-value { font-size: 1rem; color: #1e293b; word-break: break-word; }
+</style>
 {% endblock %}
-
-
-

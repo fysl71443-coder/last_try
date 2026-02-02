@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Sales Report') }}{% endblock %}
+{% block head %}
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  .sr-wrap { font-family: 'Cairo', 'Tajawal', sans-serif; --sr-fg: #1f2937; --sr-muted: #6b7280; --sr-primary: #1565c0; --sr-border: #e5e7eb; --sr-bg: #f8fafc; }
+  .sr-title-wrap { text-align: center; margin: 1rem 0 1rem; }
+  .sr-title-wrap hr { margin: 0.5rem 0; border-color: var(--sr-primary); opacity: 0.4; }
+  .sr-title { font-size: 1.35rem; font-weight: 700; color: var(--sr-primary); margin: 0; }
+  .sr-meta { font-size: 0.9rem; color: var(--sr-muted); display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; }
+  .sr-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem; }
+  .sr-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+  .sr-card { background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); color: #fff; border-radius: 10px; padding: 0.85rem 1rem; text-align: center; }
+  .sr-card .label { font-size: 0.8rem; opacity: 0.9; margin-bottom: 0.25rem; }
+  .sr-card .value { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sr-table-wrap { overflow-x: auto; border: 1px solid var(--sr-border); border-radius: 10px; overflow: hidden; }
+  .sr-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  .sr-table th { background: var(--sr-primary); color: #fff; padding: 0.6rem 0.75rem; text-align: right; font-weight: 600; }
+  .sr-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--sr-border); text-align: right; }
+  .sr-table tbody tr:hover { background: var(--sr-bg); }
+  .sr-table tfoot tr { background: #e3f2fd; font-weight: 700; border-top: 2px solid var(--sr-primary); }
+  .sr-table tfoot td { padding: 0.6rem 0.75rem; }
+  /* طباعة موحدة: لون خط واحد وتصميم واضح */
+  @media print {
+    .no-print { display: none !important; }
+    .sr-actions { display: none !important; }
+    body { background: #fff !important; color: #000 !important; }
+    .sr-wrap, .sr-wrap * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .navbar { display: none !important; }
+    #app-messages { display: none !important; }
+    .report-print-header, .report-print-header * { color: #000 !important; }
+    .report-print-header .text-muted { color: #333 !important; }
+    .report-print-header { border-bottom-color: #333 !important; padding-bottom: 0.75rem; margin-bottom: 1rem; }
+    .sr-title-print { display: block !important; text-align: center; font-size: 1.25rem; font-weight: 700; margin: 1rem 0 0.75rem; padding-bottom: 0.5rem; border-bottom: 2px solid #000; color: #000 !important; }
+    .sr-meta { color: #000 !important; margin-bottom: 1rem; }
+    .sr-cards { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+    .sr-card { background: #fff !important; color: #000 !important; border: 1px solid #333 !important; box-shadow: none !important; }
+    .sr-card .label { color: #333 !important; opacity: 1; }
+    .sr-card .value { color: #000 !important; }
+    .sr-table-wrap { border: 1px solid #333 !important; }
+    .sr-table th { background: #333 !important; color: #fff !important; border: 1px solid #333 !important; }
+    .sr-table td { border: 1px solid #333 !important; color: #000 !important; }
+    .sr-table tfoot tr { background: #e8e8e8 !important; color: #000 !important; border-top: 2px solid #333 !important; }
+    .sr-table tfoot td { color: #000 !important; border: 1px solid #333 !important; }
+    .sr-table tbody tr:hover { background: #fff !important; }
+    @page { size: A4; margin: 15mm; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container py-4 ops-layout hub-wrap sr-wrap" dir="rtl">
+  <div class="ops-header-bar mb-3 no-print">
+    <span class="ops-icon"><i class="fa-solid fa-coins"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Sales Report') }}</h1>
+      <span class="ops-subtitle">{{ _('View and print sales report by period and branch') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Home') }}</a>
+      <a href="{{ url_for('reports.reports') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-chart-line me-1"></i>{{ _('Reports') }}</a>
+    </div>
+  </div>
+  {% include 'partials/report_header.html' %}
+
+  <div class="sr-title-print" style="display: none;">{{ _('Sales Report') }}</div>
+
+  <div class="sr-title-wrap no-print">
+    <hr>
+    <h2 class="sr-title">{{ _('Sales Report') }}</h2>
+    <hr>
+  </div>
+
+  <div class="sr-meta">
+    <span>{{ _('From') }}: {{ start_date.strftime('%Y/%m/%d') if start_date else '—' }}</span>
+    <span>{{ _('To') }}: {{ end_date.strftime('%Y/%m/%d') if end_date else '—' }}</span>
+    <span>{{ _('Branch') }}: {{ branch_label }}</span>
+  </div>
+
+  <div class="no-print mb-3">
+    <form method="get" action="{{ url_for('reports.reports_sales') }}" class="row g-2 align-items-end">
+      <div class="col-auto"><label class="form-label small">{{ _('From') }}</label><input type="date" name="from" class="form-control form-control-sm" value="{{ start_date.isoformat() if start_date else '' }}"></div>
+      <div class="col-auto"><label class="form-label small">{{ _('To') }}</label><input type="date" name="to" class="form-control form-control-sm" value="{{ end_date.isoformat() if end_date else '' }}"></div>
+      <div class="col-auto"><label class="form-label small">{{ _('Branch') }}</label><select name="branch" class="form-select form-select-sm"><option value="all" {{ 'selected' if branch == 'all' or not branch else '' }}>{{ _('All') }}</option><option value="china_town" {{ 'selected' if branch == 'china_town' else '' }}>China Town</option><option value="place_india" {{ 'selected' if branch == 'place_india' else '' }}>Place India</option></select></div>
+      <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</button></div>
+    </form>
+    <p class="small text-muted mt-1 mb-0">{{ _('Sales day: 10 AM → 2 AM next day.') }}</p>
+  </div>
+
+  <div class="sr-actions no-print">
+    <a href="{{ url_for('reports.reports') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-right me-1"></i>{{ _('Back to reports') }}</a>
+    <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</button>
+  </div>
+
+  <div class="sr-cards">
+    <div class="sr-card">
+      <div class="label">{{ _('Total Cash') }} SAR</div>
+      <div class="value">{{ '{:,.2f}'.format(data.total_cash or 0) }}</div>
+    </div>
+    <div class="sr-card">
+      <div class="label">{{ _('Total Card') }} SAR</div>
+      <div class="value">{{ '{:,.2f}'.format(data.total_card or 0) }}</div>
+    </div>
+    <div class="sr-card">
+      <div class="label">{{ _('Invoices count') }}</div>
+      <div class="value">{{ data.count or 0 }}</div>
+    </div>
+    <div class="sr-card">
+      <div class="label">{{ _('Total before tax') }}</div>
+      <div class="value">{{ '{:,.2f}'.format(data.total_before_tax or 0) }}</div>
+    </div>
+    <div class="sr-card">
+      <div class="label">{{ _('Discount granted') }} SAR</div>
+      <div class="value">{{ '{:,.2f}'.format(data.total_discount or 0) }}</div>
+    </div>
+    <div class="sr-card">
+      <div class="label">{{ _('Total (after VAT)') }}</div>
+      <div class="value">{{ '{:,.2f}'.format(data.total_after or 0) }}</div>
+    </div>
+  </div>
+
+  <div class="sr-table-wrap">
+    <table class="sr-table">
+      <thead>
+        <tr>
+          <th>{{ _('Branch') }}</th>
+          <th>{{ _('Amount') }}</th>
+          <th>{{ _('VAT') }}</th>
+          <th>{{ _('Discount') }}</th>
+          <th>{{ _('Total') }}</th>
+          <th>{{ _('Payment method') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in (data.rows or []) %}
+        <tr>
+          <td>{{ r.branch }}</td>
+          <td>{{ '{:,.2f}'.format(r.amount or 0) }}</td>
+          <td>{{ '{:,.2f}'.format(r.tax or 0) }}</td>
+          <td>{{ '{:,.2f}'.format(r.discount or 0) }}</td>
+          <td>{{ '{:,.2f}'.format(r.total or 0) }}</td>
+          <td>{{ r.payment_method }}</td>
+        </tr>
+        {% endfor %}
+        {% if not (data.rows or []) %}
+        <tr><td colspan="6" class="text-center text-muted py-4">{{ _('No data for the selected period.') }}</td></tr>
+        {% endif %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>{{ data.count or 0 }}</td>
+          <td>{{ '{:,.2f}'.format(data.total_before_tax or 0) }}</td>
+          <td>{{ '{:,.2f}'.format(data.total_tax or 0) }}</td>
+          <td>{{ '{:,.2f}'.format(data.total_discount or 0) }}</td>
+          <td>{{ '{:,.2f}'.format(data.total_after or 0) }}</td>
+          <td>—</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

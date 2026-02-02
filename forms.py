@@ -24,24 +24,68 @@ PURCHASE_PAYMENT_METHODS = [
     ('BANK', 'بنك / BANK'),
 ]
 
+# Fixed restaurant purchase categories for dropdown (الفئة)
+PURCHASE_CATEGORY_CHOICES = [
+    ('', _l('Select Category / اختر الفئة')),
+    ('لحوم', 'لحوم / Meat'),
+    ('دجاج', 'دجاج / Chicken'),
+    ('أسماك ومأكولات بحرية', 'أسماك ومأكولات بحرية / Seafood'),
+    ('زيوت', 'زيوت / Oils'),
+    ('توابل وبهارات', 'توابل وبهارات / Spices'),
+    ('خضروات', 'خضروات / Vegetables'),
+    ('فواكه', 'فواكه / Fruits'),
+    ('ألبان', 'ألبان / Dairy'),
+    ('مشروبات', 'مشروبات / Beverages'),
+    ('دقيق وحبوب', 'دقيق وحبوب / Flour & Grains'),
+    ('معجنات وعجائن', 'معجنات وعجائن / Dough & Pastry'),
+    ('معلبات', 'معلبات / Canned'),
+    ('شوربات ومرق', 'شوربات ومرق / Soups & Stocks'),
+    ('منظفات', 'منظفات / Cleaning'),
+    ('ورق ومستلزمات', 'ورق ومستلزمات / Paper & Supplies'),
+    ('غاز', 'غاز / Gas'),
+    ('مستلزمات مطبخ', 'مستلزمات مطبخ / Kitchen Supplies'),
+    ('أخرى', 'أخرى / Other'),
+]
+
 # Expenses should restrict payment methods to CASH or BANK
 EXPENSE_PAYMENT_METHODS = [
     ('CASH', 'نقداً / CASH'),
     ('BANK', 'بنك / BANK'),
 ]
 
-EXPENSE_ACCOUNT_CHOICES = [
-    ('RENT', 'Rent / إيجار'),
-    ('MAINT', 'Maintenance / صيانة'),
-    ('UTIL', 'Utilities / مرافق'),
-    ('LOG', 'Logistics / لوجستيات'),
-    ('MKT', 'Marketing / تسويق'),
-    ('TEL', 'Telecom & Internet / اتصالات وإنترنت'),
-    ('STAT', 'Stationery / قرطاسية'),
-    ('CLEAN', 'Cleaning / نظافة'),
-    ('GOV', 'Government Payments / مدفوعات حكومية'),
-    ('EXP', 'Operating Expenses / مصروفات تشغيلية'),
-]
+# دالة لإنشاء قائمة الحسابات من الشجرة الجديدة
+def get_expense_account_choices():
+    """تُرجع قائمة الحسابات من شجرة الحسابات الجديدة (فقط حسابات المصروفات الورقية)."""
+    try:
+        from data.coa_new_tree import leaf_coa_dict
+        coa = leaf_coa_dict()
+        choices = []
+        # فقط حسابات المصروفات (EXPENSE)
+        for code, info in sorted(coa.items()):
+            if info.get('type') == 'EXPENSE':
+                name_ar = info.get('name_ar', info.get('name', ''))
+                name_en = info.get('name_en', '')
+                display_name = f"{name_ar} / {name_en}" if name_en else name_ar
+                choices.append((code, f"{code} - {display_name}"))
+        return choices if choices else [('5260', '5260 - مصروفات متنوعة / Miscellaneous')]
+    except Exception:
+        # Fallback: حسابات افتراضية من الشجرة الجديدة
+        return [
+            ('5210', '5210 - مصروف كهرباء / Electricity'),
+            ('5220', '5220 - مصروف ماء / Water'),
+            ('5230', '5230 - مصروف اتصالات وإنترنت / Telecom & Internet'),
+            ('5240', '5240 - مصروف صيانة / Maintenance'),
+            ('5250', '5250 - مصروف نظافة / Cleaning'),
+            ('5260', '5260 - مصروف نقل وتوصيل / Transport'),
+            ('5270', '5270 - مصروف إيجار / Rent'),
+            ('5310', '5310 - رواتب وأجور / Salaries & Wages'),
+            ('5410', '5410 - مصروفات حكومية ورسوم / Government & Fees'),
+            ('5460', '5460 - غرامات ومخالفات / Fines'),
+            ('5610', '5610 - مصروفات بنكية / Bank Charges'),
+            ('5470', '5470 - مصروفات متنوعة إدارية / Miscellaneous Admin'),
+        ]
+
+EXPENSE_ACCOUNT_CHOICES = get_expense_account_choices()
 
 BRANCHES = [
     ('place_india', 'Place India'),
@@ -114,8 +158,8 @@ class MealForm(FlaskForm):
 class PurchaseInvoiceItemForm(FlaskForm):
     class Meta:
         csrf = False
-    category = SelectField(_l('Category / الفئة'), choices=[], validators=[Optional()])
-    raw_material_id = SelectField(_l('Raw Material / المادة الخام'), coerce=int, validators=[DataRequired()])
+    category = SelectField(_l('Category / الفئة'), choices=PURCHASE_CATEGORY_CHOICES, validators=[Optional()])
+    item_name = StringField(_l('Item Name / اسم الصنف'), validators=[DataRequired()])
     quantity = DecimalField(_l('Quantity / الكمية'), validators=[DataRequired(), NumberRange(min=0.0001)], places=4)
     price_before_tax = DecimalField(_l('Unit Price / سعر الوحدة'), validators=[DataRequired(), NumberRange(min=0)], places=4)
     discount = DecimalField(_l('Discount %% / نسبة الخصم %%'), validators=[Optional(), NumberRange(min=0, max=100)], places=2)

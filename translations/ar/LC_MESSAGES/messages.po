@@ -16,7 +16,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.12.1\n"
+"Generated-By: Babel 2.13.1\n"
 
 # POS System translations
 msgid "Point of Sale System"
@@ -184,9 +184,6 @@ msgstr "مطعم"
 msgid "Main"
 msgstr "الرئيسي"
 
-msgid "No items"
-msgstr "لا توجد أصناف"
-
 msgid "SAR"
 msgstr "ر.س"
 
@@ -235,20 +232,8 @@ msgstr "طباعة فقط"
 msgid "Are you sure you want to go back without payment?"
 msgstr "هل تريد العودة بدون دفع؟"
 
-msgid "Pay & Print"
-msgstr "دفع و طباعة"
-
 msgid "Preview Only"
 msgstr "معاينة فقط"
-
-msgid "Processing Payment..."
-msgstr "جاري معالجة الدفع..."
-
-msgid "Please wait, preparing receipt..."
-msgstr "يرجى الانتظار، جاري تحضير الإيصال..."
-
-msgid "Payment successful!"
-msgstr "تم الدفع بنجاح!"
 
 msgid "Receipt Number"
 msgstr "رقم الإيصال"
@@ -277,5 +262,2155 @@ msgstr "فاتورة غير مدفوعة"
 msgid "This is a preview only"
 msgstr "هذه معاينة فقط"
 
-msgid "Invoice cleared and ready for next customer"
-msgstr "تم تفريغ الفاتورة وهي جاهزة للعميل التالي"
+msgid "2FA Code"
+msgstr "رمز التحقق"
+
+msgid "Absence"
+msgstr "غياب"
+
+msgid "Account"
+msgstr "الحساب"
+
+msgid "Account list"
+msgstr "قائمة الحسابات"
+
+msgid "Account Statement"
+msgstr "كشف حساب"
+
+msgid "Accounting System"
+msgstr "النظام المحاسبي"
+
+msgid "Accounting System — Journal Entries Print"
+msgstr "النظام المحاسبي — طباعة قيود اليومية"
+
+msgid "Accounts"
+msgstr "الحسابات"
+
+msgid "Accounts Hub"
+msgstr "شاشة الحسابات"
+
+msgid "Actions"
+msgstr "إجراءات"
+
+msgid "Active"
+msgstr "نشط"
+
+msgid "Add"
+msgstr "إضافة"
+
+msgid "Add a section then select it to manage items"
+msgstr "أضف قسماً ثم اختره لإدارة العناصر"
+
+msgid "Add and view expense invoices"
+msgstr "إضافة وعرض فواتير المصروفات"
+
+msgid "Add Category"
+msgstr "إضافة قسم"
+
+msgid "Add Customer"
+msgstr "إضافة عميل"
+
+msgid "Add employee"
+msgstr "إضافة موظف"
+
+msgid "Add employees, payroll, advances, reports"
+msgstr "إضافة الموظفين، مسير الرواتب، السلف، التقارير"
+
+msgid "Add Ingredient"
+msgstr "إضافة مكون"
+
+msgid "Add Item"
+msgstr "إضافة بند"
+
+msgid "Add Meal"
+msgstr "إضافة وجبة"
+
+msgid "Add New Raw Material"
+msgstr "إضافة مادة خام جديدة"
+
+msgid "Add Qty"
+msgstr "إضافة كمية"
+
+msgid "Add Section"
+msgstr "إضافة قسم"
+
+msgid "Add supplier"
+msgstr "إضافة مورد"
+
+msgid "Add Supplier"
+msgstr "إضافة مورد"
+
+msgid "Add user"
+msgstr "إضافة مستخدم"
+
+msgid "Add your first raw material to start creating meals"
+msgstr "أضف أول مادة خام لبدء إنشاء الوجبات"
+
+msgid "Address"
+msgstr "الموقع"
+
+msgid "Advances"
+msgstr "سلف واسترجاع"
+
+msgid "Advances list & recover"
+msgstr "سلف واسترجاع"
+
+msgid "All"
+msgstr "الكل"
+
+msgid "All branches"
+msgstr "جميع الفروع"
+
+msgid "All Expenses"
+msgstr "كل المصروفات"
+
+msgid "All in current type tab"
+msgstr "كل فواتير النوع الحالي"
+
+msgid "All Invoices"
+msgstr "كل الفواتير"
+
+msgid "All invoices"
+msgstr "كل الفواتير"
+
+msgid "All payroll runs that have been processed for employees and not yet paid"
+msgstr "جميع المسيرات المرحلة للموظف ولم يتم دفعها"
+
+msgid "Allowances"
+msgstr "بدلات"
+
+msgid "Amount"
+msgstr "المبلغ"
+
+msgid "Apply"
+msgstr "تطبيق"
+
+#, python-format
+msgid "Apply 15%% VAT on subtotal"
+msgstr "تطبيق ضريبة 15%% على المجموع الفرعي"
+
+msgid "Apply Filters"
+msgstr "تطبيق"
+
+msgid "Arabic Name"
+msgstr "الاسم بالعربية"
+
+msgid "Archive"
+msgstr "الأرشيف"
+
+msgid "Archive Receipts"
+msgstr "أرشيف الإيصالات"
+
+msgid "Are you sure you want to delete this invoice? This action cannot be undone."
+msgstr "هل أنت متأكد من حذف هذه الفاتورة؟ لا يمكن التراجع عن هذا الإجراء."
+
+msgid "Auto on save (e.g. INV-PUR-YYYY-0001)"
+msgstr "يُولّد تلقائياً عند الحفظ (مثال: INV-PUR-YYYY-0001)"
+
+msgid "Average"
+msgstr "المتوسط"
+
+msgid "Back to branches"
+msgstr "العودة للفروع"
+
+msgid "Back to Expenses"
+msgstr "العودة للمصروفات"
+
+msgid "Back to payroll reports"
+msgstr "العودة إلى كشوفات الرواتب"
+
+msgid "Back to reports"
+msgstr "العودة للتقارير"
+
+msgid "Backfill Journals"
+msgstr "ترحيل القيود للفترة"
+
+msgid "Backfill period"
+msgstr "إنشاء قيود الفترة"
+
+msgid "Backfill Result"
+msgstr "نتيجة الترحيل"
+
+msgid "Balance due"
+msgstr "المتبقي المستحق"
+
+msgid "Balance Sheet"
+msgstr "الميزانية"
+
+msgid "Balance sheet"
+msgstr "المركز المالي"
+
+msgid "Bank"
+msgstr "بنك"
+
+msgid "Bank Transfer"
+msgstr "تحويل بنكي"
+
+msgid "Base salary"
+msgstr "الراتب الأساسي"
+
+msgid "Basic"
+msgstr "أساسي"
+
+msgid "Branch"
+msgstr "الفرع"
+
+msgid "Branch Sales by Day"
+msgstr "مبيعات الفرع حسب اليوم"
+
+msgid "Branch Sales Report"
+msgstr "تقرير مبيعات الفرع"
+
+msgid "Branches"
+msgstr "الفروع"
+
+msgid "Bulk Import"
+msgstr "استيراد جماعي"
+
+msgid "Cancel"
+msgstr "إلغاء"
+
+msgid "Cash Calculator"
+msgstr "حاسبة الكاش"
+
+msgid "Category"
+msgstr "الفئة"
+
+msgid "Category Name"
+msgstr "اسم القسم"
+
+msgid "Change dates"
+msgstr "تغيير الفترة"
+
+msgid "Chart of accounts"
+msgstr "شجرة الحسابات"
+
+msgid "Check"
+msgstr "شيك"
+
+msgid "Cheque"
+msgstr "شيك"
+
+msgid "Choose a meal"
+msgstr "اختر وجبة"
+
+msgid "Choose branch"
+msgstr "اختر الفرع"
+
+msgid "Choose section to delete"
+msgstr "اختر قسماً للحذف"
+
+msgid "Clear"
+msgstr "مسح"
+
+msgid "Clear all orders"
+msgstr "مسح جميع الطلبات"
+
+msgid "Clear all orders? This cannot be undone."
+msgstr "مسح جميع الطلبات؟ لا يمكن التراجع."
+
+msgid "Clear Filters"
+msgstr "مسح الفلاتر"
+
+msgid "Clear Form"
+msgstr "مسح النموذج"
+
+msgid "Clear selection"
+msgstr "إلغاء التحديد"
+
+msgid "Code"
+msgstr "الرمز"
+
+msgid "COGS"
+msgstr "تكلفة البضاعة المباعة"
+
+msgid "Collect"
+msgstr "تحصيل"
+
+msgid "Company"
+msgstr "الشركة"
+
+msgid "Company Name"
+msgstr "اسم الشركة"
+
+msgid "Confirm"
+msgstr "تأكيد"
+
+msgid "Confirm full payment"
+msgstr "تأكيد دفع كامل"
+
+msgid "Confirm toggle status?"
+msgstr "تأكيد تغيير الحالة؟"
+
+msgid "Confirm toggle?"
+msgstr "تأكيد التبديل؟"
+
+msgid "Consumption Cost"
+msgstr "تكلفة الاستهلاك"
+
+msgid "Contact Person"
+msgstr "شخص التواصل"
+
+msgid "Contribution"
+msgstr "المساهمة"
+
+msgid "Cost"
+msgstr "التكلفة"
+
+msgid "cost based on latest recipe prices"
+msgstr "التكلفة حسب آخر أسعار المكونات"
+
+msgid "Cost may vary due to outdated ingredient prices"
+msgstr "قد تختلف التكلفة بسبب أسعار قديمة"
+
+msgid "Cost per Unit"
+msgstr "التكلفة لكل وحدة"
+
+msgid "Cost Summary"
+msgstr "ملخص التكاليف"
+
+msgid "Count"
+msgstr "العدد"
+
+msgid "CR"
+msgstr "السجل"
+
+msgid "CR Number"
+msgstr "السجل التجاري"
+
+msgid "Create a new customer record"
+msgstr "إنشاء سجل عميل جديد"
+
+msgid "Create and manage purchase invoices"
+msgstr "إنشاء وإدارة فواتير الشراء"
+
+msgid "Create and manage sales invoices"
+msgstr "إنشاء وإدارة فواتير المبيعات"
+
+msgid "Create Meals"
+msgstr "إنشاء الوجبات"
+
+msgid "Create New Invoice"
+msgstr "إنشاء فاتورة جديدة"
+
+msgid "Create New Meal"
+msgstr "إنشاء وجبة جديدة"
+
+msgid "Create New Purchase Invoice"
+msgstr "إنشاء فاتورة شراء جديدة"
+
+msgid "Create your first invoice to get started"
+msgstr "أنشئ أول فاتورة للبدء"
+
+msgid "Created journal entries"
+msgstr "قيود منشأة"
+
+msgid "Credit"
+msgstr "آجل"
+
+msgid "Credit customer statement (invoices and payments)"
+msgstr "كشف حساب عميل آجل (فواتير مبيعات وسداد)"
+
+msgid "Current Qty"
+msgstr "الكمية الحالية"
+
+msgid "Currently, you can only edit basic invoice information. Item editing will be available in a future update."
+msgstr "حالياً، يمكنك تعديل معلومات الفاتورة الأساسية فقط. تعديل العناصر سيكون متاحاً في تحديث مستقبلي."
+
+msgid "Customer added"
+msgstr "تم إضافة العميل"
+
+msgid "Customer data"
+msgstr "بيانات العميل"
+
+msgid "Customer Details"
+msgstr "تفاصيل العميل"
+
+msgid "Customer Discount %"
+msgstr "نسبة خصم العميل"
+
+msgid "Customer name"
+msgstr "اسم العميل"
+
+msgid "Customer Statement"
+msgstr "كشف حساب عميل"
+
+msgid "Customers"
+msgstr "العملاء"
+
+msgid "customers"
+msgstr "عملاء"
+
+msgid "Customers List"
+msgstr "قائمة العملاء"
+
+msgid "Daily summary date"
+msgstr "ملخص يومي للتاريخ"
+
+msgid "Daily totals"
+msgstr "الإجماليات اليومية"
+
+msgid "Dark"
+msgstr "ليلي"
+
+msgid "Dashboard"
+msgstr "الرئيسية"
+
+msgid "Date"
+msgstr "التاريخ"
+
+msgid "Date Range"
+msgstr "نطاق التاريخ"
+
+msgid "Day"
+msgstr "اليوم"
+
+msgid "Debt"
+msgstr "الدين"
+
+msgid "Debtors due"
+msgstr "مستحقات المدينين"
+
+msgid "Deductions"
+msgstr "استقطاعات"
+
+msgid "Default theme"
+msgstr "سمة الواجهة الافتراضية"
+
+#, python-format
+msgid "Default VAT rate (%%)"
+msgstr "نسبة VAT الافتراضية"
+
+msgid "Delete"
+msgstr "حذف"
+
+msgid "Delete Invoices"
+msgstr "حذف الفواتير"
+
+msgid "Delete Section"
+msgstr "حذف قسم"
+
+msgid "Delete selected invoices? This cannot be undone."
+msgstr "حذف الفواتير المحددة؟ لا يمكن التراجع."
+
+msgid "Delete this customer?"
+msgstr "حذف هذا العميل؟"
+
+msgid "Delete this employee?"
+msgstr "حذف هذا الموظف؟"
+
+msgid "Delete this expense invoice?"
+msgstr "حذف فاتورة المصروفات هذه؟"
+
+msgid "Delete this section?"
+msgstr "حذف هذا القسم؟"
+
+msgid "Delete this supplier?"
+msgstr "حذف هذا المورد؟"
+
+msgid "Department"
+msgstr "القسم"
+
+msgid "Description"
+msgstr "الوصف"
+
+msgid "Detailed View"
+msgstr "العرض التفصيلي"
+
+msgid "Details"
+msgstr "تفاصيل"
+
+#, python-format
+msgid "Discount %%"
+msgstr "الخصم %%"
+
+msgid "Discounts"
+msgstr "الخصومات"
+
+msgid "Download"
+msgstr "تنزيل"
+
+msgid "Due"
+msgstr "مستحق"
+
+msgid "Dynamic Stock Analysis"
+msgstr "تحليل المخزون الديناميكي"
+
+msgid "e.g., Office rent, Electricity bill"
+msgstr "مثل: إيجار المكتب، فاتورة الكهرباء"
+
+msgid "Edit"
+msgstr "تعديل"
+
+msgid "Edit Customer"
+msgstr "تعديل عميل"
+
+msgid "Edit Expense Invoice"
+msgstr "تعديل فاتورة المصروفات"
+
+msgid "Edit Invoice Details"
+msgstr "تعديل تفاصيل الفاتورة"
+
+msgid "Edit Supplier"
+msgstr "تعديل المورد"
+
+msgid "Edit this expense invoice?"
+msgstr "تعديل فاتورة المصروفات هذه؟"
+
+msgid "Email"
+msgstr "البريد"
+
+msgid "Employee"
+msgstr "الموظف"
+
+msgid "Employee name"
+msgstr "اسم الموظف"
+
+msgid "Employees"
+msgstr "الموظفين"
+
+msgid "Employees list"
+msgstr "قائمة الموظفين"
+
+msgid "End Date"
+msgstr "تاريخ النهاية"
+
+msgid "Enter Amount"
+msgstr "ادخال مبلغ"
+
+msgid "Enter amount to pay"
+msgstr "ادخل مبلغ الدفع"
+
+msgid "Enter date and amount"
+msgstr "أدخل التاريخ والمبلغ"
+
+msgid "Enter last 4 digits"
+msgstr "أدخل آخر 4 أرقام"
+
+msgid "Enter Quantities"
+msgstr "ادخال الكميات"
+
+msgid "Entry No."
+msgstr "قيد رقم"
+
+msgid "Error deleting invoice"
+msgstr "خطأ في حذف الفاتورة"
+
+msgid "Error — Payroll Statement"
+msgstr "خطأ — كشف رواتب"
+
+msgid "Estimated Meal Cost"
+msgstr "تكلفة الإنتاج التقديرية"
+
+msgid "Estimated Usage"
+msgstr "الاستهلاك التقديري"
+
+msgid "Excel file with customer data"
+msgstr "ملف Excel يحتوي على بيانات العملاء"
+
+msgid "Expected Stock"
+msgstr "المخزون المتوقع"
+
+msgid "Expense Details"
+msgstr "تفاصيل المصروف"
+
+msgid "Expense Invoice"
+msgstr "فاتورة مصروفات"
+
+msgid "Expense Invoice Details"
+msgstr "تفاصيل فاتورة المصروفات"
+
+msgid "Expense Invoices"
+msgstr "سجل المصروفات"
+
+msgid "Expense Items"
+msgstr "بنود المصروفات"
+
+msgid "Expense list"
+msgstr "قائمة المصروفات"
+
+msgid "Expense No."
+msgstr "رقم المصروف"
+
+msgid "Expenses"
+msgstr "المصروفات"
+
+msgid "Expenses (invoice + journal)"
+msgstr "مصروفات (فاتورة + قيد)"
+
+msgid "Expenses (Itemized)"
+msgstr "مصروفات مفصلة"
+
+msgid "Export"
+msgstr "تصدير"
+
+msgid "Export CSV"
+msgstr "تصدير"
+
+msgid "Extra"
+msgstr "إضافي"
+
+msgid "Failed to load"
+msgstr "فشل التحميل"
+
+msgid "Failed to load payroll statement"
+msgstr "فشل تحميل كشف الرواتب"
+
+msgid "Filter"
+msgstr "تصفية"
+
+msgid "Filter and view order invoices"
+msgstr "تصفية وعرض فواتير الطلبات"
+
+msgid "Filter, pay and track invoices"
+msgstr "تصفية ودفع ومتابعة الفواتير"
+
+msgid "Filters"
+msgstr "فلاتر البحث"
+
+msgid "Filters & actions"
+msgstr "الفلاتر والإجراءات"
+
+msgid "Final Total"
+msgstr "الإجمالي النهائي"
+
+msgid "Financial Control Center"
+msgstr "مركز القوائم المالية"
+
+msgid "Financial Statements"
+msgstr "القوائم المالية"
+
+msgid "Financial Summary"
+msgstr "الملخص المالي"
+
+msgid "Food Materials"
+msgstr "مواد غذائية"
+
+msgid "Forgot Password?"
+msgstr "نسيت كلمة المرور؟"
+
+msgid "Format: name, phone, discount_percent"
+msgstr "التنسيق: الاسم، الهاتف، نسبة الخصم"
+
+msgid "From"
+msgstr "من"
+
+msgid "From date"
+msgstr "من تاريخ"
+
+msgid "From month"
+msgstr "من شهر"
+
+msgid "From year"
+msgstr "من سنة"
+
+msgid "From – To"
+msgstr "من – إلى"
+
+msgid "Full name"
+msgstr "الاسم"
+
+msgid "Generated on"
+msgstr "تم الإنشاء في"
+
+msgid "Goes to Production"
+msgstr "تدخل الإنتاج"
+
+msgid "Grant"
+msgstr "منح"
+
+msgid "Grant advance"
+msgstr "منح سلفة"
+
+msgid "Granted"
+msgstr "مُنح"
+
+msgid "Granted."
+msgstr "تمت المنح."
+
+msgid "Gross Profit"
+msgstr "الربح الإجمالي"
+
+msgid "Hide"
+msgstr "إخفاء"
+
+msgid "Hide Items"
+msgstr "إخفاء العناصر"
+
+msgid "Hire date"
+msgstr "تاريخ التعيين"
+
+msgid "IBAN"
+msgstr "الآيبان"
+
+msgid "Import"
+msgstr "استيراد"
+
+msgid "Import CSV"
+msgstr "استيراد CSV"
+
+msgid "Import Excel"
+msgstr "استيراد Excel"
+
+msgid "Import Meals"
+msgstr "استيراد الوجبات"
+
+msgid "Inactive"
+msgstr "غير نشط"
+
+msgid "Incentive"
+msgstr "حافز"
+
+msgid "Income Statement"
+msgstr "قائمة الدخل"
+
+msgid "Ingredient"
+msgstr "المكون"
+
+msgid "Ingredient Category"
+msgstr "فئة المكون"
+
+msgid "Ingredient Purchases (This Month)"
+msgstr "مشتريات هذا الشهر"
+
+msgid "Ingredients"
+msgstr "المكونات"
+
+msgid "ingredients"
+msgstr "مكونات"
+
+msgid "Initial Stock"
+msgstr "المخزون الابتدائي"
+
+msgid "Input VAT"
+msgstr "ضريبة المدخلات"
+
+msgid "Invalid amount"
+msgstr "مبلغ غير صالح"
+
+msgid "Invalid OTP format (6 digits)"
+msgstr "رمز التحقق غير صحيح"
+
+msgid "Inventory"
+msgstr "المخزون"
+
+msgid "Inventory & Cost Management"
+msgstr "المخزون وإدارة التكاليف"
+
+msgid "Inventory & Production Cost Intelligence"
+msgstr "ذكاء المخزون وتكلفة الإنتاج"
+
+msgid "Inventory Kind"
+msgstr "نوع المخزون"
+
+msgid "Invoice info"
+msgstr "بيانات الفاتورة"
+
+msgid "Invoice Info"
+msgstr "بيانات الفاتورة"
+
+msgid "Invoice Information"
+msgstr "معلومات الفاتورة"
+
+msgid "Invoice Items"
+msgstr "بنود الفاتورة"
+
+msgid "Invoice No"
+msgstr "رقم الفاتورة"
+
+msgid "Invoice No."
+msgstr "رقم الفاتورة"
+
+msgid "Invoice number cannot be changed"
+msgstr "لا يمكن تغيير رقم الفاتورة"
+
+msgid "Invoice Type"
+msgstr "نوع الفاتورة"
+
+msgid "invoices"
+msgstr "فواتير"
+
+msgid "Invoices"
+msgstr "الفواتير"
+
+msgid "Invoices list"
+msgstr "قائمة الفواتير"
+
+msgid "Issue date"
+msgstr "تاريخ الإصدار"
+
+msgid "Item"
+msgstr "الصنف"
+
+msgid "items"
+msgstr "عناصر"
+
+msgid "Items Count"
+msgstr "عدد العناصر"
+
+msgid "Items summary"
+msgstr "ملخص الأصناف"
+
+msgid "Journal Entries"
+msgstr "قيود اليومية"
+
+msgid "Journal entries created for the selected period"
+msgstr "تم إنشاء قيود اليومية للفترة المحددة"
+
+msgid "Journal Entries Print"
+msgstr "طباعة قيود اليومية"
+
+msgid "Journal Entry"
+msgstr "قيد يومية"
+
+msgid "Journal Entry Print"
+msgstr "طباعة قيد يومية"
+
+msgid "Journal filters"
+msgstr "فلاتر سجل القيود"
+
+msgid "Journal log"
+msgstr "سجل القيود"
+
+msgid "KPI Overview"
+msgstr "المؤشرات الرئيسية"
+
+msgid "KPIs, purchases summary, meal cost and sales analysis"
+msgstr "المؤشرات، ملخص المشتريات، تكلفة الوجبات وتحليل المبيعات"
+
+msgid "Leave empty = All. Select one or more employees."
+msgstr "لا تحدد = الكل. حدد موظفاً أو عدة موظفين."
+
+msgid "Liabilities"
+msgstr "الالتزامات"
+
+msgid "Light"
+msgstr "نهاري"
+
+msgid "List"
+msgstr "قائمة"
+
+msgid "live"
+msgstr "فوري"
+
+msgid "live margin"
+msgstr "هامش فوري"
+
+msgid "Load"
+msgstr "تحميل"
+
+msgid "Log"
+msgstr "سجل"
+
+msgid "Login"
+msgstr "تسجيل الدخول"
+
+msgid "Manage and search customers"
+msgstr "إدارة وبحث العملاء"
+
+msgid "Manage categories and menu items"
+msgstr "إدارة الأقسام وأصناف المنيو"
+
+msgid "Manage customers and contacts"
+msgstr "إدارة العملاء والجهات"
+
+msgid "Manage Meals"
+msgstr "إدارة الوجبات"
+
+msgid "Manage meals, ingredients and cost"
+msgstr "إدارة الوجبات والمكونات والتكلفة"
+
+msgid "Manage menu sections and items"
+msgstr "إدارة أقسام وعناصر المنيو"
+
+msgid "Manage raw materials and quantities"
+msgstr "إدارة المواد الخام والكميات"
+
+msgid "Manage sections, rows, and table numbers. Drag and drop freely, then save."
+msgstr "إدارة الأقسام والصفوف وأرقام الطاولات. اسحب وأفلت ثم احفظ."
+
+msgid "Manage supplier information"
+msgstr "إدارة معلومات الموردين"
+
+msgid "Manage suppliers and procurement"
+msgstr "إدارة الموردين والمشتريات"
+
+msgid "Manage tables and layout per branch"
+msgstr "إدارة الطاولات والتخطيط حسب الفرع"
+
+#, python-format
+msgid "Margin %%"
+msgstr "الهامش %%"
+
+msgid "Mark Sales Paid"
+msgstr "ترحيل مبيعات"
+
+msgid "Max is Final Total"
+msgstr "الحد الأقصى هو الإجمالي النهائي"
+
+msgid "Meal"
+msgstr "الوجبة"
+
+msgid "Meal Cost & Sales Analysis"
+msgstr "تحليل تكلفة الوجبات والمبيعات"
+
+msgid "Meal Ingredients"
+msgstr "مكونات الوجبة"
+
+msgid "Meal Name"
+msgstr "اسم الوجبة"
+
+msgid "Meals"
+msgstr "الوجبات"
+
+msgid "Meals are automatically loaded from Cost Management system with calculated prices"
+msgstr "الوجبات يتم تحميلها تلقائياً من نظام إدارة التكاليف مع الأسعار المحسوبة"
+
+msgid "Meals Management"
+msgstr "إدارة الوجبات"
+
+msgid "Meals Sold (This Month)"
+msgstr "الوجبات المباعة"
+
+msgid "Meals using ingredients with outdated cost data"
+msgstr "وجبات تحتوي مكونات بسعر قديم"
+
+msgid "Menu"
+msgstr "المنيو"
+
+msgid "Menu Management"
+msgstr "إدارة القائمة"
+
+msgid "Menu sections"
+msgstr "أقسام المنيو"
+
+msgid "Method"
+msgstr "الطريقة"
+
+msgid "Month"
+msgstr "الشهر"
+
+msgid "Movements"
+msgstr "حركات"
+
+msgid "Name"
+msgstr "الاسم"
+
+msgid "Name is required"
+msgstr "الاسم مطلوب"
+
+msgid "Name, Name (Arabic), Selling Price"
+msgstr "الاسم، الاسم بالعربية، سعر البيع"
+
+msgid "National ID"
+msgstr "الرقم الوطني"
+
+msgid "Net Profit"
+msgstr "صافي الربح"
+
+msgid "Net VAT"
+msgstr "الضريبة المستحقة"
+
+msgid "Net VAT Due"
+msgstr "صافي الضريبة المستحقة"
+
+msgid "Network error"
+msgstr "خطأ في الشبكة"
+
+msgid "New Customer"
+msgstr "عميل جديد"
+
+msgid "New entry"
+msgstr "قيد جديد"
+
+msgid "New section name"
+msgstr "اسم القسم الجديد"
+
+msgid "New Unit Cost"
+msgstr "التكلفة لكل وحدة (اختياري)"
+
+msgid "Next"
+msgstr "التالي"
+
+msgid "No branches found. Please contact the administrator."
+msgstr "لم يتم العثور على فروع. يرجى التواصل مع المسؤول."
+
+msgid "No categories"
+msgstr "لا توجد أقسام"
+
+msgid "No customers found"
+msgstr "لم يتم العثور على عملاء"
+
+msgid "No data"
+msgstr "لا توجد بيانات"
+
+msgid "No details"
+msgstr "لا توجد تفاصيل"
+
+msgid "No employees or payroll data for the selected period."
+msgstr "لا يوجد موظفون أو لا توجد بيانات رواتب للفترة المحددة."
+
+msgid "No employees yet"
+msgstr "لا يوجد موظفون بعد"
+
+msgid "No expense invoices yet"
+msgstr "لا توجد فواتير مصروفات بعد"
+
+msgid "No invoices in this period"
+msgstr "لا توجد فواتير في هذه الفترة"
+
+msgid "No items found"
+msgstr "لم يتم العثور على عناصر"
+
+msgid "No matching receipts"
+msgstr "لا توجد إيصالات مطابقة"
+
+msgid "No payments recorded"
+msgstr "لا توجد مدفوعات مسجلة"
+
+msgid "No raw materials found"
+msgstr "لا توجد مواد خام"
+
+msgid "No receipts"
+msgstr "لا توجد إيصالات"
+
+msgid "No sales invoices for this group"
+msgstr "لا توجد فواتير مبيعات لهذه المجموعة"
+
+msgid "No supplier invoices"
+msgstr "لا توجد فواتير للموردين"
+
+msgid "No suppliers found"
+msgstr "لم يتم العثور على موردين"
+
+msgid "None"
+msgstr "بدون"
+
+msgid "Note"
+msgstr "ملاحظة"
+
+msgid "Notes"
+msgstr "ملاحظات"
+
+msgid "Nothing to pay"
+msgstr "لا يوجد متبقي للدفع"
+
+msgid "of"
+msgstr "من"
+
+msgid "Open Tables"
+msgstr "فتح الطاولات"
+
+msgid "Open tables for the selected branch"
+msgstr "فتح الطاولات للفرع المحدد"
+
+msgid "Opening Balance"
+msgstr "رصيد افتتاحي"
+
+msgid "Opening Qty"
+msgstr "الكمية الافتتاحية"
+
+msgid "Operating Expenses"
+msgstr "المصروفات التشغيلية"
+
+msgid "Operations"
+msgstr "عمليات"
+
+msgid "Operations (journal only): no invoice. Expenses: invoice + journal."
+msgstr "عمليات (قيد فقط، لا فاتورة). مصروفات: فاتورة + قيد."
+
+msgid "Order Invoices"
+msgstr "فواتير الطلبات"
+
+msgid "Other Dues"
+msgstr "مستحقات أخرى"
+
+msgid "Other Supplies"
+msgstr "مستلزمات أخرى"
+
+msgid "Output VAT"
+msgstr "ضريبة المخرجات"
+
+msgid "Page"
+msgstr "صفحة"
+
+msgid "Paid"
+msgstr "مدفوع"
+
+msgid "Paid Amount (Partial)"
+msgstr "المبلغ المدفوع (جزئي)"
+
+msgid "Partial"
+msgstr "جزئي"
+
+msgid "Party"
+msgstr "الطرف"
+
+msgid "Password"
+msgstr "كلمة المرور"
+
+msgid "Password required"
+msgstr "كلمة السر مطلوبة"
+
+msgid "Pay"
+msgstr "دفع"
+
+msgid "Pay Full"
+msgstr "دفع كامل"
+
+msgid "Pay Supplier"
+msgstr "دفع للمورد"
+
+msgid "Payment"
+msgstr "الدفع"
+
+msgid "Payment method"
+msgstr "طريقة الدفع"
+
+msgid "Payment Method"
+msgstr "طريقة الدفع"
+
+msgid "Payment Status"
+msgstr "حالة الدفع"
+
+msgid "Payments"
+msgstr "المدفوعات"
+
+msgid "Payments & Receivables"
+msgstr "المدفوعات والمستحقات"
+
+msgid "Payments & Statements"
+msgstr "متابعة السداد"
+
+msgid "Payroll reports"
+msgstr "كشوفات رواتب"
+
+msgid "Payroll run"
+msgstr "مسير رواتب"
+
+msgid "Payroll Statement"
+msgstr "كشف رواتب"
+
+msgid "PDF"
+msgstr "ملف"
+
+msgid "Pending"
+msgstr "معلق"
+
+msgid "Per Page"
+msgstr "لكل صفحة"
+
+msgid "Period"
+msgstr "الفترة"
+
+msgid "Period & Branch"
+msgstr "الفترة والفرع"
+
+msgid "Period & view"
+msgstr "الفترة والعرض"
+
+msgid "Period summary and VAT totals"
+msgstr "ملخص الفترة ومجاميع الضريبة"
+
+msgid "Permissions"
+msgstr "الصلاحيات"
+
+msgid "Phone"
+msgstr "الهاتف"
+
+msgid "Phone number"
+msgstr "رقم الهاتف"
+
+msgid "Placeholder for branch sales report"
+msgstr "نموذج لتقرير مبيعات الفرع"
+
+msgid "Please check the selected period and employees, or review server logs."
+msgstr "يرجى التحقق من الفترة المحددة والموظفين، أو مراجعة سجلات الخادم."
+
+msgid "Please choose a section"
+msgstr "يرجى اختيار قسم"
+
+msgid "Please fill username and password"
+msgstr "يرجى إدخال اسم المستخدم وكلمة المرور"
+
+msgid "Please sign in"
+msgstr "الرجاء تسجيل الدخول"
+
+msgid "Prev"
+msgstr "السابق"
+
+msgid "Preview"
+msgstr "معاينة"
+
+msgid "Previous due"
+msgstr "مستحق سابق"
+
+msgid "Previous Invoices"
+msgstr "الفواتير السابقة"
+
+msgid "Previous Owner"
+msgstr "الالتزام تجاه المالك السابق"
+
+msgid "Price"
+msgstr "السعر"
+
+msgid "Price override"
+msgstr "سعر مخصص"
+
+msgid "Print"
+msgstr "طباعة"
+
+msgid "Print All"
+msgstr "طباعة الكل"
+
+msgid "Print daily summary"
+msgstr "طباعة ملخص اليوم"
+
+msgid "Print PDF"
+msgstr "طباعة PDF"
+
+msgid "Print Report"
+msgstr "تقرير طباعة"
+
+msgid "Products & Cost"
+msgstr "المنتجات والتكاليف"
+
+msgid "Profit"
+msgstr "الربح"
+
+msgid "Profit Margin"
+msgstr "هامش الربح"
+
+msgid "Profit/Loss"
+msgstr "صافي الربح/الخسارة"
+
+msgid "Purchase Invoices"
+msgstr "فواتير الشراء"
+
+msgid "Purchase Items"
+msgstr "بنود الشراء"
+
+msgid "Purchase Trend"
+msgstr "اتجاه المشتريات"
+
+msgid "Purchases"
+msgstr "المشتريات"
+
+msgid "Purchases for Production (NO VAT)"
+msgstr "مشتريات للإنتاج بدون ضريبة"
+
+msgid "Purchases Ledger"
+msgstr "سجل المشتريات"
+
+msgid "Purchases ledger and cost overview"
+msgstr "سجل المشتريات وملخص التكاليف"
+
+msgid "Purchases Qty"
+msgstr "كمية المشتريات"
+
+msgid "Purchases Summary"
+msgstr "ملخص المشتريات"
+
+msgid "Purchases Total"
+msgstr "إجمالي المشتريات"
+
+msgid "Purchases ➖ Estimated Usage"
+msgstr "المشتريات ➖ الاستهلاك التقديري"
+
+msgid "Qty"
+msgstr "الكمية"
+
+msgid "Quantity"
+msgstr "الكمية"
+
+msgid "Quarter"
+msgstr "الربع"
+
+msgid "Quick access to Sales, Purchases, Invoices, Inventory, Reports and Settings"
+msgstr "الوصول السريع للمبيعات، المشتريات، الفواتير، المخزون، التقارير والإعدادات"
+
+msgid "Quick Proof"
+msgstr "إثبات مصروف سريع"
+
+msgid "Raw Materials"
+msgstr "المواد الخام"
+
+msgid "Read-only"
+msgstr "للقراءة فقط"
+
+msgid "Recalculate"
+msgstr "إعادة حساب"
+
+msgid "Receipt Archive"
+msgstr "أرشيف الإيصالات"
+
+msgid "Receivables & Statements"
+msgstr "متابعة المستحقات والكشوفات"
+
+msgid "Remaining"
+msgstr "متبقي"
+
+msgid "Remaining Due"
+msgstr "المتبقي للدفع"
+
+msgid "Remember Me"
+msgstr "تذكرني"
+
+msgid "Remove item?"
+msgstr "حذف العنصر؟"
+
+msgid "Repaid"
+msgstr "مُستَرَد"
+
+msgid "Repay"
+msgstr "استرجاع"
+
+msgid "Repay advance"
+msgstr "استرجاع سلفة"
+
+msgid "Reports"
+msgstr "التقارير"
+
+msgid "Required columns"
+msgstr "الأعمدة المطلوبة"
+
+msgid "Reset"
+msgstr "إعادة تعيين"
+
+msgid "Results"
+msgstr "النتائج"
+
+msgid "Revenue"
+msgstr "الإيراد"
+
+msgid "Risk"
+msgstr "المخاطر"
+
+msgid "Ok"
+msgstr "عادي"
+
+msgid "Low"
+msgstr "منخفض"
+
+msgid "Excess"
+msgstr "فائض"
+
+msgid "Run backfill for journal entries in the selected period"
+msgstr "تنفيذ ترحيل القيود للفترة المحددة"
+
+msgid "Salaries"
+msgstr "رواتب"
+
+msgid "Sales (Before VAT)"
+msgstr "المبيعات قبل الضريبة"
+
+msgid "Sales Count"
+msgstr "عدد المبيعات"
+
+msgid "Sales Debtors"
+msgstr "مدينون من المبيعات"
+
+msgid "Sales, purchases, expenses"
+msgstr "مبيعات، مشتريات، مصروفات"
+
+msgid "Sales, purchases, expenses, VAT and profit by period and branch"
+msgstr "المبيعات، المشتريات، المصروفات، الضريبة والربح حسب الفترة والفرع"
+
+msgid "Save"
+msgstr "حفظ"
+
+msgid "Save Changes"
+msgstr "حفظ التغييرات"
+
+msgid "Save Layout"
+msgstr "حفظ التخطيط"
+
+msgid "Scope"
+msgstr "النطاق"
+
+msgid "Search"
+msgstr "بحث"
+
+msgid "Search and download receipts"
+msgstr "البحث وتنزيل الإيصالات"
+
+msgid "Search and manage suppliers"
+msgstr "البحث وإدارة الموردين"
+
+msgid "Search by last 4 digits of invoice number"
+msgstr "البحث بآخر 4 أرقام من رقم الفاتورة"
+
+msgid "Search by name or phone"
+msgstr "ابحث بالاسم أو الهاتف"
+
+msgid "Search receipts using the last 4 digits of the invoice number"
+msgstr "يتم البحث في الإيصالات باستخدام آخر 4 أرقام من رقم الفاتورة"
+
+msgid "Search suppliers"
+msgstr "ابحث عن موردين"
+
+msgid "Search..."
+msgstr "بحث..."
+
+msgid "Select"
+msgstr "اختر"
+
+msgid "Select a customer"
+msgstr "اختر عميلاً"
+
+msgid "Select a supplier"
+msgstr "اختر مورداً"
+
+msgid "Select Account"
+msgstr "اختر الحساب"
+
+msgid "Select all"
+msgstr "تحديد الكل"
+
+msgid "Select Branch"
+msgstr "اختر الفرع"
+
+msgid "Select Category"
+msgstr "اختر الفئة"
+
+msgid "Select customer"
+msgstr "اختر العميل"
+
+msgid "Select employee and amount."
+msgstr "اختر الموظف والمبلغ."
+
+msgid "Select File"
+msgstr "اختر الملف"
+
+msgid "Select Ingredient"
+msgstr "اختر المكون"
+
+msgid "Select Meal"
+msgstr "اختر الوجبة"
+
+msgid "Select Raw Material"
+msgstr "اختر المادة الخام"
+
+msgid "Select Supplier"
+msgstr "اختر المورد"
+
+msgid "Select supplier"
+msgstr "اختر المورد"
+
+msgid "Selected only"
+msgstr "المحدد فقط"
+
+msgid "Selling Price"
+msgstr "سعر البيع"
+
+msgid "Settings"
+msgstr "الإعدادات"
+
+msgid "Show"
+msgstr "عرض"
+
+msgid "Show Items"
+msgstr "عرض العناصر"
+
+msgid "Showing"
+msgstr "المعروض"
+
+msgid "Sign Up"
+msgstr "تسجيل حساب"
+
+msgid "Signature"
+msgstr "التوقيع"
+
+msgid "Single month"
+msgstr "شهر واحد"
+
+msgid "Start Date"
+msgstr "تاريخ البداية"
+
+msgid "Statement"
+msgstr "كشف حساب"
+
+msgid "Statement lines"
+msgstr "حركات الكشف"
+
+msgid "Status"
+msgstr "الحالة"
+
+msgid "Summary"
+msgstr "الملخص"
+
+msgid "Supplier"
+msgstr "المورد"
+
+msgid "Supplier details"
+msgstr "بيانات المورد"
+
+msgid "Supplier Details"
+msgstr "تفاصيل المورد"
+
+msgid "Supplier groups"
+msgstr "مجموعات الموردين"
+
+msgid "Supplier Info"
+msgstr "بيانات المورد"
+
+msgid "Supplier Invoice No"
+msgstr "رقم فاتورة المورد"
+
+msgid "Supplier Payments & Statements"
+msgstr "متابعة سداد الموردين"
+
+msgid "Supplier Statement"
+msgstr "كشف حساب مورد"
+
+msgid "Suppliers"
+msgstr "الموردون"
+
+msgid "suppliers"
+msgstr "موردين"
+
+msgid "Suppliers (Creditors)"
+msgstr "الموردون (دائنون)"
+
+msgid "Suppliers Due"
+msgstr "مستحقات الموردين"
+
+msgid "Suppliers List"
+msgstr "قائمة الموردين"
+
+msgid "Supported formats: Excel (.xlsx, .xls), CSV"
+msgstr "الصيغ المدعومة: إكسل، CSV"
+
+msgid "Supported: Excel (.xlsx, .xls), CSV"
+msgstr "الصيغ المدعومة: إكسل، CSV"
+
+msgid "Table Manager"
+msgstr "إدارة الطاولات"
+
+msgid "Table Settings"
+msgstr "الطاولات"
+
+msgid "Tax Number"
+msgstr "الرقم الضريبي"
+
+msgid "Tax number"
+msgstr "الرقم الضريبي"
+
+msgid "The system could not generate the statement. Technical details:"
+msgstr "لم يتمكن النظام من إنشاء الكشف. التفاصيل التقنية:"
+
+msgid "This action is irreversible. Related items and payments will be deleted as well."
+msgstr "هذا الإجراء لا يمكن التراجع عنه وسيتم حذف العناصر والمدفوعات المرتبطة أيضاً"
+
+msgid "This is a minimal placeholder for smoke tests."
+msgstr "نموذج بسيط لاختبارات الدخان."
+
+msgid "Tip"
+msgstr "نصيحة"
+
+msgid "to"
+msgstr "إلى"
+
+msgid "To"
+msgstr "إلى"
+
+msgid "To date"
+msgstr "إلى تاريخ"
+
+msgid "To month"
+msgstr "إلى شهر"
+
+msgid "To year"
+msgstr "إلى سنة"
+
+msgid "Toggle"
+msgstr "تبديل"
+
+msgid "Toggle Status"
+msgstr "تبديل الحالة"
+
+msgid "Total Amount"
+msgstr "المبلغ الإجمالي"
+
+msgid "Total cannot be changed here"
+msgstr "لا يمكن تغيير الإجمالي هنا"
+
+msgid "Total Cost"
+msgstr "إجمالي التكلفة"
+
+msgid "Total Customers"
+msgstr "إجمالي العملاء"
+
+msgid "Total debt"
+msgstr "إجمالي الديون"
+
+msgid "Total Inventory Cost"
+msgstr "إجمالي تكلفة المخزون"
+
+msgid "Total Materials"
+msgstr "إجمالي المواد"
+
+msgid "Total paid"
+msgstr "إجمالي المدفوع"
+
+msgid "Total Profit"
+msgstr "إجمالي الربح"
+
+msgid "Total Profit (Sales - Prod Cost)"
+msgstr "إجمالي الربح"
+
+msgid "Total qty"
+msgstr "إجمالي الكمية"
+
+msgid "Total remaining"
+msgstr "إجمالي المتبقي"
+
+msgid "Total Suppliers"
+msgstr "إجمالي الموردين"
+
+msgid "Track payments and print detailed supplier statements"
+msgstr "متابعة السداد وطباعة الكشوفات التفصيلية"
+
+msgid "Track receivables and print customer statements"
+msgstr "متابعة مستحقات العملاء الآجلين وطباعة الكشوفات"
+
+msgid "trend"
+msgstr "الاتجاه"
+
+msgid "Trial Balance"
+msgstr "ميزان المراجعة"
+
+msgid "Trial balance"
+msgstr "ميزان المراجعة"
+
+msgid "Try different search terms"
+msgstr "جرب مصطلحات بحث مختلفة"
+
+msgid "Type"
+msgstr "النوع"
+
+msgid "unit"
+msgstr "وحدة"
+
+msgid "Unit"
+msgstr "الوحدة"
+
+msgid "Unit Price"
+msgstr "سعر الوحدة"
+
+msgid "Unpaid"
+msgstr "غير مدفوع"
+
+msgid "Unpaid dues"
+msgstr "مستحقات غير مدفوعة"
+
+msgid "Update"
+msgstr "تحديث"
+
+msgid "Update Quantities"
+msgstr "تحديث الكميات"
+
+msgid "Update supplier details"
+msgstr "تحديث بيانات المورد"
+
+msgid "Username"
+msgstr "اسم المستخدم"
+
+msgid "Users"
+msgstr "المستخدمون"
+
+msgid "Users list"
+msgstr "قائمة المستخدمين"
+
+msgid "VAT"
+msgstr "ضريبة القيمة المضافة"
+
+msgid "VAT Dashboard"
+msgstr "لوحة الضريبة"
+
+msgid "VAT Input"
+msgstr "ضريبة المدخلات"
+
+msgid "VAT Output"
+msgstr "ضريبة المخرجات"
+
+msgid "VAT Return"
+msgstr "الإقرار الضريبي"
+
+msgid "VAT Summary"
+msgstr "ملخص الضريبة"
+
+msgid "VAT Total"
+msgstr "إجمالي الضريبة"
+
+msgid "View"
+msgstr "عرض"
+
+msgid "View account balances by period and open statements"
+msgstr "عرض أرصدة الحسابات حسب الفترة وفتح الكشوفات"
+
+msgid "View Accounts"
+msgstr "عرض الحسابات"
+
+msgid "View all invoices by branch"
+msgstr "عرض كل الفواتير حسب الفرع"
+
+msgid "View and export all expense records"
+msgstr "عرض وتصدير سجل المصروفات"
+
+msgid "View and print invoice"
+msgstr "عرض وطباعة الفاتورة"
+
+msgid "View daily sales by branch and month"
+msgstr "عرض المبيعات اليومية حسب الفرع والشهر"
+
+msgid "View running balance by period"
+msgstr "عرض الرصيد الجاري حسب الفترة"
+
+msgid "vs last period"
+msgstr "مقارنة بالفترة السابقة"
+
+msgid "Year"
+msgstr "السنة"
+
+msgid "Total sales before VAT"
+msgstr "إجمالي المبيعات قبل الضريبة"
+
+msgid "Total purchases before VAT"
+msgstr "إجمالي المشتريات قبل الضريبة"
+
+msgid "Total expenses before VAT"
+msgstr "إجمالي المصروفات قبل الضريبة"
+
+msgid "Journals Reconciliation"
+msgstr "المصالحة مع القيود"
+
+msgid "Prepared by system"
+msgstr "تم الإعداد بواسطة النظام"
+
+msgid "Print date"
+msgstr "تاريخ الطباعة"
+
+msgid "Period type"
+msgstr "نوع الفترة"
+
+msgid "Quarterly"
+msgstr "ربع سنوي"
+
+msgid "Monthly"
+msgstr "شهري"
+
+msgid "Q1 (Jan–Mar)"
+msgstr "الربع 1 (يناير - مارس)"
+
+msgid "Q2 (Apr–Jun)"
+msgstr "الربع 2 (أبريل - يونيو)"
+
+msgid "Q3 (Jul–Sep)"
+msgstr "الربع 3 (يوليو - سبتمبر)"
+
+msgid "Q4 (Oct–Dec)"
+msgstr "الربع 4 (أكتوبر - ديسمبر)"
+
+msgid "Outputs (Sales)"
+msgstr "المخرجات (مبيعات)"
+
+msgid "Inputs (Purchases & Expenses)"
+msgstr "المدخلات (مشتريات ومصروفات)"
+
+msgid "Declaration & Summary"
+msgstr "الإقرار والملخص"
+
+msgid "Refund balance"
+msgstr "رصيد مسترد"
+
+msgid "Enter notes — do not change numbers"
+msgstr "أدخل ملاحظات — لا تغيير للأرقام"
+
+msgid "Purchases & Expenses"
+msgstr "المشتريات والمصروفات"
+
+msgid "Amount (excl. VAT)"
+msgstr "المبلغ (بدون ض.ق.م)"
+
+msgid "Total (incl. VAT)"
+msgstr "الإجمالي (شامل ض.ق.م)"
+
+msgid "Standard Rated (15%)"
+msgstr "معيار 15%"
+
+msgid "Zero Rated"
+msgstr "صفر"
+
+msgid "Exempt"
+msgstr "معفى"
+
+msgid "Exports"
+msgstr "صادرات"
+
+msgid "Deductible Purchases"
+msgstr "مشتريات قابلة للخصم"
+
+msgid "Deductible Expenses"
+msgstr "مصروفات قابلة للخصم"
+
+msgid "Non-deductible Purchases"
+msgstr "مشتريات غير قابلة للخصم"
+
+msgid "Non-deductible Expenses"
+msgstr "مصروفات غير قابلة للخصم"
+
+msgid "Executive summary and P&L"
+msgstr "ملخص تنفيذي وقائمة ربحية وخسارة"
+
+msgid "Today"
+msgstr "اليوم"
+
+msgid "This week"
+msgstr "هذا الأسبوع"
+
+msgid "This month"
+msgstr "هذا الشهر"
+
+msgid "This year"
+msgstr "هذه السنة"
+
+msgid "Custom"
+msgstr "مخصص"
+
+msgid "Detailed view"
+msgstr "عرض تفصيلي"
+
+msgid "No data for the selected period."
+msgstr "لا توجد بيانات ضمن الفترة المحددة."
+
+msgid "Total revenue"
+msgstr "إجمالي الإيرادات"
+
+msgid "Cost of sales"
+msgstr "تكلفة المبيعات"
+
+msgid "Gross profit"
+msgstr "مجمل الربح"
+
+msgid "Net profit"
+msgstr "صافي الربح"
+
+msgid "Total cost of sales"
+msgstr "إجمالي تكلفة المبيعات"
+
+msgid "Operating expenses"
+msgstr "المصروفات التشغيلية"
+
+msgid "Total operating expenses"
+msgstr "إجمالي المصروفات التشغيلية"
+
+msgid "Operating profit"
+msgstr "الربح التشغيلي"
+
+msgid "Other income & expenses"
+msgstr "إيرادات ومصروفات أخرى"
+
+msgid "Other income"
+msgstr "إيرادات أخرى"
+
+msgid "Other expenses"
+msgstr "مصروفات أخرى"
+
+msgid "VAT is not part of income statement; see analytical details below."
+msgstr "ضريبة القيمة المضافة لا تدخل في قائمة الدخل؛ انظر تفاصيل تحليلية أدناه."
+
+msgid "Analytical details"
+msgstr "تفاصيل تحليلية"
+
+msgid "Expand"
+msgstr "توسيع"
+
+msgid "COGS Breakdown"
+msgstr "تفصيل تكلفة المبيعات"
+
+msgid "Opening stock"
+msgstr "مخزون بداية الفترة"
+
+msgid "Period purchases"
+msgstr "مشتريات الفترة"
+
+msgid "Closing stock"
+msgstr "مخزون نهاية الفترة"
+
+msgid "Material waste"
+msgstr "هدر المواد"
+
+msgid "Computed"
+msgstr "المُحتسب"
+
+msgid "From journals"
+msgstr "من القيود"
+
+msgid "Used"
+msgstr "المعتمد"
+
+msgid "Sales by Branch"
+msgstr "المبيعات حسب الفرع"
+
+msgid "As of"
+msgstr "حتى"
+
+msgid "As of date"
+msgstr "حتى تاريخ"
+
+msgid "Warning: Trial balance is not balanced"
+msgstr "تحذير: الميزان غير متوازن"
+
+msgid "diff"
+msgstr "الفرق"
+
+msgid "Trial balance — accounts with movement only (expandable)"
+msgstr "ميزان المراجعة — حسابات ذات حركة فقط (قابلة للتوسيع)"
+
+msgid "Totals by Type"
+msgstr "تفصيل حسب النوع"
+
+msgid "No accounts with movement."
+msgstr "لا توجد حسابات ذات حركة."
+
+msgid "accounts"
+msgstr "حساب"
+
+msgid "Export PDF"
+msgstr "تصدير PDF"
+
+msgid "Export Excel"
+msgstr "تصدير Excel"
+
+msgid "Assets"
+msgstr "الأصول"
+
+msgid "Equity"
+msgstr "حقوق الملكية"
+
+msgid "Current assets"
+msgstr "أصول متداولة"
+
+msgid "Non-current assets"
+msgstr "أصول غير متداولة"
+
+msgid "No movements in this period."
+msgstr "لا توجد حركات في هذه الفترة."
+
+msgid "This screen is for viewing, filtering and printing only. No payments or deletions are performed here."
+msgstr "هذه الشاشة للعرض والفلترة والطباعة فقط. لا يتم تنفيذ أي دفعات أو حذف هنا."
+
+msgid "Sales Invoices (Itemized, grouped by Branch)"
+msgstr "فواتير المبيعات (مفصلة، مجمعة حسب الفرع)"
+
+msgid "Purchase Invoices (Itemized)"
+msgstr "فواتير المشتريات (مفصلة)"
+
+msgid "Export Detailed CSV"
+msgstr "تصدير CSV مفصل"
+
+# Reports hub and print templates — full language switch
+msgid "Reports"
+msgstr "التقارير"
+
+msgid "View and print sales, expenses, purchases, payroll and financial reports"
+msgstr "معاينة وطباعة تقارير المبيعات، المصروفات، المشتريات، الموظفين، والمالية"
+
+msgid "Home"
+msgstr "الرئيسية"
+
+msgid "Sales Report"
+msgstr "تقرير المبيعات"
+
+msgid "View and print sales report by period and branch."
+msgstr "معاينة وطباعة تقرير المبيعات بالفترة والفرع."
+
+msgid "View"
+msgstr "معاينة"
+
+msgid "Expenses Report"
+msgstr "تقرير المصروفات"
+
+msgid "Expenses report with filters for accounts to include in print."
+msgstr "تقرير مصروفات مع فلاتر للحسابات المطلوب تضمينها تفصيلياً عند الطباعة."
+
+msgid "Purchases Report"
+msgstr "تقرير المشتريات"
+
+msgid "Detailed purchase invoices and suppliers data."
+msgstr "بيانات تفصيلية عن فواتير المشتريات والموردين."
+
+msgid "Branch Sales by Day"
+msgstr "مبيعات الفرع حسب اليوم"
+
+msgid "Daily sales by branch and month with print option."
+msgstr "عرض المبيعات اليومية حسب الفرع والشهر مع إمكانية الطباعة."
+
+msgid "Employees Report"
+msgstr "تقرير الموظفين"
+
+msgid "Paid and due amounts, months due, and totals."
+msgstr "المدفوع والمستحق على المطعم، أشهر الاستحقاق، والإجماليات."
+
+msgid "Trial Balance"
+msgstr "ميزان المراجعة"
+
+msgid "Trial balance as of a given date."
+msgstr "ميزان مراجعة حتى تاريخ محدد."
+
+msgid "Cash Flow"
+msgstr "التدفقات النقدية"
+
+msgid "Cash flow report for the period."
+msgstr "تقرير التدفقات النقدية للفترة."
+
+msgid "Balance Sheet"
+msgstr "المركز المالي"
+
+msgid "Statement of financial position as of date."
+msgstr "قائمة المركز المالي حتى تاريخ."
+
+msgid "Income Statement"
+msgstr "قائمة الدخل"
+
+msgid "Income statement for the period."
+msgstr "قائمة الدخل للفترة."
+
+msgid "Financial Report"
+msgstr "تقرير مالي"
+
+msgid "Back to cards"
+msgstr "العودة للبطاقات"
+
+msgid "Tax number"
+msgstr "الرقم الضريبي"
+
+msgid "Phone"
+msgstr "هاتف"
+
+msgid "Email"
+msgstr "بريد"
+
+msgid "Restaurant"
+msgstr "مطعم"
+
+msgid "From"
+msgstr "من"
+
+msgid "To"
+msgstr "إلى"
+
+msgid "All"
+msgstr "الكل"
+
+msgid "Sales day: 10 AM → 2 AM next day."
+msgstr "يوم المبيعات: 10 صباحاً → 2 صباحاً اليوم التالي."
+
+msgid "Back to reports"
+msgstr "العودة للتقارير"
+
+msgid "Total Cash"
+msgstr "إجمالي الكاش"
+
+msgid "Total Card"
+msgstr "إجمالي البطاقة"
+
+msgid "Invoices count"
+msgstr "عدد الفواتير"
+
+msgid "Total before tax"
+msgstr "إجمالي قبل الضريبة"
+
+msgid "Discount granted"
+msgstr "الخصم الممنوح"
+
+msgid "Total (after VAT)"
+msgstr "الإجمالي (بعد ض.خ.م)"
+
+msgid "Payment method"
+msgstr "طريقة الدفع"
+
+msgid "No data for the selected period."
+msgstr "لا توجد بيانات للفترة المحددة."
+
+msgid "Range"
+msgstr "النطاق"
+
+msgid "Printed"
+msgstr "طباعة"
+
+msgid "PM"
+msgstr "طريقة الدفع"
+
+msgid "Branch Totals"
+msgstr "إجماليات الفرع"
+
+msgid "Overall Totals"
+msgstr "الإجمالي الكلي"
+
+msgid "Payment Method Totals"
+msgstr "إجمالي حسب طريقة الدفع"
+
+msgid "Method"
+msgstr "الطريقة"
+
+msgid "Dashboard"
+msgstr "لوحة التحكم"
+
+msgid "Total Expenses"
+msgstr "إجمالي المصروفات"
+
+msgid "Expense No."
+msgstr "رقم المصروف"
+
+msgid "Description"
+msgstr "الوصف"
+
+msgid "View and print expenses report by period and branch"
+msgstr "معاينة وطباعة تقرير المصروفات بالفترة والفرع"
+
+msgid "View and print purchases and suppliers report by period and branch"
+msgstr "معاينة وطباعة تقرير المشتريات والموردين بالفترة والفرع"
+
+msgid "Supplier"
+msgstr "المورد"
+
+msgid "Invoice No."
+msgstr "رقم الفاتورة"
+
+msgid "Item"
+msgstr "الصنف"
+
+msgid "Qty"
+msgstr "الكمية"
+
+msgid "Amount"
+msgstr "المبلغ"
+
+msgid "VAT"
+msgstr "ض.خ.م"
+
+msgid "Payment"
+msgstr "الدفع"
+
+msgid "Branch Sales Report"
+msgstr "تقرير مبيعات الفرع"
+
+msgid "Period"
+msgstr "الفترة"
+
+msgid "Average"
+msgstr "المتوسط"
+
+msgid "Payment Methods"
+msgstr "طرق الدفع"
+
+msgid "No sales data for the selected period."
+msgstr "لا توجد بيانات مبيعات للفترة المحددة."
+
+msgid "For detailed data (invoices and line items), use the Branch Sales by Day screen, select period and branch, then print from there."
+msgstr "لعرض البيانات التفصيلية (تفاصيل الفواتير والبنود) يرجى استخدام شاشة «مبيعات الفرع حسب اليوم» وتحديد السنة والشهر والفرع ثم الطباعة من هناك."
+
+msgid "Prepared by system"
+msgstr "تم الإعداد بواسطة النظام"

@@ -16,7 +16,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.12.1\n"
+"Generated-By: Babel 2.13.1\n"
 
 # POS System translations (English - keep original)
 msgid "Point of Sale System"
@@ -184,11 +184,8 @@ msgstr "Restaurant"
 msgid "Main"
 msgstr "Main"
 
-msgid "No items"
-msgstr "No items"
-
 msgid "SAR"
-msgstr "ر.س"
+msgstr "SAR"
 
 msgid "Currency"
 msgstr "Currency"
@@ -235,20 +232,8 @@ msgstr "Print Only"
 msgid "Are you sure you want to go back without payment?"
 msgstr "Are you sure you want to go back without payment?"
 
-msgid "Pay & Print"
-msgstr "Pay & Print"
-
 msgid "Preview Only"
 msgstr "Preview Only"
-
-msgid "Processing Payment..."
-msgstr "Processing Payment..."
-
-msgid "Please wait, preparing receipt..."
-msgstr "Please wait, preparing receipt..."
-
-msgid "Payment successful!"
-msgstr "Payment successful!"
 
 msgid "Receipt Number"
 msgstr "Receipt Number"
@@ -277,5 +262,1951 @@ msgstr "UNPAID INVOICE"
 msgid "This is a preview only"
 msgstr "This is a preview only"
 
-msgid "Invoice cleared and ready for next customer"
-msgstr "Invoice cleared and ready for next customer"
+msgid "2FA Code"
+msgstr "2FA Code"
+
+msgid "Absence"
+msgstr "Absence"
+
+msgid "Account"
+msgstr "Account"
+
+msgid "Account list"
+msgstr "Account list"
+
+msgid "Account Statement"
+msgstr "Account Statement"
+
+msgid "Accounting System"
+msgstr "Accounting System"
+
+msgid "Accounting System — Journal Entries Print"
+msgstr "Accounting System — Journal Entries Print"
+
+msgid "Accounts"
+msgstr "Accounts"
+
+msgid "Accounts Hub"
+msgstr "Accounts Hub"
+
+msgid "Actions"
+msgstr "Actions"
+
+msgid "Active"
+msgstr "Active"
+
+msgid "Add"
+msgstr "Add"
+
+msgid "Add a section then select it to manage items"
+msgstr "Add a section then select it to manage items"
+
+msgid "Add and view expense invoices"
+msgstr "Add and view expense invoices"
+
+msgid "Add Category"
+msgstr "Add Category"
+
+msgid "Add Customer"
+msgstr "Add Customer"
+
+msgid "Add employee"
+msgstr "Add employee"
+
+msgid "Add employees, payroll, advances, reports"
+msgstr "Add employees, payroll, advances, reports"
+
+msgid "Add Ingredient"
+msgstr "Add Ingredient"
+
+msgid "Add Item"
+msgstr "Add Item"
+
+msgid "Add Meal"
+msgstr "Add Meal"
+
+msgid "Add New Raw Material"
+msgstr "Add New Raw Material"
+
+msgid "Add Qty"
+msgstr "Add Qty"
+
+msgid "Add Section"
+msgstr "Add Section"
+
+msgid "Add supplier"
+msgstr "Add supplier"
+
+msgid "Add Supplier"
+msgstr "Add Supplier"
+
+msgid "Add user"
+msgstr "Add user"
+
+msgid "Add your first raw material to start creating meals"
+msgstr "Add your first raw material to start creating meals"
+
+msgid "Address"
+msgstr "Address"
+
+msgid "Advances"
+msgstr "Advances"
+
+msgid "Advances list & recover"
+msgstr "Advances list & recover"
+
+msgid "All"
+msgstr "All"
+
+msgid "All branches"
+msgstr "All branches"
+
+msgid "All Expenses"
+msgstr "All Expenses"
+
+msgid "All in current type tab"
+msgstr "All in current type tab"
+
+msgid "All Invoices"
+msgstr "All Invoices"
+
+msgid "All invoices"
+msgstr "All invoices"
+
+msgid "All payroll runs that have been processed for employees and not yet paid"
+msgstr "All payroll runs that have been processed for employees and not yet paid"
+
+msgid "Allowances"
+msgstr "Allowances"
+
+msgid "Amount"
+msgstr "Amount"
+
+msgid "Apply"
+msgstr "Apply"
+
+#, python-format
+msgid "Apply 15%% VAT on subtotal"
+msgstr "Apply 15%% VAT on subtotal"
+
+msgid "Apply Filters"
+msgstr "Apply Filters"
+
+msgid "Arabic Name"
+msgstr "Arabic Name"
+
+msgid "Archive"
+msgstr "Archive"
+
+msgid "Archive Receipts"
+msgstr "Archive Receipts"
+
+msgid "Are you sure you want to delete this invoice? This action cannot be undone."
+msgstr "Are you sure you want to delete this invoice? This action cannot be undone."
+
+msgid "Auto on save (e.g. INV-PUR-YYYY-0001)"
+msgstr "Auto on save (e.g. INV-PUR-YYYY-0001)"
+
+msgid "Average"
+msgstr "Average"
+
+msgid "Back to branches"
+msgstr "Back to branches"
+
+msgid "Back to Expenses"
+msgstr "Back to Expenses"
+
+msgid "Back to payroll reports"
+msgstr "Back to payroll reports"
+
+msgid "Back to reports"
+msgstr "Back to reports"
+
+msgid "Backfill Journals"
+msgstr "Backfill Journals"
+
+msgid "Backfill period"
+msgstr "Backfill period"
+
+msgid "Backfill Result"
+msgstr "Backfill Result"
+
+msgid "Balance due"
+msgstr "Balance due"
+
+msgid "Balance Sheet"
+msgstr "Balance Sheet"
+
+msgid "Balance sheet"
+msgstr "Balance sheet"
+
+msgid "Bank"
+msgstr "Bank"
+
+msgid "Bank Transfer"
+msgstr "Bank Transfer"
+
+msgid "Base salary"
+msgstr "Base salary"
+
+msgid "Basic"
+msgstr "Basic"
+
+msgid "Branch"
+msgstr "Branch"
+
+msgid "Branch Sales by Day"
+msgstr "Branch Sales by Day"
+
+msgid "Branch Sales Report"
+msgstr "Branch Sales Report"
+
+msgid "Branches"
+msgstr "Branches"
+
+msgid "Bulk Import"
+msgstr "Bulk Import"
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgid "Cash Calculator"
+msgstr "Cash Calculator"
+
+msgid "Category"
+msgstr "Category"
+
+msgid "Category Name"
+msgstr "Category Name"
+
+msgid "Change dates"
+msgstr "Change dates"
+
+msgid "Chart of accounts"
+msgstr "Chart of accounts"
+
+msgid "Check"
+msgstr "Check"
+
+msgid "Cheque"
+msgstr "Cheque"
+
+msgid "Choose a meal"
+msgstr "Choose a meal"
+
+msgid "Choose branch"
+msgstr "Choose branch"
+
+msgid "Choose section to delete"
+msgstr "Choose section to delete"
+
+msgid "Clear"
+msgstr "Clear"
+
+msgid "Clear all orders"
+msgstr "Clear all orders"
+
+msgid "Clear all orders? This cannot be undone."
+msgstr "Clear all orders? This cannot be undone."
+
+msgid "Clear Filters"
+msgstr "Clear Filters"
+
+msgid "Clear Form"
+msgstr "Clear Form"
+
+msgid "Clear selection"
+msgstr "Clear selection"
+
+msgid "Code"
+msgstr "Code"
+
+msgid "COGS"
+msgstr "COGS"
+
+msgid "Collect"
+msgstr "Collect"
+
+msgid "Company"
+msgstr "Company"
+
+msgid "Company Name"
+msgstr "Company Name"
+
+msgid "Confirm"
+msgstr "Confirm"
+
+msgid "Confirm full payment"
+msgstr "Confirm full payment"
+
+msgid "Confirm toggle status?"
+msgstr "Confirm toggle status?"
+
+msgid "Confirm toggle?"
+msgstr "Confirm toggle?"
+
+msgid "Consumption Cost"
+msgstr "Consumption Cost"
+
+msgid "Contact Person"
+msgstr "Contact Person"
+
+msgid "Contribution"
+msgstr "Contribution"
+
+msgid "Cost"
+msgstr "Cost"
+
+msgid "cost based on latest recipe prices"
+msgstr "cost based on latest recipe prices"
+
+msgid "Cost may vary due to outdated ingredient prices"
+msgstr "Cost may vary due to outdated ingredient prices"
+
+msgid "Cost per Unit"
+msgstr "Cost per Unit"
+
+msgid "Cost Summary"
+msgstr "Cost Summary"
+
+msgid "Count"
+msgstr "Count"
+
+msgid "CR"
+msgstr "CR"
+
+msgid "CR Number"
+msgstr "CR Number"
+
+msgid "Create a new customer record"
+msgstr "Create a new customer record"
+
+msgid "Create and manage purchase invoices"
+msgstr "Create and manage purchase invoices"
+
+msgid "Create and manage sales invoices"
+msgstr "Create and manage sales invoices"
+
+msgid "Create Meals"
+msgstr "Create Meals"
+
+msgid "Create New Invoice"
+msgstr "Create New Invoice"
+
+msgid "Create New Meal"
+msgstr "Create New Meal"
+
+msgid "Create New Purchase Invoice"
+msgstr "Create New Purchase Invoice"
+
+msgid "Create your first invoice to get started"
+msgstr "Create your first invoice to get started"
+
+msgid "Created journal entries"
+msgstr "Created journal entries"
+
+msgid "Credit"
+msgstr "Credit"
+
+msgid "Credit customer statement (invoices and payments)"
+msgstr "Credit customer statement (invoices and payments)"
+
+msgid "Current Qty"
+msgstr "Current Qty"
+
+msgid "Currently, you can only edit basic invoice information. Item editing will be available in a future update."
+msgstr "Currently, you can only edit basic invoice information. Item editing will be available in a future update."
+
+msgid "Customer added"
+msgstr "Customer added"
+
+msgid "Customer data"
+msgstr "Customer data"
+
+msgid "Customer Details"
+msgstr "Customer Details"
+
+msgid "Customer Discount %"
+msgstr "Customer Discount %"
+
+msgid "Customer name"
+msgstr "Customer name"
+
+msgid "Customer Statement"
+msgstr "Customer Statement"
+
+msgid "Customers"
+msgstr "Customers"
+
+msgid "customers"
+msgstr "customers"
+
+msgid "Customers List"
+msgstr "Customers List"
+
+msgid "Daily summary date"
+msgstr "Daily summary date"
+
+msgid "Daily totals"
+msgstr "Daily totals"
+
+msgid "Dark"
+msgstr "Dark"
+
+msgid "Dashboard"
+msgstr "Dashboard"
+
+msgid "Date"
+msgstr "Date"
+
+msgid "Date Range"
+msgstr "Date Range"
+
+msgid "Day"
+msgstr "Day"
+
+msgid "Debt"
+msgstr "Debt"
+
+msgid "Debtors due"
+msgstr "Debtors due"
+
+msgid "Deductions"
+msgstr "Deductions"
+
+msgid "Default theme"
+msgstr "Default theme"
+
+#, python-format
+msgid "Default VAT rate (%%)"
+msgstr "Default VAT rate (%%)"
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Delete Invoices"
+msgstr "Delete Invoices"
+
+msgid "Delete Section"
+msgstr "Delete Section"
+
+msgid "Delete selected invoices? This cannot be undone."
+msgstr "Delete selected invoices? This cannot be undone."
+
+msgid "Delete this customer?"
+msgstr "Delete this customer?"
+
+msgid "Delete this employee?"
+msgstr "Delete this employee?"
+
+msgid "Delete this expense invoice?"
+msgstr "Delete this expense invoice?"
+
+msgid "Delete this section?"
+msgstr "Delete this section?"
+
+msgid "Delete this supplier?"
+msgstr "Delete this supplier?"
+
+msgid "Department"
+msgstr "Department"
+
+msgid "Description"
+msgstr "Description"
+
+msgid "Detailed View"
+msgstr "Detailed View"
+
+msgid "Details"
+msgstr "Details"
+
+#, python-format
+msgid "Discount %%"
+msgstr "Discount %%"
+
+msgid "Discounts"
+msgstr "Discounts"
+
+msgid "Download"
+msgstr "Download"
+
+msgid "Due"
+msgstr "Due"
+
+msgid "Dynamic Stock Analysis"
+msgstr "Dynamic Stock Analysis"
+
+msgid "e.g., Office rent, Electricity bill"
+msgstr "e.g., Office rent, Electricity bill"
+
+msgid "Edit"
+msgstr "Edit"
+
+msgid "Edit Customer"
+msgstr "Edit Customer"
+
+msgid "Edit Expense Invoice"
+msgstr "Edit Expense Invoice"
+
+msgid "Edit Invoice Details"
+msgstr "Edit Invoice Details"
+
+msgid "Edit Supplier"
+msgstr "Edit Supplier"
+
+msgid "Edit this expense invoice?"
+msgstr "Edit this expense invoice?"
+
+msgid "Email"
+msgstr "Email"
+
+msgid "Employee"
+msgstr "Employee"
+
+msgid "Employee name"
+msgstr "Employee name"
+
+msgid "Employees"
+msgstr "Employees"
+
+msgid "Employees list"
+msgstr "Employees list"
+
+msgid "End Date"
+msgstr "End Date"
+
+msgid "Enter Amount"
+msgstr "Enter Amount"
+
+msgid "Enter amount to pay"
+msgstr "Enter amount to pay"
+
+msgid "Enter date and amount"
+msgstr "Enter date and amount"
+
+msgid "Enter last 4 digits"
+msgstr "Enter last 4 digits"
+
+msgid "Enter Quantities"
+msgstr "Enter Quantities"
+
+msgid "Entry No."
+msgstr "Entry No."
+
+msgid "Error deleting invoice"
+msgstr "Error deleting invoice"
+
+msgid "Error — Payroll Statement"
+msgstr "Error — Payroll Statement"
+
+msgid "Estimated Meal Cost"
+msgstr "Estimated Meal Cost"
+
+msgid "Estimated Usage"
+msgstr "Estimated Usage"
+
+msgid "Excel file with customer data"
+msgstr "Excel file with customer data"
+
+msgid "Expected Stock"
+msgstr "Expected Stock"
+
+msgid "Expense Details"
+msgstr "Expense Details"
+
+msgid "Expense Invoice"
+msgstr "Expense Invoice"
+
+msgid "Expense Invoice Details"
+msgstr "Expense Invoice Details"
+
+msgid "Expense Invoices"
+msgstr "Expense Invoices"
+
+msgid "Expense Items"
+msgstr "Expense Items"
+
+msgid "Expense list"
+msgstr "Expense list"
+
+msgid "Expense No."
+msgstr "Expense No."
+
+msgid "Expenses"
+msgstr "Expenses"
+
+msgid "Expenses (invoice + journal)"
+msgstr "Expenses (invoice + journal)"
+
+msgid "Expenses (Itemized)"
+msgstr "Expenses (Itemized)"
+
+msgid "Export"
+msgstr "Export"
+
+msgid "Export CSV"
+msgstr "Export CSV"
+
+msgid "Extra"
+msgstr "Extra"
+
+msgid "Failed to load"
+msgstr "Failed to load"
+
+msgid "Failed to load payroll statement"
+msgstr "Failed to load payroll statement"
+
+msgid "Filter"
+msgstr "Filter"
+
+msgid "Filter and view order invoices"
+msgstr "Filter and view order invoices"
+
+msgid "Filter, pay and track invoices"
+msgstr "Filter, pay and track invoices"
+
+msgid "Filters"
+msgstr "Filters"
+
+msgid "Filters & actions"
+msgstr "Filters & actions"
+
+msgid "Final Total"
+msgstr "Final Total"
+
+msgid "Financial Control Center"
+msgstr "Financial Control Center"
+
+msgid "Financial Statements"
+msgstr "Financial Statements"
+
+msgid "Financial Summary"
+msgstr "Financial Summary"
+
+msgid "Food Materials"
+msgstr "Food Materials"
+
+msgid "Forgot Password?"
+msgstr "Forgot Password?"
+
+msgid "Format: name, phone, discount_percent"
+msgstr "Format: name, phone, discount_percent"
+
+msgid "From"
+msgstr "From"
+
+msgid "From date"
+msgstr "From date"
+
+msgid "From month"
+msgstr "From month"
+
+msgid "From year"
+msgstr "From year"
+
+msgid "From – To"
+msgstr "From – To"
+
+msgid "Full name"
+msgstr "Full name"
+
+msgid "Generated on"
+msgstr "Generated on"
+
+msgid "Goes to Production"
+msgstr "Goes to Production"
+
+msgid "Grant"
+msgstr "Grant"
+
+msgid "Grant advance"
+msgstr "Grant advance"
+
+msgid "Granted"
+msgstr "Granted"
+
+msgid "Granted."
+msgstr "Granted."
+
+msgid "Gross Profit"
+msgstr "Gross Profit"
+
+msgid "Hide"
+msgstr "Hide"
+
+msgid "Hide Items"
+msgstr "Hide Items"
+
+msgid "Hire date"
+msgstr "Hire date"
+
+msgid "IBAN"
+msgstr "IBAN"
+
+msgid "Import"
+msgstr "Import"
+
+msgid "Import CSV"
+msgstr "Import CSV"
+
+msgid "Import Excel"
+msgstr "Import Excel"
+
+msgid "Import Meals"
+msgstr "Import Meals"
+
+msgid "Inactive"
+msgstr "Inactive"
+
+msgid "Incentive"
+msgstr "Incentive"
+
+msgid "Income Statement"
+msgstr "Income Statement"
+
+msgid "Ingredient"
+msgstr "Ingredient"
+
+msgid "Ingredient Category"
+msgstr "Ingredient Category"
+
+msgid "Ingredient Purchases (This Month)"
+msgstr "Ingredient Purchases (This Month)"
+
+msgid "Ingredients"
+msgstr "Ingredients"
+
+msgid "ingredients"
+msgstr "ingredients"
+
+msgid "Initial Stock"
+msgstr "Initial Stock"
+
+msgid "Input VAT"
+msgstr "Input VAT"
+
+msgid "Invalid amount"
+msgstr "Invalid amount"
+
+msgid "Invalid OTP format (6 digits)"
+msgstr "Invalid OTP format (6 digits)"
+
+msgid "Inventory"
+msgstr "Inventory"
+
+msgid "Inventory & Cost Management"
+msgstr "Inventory & Cost Management"
+
+msgid "Inventory & Production Cost Intelligence"
+msgstr "Inventory & Production Cost Intelligence"
+
+msgid "Inventory Kind"
+msgstr "Inventory Kind"
+
+msgid "Invoice info"
+msgstr "Invoice info"
+
+msgid "Invoice Info"
+msgstr "Invoice Info"
+
+msgid "Invoice Information"
+msgstr "Invoice Information"
+
+msgid "Invoice Items"
+msgstr "Invoice Items"
+
+msgid "Invoice No"
+msgstr "Invoice No"
+
+msgid "Invoice No."
+msgstr "Invoice No."
+
+msgid "Invoice number cannot be changed"
+msgstr "Invoice number cannot be changed"
+
+msgid "Invoice Type"
+msgstr "Invoice Type"
+
+msgid "invoices"
+msgstr "invoices"
+
+msgid "Invoices"
+msgstr "Invoices"
+
+msgid "Invoices list"
+msgstr "Invoices list"
+
+msgid "Issue date"
+msgstr "Issue date"
+
+msgid "Item"
+msgstr "Item"
+
+msgid "items"
+msgstr "items"
+
+msgid "Items Count"
+msgstr "Items Count"
+
+msgid "Items summary"
+msgstr "Items summary"
+
+msgid "Journal Entries"
+msgstr "Journal Entries"
+
+msgid "Journal entries created for the selected period"
+msgstr "Journal entries created for the selected period"
+
+msgid "Journal Entries Print"
+msgstr "Journal Entries Print"
+
+msgid "Journal Entry"
+msgstr "Journal Entry"
+
+msgid "Journal Entry Print"
+msgstr "Journal Entry Print"
+
+msgid "Journal filters"
+msgstr "Journal filters"
+
+msgid "Journal log"
+msgstr "Journal log"
+
+msgid "KPI Overview"
+msgstr "KPI Overview"
+
+msgid "KPIs, purchases summary, meal cost and sales analysis"
+msgstr "KPIs, purchases summary, meal cost and sales analysis"
+
+msgid "Leave empty = All. Select one or more employees."
+msgstr "Leave empty = All. Select one or more employees."
+
+msgid "Liabilities"
+msgstr "Liabilities"
+
+msgid "Light"
+msgstr "Light"
+
+msgid "List"
+msgstr "List"
+
+msgid "live"
+msgstr "live"
+
+msgid "live margin"
+msgstr "live margin"
+
+msgid "Load"
+msgstr "Load"
+
+msgid "Log"
+msgstr "Log"
+
+msgid "Login"
+msgstr "Login"
+
+msgid "Manage and search customers"
+msgstr "Manage and search customers"
+
+msgid "Manage categories and menu items"
+msgstr "Manage categories and menu items"
+
+msgid "Manage customers and contacts"
+msgstr "Manage customers and contacts"
+
+msgid "Manage Meals"
+msgstr "Manage Meals"
+
+msgid "Manage meals, ingredients and cost"
+msgstr "Manage meals, ingredients and cost"
+
+msgid "Manage menu sections and items"
+msgstr "Manage menu sections and items"
+
+msgid "Manage raw materials and quantities"
+msgstr "Manage raw materials and quantities"
+
+msgid "Manage sections, rows, and table numbers. Drag and drop freely, then save."
+msgstr "Manage sections, rows, and table numbers. Drag and drop freely, then save."
+
+msgid "Manage supplier information"
+msgstr "Manage supplier information"
+
+msgid "Manage suppliers and procurement"
+msgstr "Manage suppliers and procurement"
+
+msgid "Manage tables and layout per branch"
+msgstr "Manage tables and layout per branch"
+
+#, python-format
+msgid "Margin %%"
+msgstr "Margin %%"
+
+msgid "Mark Sales Paid"
+msgstr "Mark Sales Paid"
+
+msgid "Max is Final Total"
+msgstr "Max is Final Total"
+
+msgid "Meal"
+msgstr "Meal"
+
+msgid "Meal Cost & Sales Analysis"
+msgstr "Meal Cost & Sales Analysis"
+
+msgid "Meal Ingredients"
+msgstr "Meal Ingredients"
+
+msgid "Meal Name"
+msgstr "Meal Name"
+
+msgid "Meals"
+msgstr "Meals"
+
+msgid "Meals are automatically loaded from Cost Management system with calculated prices"
+msgstr "Meals are automatically loaded from Cost Management system with calculated prices"
+
+msgid "Meals Management"
+msgstr "Meals Management"
+
+msgid "Meals Sold (This Month)"
+msgstr "Meals Sold (This Month)"
+
+msgid "Meals using ingredients with outdated cost data"
+msgstr "Meals using ingredients with outdated cost data"
+
+msgid "Menu"
+msgstr "Menu"
+
+msgid "Menu Management"
+msgstr "Menu Management"
+
+msgid "Menu sections"
+msgstr "Menu sections"
+
+msgid "Method"
+msgstr "Method"
+
+msgid "Month"
+msgstr "Month"
+
+msgid "Movements"
+msgstr "Movements"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Name is required"
+msgstr "Name is required"
+
+msgid "Name, Name (Arabic), Selling Price"
+msgstr "Name, Name (Arabic), Selling Price"
+
+msgid "National ID"
+msgstr "National ID"
+
+msgid "Net Profit"
+msgstr "Net Profit"
+
+msgid "Net VAT"
+msgstr "Net VAT"
+
+msgid "Net VAT Due"
+msgstr "Net VAT Due"
+
+msgid "Network error"
+msgstr "Network error"
+
+msgid "New Customer"
+msgstr "New Customer"
+
+msgid "New entry"
+msgstr "New entry"
+
+msgid "New section name"
+msgstr "New section name"
+
+msgid "New Unit Cost"
+msgstr "New Unit Cost"
+
+msgid "Next"
+msgstr "Next"
+
+msgid "No branches found. Please contact the administrator."
+msgstr "No branches found. Please contact the administrator."
+
+msgid "No categories"
+msgstr "No categories"
+
+msgid "No customers found"
+msgstr "No customers found"
+
+msgid "No data"
+msgstr "No data"
+
+msgid "No details"
+msgstr "No details"
+
+msgid "No employees or payroll data for the selected period."
+msgstr "No employees or payroll data for the selected period."
+
+msgid "No employees yet"
+msgstr "No employees yet"
+
+msgid "No expense invoices yet"
+msgstr "No expense invoices yet"
+
+msgid "No invoices in this period"
+msgstr "No invoices in this period"
+
+msgid "No items found"
+msgstr "No items found"
+
+msgid "No matching receipts"
+msgstr "No matching receipts"
+
+msgid "No payments recorded"
+msgstr "No payments recorded"
+
+msgid "No raw materials found"
+msgstr "No raw materials found"
+
+msgid "No receipts"
+msgstr "No receipts"
+
+msgid "No sales invoices for this group"
+msgstr "No sales invoices for this group"
+
+msgid "No supplier invoices"
+msgstr "No supplier invoices"
+
+msgid "No suppliers found"
+msgstr "No suppliers found"
+
+msgid "None"
+msgstr "None"
+
+msgid "Note"
+msgstr "Note"
+
+msgid "Notes"
+msgstr "Notes"
+
+msgid "Nothing to pay"
+msgstr "Nothing to pay"
+
+msgid "of"
+msgstr "of"
+
+msgid "Open Tables"
+msgstr "Open Tables"
+
+msgid "Open tables for the selected branch"
+msgstr "Open tables for the selected branch"
+
+msgid "Opening Balance"
+msgstr "Opening Balance"
+
+msgid "Opening Qty"
+msgstr "Opening Qty"
+
+msgid "Operating Expenses"
+msgstr "Operating Expenses"
+
+msgid "Operations"
+msgstr "Operations"
+
+msgid "Operations (journal only): no invoice. Expenses: invoice + journal."
+msgstr "Operations (journal only): no invoice. Expenses: invoice + journal."
+
+msgid "Order Invoices"
+msgstr "Order Invoices"
+
+msgid "Other Dues"
+msgstr "Other Dues"
+
+msgid "Other Supplies"
+msgstr "Other Supplies"
+
+msgid "Output VAT"
+msgstr "Output VAT"
+
+msgid "Page"
+msgstr "Page"
+
+msgid "Paid"
+msgstr "Paid"
+
+msgid "Paid Amount (Partial)"
+msgstr "Paid Amount (Partial)"
+
+msgid "Partial"
+msgstr "Partial"
+
+msgid "Party"
+msgstr "Party"
+
+msgid "Password"
+msgstr "Password"
+
+msgid "Password required"
+msgstr "Password required"
+
+msgid "Pay"
+msgstr "Pay"
+
+msgid "Pay Full"
+msgstr "Pay Full"
+
+msgid "Pay Supplier"
+msgstr "Pay Supplier"
+
+msgid "Payment"
+msgstr "Payment"
+
+msgid "Payment method"
+msgstr "Payment method"
+
+msgid "Payment Method"
+msgstr "Payment Method"
+
+msgid "Payment Status"
+msgstr "Payment Status"
+
+msgid "Payments"
+msgstr "Payments"
+
+msgid "Payments & Receivables"
+msgstr "Payments & Receivables"
+
+msgid "Payments & Statements"
+msgstr "Payments & Statements"
+
+msgid "Payroll reports"
+msgstr "Payroll reports"
+
+msgid "Payroll run"
+msgstr "Payroll run"
+
+msgid "Payroll Statement"
+msgstr "Payroll Statement"
+
+msgid "PDF"
+msgstr "PDF"
+
+msgid "Pending"
+msgstr "Pending"
+
+msgid "Per Page"
+msgstr "Per Page"
+
+msgid "Period"
+msgstr "Period"
+
+msgid "Period & Branch"
+msgstr "Period & Branch"
+
+msgid "Period & view"
+msgstr "Period & view"
+
+msgid "Period summary and VAT totals"
+msgstr "Period summary and VAT totals"
+
+msgid "Permissions"
+msgstr "Permissions"
+
+msgid "Phone"
+msgstr "Phone"
+
+msgid "Phone number"
+msgstr "Phone number"
+
+msgid "Placeholder for branch sales report"
+msgstr "Placeholder for branch sales report"
+
+msgid "Please check the selected period and employees, or review server logs."
+msgstr "Please check the selected period and employees, or review server logs."
+
+msgid "Please choose a section"
+msgstr "Please choose a section"
+
+msgid "Please fill username and password"
+msgstr "Please fill username and password"
+
+msgid "Please sign in"
+msgstr "Please sign in"
+
+msgid "Prev"
+msgstr "Prev"
+
+msgid "Preview"
+msgstr "Preview"
+
+msgid "Previous due"
+msgstr "Previous due"
+
+msgid "Previous Invoices"
+msgstr "Previous Invoices"
+
+msgid "Previous Owner"
+msgstr "Previous Owner"
+
+msgid "Price"
+msgstr "Price"
+
+msgid "Price override"
+msgstr "Price override"
+
+msgid "Print"
+msgstr "Print"
+
+msgid "Print All"
+msgstr "Print All"
+
+msgid "Print daily summary"
+msgstr "Print daily summary"
+
+msgid "Print PDF"
+msgstr "Print PDF"
+
+msgid "Print Report"
+msgstr "Print Report"
+
+msgid "Products & Cost"
+msgstr "Products & Cost"
+
+msgid "Profit"
+msgstr "Profit"
+
+msgid "Profit Margin"
+msgstr "Profit Margin"
+
+msgid "Profit/Loss"
+msgstr "Profit/Loss"
+
+msgid "Purchase Invoices"
+msgstr "Purchase Invoices"
+
+msgid "Purchase Items"
+msgstr "Purchase Items"
+
+msgid "Purchase Trend"
+msgstr "Purchase Trend"
+
+msgid "Purchases"
+msgstr "Purchases"
+
+msgid "Purchases for Production (NO VAT)"
+msgstr "Purchases for Production (NO VAT)"
+
+msgid "Purchases Ledger"
+msgstr "Purchases Ledger"
+
+msgid "Purchases ledger and cost overview"
+msgstr "Purchases ledger and cost overview"
+
+msgid "Purchases Qty"
+msgstr "Purchases Qty"
+
+msgid "Purchases Summary"
+msgstr "Purchases Summary"
+
+msgid "Purchases Total"
+msgstr "Purchases Total"
+
+msgid "Purchases ➖ Estimated Usage"
+msgstr "Purchases ➖ Estimated Usage"
+
+msgid "Qty"
+msgstr "Qty"
+
+msgid "Quantity"
+msgstr "Quantity"
+
+msgid "Quarter"
+msgstr "Quarter"
+
+msgid "Quick access to Sales, Purchases, Invoices, Inventory, Reports and Settings"
+msgstr "Quick access to Sales, Purchases, Invoices, Inventory, Reports and Settings"
+
+msgid "Quick Proof"
+msgstr "Quick Proof"
+
+msgid "Raw Materials"
+msgstr "Raw Materials"
+
+msgid "Read-only"
+msgstr "Read-only"
+
+msgid "Recalculate"
+msgstr "Recalculate"
+
+msgid "Receipt Archive"
+msgstr "Receipt Archive"
+
+msgid "Receivables & Statements"
+msgstr "Receivables & Statements"
+
+msgid "Remaining"
+msgstr "Remaining"
+
+msgid "Remaining Due"
+msgstr "Remaining Due"
+
+msgid "Remember Me"
+msgstr "Remember Me"
+
+msgid "Remove item?"
+msgstr "Remove item?"
+
+msgid "Repaid"
+msgstr "Repaid"
+
+msgid "Repay"
+msgstr "Repay"
+
+msgid "Repay advance"
+msgstr "Repay advance"
+
+msgid "Reports"
+msgstr "Reports"
+
+msgid "Required columns"
+msgstr "Required columns"
+
+msgid "Reset"
+msgstr "Reset"
+
+msgid "Results"
+msgstr "Results"
+
+msgid "Revenue"
+msgstr "Revenue"
+
+msgid "Risk"
+msgstr "Risk"
+
+msgid "Ok"
+msgstr "Ok"
+
+msgid "Low"
+msgstr "Low"
+
+msgid "Excess"
+msgstr "Excess"
+
+msgid "Run backfill for journal entries in the selected period"
+msgstr "Run backfill for journal entries in the selected period"
+
+msgid "Salaries"
+msgstr "Salaries"
+
+msgid "Sales (Before VAT)"
+msgstr "Sales (Before VAT)"
+
+msgid "Sales Count"
+msgstr "Sales Count"
+
+msgid "Sales Debtors"
+msgstr "Sales Debtors"
+
+msgid "Sales, purchases, expenses"
+msgstr "Sales, purchases, expenses"
+
+msgid "Sales, purchases, expenses, VAT and profit by period and branch"
+msgstr "Sales, purchases, expenses, VAT and profit by period and branch"
+
+msgid "Save"
+msgstr "Save"
+
+msgid "Save Changes"
+msgstr "Save Changes"
+
+msgid "Save Layout"
+msgstr "Save Layout"
+
+msgid "Scope"
+msgstr "Scope"
+
+msgid "Search"
+msgstr "Search"
+
+msgid "Search and download receipts"
+msgstr "Search and download receipts"
+
+msgid "Search and manage suppliers"
+msgstr "Search and manage suppliers"
+
+msgid "Search by last 4 digits of invoice number"
+msgstr "Search by last 4 digits of invoice number"
+
+msgid "Search by name or phone"
+msgstr "Search by name or phone"
+
+msgid "Search receipts using the last 4 digits of the invoice number"
+msgstr "Search receipts using the last 4 digits of the invoice number"
+
+msgid "Search suppliers"
+msgstr "Search suppliers"
+
+msgid "Search..."
+msgstr "Search..."
+
+msgid "Select"
+msgstr "Select"
+
+msgid "Select a customer"
+msgstr "Select a customer"
+
+msgid "Select a supplier"
+msgstr "Select a supplier"
+
+msgid "Select Account"
+msgstr "Select Account"
+
+msgid "Select all"
+msgstr "Select all"
+
+msgid "Select Branch"
+msgstr "Select Branch"
+
+msgid "Select Category"
+msgstr "Select Category"
+
+msgid "Select customer"
+msgstr "Select customer"
+
+msgid "Select employee and amount."
+msgstr "Select employee and amount."
+
+msgid "Select File"
+msgstr "Select File"
+
+msgid "Select Ingredient"
+msgstr "Select Ingredient"
+
+msgid "Select Meal"
+msgstr "Select Meal"
+
+msgid "Select Raw Material"
+msgstr "Select Raw Material"
+
+msgid "Select Supplier"
+msgstr "Select Supplier"
+
+msgid "Select supplier"
+msgstr "Select supplier"
+
+msgid "Selected only"
+msgstr "Selected only"
+
+msgid "Selling Price"
+msgstr "Selling Price"
+
+msgid "Settings"
+msgstr "Settings"
+
+msgid "Show"
+msgstr "Show"
+
+msgid "Show Items"
+msgstr "Show Items"
+
+msgid "Showing"
+msgstr "Showing"
+
+msgid "Sign Up"
+msgstr "Sign Up"
+
+msgid "Signature"
+msgstr "Signature"
+
+msgid "Single month"
+msgstr "Single month"
+
+msgid "Start Date"
+msgstr "Start Date"
+
+msgid "Statement"
+msgstr "Statement"
+
+msgid "Statement lines"
+msgstr "Statement lines"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Summary"
+msgstr "Summary"
+
+msgid "Supplier"
+msgstr "Supplier"
+
+msgid "Supplier details"
+msgstr "Supplier details"
+
+msgid "Supplier Details"
+msgstr "Supplier Details"
+
+msgid "Supplier groups"
+msgstr "Supplier groups"
+
+msgid "Supplier Info"
+msgstr "Supplier Info"
+
+msgid "Supplier Invoice No"
+msgstr "Supplier Invoice No"
+
+msgid "Supplier Payments & Statements"
+msgstr "Supplier Payments & Statements"
+
+msgid "Supplier Statement"
+msgstr "Supplier Statement"
+
+msgid "Suppliers"
+msgstr "Suppliers"
+
+msgid "suppliers"
+msgstr "suppliers"
+
+msgid "Suppliers (Creditors)"
+msgstr "Suppliers (Creditors)"
+
+msgid "Suppliers Due"
+msgstr "Suppliers Due"
+
+msgid "Suppliers List"
+msgstr "Suppliers List"
+
+msgid "Supported formats: Excel (.xlsx, .xls), CSV"
+msgstr "Supported formats: Excel (.xlsx, .xls), CSV"
+
+msgid "Supported: Excel (.xlsx, .xls), CSV"
+msgstr "Supported: Excel (.xlsx, .xls), CSV"
+
+msgid "Table Manager"
+msgstr "Table Manager"
+
+msgid "Table Settings"
+msgstr "Table Settings"
+
+msgid "Tax Number"
+msgstr "Tax Number"
+
+msgid "Tax number"
+msgstr "Tax number"
+
+msgid "The system could not generate the statement. Technical details:"
+msgstr "The system could not generate the statement. Technical details:"
+
+msgid "This action is irreversible. Related items and payments will be deleted as well."
+msgstr "This action is irreversible. Related items and payments will be deleted as well."
+
+msgid "This is a minimal placeholder for smoke tests."
+msgstr "This is a minimal placeholder for smoke tests."
+
+msgid "Tip"
+msgstr "Tip"
+
+msgid "to"
+msgstr "to"
+
+msgid "To"
+msgstr "To"
+
+msgid "To date"
+msgstr "To date"
+
+msgid "To month"
+msgstr "To month"
+
+msgid "To year"
+msgstr "To year"
+
+msgid "Toggle"
+msgstr "Toggle"
+
+msgid "Toggle Status"
+msgstr "Toggle Status"
+
+msgid "Total Amount"
+msgstr "Total Amount"
+
+msgid "Total cannot be changed here"
+msgstr "Total cannot be changed here"
+
+msgid "Total Cost"
+msgstr "Total Cost"
+
+msgid "Total Customers"
+msgstr "Total Customers"
+
+msgid "Total debt"
+msgstr "Total debt"
+
+msgid "Total Inventory Cost"
+msgstr "Total Inventory Cost"
+
+msgid "Total Materials"
+msgstr "Total Materials"
+
+msgid "Total paid"
+msgstr "Total paid"
+
+msgid "Total Profit"
+msgstr "Total Profit"
+
+msgid "Total Profit (Sales - Prod Cost)"
+msgstr "Total Profit (Sales - Prod Cost)"
+
+msgid "Total qty"
+msgstr "Total qty"
+
+msgid "Total remaining"
+msgstr "Total remaining"
+
+msgid "Total Suppliers"
+msgstr "Total Suppliers"
+
+msgid "Track payments and print detailed supplier statements"
+msgstr "Track payments and print detailed supplier statements"
+
+msgid "Track receivables and print customer statements"
+msgstr "Track receivables and print customer statements"
+
+msgid "trend"
+msgstr "trend"
+
+msgid "Trial Balance"
+msgstr "Trial Balance"
+
+msgid "Trial balance"
+msgstr "Trial balance"
+
+msgid "Try different search terms"
+msgstr "Try different search terms"
+
+msgid "Type"
+msgstr "Type"
+
+msgid "unit"
+msgstr "unit"
+
+msgid "Unit"
+msgstr "Unit"
+
+msgid "Unit Price"
+msgstr "Unit Price"
+
+msgid "Unpaid"
+msgstr "Unpaid"
+
+msgid "Unpaid dues"
+msgstr "Unpaid dues"
+
+msgid "Update"
+msgstr "Update"
+
+msgid "Update Quantities"
+msgstr "Update Quantities"
+
+msgid "Update supplier details"
+msgstr "Update supplier details"
+
+msgid "Username"
+msgstr "Username"
+
+msgid "Users"
+msgstr "Users"
+
+msgid "Users list"
+msgstr "Users list"
+
+msgid "VAT"
+msgstr "VAT"
+
+msgid "VAT Dashboard"
+msgstr "VAT Dashboard"
+
+msgid "VAT Input"
+msgstr "VAT Input"
+
+msgid "VAT Output"
+msgstr "VAT Output"
+
+msgid "VAT Return"
+msgstr "VAT Return"
+
+msgid "VAT Summary"
+msgstr "VAT Summary"
+
+msgid "VAT Total"
+msgstr "VAT Total"
+
+msgid "View"
+msgstr "View"
+
+msgid "View account balances by period and open statements"
+msgstr "View account balances by period and open statements"
+
+msgid "View Accounts"
+msgstr "View Accounts"
+
+msgid "View all invoices by branch"
+msgstr "View all invoices by branch"
+
+msgid "View and export all expense records"
+msgstr "View and export all expense records"
+
+msgid "View and print invoice"
+msgstr "View and print invoice"
+
+msgid "View daily sales by branch and month"
+msgstr "View daily sales by branch and month"
+
+msgid "View running balance by period"
+msgstr "View running balance by period"
+
+msgid "vs last period"
+msgstr "vs last period"
+
+msgid "Year"
+msgstr "Year"
+
+msgid "Total sales before VAT"
+msgstr "Total sales before VAT"
+
+msgid "Total purchases before VAT"
+msgstr "Total purchases before VAT"
+
+msgid "Total expenses before VAT"
+msgstr "Total expenses before VAT"
+
+msgid "Journals Reconciliation"
+msgstr "Journals Reconciliation"
+
+msgid "Prepared by system"
+msgstr "Prepared by system"
+
+msgid "Print date"
+msgstr "Print date"
+
+msgid "Period type"
+msgstr "Period type"
+
+msgid "Quarterly"
+msgstr "Quarterly"
+
+msgid "Monthly"
+msgstr "Monthly"
+
+msgid "Q1 (Jan–Mar)"
+msgstr "Q1 (Jan–Mar)"
+
+msgid "Q2 (Apr–Jun)"
+msgstr "Q2 (Apr–Jun)"
+
+msgid "Q3 (Jul–Sep)"
+msgstr "Q3 (Jul–Sep)"
+
+msgid "Q4 (Oct–Dec)"
+msgstr "Q4 (Oct–Dec)"
+
+msgid "Outputs (Sales)"
+msgstr "Outputs (Sales)"
+
+msgid "Inputs (Purchases & Expenses)"
+msgstr "Inputs (Purchases & Expenses)"
+
+msgid "Declaration & Summary"
+msgstr "Declaration & Summary"
+
+msgid "Refund balance"
+msgstr "Refund balance"
+
+msgid "Enter notes — do not change numbers"
+msgstr "Enter notes — do not change numbers"
+
+msgid "Purchases & Expenses"
+msgstr "Purchases & Expenses"
+
+msgid "Amount (excl. VAT)"
+msgstr "Amount (excl. VAT)"
+
+msgid "Total (incl. VAT)"
+msgstr "Total (incl. VAT)"
+
+msgid "Standard Rated (15%)"
+msgstr "Standard Rated (15%)"
+
+msgid "Zero Rated"
+msgstr "Zero Rated"
+
+msgid "Exempt"
+msgstr "Exempt"
+
+msgid "Exports"
+msgstr "Exports"
+
+msgid "Deductible Purchases"
+msgstr "Deductible Purchases"
+
+msgid "Deductible Expenses"
+msgstr "Deductible Expenses"
+
+msgid "Non-deductible Purchases"
+msgstr "Non-deductible Purchases"
+
+msgid "Non-deductible Expenses"
+msgstr "Non-deductible Expenses"
+
+msgid "Executive summary and P&L"
+msgstr "Executive summary and P&L"
+
+msgid "Today"
+msgstr "Today"
+
+msgid "This week"
+msgstr "This week"
+
+msgid "This month"
+msgstr "This month"
+
+msgid "This year"
+msgstr "This year"
+
+msgid "Custom"
+msgstr "Custom"
+
+msgid "Detailed view"
+msgstr "Detailed view"
+
+msgid "No data for the selected period."
+msgstr "No data for the selected period."
+
+msgid "Total revenue"
+msgstr "Total revenue"
+
+msgid "Cost of sales"
+msgstr "Cost of sales"
+
+msgid "Gross profit"
+msgstr "Gross profit"
+
+msgid "Net profit"
+msgstr "Net profit"
+
+msgid "Total cost of sales"
+msgstr "Total cost of sales"
+
+msgid "Operating expenses"
+msgstr "Operating expenses"
+
+msgid "Total operating expenses"
+msgstr "Total operating expenses"
+
+msgid "Operating profit"
+msgstr "Operating profit"
+
+msgid "Other income & expenses"
+msgstr "Other income & expenses"
+
+msgid "Other income"
+msgstr "Other income"
+
+msgid "Other expenses"
+msgstr "Other expenses"
+
+msgid "VAT is not part of income statement; see analytical details below."
+msgstr "VAT is not part of income statement; see analytical details below."
+
+msgid "Analytical details"
+msgstr "Analytical details"
+
+msgid "Expand"
+msgstr "Expand"
+
+msgid "COGS Breakdown"
+msgstr "COGS Breakdown"
+
+msgid "Opening stock"
+msgstr "Opening stock"
+
+msgid "Period purchases"
+msgstr "Period purchases"
+
+msgid "Closing stock"
+msgstr "Closing stock"
+
+msgid "Material waste"
+msgstr "Material waste"
+
+msgid "Computed"
+msgstr "Computed"
+
+msgid "From journals"
+msgstr "From journals"
+
+msgid "Used"
+msgstr "Used"
+
+msgid "Sales by Branch"
+msgstr "Sales by Branch"
+
+msgid "As of"
+msgstr "As of"
+
+msgid "As of date"
+msgstr "As of date"
+
+msgid "Warning: Trial balance is not balanced"
+msgstr "Warning: Trial balance is not balanced"
+
+msgid "diff"
+msgstr "diff"
+
+msgid "Trial balance — accounts with movement only (expandable)"
+msgstr "Trial balance — accounts with movement only (expandable)"
+
+msgid "Totals by Type"
+msgstr "Totals by Type"
+
+msgid "No accounts with movement."
+msgstr "No accounts with movement."
+
+msgid "accounts"
+msgstr "accounts"
+
+msgid "Export PDF"
+msgstr "Export PDF"
+
+msgid "Export Excel"
+msgstr "Export Excel"
+
+msgid "Assets"
+msgstr "Assets"
+
+msgid "Equity"
+msgstr "Equity"
+
+msgid "Current assets"
+msgstr "Current assets"
+
+msgid "Non-current assets"
+msgstr "Non-current assets"
+
+msgid "No movements in this period."
+msgstr "No movements in this period."
+
+msgid "This screen is for viewing, filtering and printing only. No payments or deletions are performed here."
+msgstr "This screen is for viewing, filtering and printing only. No payments or deletions are performed here."
+
+msgid "Sales Invoices (Itemized, grouped by Branch)"
+msgstr "Sales Invoices (Itemized, grouped by Branch)"
+
+msgid "Purchase Invoices (Itemized)"
+msgstr "Purchase Invoices (Itemized)"
+
+msgid "Export Detailed CSV"
+msgstr "Export Detailed CSV"
+

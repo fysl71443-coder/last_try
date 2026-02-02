@@ -1,692 +1,303 @@
 {% extends 'base.html' %}
 {% set back_url = url_for('main.dashboard') %}
 
-{% block title %}{{ _('Expenses / المصروفات') }}{% endblock %}
+{% block title %}{{ _('Expenses') }}{% endblock %}
 {% block content %}
 
-<style>
-body {
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  min-height: 100vh;
-}
+<style>.expense-highlight{ font-weight:700; color:var(--danger,#e74c3c); }</style>
 
-.expenses-card {
-  background: white;
-  border-radius: 15px;
-  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-  padding: 2rem;
-  margin-bottom: 2rem;
-  border: 1px solid rgba(0,0,0,0.05);
-}
-
-.expenses-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 35px rgba(0,0,0,0.15);
-  transition: all 0.3s ease;
-}
-
-.status-badge {
-  padding: 0.4rem 0.8rem;
-  border-radius: 25px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.status-paid { 
-  background: linear-gradient(45deg, #00b894, #00a085); 
-  color: white; 
-  box-shadow: 0 2px 8px rgba(0,184,148,0.3);
-}
-
-.status-pending { 
-  background: linear-gradient(45deg, #ffeaa7, #fdcb6e); 
-  color: #2d3436; 
-  box-shadow: 0 2px 8px rgba(253,203,110,0.3);
-}
-
-.item-row {
-  border: 2px solid #e9ecef;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-  background: white;
-  transition: all 0.3s ease;
-}
-
-.item-row:hover {
-  border-color: #007bff;
-  box-shadow: 0 4px 15px rgba(0,123,255,0.1);
-}
-
-.expense-highlight {
-  font-weight: bold;
-  color: #e74c3c;
-}
-
-/* Enhanced form controls */
-.form-control:focus, .form-select:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
-}
-
-/* Button enhancements */
-.btn {
-  border-radius: 8px;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-/* Table enhancements */
-.table {
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.table thead th {
-  border: none;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-size: 0.85rem;
-}
-
-.table tbody tr:hover {
-  background-color: rgba(0,123,255,0.05);
-  transform: scale(1.01);
-  transition: all 0.2s ease;
-}
-
-/* Card stats */
-.card {
-  border-radius: 12px;
-  border: none;
-  transition: all 0.3s ease;
-}
-
-.card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-}
-</style>
-
-<div class="container py-4">
-    <!-- Header with navigation -->
-    <div class="section-header mb-3">
+<div class="container py-4 ops-layout hub-wrap">
+    <div class="ops-header-bar">
+        <span class="ops-icon"><i class="fa-solid fa-wallet"></i></span>
         <div>
-            <h3 class="mb-1">💸 {{ _('Expenses Management / إدارة المصروفات') }}</h3>
-            <small class="text-muted">{{ _('Track and manage business expenses / تتبع وإدارة مصروفات العمل') }}</small>
+            <h1 class="ops-title mb-0">{{ _('Expenses') }}</h1>
+            <span class="ops-subtitle">{{ _('Add and view expense invoices') }}</span>
         </div>
-        <div class="d-flex flex-wrap gap-2">
-            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning">
-                🛒 {{ _('Purchases / المشتريات') }}
-            </a>
-            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-success">
-                💰 {{ _('Sales / المبيعات') }}
-            </a>
-            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
-                🏠 {{ _('Dashboard / لوحة التحكم') }}
-            </a>
+        <div class="ops-actions d-flex flex-wrap gap-2" data-partial-links>
+            <a href="{{ url_for('purchases.purchases') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-cart-shopping me-1"></i>{{ _('Purchases') }}</a>
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
         </div>
     </div>
 
-    <!-- Quick Stats -->
     {% if invoices %}
-    <div class="row mb-4">
+    <div class="kpi-row">
         {% set total_expenses = invoices|sum(attribute='total_after_tax_discount') %}
         {% set paid_expenses = invoices|selectattr('status','equalto','paid')|sum(attribute='total_after_tax_discount') %}
         {% set pending_expenses = total_expenses - paid_expenses %}
-        
-        <div class="col-md-3">
-            <div class="card bg-danger text-white">
-                <div class="card-body text-center">
-                    <h4 class="mb-1">﷼{{ "%.2f"|format(total_expenses) }}</h4>
-                    <small>{{ _('Total Expenses / إجمالي المصروفات') }}</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-success text-white">
-                <div class="card-body text-center">
-                    <h4 class="mb-1">﷼{{ "%.2f"|format(paid_expenses) }}</h4>
-                    <small>{{ _('Paid / مدفوع') }}</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-warning text-white">
-                <div class="card-body text-center">
-                    <h4 class="mb-1">﷼{{ "%.2f"|format(pending_expenses) }}</h4>
-                    <small>{{ _('Pending / معلق') }}</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
-                <div class="card-body text-center">
-                    <h4 class="mb-1">{{ invoices|length }}</h4>
-                    <small>{{ _('Total Invoices / إجمالي الفواتير') }}</small>
-                </div>
-            </div>
-        </div>
+        <div class="kpi-card kpi-card--blue"><div class="kpi-value">{{ invoices|length }}</div><div class="kpi-label">{{ _('Invoices') }}</div></div>
+        <div class="kpi-card kpi-card--red"><div class="kpi-value">﷼{{ "%.2f"|format(total_expenses) }}</div><div class="kpi-label">{{ _('Total') }}</div></div>
+        <div class="kpi-card kpi-card--green"><div class="kpi-value">﷼{{ "%.2f"|format(paid_expenses) }}</div><div class="kpi-label">{{ _('Paid') }}</div></div>
+        <div class="kpi-card kpi-card--orange"><div class="kpi-value">﷼{{ "%.2f"|format(pending_expenses) }}</div><div class="kpi-label">{{ _('Pending') }}</div></div>
     </div>
     {% endif %}
 
-    <div class="expenses-card">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0">🧾 {{ _('Expense Proof / إثبات مصروف') }}</h5>
-        </div>
-        <div class="row g-3">
-            <div class="col-md-12">
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button class="btn btn-outline-primary" onclick="openScenario('salaries')">Salaries Payment / سداد رواتب</button>
-                    <button class="btn btn-outline-primary" onclick="openScenario('vat')">VAT Settlement / سداد ضريبة القيمة المضافة</button>
-                    <button class="btn btn-outline-primary" onclick="openScenario('purchase_no_vat')">Operating Purchases (No VAT) / مشتريات تشغيل بدون ضريبة</button>
-                    <button class="btn btn-outline-primary" onclick="openScenario('maintenance')">Maintenance & Services / صيانة/خدمات</button>
-                    <button class="btn btn-outline-primary" onclick="openScenario('prepaid_rent')">Prepaid Rent / إيجار مقدّم</button>
-                    <button class="btn btn-outline-primary" onclick="openScenario('cash_deposit')">Bank Cash Deposit / إيداع نقدي بالبنك</button>
-                </div>
-                <div id="scenarioForm" style="display:none">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold">الفرع (اختياري)</label>
-                            <select id="scBranch" class="form-select">
-                                <option value="all" selected>الكل / All</option>
-                                <option value="place_india">Place India</option>
-                                <option value="china_town">China Town</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold">التاريخ</label>
-                            <input id="scDate" type="date" class="form-control" value="">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold">طريقة الدفع</label>
-                            <select id="scPM" class="form-select">
-                                <option value="cash">نقداً</option>
-                                <option value="bank">بنك</option>
-                                <option value="creditor">موردين</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold">المبلغ</label>
-                            <div class="input-group">
-                                <span class="input-group-text">﷼</span>
-                                <input id="scAmount" type="number" step="0.01" class="form-control" placeholder="0.00">
-                            </div>
-                        </div>
-                        <div class="col-md-3" id="scVatBox" style="display:none">
-                            <div class="form-check mt-4">
-                                <input class="form-check-input" type="checkbox" id="scApplyVat">
-                                <label class="form-check-label" for="scApplyVat">تطبيق ضريبة مدخلات 15%%</label>
-                            </div>
-                        </div>
-                        <div class="col-md-3" id="scPurchaseBox" style="display:none">
-                            <label class="form-label fw-bold">نوع المشتريات / Purchase Type</label>
-                            <select id="scPurchaseType" class="form-select"></select>
-                        </div>
-                        <div class="col-md-3" id="scPurchaseItemBox" style="display:none">
-                            <label class="form-label fw-bold">الصنف / Item</label>
-                            <select id="scPurchaseItem" class="form-select"></select>
-                        </div>
-                        <div class="col-md-3" id="scBankFeeBox" style="display:none">
-                            <label class="form-label fw-bold">عمولة بنك (اختياري)</label>
-                            <div class="input-group">
-                                <span class="input-group-text">﷼</span>
-                                <input id="scBankFee" type="number" step="0.01" class="form-control" placeholder="0.00">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">ملاحظة</label>
-                            <input id="scNote" type="text" class="form-control" placeholder="اختياري">
-                        </div>
-                    </div>
-                    <div class="alert alert-secondary mt-3" id="scPreview"></div>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-success" onclick="submitScenario()">Save / حفظ</button>
-                        <button class="btn btn-outline-secondary" onclick="closeScenario()">Cancel / إلغاء</button>
-                        <button class="btn btn-outline-info" id="scAutoBtn" style="display:none"></button>
-                    </div>
-                </div>
-            </div>
+    <div class="ops-tabs-wrap">
+        <div class="ops-tabs" role="tablist">
+            <button type="button" class="ops-tab active" data-panel="panel-add">{{ _('Add') }}</button>
+            <button type="button" class="ops-tab" data-panel="panel-log">{{ _('Log') }}</button>
         </div>
     </div>
-    <!-- نموذج إنشاء فاتورة مصروفات جديدة -->
-    <div class="expenses-card">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0">📝 {{ _('Create New Expense Invoice / إنشاء فاتورة مصروفات جديدة') }}</h5>
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearExpenseForm()">
-                🗑️ {{ _('Clear Form / مسح النموذج') }}
-            </button>
-        </div>
+    <div class="ops-body ops-body-no-sidebar">
+        <main class="ops-main">
+            <div id="panel-add" class="ops-panel" data-panel>
+                <div class="ops-form-card">
+                    <div class="ops-form-head d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span>{{ _('Add Expense') }}</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="expense-type-driven-reset">🗑️ {{ _('Clear') }}</button>
+                    </div>
+                    <div class="ops-form-body">
+                        <div class="alert alert-info border-0 py-2 mb-3"><i class="fas fa-info-circle me-2"></i><strong>{{ _('Tip') }}:</strong> {{ _('Choose expense type first — the system will set account, VAT, and payment.') }}</div>
 
-        <div class="alert alert-info border-0">
-            <div class="d-flex align-items-center">
-                <i class="fas fa-info-circle me-2"></i>
-                <div>
-                    <strong>💡 {{ _('Tip / نصيحة') }}:</strong>
-                    {{ _('Record all business expenses including utilities, rent, supplies, and other operational costs / سجل جميع مصروفات العمل بما في ذلك المرافق والإيجار واللوازم والتكاليف التشغيلية الأخرى') }}
-                </div>
-            </div>
-        </div>
-
-        <form method="POST" id="expense-form">
-            {{ form.hidden_tag() }}
-
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-
-            <!-- معلومات الفاتورة الأساسية -->
-            <div class="card border-0 bg-light mb-4">
-                <div class="card-body">
-                    <h6 class="card-title mb-3">📋 {{ _('Invoice Information / معلومات الفاتورة') }}</h6>
-                    <div class="row g-3">
-                        {% if form.csrf_token %}{{ form.csrf_token }}{% endif %}
-                        <div class="col-md-4">
-                            {{ form.date.label(class_='form-label fw-bold') }}
-                            {{ form.date(class_='form-control') }}
-                        </div>
-                        <div class="col-md-4">
-                            {{ form.payment_method.label(class_='form-label fw-bold') }}
-                            {{ form.payment_method(class_='form-select') }}
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">{{ _('Payment Status / حالة الدفع') }}</label>
-                            <select name="status" id="expense-status" class="form-select">
-                                <option value="paid">✅ {{ _('Paid / مدفوع') }}</option>
-                                <option value="partial">⚠️ {{ _('Partial / مدفوع جزئياً') }}</option>
-                                <option value="unpaid">❌ {{ _('Unpaid / غير مدفوع') }}</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6" id="expense-partial-box" style="display:none;">
-                            <label class="form-label fw-bold">{{ _('Paid Amount (Partial) / المبلغ المدفوع (جزئي)') }}</label>
-                            <div class="input-group">
-                                <span class="input-group-text">﷼</span>
-                                <input name="partial_paid_amount" id="expense-partial-amount" type="number" step="0.01" min="0" class="form-control" placeholder="0.00">
+                        <!-- Step 1: نوع المصروف (Mandatory) -->
+                        <div class="ops-form-card mb-3">
+                            <div class="ops-form-head"><i class="fa-solid fa-tags me-2"></i>{{ _('Step 1: Expense Type') }} <span class="text-danger">*</span></div>
+                            <div class="ops-form-body">
+                                <p class="text-muted small mb-2">{{ _('You cannot continue without selecting a type.') }}</p>
+                                <div id="expense-type-cards" class="row g-2">
+                                    <!-- populated by JS from /expenses/api/expense_types -->
+                                </div>
+                                <input type="hidden" name="expense_type" id="expense_type" value="">
                             </div>
-                            <div class="form-text">{{ _('Max is Final Total / الحد الأقصى هو الإجمالي النهائي') }}: <span id="expense-partial-max" class="fw-bold text-danger"></span></div>
                         </div>
-                    </div>
-                </div>
-            </div>
 
+                        <!-- Step 2: التصنيف الفرعي (Sub-Type) -->
+                        <div class="ops-form-card mb-3" id="expense-step2-box" style="display:none;">
+                            <div class="ops-form-head"><i class="fa-solid fa-list me-2"></i>{{ _('Step 2: Sub-Type') }}</div>
+                            <div class="ops-form-body">
+                                <label class="form-label fw-bold">{{ _('Sub-Type') }}</label>
+                                <select class="form-select" id="expense_sub_type" name="expense_sub_type">
+                                    <option value="">{{ _('Select sub-type') }}</option>
+                                </select>
+                            </div>
+                        </div>
 
-            <!-- عناصر الفاتورة -->
-            <div class="card border-0 bg-light mb-4">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="card-title mb-0">🧾 {{ _('Expense Items / بنود المصروفات') }}</h6>
-                        <button type="button" class="btn btn-success btn-sm" id="add-item">
-                            ➕ {{ _('Add Item / إضافة بند') }}
-                        </button>
-                    </div>
-                    
-                    <div id="items-container">
-                        {% for item_form in form.items %}
-                        <div class="item-row border rounded p-3 mb-3 bg-white">
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    {{ item_form.form.description.label(class_='form-label fw-bold') }}
-                                    {{ item_form.form.description(class_='form-control', placeholder=_('e.g., Office rent, Electricity bill / مثل: إيجار المكتب، فاتورة الكهرباء')) }}
-                                    <div class="mt-2">
-                                        {{ item_form.form.account_code.label(class_='form-label fw-bold') }}
-                                        {{ item_form.form.account_code(class_='form-select') }}
+                        <!-- Step 3: بيانات أساسية -->
+                        <form method="POST" id="expense-form" style="display:none;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <input type="hidden" name="expense_type" id="expense_type_submit" value="">
+                            <input type="hidden" name="expense_sub_type" id="expense_sub_type_submit" value="">
+                            <div class="ops-form-card mb-3">
+                                <div class="ops-form-head"><i class="fa-solid fa-file-invoice me-2"></i>{{ _('Step 3: Details') }}</div>
+                                <div class="ops-form-body">
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold">{{ _('Date') }}</label>
+                                            <input type="date" name="date" id="expense-date" class="form-control" value="{{ form.date.data or '' }}">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold">{{ _('Payment Method') }}</label>
+                                            <select name="payment_method" id="expense-payment-method" class="form-select">
+                                                <option value="CASH">{{ _('Cash') }}</option>
+                                                <option value="BANK">{{ _('Bank') }}</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold">{{ _('Payment Status') }}</label>
+                                            <select name="status" id="expense-status" class="form-select">
+                                                <option value="paid">{{ _('Paid') }}</option>
+                                                <option value="partial">{{ _('Partial') }}</option>
+                                                <option value="unpaid">{{ _('Unpaid') }}</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">{{ _('Amount') }} (﷼) <span class="text-danger">*</span></label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">﷼</span>
+                                                <input type="number" name="amount" id="expense-amount" class="form-control" step="0.01" min="0" placeholder="0.00" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 d-flex align-items-end">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="expense-apply-vat" name="apply_vat">
+                                                <label class="form-check-label" for="expense-apply-vat">{{ _('Apply 15%% VAT') }}</label>
+                                            </div>
+                                            <span class="ms-2 small text-muted" id="expense-vat-hint"></span>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label fw-bold">{{ _('Description') }}</label>
+                                            <input type="text" name="description" id="expense-description" class="form-control" placeholder="{{ _('Optional') }}">
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="col-md-2">
-                                    {{ item_form.form.quantity.label(class_='form-label fw-bold') }}
-                                    <div class="input-group">
-                                        {{ item_form.form.quantity(class_='form-control', step='0.01', value='1') }}
-                                        <span class="input-group-text">{{ _('unit / وحدة') }}</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
-                                    {{ item_form.form.price_before_tax.label(class_='form-label fw-bold') }}
-                                    <div class="input-group">
-                                        <span class="input-group-text">﷼</span>
-                                        {{ item_form.form.price_before_tax(class_='form-control', step='0.01') }}
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label fw-bold">{{ _('Discount %% / نسبة الخصم %%') }}</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">﷼</span>
-                                        {{ item_form.form.discount(class_='form-control', step='0.01', value='0') }}
-                                    </div>
-                                </div>
-                                <div class="col-md-1"></div>
-                                <div class="col-md-1">
-                                    <label class="form-label fw-bold">{{ _('Total / الإجمالي') }}</label>
-                                    <div class="form-control bg-success text-white fw-bold item-total">﷼0.00</div>
-                                </div>
-                                <div class="col-md-1 d-flex align-items-end">
-                                    <button type="button" class="btn btn-outline-danger btn-sm remove-item-btn w-100">🗑️</button>
-                                </div>
                             </div>
-                        </div>
-                        {% endfor %}
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary btn-lg px-4"><i class="fa-solid fa-save me-1"></i> {{ _('Save') }}</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
 
-            <!-- ملخص التكاليف -->
-            <div class="card border-0 bg-light mb-4">
-                <div class="card-body">
-                    <h6 class="card-title mb-3">💰 {{ _('Cost Summary / ملخص التكاليف') }}</h6>
-                    <div class="row g-3 align-items-center">
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold">{{ _('Subtotal / المجموع الفرعي') }}</label>
-                            <div class="form-control bg-info text-white fw-bold" id="total-before-tax">﷼0.00</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold">{{ _('Tax / الضريبة') }}</label>
-                            <div class="form-control bg-warning text-dark fw-bold" id="tax-amount">﷼0.00</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="form-check mt-4">
-                                <input class="form-check-input" type="checkbox" id="apply_vat_all" name="apply_vat_all">
-                                <label class="form-check-label" for="apply_vat_all">{{ _('Apply 15%% VAT on subtotal / تطبيق ضريبة 15%% على المجموع الفرعي') }}</label>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold">{{ _('Discount / الخصم') }}</label>
-                            <div class="form-control bg-secondary text-white fw-bold" id="total-discount">﷼0.00</div>
-                        </div>
-                        <div class="col-md-3 mt-3">
-                            <label class="form-label fw-bold">{{ _('Final Total / الإجمالي النهائي') }}</label>
-                            <div class="form-control bg-danger text-white fw-bold fs-5" id="final-total">﷼0.00</div>
+            <div id="panel-log" class="ops-panel d-none" data-panel>
+                <div class="ops-form-card">
+                    <div class="ops-form-head d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span>{{ _('Expense Invoices') }}</span>
+                        <div class="d-flex gap-2">
+                            <input type="text" class="form-control form-control-sm" id="invoiceSearch" placeholder="{{ _('Search...') }}" style="width:180px">
+                            <button class="btn btn-outline-primary btn-sm" onclick="window.exportExpenses()"><i class="fa-solid fa-file-export me-1"></i>{{ _('Export') }}</button>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <button type="button" class="btn btn-outline-secondary me-2" onclick="clearExpenseForm()">
-                        🗑️ {{ _('Clear Form / مسح النموذج') }}
-                    </button>
-                    <button type="button" class="btn btn-outline-info" onclick="calculateTotals()">
-                        🔄 {{ _('Recalculate / إعادة حساب') }}
-                    </button>
-                </div>
-                <div>
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                    {{ form.submit(class_='btn btn-danger btn-lg px-4') }}
-                </div>
-            </div>
-            <div class="mt-3">
-                <button type="button" id="btnCashCalcToggle" class="btn btn-outline-primary">Cash Calculator / حاسبة الكاش</button>
-                <div id="cashCalcBox" class="card border-0 bg-light mt-2" style="display:none">
-                    <div class="card-body">
-                        <div class="row g-3 align-items-end">
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">Cash Received / المبلغ المستلم</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">﷼</span>
-                                    <input id="cashReceived" type="number" step="0.01" class="form-control" placeholder="0.00">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">Change / الباقي للعميل</label>
-                                <div id="cashChangeValue" class="form-control bg-success text-white fw-bold">﷼0.00</div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">Remaining Due / المتبقي للدفع</label>
-                                <div id="cashRemainingValue" class="form-control bg-warning text-dark fw-bold">﷼0.00</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <!-- قائمة الفواتير السابقة -->
+                    <div class="ops-form-body p-0">
     {% if invoices %}
-    <div class="expenses-card">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0">📋 {{ _('Previous Expense Invoices / فواتير المصروفات السابقة') }}</h5>
-            <div class="d-flex gap-2">
-                <input type="text" class="form-control form-control-sm" id="invoiceSearch" placeholder="{{ _('Search invoices... / بحث في الفواتير...') }}" style="width: 200px;">
-                <button class="btn btn-outline-primary btn-sm" onclick="window.exportExpenses()">
-                    📊 {{ _('Export / تصدير') }}
-                </button>
-            </div>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th class="text-center">#</th>
-                        <th>{{ _('Invoice No / رقم الفاتورة') }}</th>
-                        <th>{{ _('Date / التاريخ') }}</th>
-                        <th>{{ _('Payment / الدفع') }}</th>
-                        <th class="text-end">{{ _('Total / الإجمالي') }}</th>
-                        <th class="text-center">{{ _('Status / الحالة') }}</th>
-                        <th class="text-center">{{ _('Items / العناصر') }}</th>
-                        <th class="text-center">{{ _('Actions / الإجراءات') }}</th>
-                    </tr>
-                </thead>
-                <tbody id="invoicesTableBody">
-                    {% for invoice in invoices %}
-                    <tr>
-                        <td class="text-center"><span class="badge bg-secondary">{{ loop.index }}</span></td>
-                        <td><strong class="text-primary">{{ invoice.invoice_number }}</strong></td>
-                        <td>
-                            <span class="badge bg-light text-dark">{{ invoice.date.strftime('%Y-%m-%d') }}</span>
-                        </td>
-                        <td>
-                            {% set pm = (invoice.payment_method or '')|lower %}
-                            {% if pm == 'cash' %}
-                                <span class="badge bg-success">💰 {{ _('Cash / نقداً') }}</span>
-                            {% else %}
-                                <span class="badge bg-primary">🏦 {{ _('Bank / بنك') }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end">
-                            <span class="fw-bold text-danger fs-6">﷼{{ "%.2f"|format(invoice.total_after_tax_discount) }}</span>
-                        </td>
-                        <td class="text-center">
-                            {% if invoice.status == 'paid' %}
-                                <span class="badge bg-success">✅ {{ _('Paid / مدفوع') }}</span>
-                            {% elif invoice.status == 'partial' %}
-                                <span class="badge bg-warning">⚠️ {{ _('Partial / جزئي') }}</span>
-                            {% else %}
-                                <span class="badge bg-danger">❌ {{ _('Unpaid / غير مدفوع') }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            <span class="badge bg-info">{{ invoice.items|length }} {{ _('items / عناصر') }}</span>
-                        </td>
-                        <td class="text-center">
-                            <div class="btn-group" role="group">
-                                <button class="btn btn_sm btn-outline-info" onclick="window.viewInvoice({{ invoice.id }})" title="{{ _('View Details / عرض التفاصيل') }}">
-                                    👁️
-                                </button>
-                                
-                                <form method="post" action="{{ url_for('main.expense_delete', eid=invoice.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this expense invoice? / حذف فاتورة المصروفات هذه؟') }}')">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete / حذف') }}">🗑️</button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle screen-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="text-center">#</th>
+                                        <th>{{ _('Invoice No') }}</th>
+                                        <th>{{ _('Date') }}</th>
+                                        <th>{{ _('Payment') }}</th>
+                                        <th class="text-end">{{ _('Total') }}</th>
+                                        <th class="text-center">{{ _('Status') }}</th>
+                                        <th class="text-center">{{ _('Items') }}</th>
+                                        <th class="text-center">{{ _('Actions') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="invoicesTableBody">
+                                    {% for invoice in invoices %}
+                                    <tr>
+                                        <td class="text-center"><span class="badge bg-secondary">{{ loop.index }}</span></td>
+                                        <td><strong class="text-primary">{{ invoice.invoice_number }}</strong></td>
+                                        <td><span class="badge bg-light text-dark">{{ invoice.date.strftime('%Y-%m-%d') }}</span></td>
+                                        <td>
+                                            {% set pm = (invoice.payment_method or '')|lower %}
+                                            {% if pm == 'cash' %}<span class="badge bg-success">{{ _('Cash') }}</span>{% else %}<span class="badge bg-primary">{{ _('Bank') }}</span>{% endif %}
+                                        </td>
+                                        <td class="text-end"><span class="fw-bold text-danger fs-6">﷼{{ "%.2f"|format(invoice.total_after_tax_discount) }}</span></td>
+                                        <td class="text-center">
+                                            {% if invoice.status == 'paid' %}<span class="badge bg-success">{{ _('Paid') }}</span>
+                                            {% elif invoice.status == 'partial' %}<span class="badge bg-warning">{{ _('Partial') }}</span>
+                                            {% else %}<span class="badge bg-danger">{{ _('Unpaid') }}</span>{% endif %}
+                                        </td>
+                                        <td class="text-center"><span class="badge bg-info">{{ invoice.items|length }} {{ _('items') }}</span></td>
+                                        <td class="text-center">
+                                            <div class="btn-group">
+                                                <button class="btn btn-sm btn-outline-info" onclick="window.viewInvoice({{ invoice.id }})" title="{{ _('View') }}">👁️</button>
+                                                <form method="post" action="{{ url_for('expenses.expense_delete', eid=invoice.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this expense invoice?') }}')">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete') }}">🗑️</button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+    {% else %}
+                        <div class="text-center text-muted py-5">{{ _('No expense invoices yet') }}</div>
     {% endif %}
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
 </div>
 
-<!-- SocketIO and JavaScript -->
-<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script>
-    // SocketIO for real-time updates
-    var socket = io();
-    socket.on('expense_update', function(data) {
-        console.log('Expense updated:', data);
-        alert('New expense invoice created: ' + data.invoice_number + ' - ﷼' + data.total);
-        location.reload();
-    });
-
-    // Payment status handling
-    document.getElementById('expense-status')?.addEventListener('change', function() {
-        const partialBox = document.getElementById('expense-partial-box');
-        if (this.value === 'partial') {
-            partialBox.style.display = 'block';
-        } else {
-            partialBox.style.display = 'none';
+    // SocketIO optional (server may not have SocketIO; avoid 404 noise)
+    try {
+        if (typeof io === 'function') {
+            var socket = io();
+            socket.on('expense_update', function(data) {
+                console.log('Expense updated:', data);
+                location.reload();
+            });
         }
-    });
+    } catch (e) { /* Socket.IO not available */ }
 
-    // Auto-calculation functionality
-    function calculateTotals() {
-        let totalBeforeTax = 0;
-        let totalTax = 0;
-        let totalDiscount = 0;
+    // --- Type-driven expense UI ---
+    let EXPENSE_CATEGORIES = [];
+    const typeCardsEl = document.getElementById('expense-type-cards');
+    const expenseTypeEl = document.getElementById('expense_type');
+    const step2Box = document.getElementById('expense-step2-box');
+    const subTypeSelect = document.getElementById('expense_sub_type');
+    const expenseFormEl = document.getElementById('expense-form');
+    const expenseTypeSubmit = document.getElementById('expense_type_submit');
+    const expenseSubTypeSubmit = document.getElementById('expense_sub_type_submit');
+    const expenseVatCheck = document.getElementById('expense-apply-vat');
+    const expenseVatHint = document.getElementById('expense-vat-hint');
 
-        document.querySelectorAll('.item-row').forEach(row => {
-            const quantityInput = row.querySelector('input[name$="-quantity"]');
-            const priceInput = row.querySelector('input[name$="-price_before_tax"]');
-            const discountInput = row.querySelector('input[name$="-discount"]');
-            const totalDisplay = row.querySelector('.item-total');
+    function expenseTypeReset() {
+        expenseTypeEl.value = '';
+        if (typeCardsEl) typeCardsEl.querySelectorAll('.expense-type-card').forEach(c => c.classList.remove('active', 'border-primary'));
+        step2Box.style.display = 'none';
+        subTypeSelect.innerHTML = '<option value="">{{ _("Select sub-type") }}</option>';
+        subTypeSelect.value = '';
+        expenseFormEl.style.display = 'none';
+        expenseTypeSubmit.value = '';
+        expenseSubTypeSubmit.value = '';
+    }
 
-            const quantity = parseFloat(quantityInput.value) || 0;
-            const price = parseFloat(priceInput.value) || 0;
-            const discountPct = parseFloat(discountInput.value) || 0;
+    function loadExpenseTypes() {
+        fetch('{{ url_for("expenses.expense_types_api") }}', { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                EXPENSE_CATEGORIES = data.categories || [];
+                if (!typeCardsEl) return;
+                typeCardsEl.innerHTML = '';
+                EXPENSE_CATEGORIES.forEach(cat => {
+                    const card = document.createElement('button');
+                    card.type = 'button';
+                    card.className = 'btn btn-outline-secondary expense-type-card text-start col-md-4 col-lg-3';
+                    card.dataset.categoryId = cat.id;
+                    const icon = (cat.icon && cat.icon.startsWith('fa-')) ? cat.icon : 'fa-tag';
+                    card.innerHTML = '<i class="fa-solid ' + icon + ' me-2"></i><span>' + (cat.label_ar || cat.label_en || cat.id) + '</span>';
+                    card.addEventListener('click', function() {
+                        typeCardsEl.querySelectorAll('.expense-type-card').forEach(c => c.classList.remove('active', 'border-primary'));
+                        this.classList.add('active', 'border-primary');
+                        expenseTypeEl.value = cat.id;
+                        step2Box.style.display = 'block';
+                        subTypeSelect.innerHTML = '<option value="">Select sub-type</option>';
+                        (cat.sub_types || []).forEach(st => {
+                            const opt = document.createElement('option');
+                            opt.value = st.id;
+                            opt.textContent = (st.label_ar || st.label_en || st.id);
+                            opt.dataset.defaultVat = (st.default_vat === true || st.default_vat === '1') ? '1' : '0';
+                            subTypeSelect.appendChild(opt);
+                        });
+                        expenseFormEl.style.display = 'none';
+                    });
+                    typeCardsEl.appendChild(card);
+                });
+            })
+            .catch(e => console.error('Expense types load error', e));
+    }
 
-            const itemBeforeTax = quantity * price;
-            const discountAmt = itemBeforeTax * (discountPct/100);
-            const itemTotal = itemBeforeTax - discountAmt;
-
-            totalDisplay.textContent = '﷼' + itemTotal.toFixed(2);
-            totalBeforeTax += itemBeforeTax;
-            totalDiscount += discountAmt;
+    if (subTypeSelect) {
+        subTypeSelect.addEventListener('change', function() {
+            const val = this.value;
+            expenseSubTypeSubmit.value = val;
+            expenseTypeSubmit.value = expenseTypeEl.value || '';
+            if (val) {
+                expenseFormEl.style.display = 'block';
+                const opt = this.selectedOptions[0];
+                if (opt && expenseVatCheck) {
+                    const defaultVat = opt.dataset.defaultVat === '1';
+                    expenseVatCheck.checked = defaultVat;
+                    if (expenseVatHint) expenseVatHint.textContent = defaultVat ? '{{ _("VAT applied by default for this type") }}' : '';
+                }
+            } else {
+                expenseFormEl.style.display = 'none';
+            }
         });
-
-        const applyAll = document.getElementById('apply_vat_all')?.checked;
-        totalTax = applyAll ? ((totalBeforeTax - totalDiscount) * 0.15) : 0;
-        const finalTotal = totalBeforeTax + totalTax - totalDiscount;
-
-        document.getElementById('total-before-tax').textContent = '﷼' + totalBeforeTax.toFixed(2);
-        document.getElementById('tax-amount').textContent = '﷼' + totalTax.toFixed(2);
-        document.getElementById('total-discount').textContent = '﷼' + totalDiscount.toFixed(2);
-        document.getElementById('final-total').textContent = '﷼' + finalTotal.toFixed(2);
-        try{ if(typeof updateExpensePartialMax==='function') updateExpensePartialMax(); }catch(e){}
     }
 
-    // Event listeners
-    function recalcRow(row){
-        const q = parseFloat(row.querySelector('input[name$="-quantity"]').value)||0;
-        const p = parseFloat(row.querySelector('input[name$="-price_before_tax"]').value)||0;
-        const d = parseFloat(row.querySelector('input[name$="-discount"]').value)||0;
-        const apply = !!row.querySelector('.apply-vat-toggle')?.checked;
-        const taxInput = row.querySelector('.tax-input');
-        const before = q*p;
-        const discAmt = before*(d/100);
-        const base = Math.max(before-discAmt,0);
-        const tax = apply ? (base*0.15) : 0;
-        if(taxInput){ taxInput.value = tax.toFixed(2); }
-    }
-    document.addEventListener('change', e => {
-        if (e.target.matches('input[name$="-quantity"], input[name$="-price_before_tax"], input[name$="-discount"], #apply_vat_all')) {
-            calculateTotals();
+    document.getElementById('expense-type-driven-reset')?.addEventListener('click', expenseTypeReset);
+
+    expenseFormEl?.addEventListener('submit', function() {
+        expenseTypeSubmit.value = expenseTypeEl.value || '';
+        expenseSubTypeSubmit.value = subTypeSelect.value || '';
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadExpenseTypes();
+        const d = document.getElementById('expense-date');
+        if (d && !d.value) {
+            const t = new Date();
+            d.value = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
         }
     });
-
-    // Add new item functionality
-    let itemIndex = {{ form.items|length }};
-
-    document.getElementById('add-item').addEventListener('click', function() {
-        const container = document.getElementById('items-container');
-        const newItem = document.createElement('div');
-        newItem.className = 'item-row';
-        newItem.innerHTML = `
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">{{ _('Description / الوصف') }}</label>
-                    <input class="form-control" name="items-${itemIndex}-description" type="text" placeholder="{{ _('e.g., Office rent, Electricity bill / مثل: إيجار المكتب، فاتورة الكهرباء') }}">
-                    <div class="mt-2">
-                        <label class="form-label fw-bold">{{ _('Account / الحساب') }}</label>
-                        <select class="form-select" name="items-${itemIndex}-account_code">
-                            <option value="RENT">{{ _('Rent / إيجار') }}</option>
-                            <option value="MAINT">{{ _('Maintenance / صيانة') }}</option>
-                            <option value="UTIL">{{ _('Utilities / مرافق') }}</option>
-                            <option value="LOG">{{ _('Logistics / لوجستيات') }}</option>
-                            <option value="MKT">{{ _('Marketing / تسويق') }}</option>
-                            <option value="TEL">{{ _('Telecom & Internet / اتصالات وإنترنت') }}</option>
-                            <option value="STAT">{{ _('Stationery / قرطاسية') }}</option>
-                            <option value="CLEAN">{{ _('Cleaning / نظافة') }}</option>
-                            <option value="GOV">{{ _('Government Payments / مدفوعات حكومية') }}</option>
-                            <option value="EXP" selected>{{ _('Operating Expenses / مصروفات تشغيلية') }}</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-bold">{{ _('Quantity / الكمية') }}</label>
-                    <div class="input-group">
-                        <input class="form-control" name="items-${itemIndex}-quantity" step="0.01" type="number" value="1">
-                        <span class="input-group-text">{{ _('unit / وحدة') }}</span>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-bold">{{ _('Unit Price / سعر الوحدة') }}</label>
-                    <div class="input-group">
-                        <span class="input-group-text">﷼</span>
-                        <input class="form-control" name="items-${itemIndex}-price_before_tax" step="0.01" type="number">
-                    </div>
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label fw-bold">{{ _('Tax / الضريبة') }}</label>
-                    <div class="input-group">
-                        <span class="input-group-text">﷼</span>
-                        <input class="form-control" name="items-${itemIndex}-tax" step="0.01" type="number" value="0">
-                    </div>
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label fw-bold">{{ _('Discount / الخصم') }}</label>
-                    <div class="input-group">
-                        <span class="input-group-text">﷼</span>
-                        <input class="form-control" name="items-${itemIndex}-discount" step="0.01" type="number" value="0">
-                    </div>
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label fw-bold">{{ _('Total / الإجمالي') }}</label>
-                    <div class="form-control bg-success text-white fw-bold item-total">﷼0.00</div>
-                </div>
-                <div class="col-md-1 d-flex align-items-end">
-                    <button type="button" class="btn btn-outline-danger btn-sm remove-item-btn w-100">🗑️</button>
-                </div>
-            </div>
-        `;
-        container.appendChild(newItem);
-        itemIndex++;
-    });
-
-    // Remove item functionality
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('remove-item-btn')) {
-            e.target.closest('.item-row').remove();
-            calculateTotals();
-        }
-    });
-
-    // Clear expense form
-    function clearExpenseForm() {
-        document.getElementById('expense-form').reset();
-        document.getElementById('items-container').innerHTML = '';
-        calculateTotals();
-        // Add one default item
-        document.getElementById('add-item').click();
-    }
 
     // Search functionality
     document.getElementById('invoiceSearch')?.addEventListener('input', function() {
@@ -755,21 +366,21 @@ body {
             <td class="text-end">﷼${(it.total_price||0).toFixed(2)}</td>
           </tr>`).join('');
         modalBody.innerHTML = `
-          <div class="mb-2"><strong>{{ _('Invoice No / رقم الفاتورة') }}:</strong> ${inv.invoice_number||'-'}</div>
-          <div class="mb-2"><strong>{{ _('Date / التاريخ') }}:</strong> ${inv.date||'-'}</div>
-          <div class="mb-2"><strong>{{ _('Payment / الدفع') }}:</strong> ${(inv.payment_method||'-').toUpperCase()}</div>
-          <div class="mb-2"><strong>{{ _('Status / الحالة') }}:</strong> ${(inv.status||'-').toUpperCase()}</div>
-          <div class="mb-2"><strong>{{ _('Total / الإجمالي') }}:</strong> ﷼${(inv.total||0).toFixed(2)}</div>
+          <div class="mb-2"><strong>{{ _('Invoice No') }}:</strong> ${inv.invoice_number||'-'}</div>
+          <div class="mb-2"><strong>{{ _('Date') }}:</strong> ${inv.date||'-'}</div>
+          <div class="mb-2"><strong>{{ _('Payment') }}:</strong> ${(inv.payment_method||'-').toUpperCase()}</div>
+          <div class="mb-2"><strong>{{ _('Status') }}:</strong> ${(inv.status||'-').toUpperCase()}</div>
+          <div class="mb-2"><strong>{{ _('Total') }}:</strong> ﷼${(inv.total||0).toFixed(2)}</div>
           <div class="table-responsive">
             <table class="table table-sm table-bordered align-middle mb-0">
               <thead class="table-light">
                 <tr>
-                  <th>{{ _('Description / الوصف') }}</th>
-                  <th class="text-end">{{ _('Quantity / الكمية') }}</th>
-                  <th class="text-end">{{ _('Unit Price / سعر الوحدة') }}</th>
-                  <th class="text-end">{{ _('Discount / الخصم') }}</th>
-                  <th class="text-end">{{ _('Tax / الضريبة') }}</th>
-                  <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+                  <th>{{ _('Description') }}</th>
+                  <th class="text-end">{{ _('Quantity') }}</th>
+                  <th class="text-end">{{ _('Unit Price') }}</th>
+                  <th class="text-end">{{ _('Discount') }}</th>
+                  <th class="text-end">{{ _('Tax') }}</th>
+                  <th class="text-end">{{ _('Total') }}</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
@@ -782,7 +393,7 @@ body {
     // Edit invoice
     window.editInvoice = async function(invoiceId) {
         // Redirect to edit page
-        if (await window.showConfirm('{{ _("Edit this expense invoice? / تعديل فاتورة المصروفات هذه؟") }}')) {
+        if (await window.showConfirm('{{ _("Edit this expense invoice?") }}')) {
             window.location.href = '/expenses/' + invoiceId + '/edit';
         }
     }
@@ -809,7 +420,7 @@ body {
             form.submit();
         }
     }
-
+</script>
 <script>
 (function(){
   function parseMoneyText(txt){ const s = String(txt||'').replace(/[^0-9.\-]/g,''); const v = parseFloat(s); return isNaN(v)?0:v; }
@@ -839,7 +450,7 @@ body {
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">{{ _('Expense Details / تفاصيل المصروف') }}</h5>
+        <h5 class="modal-title">{{ _('Expense Details') }}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body" id="expenseModalBody"></div>
@@ -850,11 +461,10 @@ body {
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        calculateTotals();
-        try{ const d=document.getElementById('scDate'); if(d && !d.value){ const t=new Date(); const y=t.getFullYear(); const m=String(t.getMonth()+1).padStart(2,'0'); const dd=String(t.getDate()).padStart(2,'0'); d.value=`${y}-${m}-${dd}`; } }catch(e){}
+        try{ const d=document.getElementById('scDate'); if(d && !d.value){ const t=new Date(); const y=t.getFullYear(); const m=String(t.getMonth()+1).padStart(2,'0'); const dd=String(t.getDate()).padStart(2,'0'); d.value=t.getFullYear()+'-'+m+'-'+dd; } }catch(e){}
     });
     let currentScenario = null;
-    function openScenario(s){ currentScenario = s; document.getElementById('scenarioForm').style.display='block';
+    function openScenario(s){ var f=document.getElementById('scenarioForm'); if(!f) return; currentScenario = s; f.style.display='block';
       document.getElementById('scVatBox').style.display = ((s==='maintenance')||(s==='prepaid_rent'))?'block':'none';
       document.getElementById('scBankFeeBox').style.display = (s==='cash_deposit')?'block':'none';
       const pBox = document.getElementById('scPurchaseBox'); const pItemBox = document.getElementById('scPurchaseItemBox');
@@ -864,9 +474,10 @@ body {
       if(s==='cash_deposit'){ autoBtn.style.display='inline-block'; autoBtn.textContent='Suggest Deposit Amount / اقتراح مبلغ الإيداع'; autoBtn.onclick=function(){ const b=document.getElementById('scBranch').value; const d=document.getElementById('scDate').value; const u='/api/sales/cash_total?branch='+encodeURIComponent(b)+'&end_date='+encodeURIComponent(d||''); fetch(u, {credentials:'same-origin'}).then(r=>r.json()).then(j=>{ if(j&&j.ok){ document.getElementById('scAmount').value = j.amount||0; previewScenario(); } }); } }
       if(s==='purchase_no_vat'){ try{ fetch('/api/purchase-categories',{credentials:'same-origin'}).then(r=>r.json()).then(j=>{ const sel=document.getElementById('scPurchaseType'); const selIt=document.getElementById('scPurchaseItem'); if(!sel||!selIt) return; sel.innerHTML=''; selIt.innerHTML=''; const pc=(j.purchase_categories||[]); const opts=[]; pc.forEach(cat=>{ const catLabel=((cat.category?.en)||'')+' / '+((cat.category?.ar)||''); (cat.subcategories||[]).forEach(sub=>{ const subLabel=((sub.name?.en)||'')+' / '+((sub.name?.ar)||''); const val=((cat.category?.en)||'')+'::'+((sub.name?.en)||''); opts.push({v:val,l:catLabel+' – '+subLabel,items:(sub.items||[])}); }); }); opts.forEach(o=>{ const opt=document.createElement('option'); opt.value=o.v; opt.textContent=o.l; opt.dataset.items=JSON.stringify(o.items||[]); sel.appendChild(opt); }); const updItems=function(){ const cur=sel.selectedOptions[0]; const items=cur?JSON.parse(cur.dataset.items||'[]'):[]; selIt.innerHTML=''; const def=document.createElement('option'); def.value=''; def.textContent='—'; selIt.appendChild(def); items.forEach(it=>{ const lbl=((it.en)||'')+' / '+((it.ar)||''); const op=document.createElement('option'); op.value=lbl; op.textContent=lbl; selIt.appendChild(op); }); }; sel.addEventListener('change', function(){ updItems(); previewScenario(); }); updItems(); }); }catch(e){} }
       previewScenario(); }
-    function closeScenario(){ currentScenario=null; document.getElementById('scenarioForm').style.display='none'; }
+    function closeScenario(){ var f=document.getElementById('scenarioForm'); if(!f) return; currentScenario=null; f.style.display='none'; }
     function previewScenario(){
-      const amt = parseFloat(document.getElementById('scAmount').value||'0')||0;
+      const scAmount = document.getElementById('scAmount'); if(!scAmount) return;
+      const amt = parseFloat(scAmount.value||'0')||0;
       const pm = document.getElementById('scPM').value;
       const dt = document.getElementById('scDate').value;
       const br = document.getElementById('scBranch').value;
@@ -892,9 +503,18 @@ body {
       const el = document.getElementById('scPreview');
       el.innerHTML = `<div>${txtEn}</div><div>${txtAr}</div>`;
     }
-    function submitScenario(){ const payload={ scenario: currentScenario, amount: document.getElementById('scAmount').value, date: document.getElementById('scDate').value, branch: document.getElementById('scBranch').value, payment_method: document.getElementById('scPM').value, apply_vat: document.getElementById('scApplyVat').checked, bank_fee: document.getElementById('scBankFee').value, note: document.getElementById('scNote').value, purchase_category: document.getElementById('scPurchaseType')?.value||'', purchase_item: document.getElementById('scPurchaseItem')?.value||'' }; fetch('/api/expenses/proof', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), credentials:'same-origin' }).then(r=>r.json()).then(j=>{ if(j&&j.ok){ closeScenario(); location.reload(); } else { alert('فشل الحفظ'); } }); }
-    ['scAmount','scDate','scPM'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.addEventListener('input', previewScenario); el.addEventListener('change', previewScenario); }});
+    function submitScenario(){ if(!document.getElementById('scenarioForm')) return; const payload={ scenario: currentScenario, amount: document.getElementById('scAmount')?.value, date: document.getElementById('scDate')?.value, branch: document.getElementById('scBranch')?.value, payment_method: document.getElementById('scPM')?.value, apply_vat: document.getElementById('scApplyVat')?.checked, bank_fee: document.getElementById('scBankFee')?.value, note: document.getElementById('scNote')?.value, purchase_category: document.getElementById('scPurchaseType')?.value||'', purchase_item: document.getElementById('scPurchaseItem')?.value||'' }; fetch('/api/expenses/proof', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), credentials:'same-origin' }).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(j=>{ if(j&&j.ok){ closeScenario(); location.reload(); } else { alert('فشل الحفظ: ' + (j&&j.error ? j.error : '')); } }).catch(e=>{ alert('فشل الحفظ: ' + (e&&e.message ? e.message : '')); }); }
+    ['scAmount','scDate','scPM','scBranch'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.addEventListener('input', previewScenario); el.addEventListener('change', previewScenario); }});
+    document.querySelectorAll('.ops-tabs-wrap .ops-tab[data-panel]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = this.getAttribute('data-panel');
+        document.querySelectorAll('.ops-tabs-wrap .ops-tab[data-panel]').forEach(function(b){ b.classList.remove('active'); });
+        document.querySelectorAll('.ops-panel[data-panel]').forEach(function(p){ p.classList.add('d-none'); });
+        this.classList.add('active');
+        var panel = document.getElementById(id);
+        if (panel) panel.classList.remove('d-none');
+      });
+    });
     </script>
-</script>
 
 {% endblock %}

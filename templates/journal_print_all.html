@@ -1,27 +1,40 @@
 <!doctype html>
-<html>
+<html lang="{{ get_locale() or 'ar' }}" dir="{{ 'rtl' if (get_locale() or 'ar') == 'ar' else 'ltr' }}">
 <head>
   <meta charset="utf-8">
-  <title>طباعة قيود اليومية</title>
+  <title>{{ _('Journal Entries Print') }}</title>
   <style>
-    body{ font-family: Arial, sans-serif; }
-    .topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
-    .meta{ font-size:12px; color:#555; }
-    .entry-block{ border:1px solid #999; border-radius:8px; padding:10px; margin-bottom:16px; break-inside:avoid; page-break-inside:avoid; }
-    .header{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-    .header .left div{ margin-bottom:4px; }
-    table{ width:100%; border-collapse:collapse; margin-top:8px; }
-    th,td{ border:1px solid #333; padding:6px; font-size:12px; }
-    thead th{ background:#f0f0f0; }
-    tfoot th{ text-align:right; }
-    .badge{ padding:2px 6px; border-radius:4px; background:#eee; }
+    body, table, th, td, .meta, .badge { font-family: Tahoma, 'Segoe UI', Arial, 'Traditional Arabic', sans-serif !important; }
+    body { font-size: 14px; margin: 0; padding: 16px; color: #1a1a1a; }
+    .print-brand { font-size: 18px; font-weight: 700; margin-bottom: 4px; color: #0d47a1; }
+    .print-meta { font-size: 12px; color: #555; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+    .entry-block { border: 1px solid #333; border-radius: 8px; padding: 12px; margin-bottom: 16px; break-inside: avoid; page-break-inside: avoid; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .header .left div { margin-bottom: 4px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #333; padding: 6px; font-size: 12px; }
+    thead th { background: #e3f2fd; color: #0d47a1; font-weight: 700; }
+    tfoot th { text-align: right; background: #f5f5f5; }
+    .badge { padding: 2px 6px; border-radius: 4px; background: #eee; }
+    .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 12px; color: #555; }
+    .no-print { display: none; }
+    @media print {
+      body, table, th, td, .meta, .badge { font-family: Tahoma, 'Segoe UI', Arial, 'Traditional Arabic', sans-serif !important; color: #000 !important; }
+      body { padding: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .print-brand, .print-meta, .footer { color: #000 !important; }
+      thead th { background: #e8e8e8 !important; color: #000 !important; }
+      .entry-block { border-color: #333 !important; }
+      @page { margin: 15mm; size: A4; }
+    }
   </style>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
+  <div class="print-brand">{{ _('Accounting System — Journal Entries Print') }}</div>
   <div class="topbar">
-    <h3 style="margin:0">📘 قيود اليومية</h3>
-    <div class="meta">
+    <h3 style="margin:0; font-size:16px;">{{ _('Journal Entries') }}</h3>
+    <div class="print-meta">
       <div>الفرع: {{ branch or 'الكل' }}</div>
       {% if q %}<div>بحث: {{ q }}</div>{% endif %}
       {% if sd %}<div>من: {{ sd }}</div>{% endif %}
@@ -77,5 +90,8 @@
     </table>
   </div>
   {% endfor %}
+  <div class="footer">تم الإعداد بواسطة النظام — تاريخ الطباعة: <span id="jpa-print-date"></span></div>
+  <div class="no-print" style="margin-top:16px"><button type="button" onclick="window.print()" style="padding:8px 16px;cursor:pointer;">طباعة</button></div>
+  <script>document.getElementById('jpa-print-date').textContent = new Date().toLocaleDateString('ar-SA');</script>
 </body>
 </html>

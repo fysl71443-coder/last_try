@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Financial Statements') }}{% endblock %}
+{% block content %}
+<style>
+  .stmt-hub { --ops-blue-dark: #0d47a1; --ops-blue: #1565c0; --ops-blue-light: #e3f2fd; --border: #e2e8f0; }
+  .stmt-hub .stmt-tab-pane { min-height: 70vh; }
+  .stmt-hub .stmt-hub-iframe { width: 100%; min-height: 68vh; border: none; border-radius: 12px; background: #f8fafc; }
+  .stmt-hub .nav-tabs .nav-link { font-weight: 600; color: #64748b; border: 1px solid transparent; }
+  .stmt-hub .nav-tabs .nav-link:hover { color: var(--ops-blue); border-color: transparent; }
+  .stmt-hub .nav-tabs .nav-link.active { color: var(--ops-blue); background: #fff; border-color: var(--border) var(--border) #fff; }
+  .stmt-hub .stmt-filters { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+</style>
+<div class="container py-4 ops-layout hub-wrap stmt-hub">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-chart-line"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Financial Statements') }}</h1>
+      <span class="ops-subtitle">{{ _('Income statement, trial balance, balance sheet and cash flow in one place') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2 no-print">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('financials.accounts_hub') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-book me-1"></i>{{ _('Accounts') }}</a>
+    </div>
+  </div>
+
+  <div class="stmt-filters no-print">
+    <form id="stmt-filters-form" class="row g-3 align-items-end flex-wrap">
+      <div class="col-auto">
+        <label class="form-label small mb-0">{{ _('Period') }}</label>
+        <select name="period" id="stmt-period" class="form-select form-select-sm" style="min-width: 120px;">
+          <option value="today">{{ _('Today') }}</option>
+          <option value="this_week">{{ _('This week') }}</option>
+          <option value="this_month" selected>{{ _('This month') }}</option>
+          <option value="this_year">{{ _('This year') }}</option>
+          <option value="custom">{{ _('Custom') }}</option>
+        </select>
+      </div>
+      <div class="col-auto" id="stmt-custom-dates" style="display: none;">
+        <label class="form-label small mb-0">{{ _('From') }}</label>
+        <input type="date" name="start_date" id="stmt-start" class="form-control form-control-sm" style="min-width: 130px;">
+      </div>
+      <div class="col-auto" id="stmt-custom-dates-end" style="display: none;">
+        <label class="form-label small mb-0">{{ _('To') }}</label>
+        <input type="date" name="end_date" id="stmt-end" class="form-control form-control-sm" style="min-width: 130px;">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-0">{{ _('As of date') }}</label>
+        <input type="date" name="date" id="stmt-date" class="form-control form-control-sm" value="{{ today_iso or '' }}" style="min-width: 130px;">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-0">{{ _('Branch') }}</label>
+        <select name="branch" id="stmt-branch" class="form-select form-select-sm" style="min-width: 120px;">
+          <option value="all" selected>{{ _('All') }}</option>
+          <option value="place_india">Place India</option>
+          <option value="china_town">China Town</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="button" id="stmt-apply" class="btn btn-primary btn-sm"><i class="fa-solid fa-filter me-1"></i>{{ _('Apply') }}</button>
+      </div>
+    </form>
+  </div>
+
+  <ul class="nav nav-tabs mb-0 no-print" id="stmt-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-income-btn" data-bs-toggle="tab" data-bs-target="#tab-income" type="button" role="tab">{{ _('Income Statement') }}</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-trial-btn" data-bs-toggle="tab" data-bs-target="#tab-trial" type="button" role="tab">{{ _('Trial balance') }}</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-balance-btn" data-bs-toggle="tab" data-bs-target="#tab-balance" type="button" role="tab">{{ _('Balance sheet') }}</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-cash-btn" data-bs-toggle="tab" data-bs-target="#tab-cash" type="button" role="tab">{{ _('Cash flow') }}</button>
+    </li>
+  </ul>
+
+  <div class="card border-top-0 rounded-top-0" style="border-radius: 0 0 12px 12px !important;">
+    <div class="card-body p-0">
+      <div class="tab-content" id="stmt-tab-content">
+        <div class="tab-pane fade show active stmt-tab-pane" id="tab-income" role="tabpanel">
+          <iframe id="iframe-income" class="stmt-hub-iframe" data-src="{{ url_for('financials.income_statement', embed=1, period='this_month', branch='all', date=today_iso) }}" title="{{ _('Income Statement') }}"></iframe>
+        </div>
+        <div class="tab-pane fade stmt-tab-pane" id="tab-trial" role="tabpanel">
+          <iframe id="iframe-trial" class="stmt-hub-iframe" data-src="" title="{{ _('Trial balance') }}"></iframe>
+        </div>
+        <div class="tab-pane fade stmt-tab-pane" id="tab-balance" role="tabpanel">
+          <iframe id="iframe-balance" class="stmt-hub-iframe" data-src="" title="{{ _('Balance sheet') }}"></iframe>
+        </div>
+        <div class="tab-pane fade stmt-tab-pane" id="tab-cash" role="tabpanel">
+          <iframe id="iframe-cash" class="stmt-hub-iframe" data-src="" title="{{ _('Cash flow') }}"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var base = '{{ request.url_root.rstrip("/") }}';
+  var financialsPrefix = '{{ url_for("financials.income_statement", _external=False).split("?")[0].replace("/income_statement","") }}';
+  function params() {
+    var period = document.getElementById('stmt-period').value;
+    var date = document.getElementById('stmt-date').value;
+    var branch = document.getElementById('stmt-branch').value;
+    var start = document.getElementById('stmt-start').value;
+    var end = document.getElementById('stmt-end').value;
+    var q = 'embed=1&branch=' + encodeURIComponent(branch);
+    if (period === 'custom' && start && end) {
+      q += '&period=custom&start_date=' + encodeURIComponent(start) + '&end_date=' + encodeURIComponent(end);
+    } else {
+      q += '&period=' + encodeURIComponent(period);
+    }
+    q += '&date=' + encodeURIComponent(date);
+    return q;
+  }
+  function baseUrlFor(id) {
+    if (id === 'iframe-income') return financialsPrefix + '/income_statement';
+    if (id === 'iframe-trial') return financialsPrefix + '/trial_balance';
+    if (id === 'iframe-balance') return financialsPrefix + '/balance_sheet';
+    if (id === 'iframe-cash') return financialsPrefix + '/cash_flow';
+    return '';
+  }
+  function loadIframe(id) {
+    var iframe = document.getElementById(id);
+    if (!iframe) return;
+    var base = iframe.dataset.src ? iframe.dataset.src.split('?')[0] : baseUrlFor(id);
+    if (!base) return;
+    iframe.src = base + '?' + params();
+  }
+  function applyFilters() {
+    var q = params();
+    document.getElementById('iframe-income').dataset.src = financialsPrefix + '/income_statement?' + q;
+    document.getElementById('iframe-trial').dataset.src = financialsPrefix + '/trial_balance?' + q;
+    document.getElementById('iframe-balance').dataset.src = financialsPrefix + '/balance_sheet?' + q;
+    document.getElementById('iframe-cash').dataset.src = financialsPrefix + '/cash_flow?' + q;
+    loadIframe('iframe-income');
+    var activePane = document.querySelector('#stmt-tab-content .tab-pane.active');
+    var activeId = activePane && activePane.id === 'tab-trial' ? 'iframe-trial' : (activePane && activePane.id === 'tab-balance' ? 'iframe-balance' : (activePane && activePane.id === 'tab-cash' ? 'iframe-cash' : 'iframe-income'));
+    loadIframe(activeId);
+  }
+  document.getElementById('stmt-apply').addEventListener('click', function(){ applyFilters(); });
+  document.getElementById('stmt-period').addEventListener('change', function(){
+    var isCustom = this.value === 'custom';
+    document.getElementById('stmt-custom-dates').style.display = isCustom ? 'block' : 'none';
+    document.getElementById('stmt-custom-dates-end').style.display = isCustom ? 'block' : 'none';
+  });
+  document.querySelectorAll('#stmt-tabs button[data-bs-toggle="tab"]').forEach(function(btn){
+    btn.addEventListener('shown.bs.tab', function(e){
+      var target = (e.target.getAttribute('data-bs-target') || '').replace('#','');
+      var iframeId = target === 'tab-income' ? 'iframe-income' : (target === 'tab-trial' ? 'iframe-trial' : (target === 'tab-balance' ? 'iframe-balance' : 'iframe-cash'));
+      loadIframe(iframeId);
+    });
+  });
+  var periodEl = document.getElementById('stmt-period');
+  if (periodEl && periodEl.value === 'custom') {
+    document.getElementById('stmt-custom-dates').style.display = 'block';
+    document.getElementById('stmt-custom-dates-end').style.display = 'block';
+  }
+  var incomeIframe = document.getElementById('iframe-income');
+incomeIframe.src = incomeIframe.dataset.src || (financialsPrefix + '/income_statement?embed=1&period=this_month&branch=all&date=' + (document.getElementById('stmt-date').value || ''));
+})();
+</script>
+{% endblock %}

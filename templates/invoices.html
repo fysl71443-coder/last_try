@@ -1,152 +1,94 @@
 {% extends 'base.html' %}
 {% set back_url = url_for('main.dashboard') %}
 
-{% block title %}{{ _('All Invoices / كل الفواتير') }}{% endblock %}
+{% block title %}{{ _('All Invoices') }}{% endblock %}
 {% block content %}
 
-<style>
-body {
-  background: #f4f6f9;
-}
-.invoice-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
-.status-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: bold;
-}
-.status-pending { background: #ffeaa7; color: #2d3436; }
-.status-partial { background: #fab1a0; color: #2d3436; }
-.status-paid { background: #00b894; color: white; }
-.nav-buttons {
-  background: white;
-  border-radius: 12px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  box-shadow: 0px 2px 4px rgba(0,0,0,0.05);
-}
-</style>
+<style>.status-pending{ background:rgba(253,203,110,.3); color:#856404; } .status-partial{ background:rgba(255,193,7,.25); color:#856404; } .status-paid{ background:rgba(39,174,96,.2); color:#27ae60; }</style>
 
-<div class="container py-4">
-    <div class="section-header mb-3">
-      <h3 class="mb-0">{{ _('All Invoices / كل الفواتير') }}</h3>
-    </div>
-
-    <!-- أزرار التنقل -->
-    <div class="nav-buttons">
-        <div class="row">
-            <div class="col-md-8">
-                <a href="{{ url_for('main.invoices', type='sales') }}"
-                   class="btn btn-outline-primary me-2 {{ 'active' if current_type == 'sales' else '' }}">
-                   {{ _('Sales / المبيعات') }}
-                </a>
-                <a href="{{ url_for('main.invoices', type='purchases') }}"
-                   class="btn btn-outline-primary me-2 {{ 'active' if current_type == 'purchases' else '' }}">
-                   {{ _('Purchases / المشتريات') }}
-                </a>
-                <a href="{{ url_for('main.invoices', type='expenses') }}"
-                   class="btn btn-outline-primary me-2 {{ 'active' if current_type == 'expenses' else '' }}">
-                   {{ _('Expenses / المصروفات') }}
-                </a>
-                <a href="{{ url_for('main.invoices', type='all') }}"
-                   class="btn btn-outline-secondary {{ 'active' if current_type == 'all' else '' }}">
-                   {{ _('All / الكل') }}
-                </a>
-            </div>
-            <div class="col-md-4 text-end">
-                <div class="btn-group" role="group">
-                  <a href="#" id="btnPrintAll" class="btn btn-success" target="_blank">📄 {{ _('Print All / طباعة الكل') }}</a>
-                  {% if current_type in ['sales','all'] %}
-                  <button class="btn btn-primary" id="btnMarkSalesPaid">✅ {{ _('Mark Sales Paid / ترحيل مبيعات كمدفوعة') }}</button>
-                  {% endif %}
-                  <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">🗑️ {{ _('Delete / حذف') }}</button>
-                </div>
-            </div>
+<div class="container py-4 ops-layout hub-wrap">
+    <div class="ops-header-bar">
+        <span class="ops-icon"><i class="fa-solid fa-file-invoice"></i></span>
+        <div>
+            <h1 class="ops-title mb-0">{{ _('All Invoices') }}</h1>
+            <span class="ops-subtitle">{{ _('Sales, purchases, expenses') }}</span>
+        </div>
+        <div class="ops-actions d-flex flex-wrap gap-2">
+            <a href="#" id="btnPrintAll" class="btn btn-sm btn-primary" target="_blank"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm" data-partial-links><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
         </div>
     </div>
 
-    <!-- Detailed View / العرض التفصيلي (moved to top) -->
-    <div class="invoice-card mt-2">
-      <h4 class="mb-3">Detailed View / العرض التفصيلي</h4>
-      <div class="row g-2 mb-3">
+    <div class="ops-tabs-wrap">
+        <div class="ops-tabs" role="tablist">
+            <a href="{{ url_for('main.invoices', type='sales') }}" class="ops-tab {{ 'active' if current_type == 'sales' else '' }}">{{ _('Sales') }}</a>
+            <a href="{{ url_for('main.invoices', type='purchases') }}" class="ops-tab {{ 'active' if current_type == 'purchases' else '' }}">{{ _('Purchases') }}</a>
+            <a href="{{ url_for('main.invoices', type='expenses') }}" class="ops-tab {{ 'active' if current_type == 'expenses' else '' }}">{{ _('Expenses') }}</a>
+            <a href="{{ url_for('main.invoices', type='all') }}" class="ops-tab {{ 'active' if current_type == 'all' else '' }}">{{ _('All') }}</a>
+        </div>
+    </div>
+
+    <div class="ops-body ops-body-no-sidebar">
+    <main class="ops-main">
+    <div class="ops-form-card mt-0">
+      <div class="ops-form-head">{{ _('Detailed View') }}</div>
+      <div class="ops-form-body">
+        <p class="text-muted small mb-3">{{ _('This screen is for viewing, filtering and printing only. No payments or deletions are performed here.') }}</p>
+      <div class="row g-3 align-items-end mb-3">
         <div class="col-md-3">
-          <label class="form-label">Start Date</label>
+          <label class="form-label">{{ _('Start Date') }}</label>
           <input type="date" id="detStart" class="form-control">
         </div>
         <div class="col-md-3">
-          <label class="form-label">End Date</label>
+          <label class="form-label">{{ _('End Date') }}</label>
           <input type="date" id="detEnd" class="form-control">
         </div>
         <div class="col-md-3">
-          <label class="form-label">Payment Method</label>
+          <label class="form-label">{{ _('Payment Method') }}</label>
           <select id="detPM" class="form-select">
-            <option value="all" selected>All</option>
-            <option value="cash">Cash</option>
-            <option value="card">Card</option>
-            <option value="bank">Bank</option>
-            <option value="online">Online</option>
+            <option value="all" selected>{{ _('All') }}</option>
+            <option value="cash">{{ _('Cash') }}</option>
+            <option value="card">{{ _('Card') }}</option>
+            <option value="bank">{{ _('Bank') }}</option>
+            <option value="online">{{ _('Online') }}</option>
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Branch (Sales)</label>
+          <label class="form-label">{{ _('Branch (Sales)') }}</label>
           <select id="detBranch" class="form-select">
-            <option value="all" selected>All</option>
+            <option value="all" selected>{{ _('All') }}</option>
             <option value="china_town">China Town</option>
-            <option value="place_india">Palace India</option>
+            <option value="place_india">Place India</option>
           </select>
         </div>
       </div>
-        <div class="mb-3 text-end">
-          <button id="btnApplyFilters" class="btn btn-primary btn-sm">Apply Filters</button>
-        </div>
-        <p class="text-muted">Sales are auto-paid except platform orders (HUNGER/KEETA) which remain Unpaid. Purchases and Expenses reflect user-recorded payments.</p>
-        <div class="d-flex gap-2 mb-3">
-          <button id="btnNormalizePlatform" class="btn btn-sm btn-outline-warning">Normalize Platform Sales (set HUNGER/KEETA unpaid)</button>
-          <div class="d-flex align-items-center gap-2">
-            <label class="form-label mb-0">Batch Pay Sales:</label>
-            <select id="bpCustomer" class="form-select form-select-sm" style="width:auto">
-              <option value="all">All</option>
-              <option value="hunger">HUNGER</option>
-              <option value="keeta">KEETA</option>
-            </select>
-            <select id="bpMethod" class="form-select form-select-sm" style="width:auto">
-              <option value="CASH">CASH</option>
-              <option value="CARD">CARD</option>
-              <option value="BANK">BANK</option>
-            </select>
-            <button id="btnBatchPaySales" class="btn btn-sm btn-success">Run Batch Pay</button>
-          </div>
+        <div class="mb-3">
+          <button id="btnApplyFilters" class="btn btn-primary btn-sm"><i class="fa-solid fa-filter me-1"></i>{{ _('Apply Filters') }}</button>
         </div>
 
-      <!-- Sales Detailed -->
-      <div class="mb-4">
+      <!-- Sales Detailed (visible when tab Sales or All) -->
+      <div class="mb-4 section-det section-sales" {% if current_type not in ['sales', 'all'] %}style="display:none"{% endif %}>
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0">Sales Invoices (Itemized, grouped by Branch)</h6>
+          <h6 class="mb-0">{{ _('Sales Invoices (Itemized, grouped by Branch)') }}</h6>
           <div>
-            <button id="btnPrintSales" class="btn btn-sm btn-outline-dark">Print</button>
-            <button id="btnExportSalesDet" class="btn btn-sm btn-primary ms-2">Export</button>
+            <button id="btnPrintSales" class="btn btn-sm btn-outline-dark">{{ _('Print') }}</button>
+            <button id="btnExportSalesDet" class="btn btn-sm btn-primary ms-2">{{ _('Export') }}</button>
           </div>
         </div>
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered table-striped align-middle">
-            <thead class="table-light">
+        <div class="table-responsive screen-table-wrap">
+          <table class="table table-sm table-hover align-middle screen-table mb-0">
+            <thead>
               <tr>
-                <th>Branch</th>
-                <th>Date</th>
-                <th>Invoice No.</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Amount</th>
-                <th>Discount</th>
-                <th>VAT</th>
-                <th>Total</th>
-                <th>Payment</th>
+                <th>{{ _('Branch') }}</th>
+                <th>{{ _('Date') }}</th>
+                <th>{{ _('Invoice No.') }}</th>
+                <th>{{ _('Item') }}</th>
+                <th>{{ _('Qty') }}</th>
+                <th>{{ _('Amount') }}</th>
+                <th>{{ _('Discount') }}</th>
+                <th>{{ _('VAT') }}</th>
+                <th>{{ _('Total') }}</th>
+                <th>{{ _('Payment') }}</th>
               </tr>
             </thead>
             <tbody id="det-sales-body"></tbody>
@@ -155,28 +97,28 @@ body {
         </div>
       </div>
 
-      <!-- Purchases Detailed -->
-      <div class="mb-4">
+      <!-- Purchases Detailed (visible when tab Purchases or All) -->
+      <div class="mb-4 section-det section-purchases" {% if current_type not in ['purchases', 'all'] %}style="display:none"{% endif %}>
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0">Purchase Invoices (Itemized)</h6>
+          <h6 class="mb-0">{{ _('Purchase Invoices (Itemized)') }}</h6>
           <div>
-            <button id="btnPrintPurch" class="btn btn-sm btn-outline-dark">Print</button>
-            <button id="btnExportPurchDet" class="btn btn-sm btn-primary ms-2">Export</button>
+            <button id="btnPrintPurch" class="btn btn-sm btn-outline-dark">{{ _('Print') }}</button>
+            <button id="btnExportPurchDet" class="btn btn-sm btn-primary ms-2">{{ _('Export') }}</button>
           </div>
         </div>
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered table-striped align-middle">
-            <thead class="table-light">
+        <div class="table-responsive screen-table-wrap">
+          <table class="table table-sm table-hover align-middle screen-table mb-0">
+            <thead>
               <tr>
-                <th>Date</th>
-                <th>Invoice No.</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Amount</th>
-                <th>Discount</th>
-                <th>VAT</th>
-                <th>Total</th>
-                <th>Payment</th>
+                <th>{{ _('Date') }}</th>
+                <th>{{ _('Invoice No.') }}</th>
+                <th>{{ _('Item') }}</th>
+                <th>{{ _('Qty') }}</th>
+                <th>{{ _('Amount') }}</th>
+                <th>{{ _('Discount') }}</th>
+                <th>{{ _('VAT') }}</th>
+                <th>{{ _('Total') }}</th>
+                <th>{{ _('Payment') }}</th>
               </tr>
             </thead>
             <tbody id="det-pur-body"></tbody>
@@ -185,24 +127,24 @@ body {
         </div>
       </div>
 
-      <!-- Expenses Detailed -->
-      <div>
+      <!-- Expenses Detailed (visible when tab Expenses or All) -->
+      <div class="section-det section-expenses" {% if current_type not in ['expenses', 'all'] %}style="display:none"{% endif %}>
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0">Expenses (Itemized)</h6>
+          <h6 class="mb-0">{{ _('Expenses (Itemized)') }}</h6>
           <div>
-            <button id="btnPrintExp" class="btn btn-sm btn-outline-dark">Print</button>
-            <button id="btnExportExpDet" class="btn btn-sm btn-primary ms-2">Export</button>
+            <button id="btnPrintExp" class="btn btn-sm btn-outline-secondary">{{ _('Print') }}</button>
+            <button id="btnExportExpDet" class="btn btn-sm btn-outline-primary ms-2">{{ _('Export') }}</button>
           </div>
         </div>
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered table-striped align-middle">
-            <thead class="table-light">
+        <div class="table-responsive screen-table-wrap">
+          <table class="table table-sm table-hover align-middle screen-table mb-0">
+            <thead>
               <tr>
-                <th>Date</th>
-                <th>Expense No.</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Payment</th>
+                <th>{{ _('Date') }}</th>
+                <th>{{ _('Expense No.') }}</th>
+                <th>{{ _('Description') }}</th>
+                <th>{{ _('Amount') }}</th>
+                <th>{{ _('Payment') }}</th>
               </tr>
             </thead>
             <tbody id="det-exp-body"></tbody>
@@ -210,24 +152,23 @@ body {
           </table>
         </div>
       </div>
+      </div>
+    </div>
+    </main>
     </div>
 
-
     {% if invoices %}
-    <!-- نموذج الدفع المتعدد -->
-    <div class="invoice-card">
-        <form method="post" action="#">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-
-            <div class="d-flex justify-content-end mb-2 gap-2">
-              <button type="button" class="btn btn-sm btn-outline-success" onclick="exportInvoicesCSV()">Export CSV</button>
-              <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportInvoicesDetailedCSV()">Export Detailed CSV</button>
+    <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Invoices list') }}</div>
+        <div class="ops-form-body">
+            <div class="d-flex justify-content-end mb-3 gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportInvoicesCSV()"><i class="fa-solid fa-file-csv me-1"></i>{{ _('Export CSV') }}</button>
+              <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportInvoicesDetailedCSV()"><i class="fa-solid fa-file-excel me-1"></i>{{ _('Export Detailed CSV') }}</button>
             </div>
-            <div class="table-responsive">
-                <table class="table table-striped table-bordered">
-                    <thead class="table-dark">
+            <div class="table-responsive screen-table-wrap">
+                <table class="table table-hover align-middle screen-table mb-0">
+                    <thead>
                         <tr>
-                            <th><input type="checkbox" id="select-all"></th>
                             <th>#</th>
                             <th>{{ _('Invoice No') }}</th>
                             <th>{{ _('Type') }}</th>
@@ -237,15 +178,12 @@ body {
                             <th>{{ _('Remaining') }}</th>
                             <th>{{ _('Status') }}</th>
                             <th>{{ _('Due Date') }}</th>
-                            <th>{{ _('Pay') }}</th>
-                            <th>{{ _('View') }}</th>
-                            <th>{{ _('Actions / الإجراءات') }}</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody id="invoice-list">
                         {% for invoice in invoices %}
                         <tr>
-                            <td><input type="checkbox" name="invoice_ids" value="{{ invoice.id }}"></td>
                             <td>{{ loop.index }}</td>
                             <td><strong>{{ invoice.invoice_number }}</strong></td>
                             <td>
@@ -262,74 +200,38 @@ body {
                             </td>
                             <td>{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '-' }}</td>
                             <td>
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-
-                                {% if invoice.status != 'paid' %}
-                                    <input type="number" step="0.01" class="form-control form-control-sm me-1 rowPaymentAmount"
-                                           placeholder="Amount" max="{{ invoice.remaining_amount }}" value="{{ '%.2f'|format(invoice.remaining_amount) }}">
-                                    <button type="button" class="btn btn-sm btn-primary btn-row-pay" data-invoice-id="{{ invoice.id }}" data-method="CASH">{{ _('Pay') }}</button>
-                                {% else %}
-                                    <span class="text-success">✓ {{ _('Paid') }}</span>
-                                {% endif %}
-
-                                </td>
-                            <td>
-                                  <a class="btn btn-sm btn-outline-secondary" href="#">{{ _('View / عرض') }}</a>
+                                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.view_invoice', kind=invoice.invoice_type, invoice_id=invoice.id) }}">{{ _('View') }}</a>
                             </td>
-                            <td>
-                              <button type="button" class="btn btn-sm btn-outline-danger btn-row-delete" data-invoice-id="{{ invoice.id }}" data-invoice-type="{{ invoice.invoice_type }}">🗑️ {{ _('Delete / حذف') }}</button>
-                            </td>
-                            </tr>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-
-            <div class="row mt-3">
-                <div class="col-md-6">
-                    <div class="input-group">
-                        <span class="input-group-text">$</span>
-                        <input type="number" step="0.01" name="bulk_payment_amount"
-                               placeholder="{{ _('Total Amount for Selected') }}"
-                               class="form-control" required>
-                        <button type="submit" class="btn btn-warning">
-                            💳 {{ _('Pay Selected / دفع المحدد') }}
-                        </button>
-                    </div>
-                </div>
-                <div class="col-md-6 text-end">
-                    <small class="text-muted">
-                        {{ _('Select invoices and enter total amount to distribute payment equally') }}
-                    </small>
-                </div>
-            </div>
-        </form>
+        </div>
     </div>
     {% else %}
-    <div class="invoice-card text-center">
-        <h5>{{ _('No invoices found / لا توجد فواتير') }}</h5>
-        <p class="text-muted">{{ _('Create your first invoice to get started / أنشئ أول فاتورة للبدء') }}</p>
+    <div class="ops-form-card">
+        <div class="ops-form-body text-center py-4">
+        <h5 class="text-secondary">{{ _('No invoices found') }}</h5>
+        <p class="text-muted">{{ _('Create your first invoice to get started') }}</p>
+        </div>
     </div>
     {% endif %}
-</div>
 
-
-    <!-- Delete Modal -->
-    <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
 
   <script>
     // Detailed view loaders with filters
     (function(){
       function n2(x){ try{return Number(x||0).toFixed(2);}catch(e){return '0.00';} }
       function enc(s){ return encodeURIComponent(s||''); }
+      var CURRENT_TYPE = '{{ current_type }}';
       function buildQS(){
         const s = document.getElementById('detStart')?.value || '';
         const e = document.getElementById('detEnd')?.value || '';
         const pm = (document.getElementById('detPM')?.value || 'all');
         const br = (document.getElementById('detBranch')?.value || 'all');
         const parts = [];
+        if(CURRENT_TYPE && CURRENT_TYPE !== 'all') parts.push('type='+enc(CURRENT_TYPE));
         if(s) parts.push('start_date='+enc(s));
         if(e) parts.push('end_date='+enc(e));
         if(pm && pm!=='all') parts.push('payment_method='+enc(pm));
@@ -344,7 +246,7 @@ body {
             const body = document.getElementById('det-sales-body');
             const foot = document.getElementById('det-sales-foot');
             if(!body||!foot) return; body.innerHTML=''; foot.innerHTML='';
-            const rows = (data.invoices||[]).filter(r=> (r.branch||'')!=='Purchases' && (r.branch||'')!=='Expenses')
+            const rows = (data.invoices||[]).filter(r=> (r.type||'sale')==='sale')
               .sort((a,b)=> (a.branch||'').localeCompare(b.branch||'') || (b.date||'').localeCompare(a.date||''));
             let curB=null; const totalsByB={}; let overall={amount:0,discount:0,vat:0,total:0};
             rows.forEach(r=>{
@@ -419,8 +321,8 @@ body {
               dtr.className = 'table-row-details';
               dtr.innerHTML = `<td colspan="9">
                 <div id="${btnId}" style="display:none;">
-                  <div class="table-responsive">
-                    <table class="table table-sm table-bordered mb-0">
+                  <div class="table-responsive screen-table-wrap">
+                    <table class="table table-sm table-bordered table-hover mb-0 screen-table">
                       <thead class="table-light">
                         <tr><th>Item</th><th>Qty</th><th>Amount</th><th>Discount</th><th>VAT</th><th>Total</th></tr>
                       </thead>
@@ -492,7 +394,7 @@ body {
           rows.push(header.join(','));
           document.querySelectorAll('#invoice-list tr').forEach(tr=>{
             const tds = tr.querySelectorAll('td');
-            const pick = [1,2,3,4,5,6,7,8,9];
+            const pick = [0,1,2,3,4,5,6,7,8];
             const vals = pick.map(i=>{
               let txt = (tds[i] && tds[i].innerText) ? tds[i].innerText : '';
               txt = txt.replace(/\s+/g,' ').trim();
@@ -528,8 +430,8 @@ body {
                 <td>
                   <button class="btn btn-sm btn-outline-primary" type="button" data-target="#${panelId}">Show Items (${items.length})</button>
                   <div id="${panelId}" class="mt-2" style="display:none;">
-                    <div class="table-responsive">
-                      <table class="table table-sm table-bordered">
+                    <div class="table-responsive screen-table-wrap">
+                      <table class="table table-sm table-bordered table-hover screen-table">
                         <thead class="table-light"><tr>
                           <th>Description</th><th>Qty</th><th>Price</th><th>Tax</th><th>Discount</th><th>Total</th>
                         </tr></thead>
@@ -563,7 +465,11 @@ body {
           }).catch(err=> console.error('loadDetExp failed', err));
       }
 
-      function reloadAll(){ loadDetSales(); loadDetPurch(); loadDetExp(); }
+      function reloadAll(){
+        if(CURRENT_TYPE==='sales'||CURRENT_TYPE==='all') loadDetSales();
+        if(CURRENT_TYPE==='purchases'||CURRENT_TYPE==='all') loadDetPurch();
+        if(CURRENT_TYPE==='expenses'||CURRENT_TYPE==='all') loadDetExp();
+      }
       document.getElementById('btnApplyFilters')?.addEventListener('click', function(ev){ ev.preventDefault(); reloadAll(); });
 
       function openPrint(urlBase, dropBranch){
@@ -624,188 +530,18 @@ body {
         openPrint(base, dropBranch);
       });
 
-      // Normalize platform sales: mark HUNGER/KEETA unpaid and remove payments
-      document.getElementById('btnNormalizePlatform')?.addEventListener('click', async function(){
-        if(!confirm('تطبيع فواتير منصات HUNGER/KEETA كغير مدفوعة؟')) return;
-        try{
-          const r = await fetch('/api/sales/mark-platform-unpaid', { method:'POST', headers:{'Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'} });
-          const j = await r.json();
-          alert('تم تحديث '+(j.updated||0)+' فاتورة منصة');
-          location.reload();
-        }catch(e){ alert('فشل التطبيع: '+(e && e.message || e)); }
-      });
-
-      // Batch pay sales by customer filter
-      document.getElementById('btnBatchPaySales')?.addEventListener('click', async function(){
-        const cust = document.getElementById('bpCustomer')?.value || 'all';
-        const method = document.getElementById('bpMethod')?.value || 'CASH';
-        if(!confirm('تنفيذ دفع جماعي لفواتير المبيعات ('+cust+')؟')) return;
-        try{
-          const r = await fetch('/api/sales/batch-pay', {
-            method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'},
-            body: JSON.stringify({ customer: cust, payment_method: method })
-          });
-          const j = await r.json();
-          if(j && j.ok){ alert('تم دفع '+(j.updated||0)+' فاتورة'); location.reload(); }
-          else{ alert('فشل الدفع الجماعي: '+(j && j.error || 'خطأ غير معروف')); }
-        }catch(e){ alert('فشل الاتصال: '+(e && e.message || e)); }
-      });
-
-      // Mark all sales invoices as paid
-      document.getElementById('btnMarkSalesPaid')?.addEventListener('click', async function(ev){
-        ev.preventDefault();
-        try{
-          const r = await fetch('/api/sales/mark-unpaid-paid', { method:'POST', headers:{'Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'} });
-          const ct = (r.headers.get('content-type')||'').toLowerCase();
-          const j = ct.indexOf('application/json')!==-1 ? await r.json() : null;
-          if(j && j.ok){ alert('تم تحديث '+(j.updated||0)+' فاتورة مبيعات إلى مدفوعة'); location.reload(); }
-          else{ alert('تعذر التحديث: '+(j && j.error || (await r.text()) || 'خطأ غير معروف')); }
-        }catch(err){ alert('خطأ في الاتصال: '+err.message); }
-      });
-
-
       if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', reloadAll); } else { reloadAll(); }
     })();
   </script>
 
-          <form method="post" action="{{ url_for('main.invoices_delete') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <div class="modal-header">
-              <h5 class="modal-title">{{ _('Delete Invoices / حذف الفواتير') }}</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-              <div class="mb-2">
-                <label class="form-label">{{ _('Scope / النطاق') }}</label>
-                <select class="form-select" name="scope" id="del-scope">
-                  <option value="selected">{{ _('Selected only / المحدد فقط') }}</option>
-                  <option value="type">{{ _('All in current type tab / كل فواتير النوع الحالي') }}</option>
-                </select>
-              </div>
-              <div class="mb-2">
-                <label class="form-label">{{ _('Type / النوع') }}</label>
-                <select class="form-select" name="invoice_type">
-                  <option value="sales" {{ 'selected' if current_type=='sales' else '' }}>{{ _('Sales / مبيعات') }}</option>
-                  <option value="purchases" {{ 'selected' if current_type=='purchases' else '' }}>{{ _('Purchases / مشتريات') }}</option>
-                  <option value="expenses" {{ 'selected' if current_type=='expenses' else '' }}>{{ _('Expenses / مصروفات') }}</option>
-                </select>
-              </div>
-              <div class="alert alert-warning small">{{ _('This action is irreversible. Related items and payments will be deleted as well. / هذا الإجراء لا يمكن التراجع عنه وسيتم حذف العناصر والمدفوعات المرتبطة أيضاً') }}</div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel / إلغاء') }}</button>
-              <button type="submit" class="btn btn-danger">{{ _('Delete / حذف') }}</button>
-            </div>
-            <!-- Include selected IDs as hidden fields dynamically before submit via JS -->
-          </form>
-        </div>
-      </div>
-    </div>
-
-
-<!-- SocketIO and JavaScript -->
+<!-- SocketIO for real-time updates (optional) -->
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script>
-    // SocketIO for real-time updates
     var socket = io();
     socket.on('invoice_update', function(data) {
         console.log('Invoice updated:', data);
-        // Reload page to show updates
         location.reload();
-    });
-
-    // Select all functionality
-    document.getElementById('select-all').addEventListener('click', function() {
-        let checkboxes = document.querySelectorAll('input[name="invoice_ids"]');
-        checkboxes.forEach(cb => cb.checked = this.checked);
-    });
-
-    // Before submit delete form, inject selected ids as hidden fields
-    const delModal = document.getElementById('deleteModal');
-    if(delModal){
-      delModal.addEventListener('show.bs.modal', function(){
-        // nothing yet
-      });
-      delModal.addEventListener('shown.bs.modal', function(){
-        // Focus
-      });
-      delModal.querySelector('form').addEventListener('submit', function(ev){
-        const tbodyCbs = document.querySelectorAll('tbody#invoice-list input[name="invoice_ids"]:checked');
-        // remove previous hidden inputs
-        this.querySelectorAll('input[type="hidden"][name="invoice_ids"]').forEach(n=>n.remove());
-        tbodyCbs.forEach(cb => {
-          const i = document.createElement('input');
-          i.type = 'hidden'; i.name = 'invoice_ids'; i.value = cb.value;
-          this.appendChild(i);
-        });
-        // pass current tab type for safety
-        const t = document.createElement('input'); t.type='hidden'; t.name='current_type'; t.value='{{ current_type }}'; this.appendChild(t);
-      });
-    }
-
-    // Auto-calculate remaining amount for payment input
-    document.querySelectorAll('input[name="payment_amount"]').forEach(input => {
-        input.addEventListener('input', function() {
-            const maxAmount = parseFloat(this.getAttribute('max'));
-            if (parseFloat(this.value) > maxAmount) {
-                this.value = maxAmount;
-            }
-        });
-    });
-
-    document.querySelectorAll('.btn-row-delete').forEach(btn => {
-      btn.addEventListener('click', async function(){
-        const id = this.getAttribute('data-invoice-id');
-        const t = this.getAttribute('data-invoice-type');
-        const ok = confirm('هل تريد حذف هذه الفاتورة؟');
-        if(!ok) return;
-        const body = new URLSearchParams({ scope: 'selected', invoice_type: t || 'sales', invoice_ids: String(id||'') });
-        try{
-          const r = await fetch('{{ url_for('main.invoices_delete') }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token() }}' },
-            body
-          });
-          if(r.redirected){ location.href = r.url; }
-          else { location.reload(); }
-        }catch(e){ alert('فشل حذف الفاتورة: '+(e && e.message || e)); }
-      });
     });
 </script>
 
 {% endblock %}
-      document.querySelectorAll('.btn-row-pay').forEach(btn=>{
-        btn.addEventListener('click', async function(){
-          const td = this.closest('td');
-          const input = td && td.querySelector('.rowPaymentAmount');
-          const amt = parseFloat(input && input.value || '0');
-          const id = this.getAttribute('data-invoice-id');
-          const method = this.getAttribute('data-method') || 'CASH';
-          if(!(amt>0)){ alert('أدخل مبلغاً صالحاً'); return; }
-          try{
-            const r = await fetch('/api/sales/pay', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'}, body: JSON.stringify({ invoice_id: id, amount: amt, payment_method: method }) });
-            const j = await r.json();
-            if(j && j.ok){ location.reload(); }
-            else{ alert('فشل الدفع: '+(j && j.error || 'خطأ غير معروف')); }
-          }catch(e){ alert('فشل الاتصال: '+(e && e.message || e)); }
-        });
-      });
-
-      // Event delegation fallback in case earlier JS errors prevented bindings
-      document.addEventListener('click', async function(ev){
-        const btn = ev.target && ev.target.closest && ev.target.closest('.btn-row-pay');
-        if(!btn) return;
-        ev.preventDefault();
-        try{
-          const td = btn.closest('td');
-          const input = td && td.querySelector('.rowPaymentAmount');
-          const amt = parseFloat(input && input.value || '0');
-          const id = btn.getAttribute('data-invoice-id');
-          const method = btn.getAttribute('data-method') || 'CASH';
-          if(!(amt>0)){ alert('أدخل مبلغاً صالحاً'); return; }
-          const r = await fetch('/api/sales/pay', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRFToken':'{{ csrf_token() }}'}, body: JSON.stringify({ invoice_id: id, amount: amt, payment_method: method }) });
-          const j = await r.json();
-          if(j && j.ok){ location.reload(); }
-          else{ alert('فشل الدفع: '+(j && j.error || 'خطأ غير معروف')); }
-        }catch(e){ alert('فشل الاتصال: '+(e && e.message || e)); }
-      });

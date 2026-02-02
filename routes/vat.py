@@ -62,9 +62,22 @@ def vat_dashboard():
             start_date = date(today.year, today.month, 1)
             end_date = today
 
-    # Settings
-    s = Settings.query.first()
-    vat_rate = float(s.vat_rate)/100.0 if s and s.vat_rate is not None else 0.15
+    # Phase 3 – VAT cache (TTL 5 min): try hit first
+    try:
+        from utils.cache_helpers import vat_cache_key, VAT_TTL, _cache
+        key = vat_cache_key(start_date, end_date, branch)
+        c = _cache()
+        if c:
+            cached = c.get(key)
+            if isinstance(cached, dict) and cached.get('start_date') is not None:
+                return render_template('vat/vat_dashboard.html', data=cached)
+    except Exception:
+        pass
+
+    # Settings (Phase 3: cached)
+    from utils.cache_helpers import get_cached_settings
+    s = get_cached_settings()
+    vat_rate = float(getattr(s, 'vat_rate', None) or 15)/100.0 if s else 0.15
     company_name = s.company_name if s and s.company_name else ''
     tax_number = s.tax_number if s and s.tax_number else ''
     currency = s.currency if s and s.currency else 'SAR'
@@ -118,14 +131,14 @@ def vat_dashboard():
         from models import JournalLine, Account
         j_out = float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0))
             .join(Account, JournalLine.account_id == Account.id)
-            .filter(Account.code == '2024')
+            .filter(Account.code == '2141')
             .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0.0)
     except Exception:
         j_out = 0.0
     try:
         j_in = float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
             .join(Account, JournalLine.account_id == Account.id)
-            .filter(Account.code == '6200')
+            .filter(Account.code == '1170')
             .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0.0)
     except Exception:
         j_in = 0.0
@@ -134,14 +147,14 @@ def vat_dashboard():
     try:
         journal_vat_out = float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0))
             .join(Account, JournalLine.account_id == Account.id)
-            .filter(Account.code == '2024')
+            .filter(Account.code == '2141')
             .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0.0)
     except Exception:
         journal_vat_out = 0.0
     try:
         journal_vat_in = float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
             .join(Account, JournalLine.account_id == Account.id)
-            .filter(Account.code == '6200')
+            .filter(Account.code == '1170')
             .filter(JournalLine.line_date.between(start_date, end_date)).scalar() or 0.0)
     except Exception:
         journal_vat_in = 0.0
@@ -171,6 +184,19 @@ def vat_dashboard():
         'journal_vat_net': journal_vat_net,
         'vat_rate': vat_rate,
     }
+
+    # Phase 3 – store VAT dashboard in cache (dates as isoformat for serialization)
+    try:
+        from utils.cache_helpers import vat_cache_key, VAT_TTL, _cache
+        key = vat_cache_key(start_date, end_date, branch)
+        c = _cache()
+        if c:
+            stub = dict(data)
+            stub['start_date'] = start_date.isoformat() if hasattr(start_date, 'isoformat') else str(start_date)
+            stub['end_date'] = end_date.isoformat() if hasattr(end_date, 'isoformat') else str(end_date)
+            c.set(key, stub, timeout=VAT_TTL)
+    except Exception:
+        pass
 
     return render_template('vat/vat_dashboard.html', data=data)
 

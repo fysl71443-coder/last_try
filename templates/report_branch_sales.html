@@ -1,9 +1,22 @@
 {% extends 'base.html' %}
-{% block title %}Branch Sales Report{% endblock %}
+{% block title %}{{ _('Branch Sales Report') }}{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <h3>Branch Sales Report ({{ branch }}) - {{ year }}/{{ month }}</h3>
-  <p>This is a minimal placeholder for smoke tests.</p>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-chart-column"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Branch Sales Report') }} — {{ branch }} — {{ year }}/{{ month }}</h1>
+      <span class="ops-subtitle">{{ _('Placeholder for branch sales report') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+    </div>
+  </div>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-body">
+      <p class="text-muted mb-0">{{ _('This is a minimal placeholder for smoke tests.') }}</p>
+    </div>
+  </div>
 </div>
 {% endblock %}
 

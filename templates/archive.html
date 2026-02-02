@@ -1,106 +1,115 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Archive / الأرشيف') }}{% endblock %}
+{% block title %}{{ _('Archive') }}{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <div class="section-header mb-3">
-    <h3 class="mb-0">📁 {{ _('Archive / الأرشيف') }}</h3>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary"><i class="fa-solid fa-house"></i> {{ _('Dashboard / لوحة التحكم') }}</a>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-folder-open"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Archive') }}</h1>
+      <span class="ops-subtitle">{{ _('Search and download receipts') }}</span>
+    </div>
+    <div class="ops-actions" data-partial-links>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm"><i class="fa-solid fa-house"></i> {{ _('Dashboard') }}</a>
     </div>
   </div>
 
-  <div class="card mb-3">
-    <div class="card-body">
-      <form class="row g-3 align-items-end" onsubmit="return false;">
-        <div class="col-md-3">
-          <label class="form-label">🔎 {{ _('Receipt Archive / أرشيف الإيصالات') }}</label>
-          <input id="last4" class="form-control" maxlength="4" placeholder="{{ _('Enter last 4 digits / أدخل آخر 4 أرقام') }}">
-          <div class="small text-muted mt-1">{{ _('Search receipts using the last 4 digits of the invoice number / يتم البحث في الإيصالات باستخدام آخر 4 أرقام من رقم الفاتورة') }}</div>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Filters') }}</div>
+    <div class="ops-form-body">
+      <form onsubmit="return false;">
+        <div class="row g-3 align-items-end mb-3">
+          <div class="col-md-3">
+            <label class="form-label"><i class="fa-solid fa-magnifying-glass me-1"></i> {{ _('Receipt Archive') }}</label>
+            <input id="last4" class="form-control" maxlength="4" placeholder="{{ _('Enter last 4 digits') }}">
+            <div class="form-text">{{ _('Search by last 4 digits of invoice number') }}</div>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ _('Year') }}</label>
+            <select id="year" class="form-select">
+              <option value="">{{ _('All') }}</option>
+              {% for y in range((now.year-2), (now.year+1)) %}
+              <option value="{{ y }}">{{ y }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ _('Quarter') }}</label>
+            <select id="quarter" class="form-select">
+              <option value="">{{ _('All') }}</option>
+              <option>Q1</option>
+              <option>Q2</option>
+              <option>Q3</option>
+              <option>Q4</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ _('Month') }}</label>
+            <select id="month" class="form-select">
+              <option value="">{{ _('All') }}</option>
+              {% for m in range(1,13) %}
+              <option value="{{ '%02d'|format(m) }}">{{ '%02d'|format(m) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ _('Day') }}</label>
+            <select id="day" class="form-select">
+              <option value="">{{ _('All') }}</option>
+              {% for d in range(1,32) %}
+              <option value="{{ '%02d'|format(d) }}">{{ '%02d'|format(d) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ _('Branch') }}</label>
+            <select id="branch" class="form-select">
+              <option value="">{{ _('All') }}</option>
+              {% for code, name in (branches or {}).items() %}
+              <option value="{{ code }}">{{ name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2 d-flex gap-2">
+            <button type="button" id="search" class="btn btn-primary flex-grow-1"><i class="fa-solid fa-magnifying-glass me-1"></i> {{ _('Search') }}</button>
+          </div>
         </div>
-        <div class="col-md-2">
-          <label class="form-label">{{ _('Year / السنة') }}</label>
-          <select id="year" class="form-select">
-            <option value="">{{ _('All / الكل') }}</option>
-            {% for y in range((now.year-2), (now.year+1)) %}
-            <option value="{{ y }}">{{ y }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">{{ _('Quarter / الربع') }}</label>
-          <select id="quarter" class="form-select">
-            <option value="">{{ _('All / الكل') }}</option>
-            <option>Q1</option>
-            <option>Q2</option>
-            <option>Q3</option>
-            <option>Q4</option>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">{{ _('Month / الشهر') }}</label>
-          <select id="month" class="form-select">
-            <option value="">{{ _('All / الكل') }}</option>
-            {% for m in range(1,13) %}
-            <option value="{{ '%02d'|format(m) }}">{{ '%02d'|format(m) }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">{{ _('Day / اليوم') }}</label>
-          <select id="day" class="form-select">
-            <option value="">{{ _('All / الكل') }}</option>
-            {% for d in range(1,32) %}
-            <option value="{{ '%02d'|format(d) }}">{{ '%02d'|format(d) }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">{{ _('Branch / الفرع') }}</label>
-          <select id="branch" class="form-select">
-            <option value="">{{ _('All / الكل') }}</option>
-            {% for code, name in (branches or {}).items() %}
-            <option value="{{ code }}">{{ name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2 d-flex gap-2">
-          <button id="search" class="btn btn-secondary w-100"><i class="fa-solid fa-magnifying-glass"></i> {{ _('Search / بحث') }}</button>
-        </div>
-        <div class="col-12 d-flex align-items-center gap-2">
-          <select id="fmt" class="form-select" style="max-width:220px">
+        <div class="d-flex flex-wrap align-items-center gap-2 export-divider">
+          <span class="section-label mb-0 me-2">{{ _('Export') }}</span>
+          <select id="fmt" class="form-select" style="max-width:200px">
             <option value="zip">ZIP (PDF+CSV)</option>
             <option value="csv">CSV فقط</option>
           </select>
-          <button id="download" class="btn btn-outline-primary"><i class="fa-solid fa-download"></i> {{ _('Download / تنزيل') }}</button>
+          <button type="button" id="download" class="btn btn-outline-primary"><i class="fa-solid fa-download me-1"></i> {{ _('Download') }}</button>
           <span class="badge bg-info" id="count_badge" style="display:none"></span>
         </div>
       </form>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-body">
-      <div class="table-responsive">
-        <table class="table table-hover" id="grid">
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('Results') }}</div>
+    <div class="ops-form-body p-0">
+      <div class="table-responsive screen-table-wrap">
+        <table class="table table-hover screen-table mb-0" id="grid">
           <thead>
             <tr>
-              <th>{{ _('Invoice / الفاتورة') }}</th>
-              <th>{{ _('Date / التاريخ') }}</th>
-              <th>{{ _('Payment / الدفع') }}</th>
-              <th>{{ _('Total / الإجمالي') }}</th>
-              <th>{{ _('Branch / الفرع') }}</th>
-              <th>{{ _('Preview / معاينة') }}</th>
-              <th>{{ _('PDF / ملف') }}</th>
+              <th>{{ _('Invoice') }}</th>
+              <th>{{ _('Date') }}</th>
+              <th>{{ _('Payment') }}</th>
+              <th>{{ _('Total') }}</th>
+              <th>{{ _('Branch') }}</th>
+              <th>{{ _('Preview') }}</th>
+              <th>{{ _('PDF') }}</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
-      <div class="d-flex justify-content-between align-items-center mt-2">
+      <div class="d-flex justify-content-between align-items-center p-3 border-top">
         <div id="page_info" class="small text-muted"></div>
         <div class="btn-group">
-          <button id="prev" class="btn btn-outline-secondary btn-sm">{{ _('Prev / السابق') }}</button>
-          <button id="next" class="btn btn-outline-secondary btn-sm">{{ _('Next / التالي') }}</button>
+          <button id="prev" class="btn btn-outline-secondary btn-sm">{{ _('Prev') }}</button>
+          <button id="next" class="btn btn-outline-secondary btn-sm">{{ _('Next') }}</button>
         </div>
       </div>
     </div>
@@ -131,8 +140,8 @@
     const pi = document.getElementById('page_info');
     tbody.innerHTML='';
     if(!j.ok){ tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${j.error||'Failed to load / فشل التحميل'}</td></tr>`; badge.style.display='none'; pi.textContent=''; return; }
-    badge.textContent = `${j.items.length} {{ _('invoices / فواتير') }}`; badge.style.display='inline-block';
-    pi.textContent = `{{ _('Page / صفحة') }} ${curPage}`;
+    badge.textContent = `${j.items.length} {{ _('invoices') }}`; badge.style.display='inline-block';
+    pi.textContent = `{{ _('Page') }} ${curPage}`;
     j.items.forEach(row=>{
       const tr = document.createElement('tr');
       const branchLabel = row.branch ? {'place_india':'Place India','china_town':'China Town'}[row.branch] || row.branch : '-';
@@ -164,11 +173,11 @@
   });
   load();
 </script>
-<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade screen-modal" id="previewModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">{{ _('Receipt Preview / معاينة الإيصال') }}</h5>
+        <h5 class="modal-title">{{ _('Receipt Preview') }}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body" style="height:75vh">
@@ -176,7 +185,7 @@
       </div>
     </div>
   </div>
-  </div>
+</div>
 <script>
   function preview(inv){
     const f = document.getElementById('previewFrame');

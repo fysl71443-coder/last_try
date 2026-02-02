@@ -1,12 +1,16 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Menu Management / إدارة القائمة') }}{% endblock %}
+{% block title %}{{ _('Menu Management') }}{% endblock %}
 {% block content %}
-<div class="container py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4>{{ _('Menu Management / إدارة القائمة') }}</h4>
-    <div class="d-flex gap-2">
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.dashboard') }}">🏠 {{ _('Dashboard') }}</a>
-      <a class="btn btn-sm btn-primary" href="{{ url_for('main.pos_home', branch_code='place_india') }}">🧾 {{ _('Go to POS') }}</a>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-utensils"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Menu') }}</h1>
+      <span class="ops-subtitle">{{ _('Manage menu sections and items') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2" data-partial-links>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.dashboard') }}"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('sales.pos_home', branch_code='place_india') }}"><i class="fa-solid fa-cash-register me-1"></i>{{ _('POS') }}</a>
     </div>
   </div>
 
@@ -20,7 +24,9 @@
     .meal .thumb{aspect-ratio:4/3;background:#e9ecef;border-radius:10px;background-size:cover;background-position:center;margin-bottom:8px}
   </style>
 
-  <div class="card p-3 mb-3">
+  <div class="ops-form-card mt-0 mb-3">
+    <div class="ops-form-head">{{ _('Menu sections') }}</div>
+    <div class="ops-form-body">
     <div class="sec-tabs">
       {% for s in sections %}
         <a class="sec-tab {% if current_section and s.id==current_section.id %}active{% endif %}"
@@ -31,13 +37,15 @@
         </a>
       {% endfor %}
     </div>
+    </div>
   </div>
 
   <div class="row g-3">
-    <!-- Sections simplified: remove table, keep quick add form only -->
     <div class="col-lg-5">
-      <div class="card p-3">
-        <h6 class="mb-2">{{ _('Add Section / إضافة قسم') }}</h6>
+      <div class="screen-section">
+        <div class="screen-section-title">{{ _('Add') }}</div>
+        <div class="screen-section-body">
+        <h6 class="mb-2">{{ _('Add Section') }}</h6>
         <form method="post" action="{{ url_for('main.menu_category_add') }}" class="row g-2">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <div class="col-md-8">
@@ -48,17 +56,17 @@
           </div>
           <div class="col-12 d-flex gap-2">
             <button class="btn btn-xs btn-success" style="padding:4px 8px; font-size:12px">{{ _('Add') }}</button>
-            <a class="btn btn-xs btn-outline-secondary" style="padding:4px 8px; font-size:12px" href="{{ url_for('main.menu') }}">{{ _('All sections / جميع الأقسام') }}</a>
+            <a class="btn btn-xs btn-outline-secondary" style="padding:4px 8px; font-size:12px" href="{{ url_for('main.menu') }}">{{ _('All sections') }}</a>
           </div>
         </form>
 
         <hr class="my-3"/>
-        <h6 class="mb-2">{{ _('Delete Section / حذف قسم') }}</h6>
+        <h6 class="mb-2">{{ _('Delete Section') }}</h6>
         <form id="deleteSectionForm" method="post" onsubmit="return handleDeleteSection(event)" class="row g-2 align-items-end">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <div class="col-md-8">
             <select id="deleteSectionSelect" class="form-select form-select-sm">
-              <option value="">-- {{ _('Choose section to delete / اختر قسماً للحذف') }} --</option>
+              <option value="">-- {{ _('Choose section to delete') }} --</option>
               {% for s in sections %}
                 <option value="{{ s.id }}" {% if current_section and s.id==current_section.id %}selected{% endif %}>{{ s.name }}</option>
               {% endfor %}
@@ -68,20 +76,17 @@
             <button class="btn btn-xs btn-outline-danger" style="padding:4px 8px; font-size:12px">{{ _('Delete section') }}</button>
           </div>
         </form>
+        </div>
       </div>
     </div>
 
-    <!-- Items column -->
     <div class="col-lg-7">
-      <div class="card p-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0">{{ _('Section Items / عناصر القسم') }}</h6>
-          {% if current_section %}
-          <div class="d-flex align-items-center gap-2">
-            <div class="small text-muted">{{ _('Current Section') }}: <strong>{{ current_section.name }}</strong></div>
-            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#importMealsModal">📥 {{ _('Import Meals (Excel) / استيراد الوجبات (إكسل)') }}</button>
-          </div>
-          {% endif %}
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Section Items') }}</div>
+        <div class="ops-form-body">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+          {% if current_section %}<div class="small text-muted">{{ _('Current Section') }}: <strong>{{ current_section.name }}</strong></div>{% endif %}
+          {% if current_section %}<button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#importMealsModal"><i class="fa-solid fa-file-import me-1"></i>{{ _('Import Meals (Excel)') }}</button>{% endif %}
         </div>
 
         {% if current_section %}
@@ -89,16 +94,16 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <input type="hidden" name="section_id" value="{{ current_section.id }}"/>
           <div class="col-md-5">
-            <label class="form-label form-label-sm">{{ _('Meal / الوجبة') }}</label>
+            <label class="form-label form-label-sm">{{ _('Meal') }}</label>
             <select name="meal_id" class="form-select form-select-sm" id="mealSelect">
-              <option value="">-- {{ _('Choose a meal / اختر وجبة') }} --</option>
+              <option value="">-- {{ _('Choose a meal') }} --</option>
               {% for m in meals or [] %}
                 <option value="{{ m.id }}" data-name="{{ m.name }}{% if m.name_ar %} / {{ m.name_ar }}{% endif %}" data-price="{{ '%.2f'|format(m.selling_price or 0) }}">{{ m.name }}{% if m.name_ar %} / {{ m.name_ar }}{% endif %}</option>
               {% endfor %}
             </select>
           </div>
           <div class="col-md-4">
-            <label class="form-label form-label-sm">{{ _('Name / الاسم') }}</label>
+            <label class="form-label form-label-sm">{{ _('Name') }}</label>
             <input type="text" name="name" class="form-control form-control-sm" placeholder="{{ _('Auto from meal (editable)') }}"/>
           </div>
           <div class="col-md-2">
@@ -142,13 +147,13 @@
                 </td>
               </tr>
               {% else %}
-              <tr><td colspan="4" class="text-muted">{{ _('No items / لا توجد عناصر') }}</td></tr>
+              <tr><td colspan="4" class="text-muted">{{ _('No items') }}</td></tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
         {% else %}
-          <div class="text-muted">{{ _('Add a section then select it to manage items / أضف قسماً ثم اختره لإدارة العناصر') }}</div>
+          <div class="text-muted">{{ _('Add a section then select it to manage items') }}</div>
         {% endif %}
       </div>
 
@@ -184,7 +189,7 @@
   function deleteMenuItem(event, form) {
     event.preventDefault();
 
-    if (!confirm("{{ _('Remove item? / حذف العنصر؟') }}")) {
+    if (!confirm("{{ _('Remove item?') }}")) {
       return false;
     }
 
@@ -202,7 +207,7 @@
   }
 
   function confirmDeleteItem(){
-    return confirm("{{ _('Remove item? / حذف العنصر؟') }}");
+    return confirm("{{ _('Remove item?') }}");
   }
 
   // Delete functions for API calls
@@ -234,10 +239,10 @@
     const sel = document.getElementById('deleteSectionSelect');
     const val = sel && sel.value ? sel.value.trim() : '';
     if(!val){
-      alert("{{ _('Please choose a section / يرجى اختيار قسم') }}");
+      alert("{{ _('Please choose a section') }}");
       return false;
     }
-    if(!confirm("{{ _('Delete this section? / حذف هذا القسم؟') }}")){
+    if(!confirm("{{ _('Delete this section?') }}")){
       return false;
     }
     const form = document.getElementById('deleteSectionForm');
@@ -254,27 +259,27 @@
 <div class="modal fade" id="importMealsModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form method="post" action="{{ url_for('main.meals_import') }}" enctype="multipart/form-data">
+      <form method="post" action="{{ url_for('purchases.meals_import') }}" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         {% if current_section %}<input type="hidden" name="cat_id" value="{{ current_section.id }}"/>{% endif %}
         <div class="modal-header">
-          <h5 class="modal-title">{{ _('Import Meals / استيراد الوجبات') }}</h5>
+          <h5 class="modal-title">{{ _('Import Meals') }}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label">{{ _('Select File / اختر الملف') }}</label>
+            <label class="form-label">{{ _('Select File') }}</label>
             <input type="file" name="file" class="form-control" accept=".xlsx,.xls,.csv" required>
-            <div class="form-text">{{ _('Supported: Excel (.xlsx, .xls), CSV / الصيغ المدعومة: إكسل، CSV') }}</div>
+            <div class="form-text">{{ _('Supported: Excel (.xlsx, .xls), CSV') }}</div>
           </div>
           <div class="alert alert-info">
-            <strong>{{ _('Required columns / الأعمدة المطلوبة') }}:</strong><br>
-            {{ _('Name, Name (Arabic), Selling Price / الاسم، الاسم بالعربية، سعر البيع') }}
+            <strong>{{ _('Required columns') }}:</strong><br>
+            {{ _('Name, Name (Arabic), Selling Price') }}
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel / إلغاء') }}</button>
-          <button type="submit" class="btn btn-success">{{ _('Import / استيراد') }}</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel') }}</button>
+          <button type="submit" class="btn btn-success">{{ _('Import') }}</button>
         </div>
       </form>
     </div>

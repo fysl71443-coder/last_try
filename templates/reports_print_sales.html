@@ -19,11 +19,11 @@
   <div class="report-header d-flex justify-content-between align-items-center">
     <div>
       <h4 class="mb-1">{{ meta.title }}</h4>
-      <div class="muted">Range: {{ meta.start_date or 'All' }} → {{ meta.end_date or 'All' }} | PM: {{ meta.payment_method|upper }} | Branch: {{ meta.branch }}</div>
+      <div class="muted">{{ _('Range') }}: {{ meta.start_date or _('All') }} → {{ meta.end_date or _('All') }} | {{ _('PM') }}: {{ meta.payment_method|upper }} | {{ _('Branch') }}: {{ meta.branch }}</div>
     </div>
     <div class="text-end">
-      <div class="muted">Printed: {{ meta.generated_at }}</div>
-      <button class="btn btn-sm btn-outline-secondary no-print" onclick="window.print()">Print</button>
+      <div class="muted">{{ _('Printed') }}: {{ meta.generated_at }}</div>
+      <button class="btn btn-sm btn-outline-secondary no-print" onclick="window.print()">{{ _('Print') }}</button>
     </div>
   <script>
     (function(){
@@ -39,15 +39,15 @@
     <table class="table table-bordered table-striped table-sm align-middle">
       <thead class="table-light">
         <tr>
-          <th>Branch</th><th>Date</th><th>Invoice No.</th><th>Item</th><th>Qty</th>
-          <th>Amount</th><th>Discount</th><th>VAT</th><th>Total</th><th>Payment</th>
+          <th>{{ _('Branch') }}</th><th>{{ _('Date') }}</th><th>{{ _('Invoice No.') }}</th><th>{{ _('Item') }}</th><th>{{ _('Qty') }}</th>
+          <th>{{ _('Amount') }}</th><th>{{ _('Discount') }}</th><th>{{ _('VAT') }}</th><th>{{ _('Total') }}</th><th>{{ _('Payment') }}</th>
         </tr>
       </thead>
       <tbody>
         {% set current = None %}
         {% for r in rows %}
           {% if r.branch != current %}
-            <tr class="table-info fw-bold"><td colspan="10">Branch: {{ r.branch }}</td></tr>
+            <tr class="table-info fw-bold"><td colspan="10">{{ _('Branch') }}: {{ r.branch }}</td></tr>
             {% set current = r.branch %}
           {% endif %}
           <tr>
@@ -62,7 +62,7 @@
       <tfoot>
         {% for b, t in branch_totals|dictsort %}
           <tr class="table-warning fw-bold">
-            <td colspan="5" class="text-end">Branch Totals ({{ b }}):</td>
+            <td colspan="5" class="text-end">{{ _('Branch Totals') }} ({{ b }}):</td>
             <td>{{ '%.2f'|format(t.amount) }}</td>
             <td>{{ '%.2f'|format(t.discount) }}</td>
             <td>{{ '%.2f'|format(t.vat) }}</td>
@@ -71,7 +71,7 @@
           </tr>
         {% endfor %}
         <tr class="table-secondary fw-bold">
-          <td colspan="5" class="text-end">Overall Totals:</td>
+          <td colspan="5" class="text-end">{{ _('Overall Totals') }}:</td>
           <td>{{ '%.2f'|format(overall.amount) }}</td>
           <td>{{ '%.2f'|format(overall.discount) }}</td>
           <td>{{ '%.2f'|format(overall.vat) }}</td>
@@ -84,9 +84,9 @@
 
   {% if payment_totals %}
   <div class="mt-3">
-    <h6>Payment Method Totals</h6>
+    <h6>{{ _('Payment Method Totals') }}</h6>
     <table class="table table-sm table-bordered w-auto">
-      <thead class="table-light"><tr><th>Method</th><th class="text-end">Total</th></tr></thead>
+      <thead class="table-light"><tr><th>{{ _('Method') }}</th><th class="text-end">{{ _('Total') }}</th></tr></thead>
       <tbody>
         {% for pm, val in payment_totals|dictsort %}
         <tr><td>{{ pm }}</td><td class="text-end">{{ '%.2f'|format(val) }}</td></tr>

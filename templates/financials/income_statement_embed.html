@@ -1,0 +1,50 @@
+{% extends 'financials/base_statement_embed.html' %}
+{% block title %}{{ _('Income Statement') }}{% endblock %}
+{% block content %}
+<div class="stmt-header">
+  <h2 class="stmt-title">{{ _('Income Statement') }}</h2>
+  <div class="stmt-meta">{{ _('Period') }}: {{ data.start_date }} → {{ data.end_date }}{% if data.branch and data.branch != 'all' %} | {{ _('Branch') }}: {{ data.branch }}{% endif %}</div>
+</div>
+{% set _all_zero = ( (data.revenue or 0)==0 and (data.cogs or 0)==0 and (data.operating_expenses or 0)==0 and (data.other_income or 0)==0 and (data.other_expenses or 0)==0 ) %}
+{% if _all_zero %}
+<div class="alert alert-warning py-2">{{ _('No data for the selected period.') }}</div>
+{% endif %}
+<div class="stmt-cards" dir="rtl">
+  <div class="stmt-card" style="background:#e8f4fd; border-color:#0d6efd;">
+    <div class="val">{{ '%.2f'|format(data.revenue or 0) }}</div>
+    <div class="lbl">{{ _('Total revenue') }}</div>
+  </div>
+  <div class="stmt-card" style="background:#fff3e6; border-color:#fd7e14;">
+    <div class="val">{{ '%.2f'|format(data.cogs or 0) }}</div>
+    <div class="lbl">{{ _('Cost of sales') }}</div>
+  </div>
+  <div class="stmt-card" style="background:#e8f5e9; border-color:#198754;">
+    <div class="val">{{ '%.2f'|format(data.gross_profit or 0) }}</div>
+    <div class="lbl">{{ _('Gross profit') }}</div>
+  </div>
+  <div class="stmt-card {% if (data.net_profit_after_tax or 0) < 0 %}stmt-loss{% endif %}" style="{% if (data.net_profit_after_tax or 0) >= 0 %}background:#e8f5e9; border-color:#198754;{% else %}background:#ffebee; border-color:#dc3545;{% endif %}">
+    <div class="val">{{ '%.2f'|format(data.net_profit_after_tax or 0) }}</div>
+    <div class="lbl">{{ _('Net profit') }}</div>
+  </div>
+</div>
+<div class="stmt-panel">
+  <div class="stmt-panel-head">{{ _('Income Statement') }} ({{ data.start_date }} → {{ data.end_date }})</div>
+  <div class="p-3">
+    <table class="stmt-table table table-sm" dir="rtl">
+      <tbody>
+        <tr><td colspan="2" class="stmt-rev fw-bold"><i class="fa-solid fa-arrow-trend-up me-1"></i>{{ _('Revenue') }}</td></tr>
+        <tr><td>{{ _('Total revenue') }}</td><td class="stmt-num">{{ '%.2f'|format(data.revenue or 0) }}</td></tr>
+        <tr><td colspan="2" class="stmt-exp fw-bold pt-2">(−) {{ _('Cost of sales') }}</td></tr>
+        <tr><td>{{ _('Cost of sales') }}</td><td class="stmt-num">{{ '%.2f'|format(data.cogs or 0) }}</td></tr>
+        <tr class="stmt-total-row"><td>= {{ _('Gross profit') }}</td><td class="stmt-profit stmt-num">{{ '%.2f'|format(data.gross_profit or 0) }}</td></tr>
+        <tr><td colspan="2" class="stmt-exp fw-bold pt-2">(−) {{ _('Operating expenses') }}</td></tr>
+        <tr><td>{{ _('Total operating expenses') }}</td><td class="stmt-num">{{ '%.2f'|format(data.operating_expenses or 0) }}</td></tr>
+        <tr class="stmt-total-row"><td>= {{ _('Operating profit') }}</td><td class="stmt-num">{{ '%.2f'|format(data.operating_profit or 0) }}</td></tr>
+        <tr><td>{{ _('Other income') }}</td><td class="stmt-profit stmt-num">{{ '%.2f'|format(data.other_income or 0) }}</td></tr>
+        <tr><td>{{ _('Other expenses') }}</td><td class="stmt-exp stmt-num">{{ '%.2f'|format(data.other_expenses or 0) }}</td></tr>
+        <tr class="stmt-total-row"><td>= {{ _('Net profit') }}</td><td class="{% if (data.net_profit_after_tax or 0) >= 0 %}stmt-profit{% else %}stmt-loss{% endif %} stmt-num">{{ '%.2f'|format(data.net_profit_after_tax or 0) }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

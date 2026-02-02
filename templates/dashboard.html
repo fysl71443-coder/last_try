@@ -1,406 +1,228 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Dashboard / لوحة التحكم') }}{% endblock %}
+{% set hide_back_button = True %}
+{% block title %}{{ _('Dashboard') }}{% endblock %}
 {% block content %}
 
 <style>
-:root{ --card-bg:#ffffff; --card-border:rgba(0,0,0,.08); --glow-color:rgba(255,255,255,.75); --card-height:calc(clamp(100px, 11vw, 130px)); --icon-size:calc(clamp(28px, 3.2vw, 36px)) }
-.dashboard-panel{ background:#fff; border-radius:20px; box-shadow:0 20px 60px rgba(18,22,33,.08); padding:12px 24px 24px 24px; max-width:1400px; margin:0 auto; min-height:92vh; height:100% }
-.dashboard-side{ background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,.06); border-radius:16px; box-shadow:0 6px 16px rgba(18,22,33,.12); padding:12px }
-.dashboard-side .side-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; color:#e2e8f0; text-decoration:none; transition:background .1s ease, transform .1s ease }
-.dashboard-side .side-item:hover{ background:#1e293b; transform:translateX(2px) }
-.dashboard-side .side-icon{ width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; background:#1f2937; color:#93c5fd; font-size:16px }
-.dashboard-side .side-nested{ list-style:none; padding-left:8px; margin:6px 0 10px 0; display:none }
-.dashboard-side .side-nested li a{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; color:#cbd5e1; text-decoration:none }
-.dashboard-side .side-nested li a:hover{ background:#0b1220 }
-.stats-row{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin-bottom:14px }
-.stat-card{ background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:16px; box-shadow:0 8px 20px rgba(18,22,33,.06); padding:14px; display:flex; align-items:center; gap:12px; min-height:64px }
-.stat-card .stat-icon{ width:36px; height:36px; border-radius:12px; background:linear-gradient(180deg,#4caf50,#2e7d32); color:#fff; display:flex; align-items:center; justify-content:center; filter:drop-shadow(0 6px 12px rgba(0,0,0,.18)) }
-.stat-card.orange .stat-icon{ background:linear-gradient(180deg,#ff9800,#f57c00) }
-.stat-card.purple .stat-icon{ background:linear-gradient(180deg,#7e57c2,#5e35b1) }
-.stat-card .stat-text{ line-height:1.1 }
-.stat-card .value{ font-weight:800; font-size:1.1rem }
-.stat-card .label{ font-size:.8rem; opacity:.7 }
-.card-link{ text-decoration:none; display:block }
-.dashboard-card{ position:relative; border-radius:18px; padding:12px; text-align:center; overflow:hidden; box-shadow:0 10px 24px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.06); background:var(--card-bg); border:1px solid var(--card-border); transform:translateY(10px) scale(.98); opacity:0; will-change:transform,opacity; transition:transform .25s ease, opacity .25s ease, box-shadow .25s ease; display:flex; align-items:center; justify-content:center; flex-direction:column; height:var(--card-height); perspective:800px; transform-style:preserve-3d }
-.dashboard-card.reveal{ transform:translateY(0) scale(1); opacity:1 }
-.dashboard-card .title{ font-weight:700; margin:8px 0 0 0 }
-.icon-3d{ width:var(--icon-size); height:var(--icon-size); margin:0 auto .3rem; display:block; filter:drop-shadow(0 10px 20px rgba(0,0,0,.18)) drop-shadow(0 0 18px var(--glow-color)); animation:pulseGlow 6s ease-in-out infinite; will-change:transform,filter; shape-rendering:geometricPrecision }
-.dashboard-card:hover{ box-shadow:0 16px 32px rgba(0,0,0,.16) }
-.dashboard-card:hover .icon-3d{ transform:translateZ(18px) scale(1.06) }
-.dashboard-card::after{ content:""; position:absolute; inset:-40% -40% auto auto; height:120px; width:120px; background:radial-gradient(closest-side, rgba(255,255,255,.6), rgba(255,255,255,0)); transform:translate(0,0) rotate(25deg); opacity:0; transition:opacity .25s ease }
-.dashboard-card:hover::after{ opacity:.7 }
-.kind-sales,.kind-purchases,.kind-expenses,.kind-inventory,.kind-salaries,.kind-payments,.kind-reports,.kind-archive,.kind-vat,.kind-financials,.kind-journal,.kind-customers,.kind-menu,.kind-settings,.kind-users,.kind-tables,.kind-suppliers,.kind-empuvd{ background:#fff; border-color:var(--card-border) }
-.dashboard-card .gate{ position:absolute; inset:0; display:flex; pointer-events:none }
-.dashboard-card .gate .left,.dashboard-card .gate .right{ flex:1; background:linear-gradient(180deg, rgba(0,0,0,.08), rgba(0,0,0,.02)); backdrop-filter:saturate(120%) blur(.6px); transition:transform .45s cubic-bezier(.2,.8,.2,1) }
-.dashboard-card .gate .left{ border-right:1px solid rgba(0,0,0,.06) }
-.dashboard-card .gate .right{ border-left:1px solid rgba(0,0,0,.06) }
-.dashboard-card.open .gate .left{ transform:translateX(-120%) }
-.dashboard-card.open .gate .right{ transform:translateX(120%) }
-.dashboard-card .flash{ position:absolute; inset:0; background:radial-gradient(closest-side, rgba(255,255,255,.0), rgba(255,255,255,.0)); pointer-events:none; opacity:0 }
-.dashboard-card.open .flash{ animation:flash 520ms ease-out forwards }
-@keyframes flash{ 0%{ opacity:0; background:radial-gradient(closest-side, rgba(255,255,255,.0), rgba(255,255,255,.0)) } 15%{ opacity:.9; background:radial-gradient(closest-side, rgba(255,255,255,.85), rgba(255,255,255,.0)) } 100%{ opacity:0 } }
-.dashboard-card:hover{ transform:translateY(-2px); box-shadow:0 10px 20px rgba(0,0,0,.12) }
-@media (prefers-reduced-motion: reduce){
-  .autumn-scene .shape{ animation:none }
-  .dashboard-card{ transition:none }
-  .dashboard-card:hover{ transform:none }
+/* Hub: cards-only, blue primary, no sidebar, no reports */
+:root{
+  --hub-primary: #1565C0;
+  --hub-primary-dark: #0D47A1;
+  --hub-primary-light: #42A5F5;
+  --hub-bg: #f8fafc;
+  --hub-card-bg: #ffffff;
+  --hub-card-border: rgba(21, 101, 192, 0.12);
+  --hub-card-height: calc(clamp(96px, 10vw, 120px));
+  --hub-icon: calc(clamp(26px, 2.8vw, 32px));
 }
-/* Layout: sidebar and content parallel */
-.layout-row{ display:grid; grid-template-columns: 280px 1fr; gap:18px; min-height:calc(100vh - 40px); align-items:stretch }
-.sidebar-col,.content-col{ display:flex; flex-direction:column }
-.content-col{ min-width:0; width:100%; max-width:100% }
-.dashboard-side{ height:100% }
-.dashboard-panel{ height:100%; display:flex; flex-direction:column; overflow-x:hidden }
-.accordion#dashAccordion{ display:none }
-.dashboard-side .side-item.active{ background:#eef2f7 }
-.group-card{ display:block !important; margin:0; width:100% !important }
-#cards-grid{ display:grid !important; grid-template-columns: repeat(4, 1fr); gap:12px; min-height:320px; margin-top:0; width:100%; padding:0 24px; box-sizing:border-box }
-#cards-grid > .group-card{ width:100% !important; max-width:none !important; margin:0 !important }
-#kpi-row{ grid-column: 1 / -1 }
-.stat-card.loading{ position:relative; overflow:hidden }
-.stat-card.loading::after{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.35) 50%, rgba(255,255,255,0) 100%); animation: shimmer 1.5s infinite }
-@keyframes shimmer{ 0%{ transform:translateX(-100%) } 100%{ transform:translateX(100%) } }
-#cards-grid{ display:grid !important; grid-template-columns: repeat(4, 1fr); gap:12px; padding:0 24px }
-@media (max-width: 1200px) { #cards-grid{ grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 900px) { #cards-grid{ grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 600px) { #cards-grid{ grid-template-columns: 1fr; gap:10px; } }
-
-/* تنسيقات إضافية لضمان عرض البطاقات */
-.dashboard-card {
-    width: 100% !important;
-    min-width: 0 !important;
-    box-sizing: border-box;
-    margin: 0 !important;
-    padding: 10px !important;
+.dashboard-hub{ background:var(--hub-bg); min-height:calc(100vh - 60px); padding:1.5rem 1rem 2rem; }
+.dashboard-panel{ background:var(--hub-card-bg); border-radius:16px; box-shadow:0 4px 20px rgba(21,101,192,.08); border:1px solid var(--hub-card-border); padding:1.5rem 1.25rem; max-width:1200px; margin:0 auto; overflow:visible; }
+.dashboard-panel .hub-title{ font-size:1rem; font-weight:700; color:var(--hub-primary); margin:0 0 1rem 0; padding-bottom:.5rem; border-bottom:1px solid var(--hub-card-border); }
+.card-link{ text-decoration:none; display:block; color:inherit; }
+.dashboard-card{
+  position:relative; border-radius:14px; padding:12px; text-align:center; overflow:hidden;
+  background:var(--hub-card-bg); border:1px solid var(--hub-card-border);
+  box-shadow:0 2px 10px rgba(21,101,192,.06);
+  display:flex; align-items:center; justify-content:center; flex-direction:column; height:var(--hub-card-height);
+  transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
-
-.group-card {
-    display: block !important;
-    width: 100% !important;
-    max-width: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    box-sizing: border-box;
-}
-
-.dashboard-card .title {
-    font-size: 0.9rem !important;
-    margin: 6px 0 0 0 !important;
-}
-
-.dashboard-card .icon-3d {
-    margin-bottom: 0.2rem !important;
-}
+.dashboard-card:hover{ transform:translateY(-2px); box-shadow:0 8px 24px rgba(21,101,192,.12); border-color:var(--hub-primary-light); }
+.dashboard-card .title{ font-weight:700; font-size:.9rem; margin:6px 0 0 0; color:#1e293b; }
+.dashboard-card .icon-3d{ width:var(--hub-icon); height:var(--hub-icon); margin:0 auto .2rem; display:block; }
+#cards-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:12px; overflow:visible; }
+@media (max-width: 900px){ #cards-grid{ grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px){ #cards-grid{ grid-template-columns: 1fr; gap:10px; } }
+.group-card{ display:block !important; width:100% !important; margin:0 !important; padding:0 !important; box-sizing:border-box; }
+body.dark .dashboard-hub{ background:#0f172a; }
+body.dark .dashboard-panel{ background:#1e293b; border-color:rgba(66,165,245,.2); }
+body.dark .dashboard-card{ background:#1e293b; border-color:rgba(66,165,245,.15); }
+body.dark .dashboard-card .title{ color:#e2e8f0; }
+body.dark .dashboard-panel .hub-title{ color:var(--hub-primary-light); border-color:rgba(66,165,245,.2); }
 </style>
 
-<div class="container-fluid py-4">
-  <div class="layout-row">
-    <div class="sidebar-col">
-      <div class="dashboard-side">
-        <div class="d-flex align-items-center gap-2 mb-2"><div class="side-icon">🏠</div><strong>{{ _('Dashboard / لوحة التحكم') }}</strong></div>
-        <a class="side-item active" href="#" data-group="sales"><div class="side-icon">💼</div><span>{{ _('Sales & Commercial / المبيعات والعمليات التجارية') }}</span></a>
-        <ul class="side-nested" data-group="sales">
-          {% if can('sales','view') %}<li><a href="{{ url_for('main.sales') }}">💰 {{ _('Sales / المبيعات') }}</a></li>{% endif %}
-          {% if can('invoices','view') %}<li><a href="{{ url_for('main.invoices') }}">🧾 {{ _('Invoices / الفواتير') }}</a></li>{% endif %}
-          {% if can('customers','view') %}<li><a href="{{ url_for('main.customers') }}">🤝 {{ _('Customers / العملاء') }}</a></li>{% endif %}
-          {% if can('menu','view') %}<li><a href="{{ url_for('main.menu') }}">🍽️ {{ _('Menu / المنيو') }}</a></li>{% endif %}
-          {% if can('payments','view') %}<li><a href="{{ url_for('main.payments') }}">💳 {{ _('Payments / المدفوعات') }}</a></li>{% endif %}
-          {% if can('expenses','view') %}<li><a href="{{ url_for('main.expenses') }}">🧾 {{ _('Expenses / المصروفات') }}</a></li>{% endif %}
-        </ul>
-        <a class="side-item" href="#" data-group="proc"><div class="side-icon">🛍️</div><span>{{ _('Procurement & Suppliers / المشتريات والموردون') }}</span></a>
-        <ul class="side-nested" data-group="proc">
-          {% if can('purchases','view') %}<li><a href="{{ url_for('main.purchases') }}">🛒 {{ _('Purchases / المشتريات') }}</a></li>{% endif %}
-          {% if can('suppliers','view') %}<li><a href="{{ url_for('main.suppliers') }}">🤝 {{ _('Suppliers / الموردون') }}</a></li>{% endif %}
-          {% if can('payments','view') %}<li><a href="{{ url_for('main.payments') }}">💳 {{ _('Payments & Receivables / المدفوعات والمستحقات') }}</a></li>{% endif %}
-        </ul>
-        <a class="side-item" href="#" data-group="acct"><div class="side-icon">📒</div><span>{{ _('Accounting & Finance / المحاسبة والمالية') }}</span></a>
-        <ul class="side-nested" data-group="acct">
-          <li><a href="{{ url_for('financials.accounts_hub') }}">📚 {{ _('Accounts / الحسابات') }}</a></li>
-          {% if can('journal','view') %}<li><a href="{{ url_for('journal.list_entries') }}">📓 {{ _('Journal / قيود اليومية') }}</a></li>{% endif %}
-          {% if can('financials','view') %}<li><a href="{{ url_for('financials.trial_balance') }}">📊 {{ _('Trial Balance / ميزان المراجعة') }}</a></li>{% endif %}
-          <li><a href="{{ url_for('financials.accounts_hub') }}#tab-ledger">📑 {{ _('Ledger / دفتر الأستاذ') }}</a></li>
-          {% if can('vat','view') %}<li><a href="{{ url_for('vat.vat_dashboard') }}">🧮 {{ _('VAT / ضريبة القيمة المضافة') }}</a></li>{% endif %}
-          {% if can('financials','view') %}<li><a href="{{ url_for('financials.income_statement') }}">📘 {{ _('Financial Statements / القوائم المالية') }}</a></li>{% endif %}
-          {% if can('reports','view') %}<li><a href="{{ url_for('main.reports') }}">📊 {{ _('Reports / التقارير') }}</a></li>{% endif %}
-        </ul>
-        <a class="side-item" href="#" data-group="inv"><div class="side-icon">📦</div><span>{{ _('Inventory & Resources / المخزون وإدارة الموارد') }}</span></a>
-        <ul class="side-nested" data-group="inv">
-          {% if can('inventory','view') %}<li><a href="{{ url_for('main.inventory') }}">📦 {{ _('Inventory / المخزون') }}</a></li>{% endif %}
-          {% if can('inventory','view') %}<li><a href="{{ url_for('main.inventory') }}">🧮 {{ _('Inventory & Costs / إدارة التكاليف') }}</a></li>{% endif %}
-        </ul>
-        <a class="side-item" href="#" data-group="sys"><div class="side-icon">⚙️</div><span>{{ _('System & Configuration / النظام والإعدادات') }}</span></a>
-        <ul class="side-nested" data-group="sys">
-          {% if can('settings','view') %}<li><a href="{{ url_for('main.settings') }}">⚙️ {{ _('Settings / الإعدادات') }}</a></li>{% endif %}
-          {% if can('table_settings','view') %}<li><a href="{{ url_for('main.table_settings') }}">🪑 {{ _('Table Settings / إعدادات الطاولات') }}</a></li>{% endif %}
-          {% if can('users','view') %}<li><a href="{{ url_for('main.users') }}">👤 {{ _('Users & Permissions / المستخدمون والصلاحيات') }}</a></li>{% endif %}
-        </ul>
-      </div>
+<div class="dashboard-hub container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar mb-3">
+    <span class="ops-icon"><i class="fa-solid fa-house"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Dashboard') }}</h1>
+      <span class="ops-subtitle">{{ _('Quick access to Sales, Purchases, Invoices, Inventory, Reports and Settings') }}</span>
     </div>
-    <div class="content-col">
-      <div class="dashboard-panel">
-        <div id="cards-grid">
+  </div>
+  <div class="dashboard-panel">
+    <div id="cards-grid" data-partial-links>
 
-        
-        
-
-    {% if can('sales','view') %}
-    <div class="group-card" data-group="sales">
-      <a href="{{ url_for('main.sales') }}" class="card-link">
-        <div class="dashboard-card kind-sales" data-target="{{ url_for('main.sales') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCoin" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffd77a"/><stop offset="100%" stop-color="#ff9a3c"/></linearGradient></defs><circle cx="32" cy="32" r="22" fill="url(#gCoin)"/><circle cx="32" cy="32" r="18" fill="#fff3"/><path d="M26 36c0 4 12 4 12 0s-12-4-12 0z" fill="#fff8"/></svg>
-          <div class="title">{{ _('Sales / المبيعات') }}</div>
-          <div class="gate"><div class="left"></div><div class="right"></div></div>
-          <div class="flash"></div>
+    <div class="group-card">
+      <a href="{{ url_for('sales.sales') }}" class="card-link">
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCoin" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#42A5F5"/><stop offset="100%" stop-color="#1565C0"/></linearGradient></defs><circle cx="32" cy="32" r="22" fill="url(#gCoin)"/><circle cx="32" cy="32" r="18" fill="#fff3"/><path d="M26 36c0 4 12 4 12 0s-12-4-12 0z" fill="#fff8"/></svg>
+          <div class="title">{{ _('Sales') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('purchases','view') %}
-    <div class="group-card" data-group="proc">
-      <a href="{{ url_for('main.purchases') }}" class="card-link">
-        <div class="dashboard-card kind-purchases" data-target="{{ url_for('main.purchases') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCart" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffb3b3"/><stop offset="100%" stop-color="#ff6b6b"/></linearGradient></defs><rect x="16" y="22" width="32" height="18" rx="4" fill="url(#gCart)"/><circle cx="24" cy="44" r="4" fill="#333"/><circle cx="40" cy="44" r="4" fill="#333"/></svg>
-          <div class="title">{{ _('Purchases / المشتريات') }}</div>
-          <div class="gate"><div class="left"></div><div class="right"></div></div>
-          <div class="flash"></div>
+    <div class="group-card">
+      <a href="{{ url_for('purchases.purchases') }}" class="card-link">
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCart" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#64B5F6"/><stop offset="100%" stop-color="#1976D2"/></linearGradient></defs><rect x="16" y="22" width="32" height="18" rx="4" fill="url(#gCart)"/><circle cx="24" cy="44" r="4" fill="#333"/><circle cx="40" cy="44" r="4" fill="#333"/></svg>
+          <div class="title">{{ _('Purchases') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('suppliers','view') %}
-    <div class="group-card" data-group="proc">
-      <a href="{{ url_for('main.suppliers') }}" class="card-link">
-        <div class="dashboard-card kind-suppliers" data-target="{{ url_for('main.suppliers') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gHandshake" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#b2ebf2"/><stop offset="100%" stop-color="#00bcd4"/></linearGradient></defs><path d="M22 32l10 6 10-6" fill="none" stroke="url(#gHandshake)" stroke-width="6" stroke-linecap="round"/></svg>
-          <h6>{{ _('Suppliers / الموردون') }}</h6>
+    <div class="group-card">
+      <a href="{{ url_for('suppliers.suppliers') }}" class="card-link">
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gHandshake" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#90CAF9"/><stop offset="100%" stop-color="#1565C0"/></linearGradient></defs><path d="M22 32l10 6 10-6" fill="none" stroke="url(#gHandshake)" stroke-width="6" stroke-linecap="round"/></svg>
+          <div class="title">{{ _('Suppliers') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-
-    {% if can('expenses','view') %}
-    <div class="group-card" data-group="sales">
-      <a href="{{ url_for('main.expenses') }}" class="card-link">
-        <div class="dashboard-card kind-expenses" data-target="{{ url_for('main.expenses') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gExpense" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffccbc"/><stop offset="100%" stop-color="#ff7043"/></linearGradient></defs><rect x="18" y="20" width="28" height="24" rx="6" fill="url(#gExpense)"/><circle cx="32" cy="32" r="6" fill="#fff8"/></svg>
-          <h6>{{ _('Expenses / المصروفات') }}</h6>
+    <div class="group-card">
+      <a href="{{ url_for('expenses.expenses') }}" class="card-link" data-full-reload>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gExpense" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#64B5F6"/><stop offset="100%" stop-color="#0D47A1"/></linearGradient></defs><rect x="18" y="20" width="28" height="24" rx="6" fill="url(#gExpense)"/><circle cx="32" cy="32" r="6" fill="#fff8"/></svg>
+          <div class="title">{{ _('Expenses') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('invoices','view') %}
-    <div class="group-card" data-group="sales">
+    <div class="group-card">
       <a href="{{ url_for('main.invoices') }}" class="card-link">
-        <div class="dashboard-card kind-reports" data-target="{{ url_for('main.invoices') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gDoc" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d1c4e9"/><stop offset="100%" stop-color="#9575cd"/></linearGradient></defs><rect x="18" y="14" width="28" height="36" rx="6" fill="url(#gDoc)"/><rect x="24" y="22" width="16" height="4" rx="2" fill="#fff9"/><rect x="24" y="30" width="16" height="4" rx="2" fill="#fff6"/></svg>
-          <h6>{{ _('All Invoices / كل الفواتير') }}</h6>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gDoc" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#BBDEFB"/><stop offset="100%" stop-color="#1976D2"/></linearGradient></defs><rect x="18" y="14" width="28" height="36" rx="6" fill="url(#gDoc)"/><rect x="24" y="22" width="16" height="4" rx="2" fill="#fff9"/><rect x="24" y="30" width="16" height="4" rx="2" fill="#fff6"/></svg>
+          <div class="title">{{ _('All Invoices') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('inventory','view') %}
-    <div class="group-card" data-group="sales inv">
-      <a href="{{ url_for('main.inventory') }}" class="card-link">
-        <div class="dashboard-card kind-inventory" data-target="{{ url_for('main.inventory') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gBox" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#b2dfdb"/><stop offset="100%" stop-color="#26a69a"/></linearGradient></defs><path d="M16 24l16-10 16 10v20l-16 10-16-10z" fill="url(#gBox)"/></svg>
-          <h6>{{ _('Inventory & Costs / المخزون وادارة التكاليف') }}</h6>
+    <div class="group-card">
+      <a href="{{ url_for('inventory.inventory') }}" class="card-link" data-full-reload>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gBox" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#81D4FA"/><stop offset="100%" stop-color="#0288D1"/></linearGradient></defs><path d="M16 24l16-10 16 10v20l-16 10-16-10z" fill="url(#gBox)"/></svg>
+          <div class="title">{{ _('Inventory') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    
-
-    {% if can('payments','view') %}
-    <div class="group-card" data-group="sales proc">
-      <a href="{{ url_for('main.payments') }}" class="card-link">
-        <div class="dashboard-card kind-payments" data-target="{{ url_for('main.payments') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCard" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c5e1a5"/><stop offset="100%" stop-color="#8bc34a"/></linearGradient></defs><rect x="14" y="20" width="36" height="24" rx="6" fill="url(#gCard)"/><rect x="18" y="26" width="20" height="4" rx="2" fill="#fff9"/></svg>
-          <h6>{{ _('Payments & Receivables / المدفوعات والمستحقات') }}</h6>
+    <div class="group-card">
+      <a href="{{ url_for('payments.payments') }}" class="card-link">
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCard" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#64B5F6"/><stop offset="100%" stop-color="#1565C0"/></linearGradient></defs><rect x="14" y="20" width="36" height="24" rx="6" fill="url(#gCard)"/><rect x="18" y="26" width="20" height="4" rx="2" fill="#fff9"/></svg>
+          <div class="title">{{ _('Payments') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    
-
-    
-    
-    
-
-    {% if can('reports','view') %}
-    <div class="group-card" data-group="acct">
-      <a href="{{ url_for('main.reports') }}" class="card-link">
-        <div class="dashboard-card kind-reports" data-target="{{ url_for('main.reports') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gChart" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d1c4e9"/><stop offset="100%" stop-color="#7e57c2"/></linearGradient></defs><rect x="20" y="30" width="6" height="14" rx="2" fill="url(#gChart)"/><rect x="30" y="24" width="6" height="20" rx="2" fill="url(#gChart)"/><rect x="40" y="34" width="6" height="10" rx="2" fill="url(#gChart)"/></svg>
-          <h6>{{ _('Reports / التقارير') }}</h6>
+    <div class="group-card">
+      <a href="{{ url_for('reports.reports') }}" class="card-link">
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gChart" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#90CAF9"/><stop offset="100%" stop-color="#1565C0"/></linearGradient></defs><rect x="20" y="30" width="6" height="14" rx="2" fill="url(#gChart)"/><rect x="30" y="24" width="6" height="20" rx="2" fill="url(#gChart)"/><rect x="40" y="34" width="6" height="10" rx="2" fill="url(#gChart)"/></svg>
+          <div class="title">{{ _('Reports') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('archive','view') %}
-    <div class="group-card" data-group="acct">
+    <div class="group-card">
       <a href="{{ url_for('main.archive') }}" class="card-link">
-        <div class="dashboard-card kind-archive" data-target="{{ url_for('main.archive') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gFolder" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#cfd8dc"/><stop offset="100%" stop-color="#90a4ae"/></linearGradient></defs><path d="M14 24h16l4 6h16v20H14z" fill="url(#gFolder)"/></svg>
-          <h6>{{ _('Archive / الأرشيف') }}</h6>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gFolder" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#90A4AE"/><stop offset="100%" stop-color="#455A64"/></linearGradient></defs><path d="M14 24h16l4 6h16v20H14z" fill="url(#gFolder)"/></svg>
+          <div class="title">{{ _('Archive') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('vat','view') %}
-    <div class="group-card" data-group="acct">
+    <div class="group-card">
       <a href="{{ url_for('vat.vat_dashboard') }}" class="card-link">
-        <div class="dashboard-card kind-vat" data-target="{{ url_for('vat.vat_dashboard') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gVat" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffe082"/><stop offset="100%" stop-color="#ffca28"/></linearGradient></defs><circle cx="32" cy="24" r="10" fill="url(#gVat)"/><rect x="20" y="36" width="24" height="10" rx="5" fill="#fff6"/></svg>
-          <h6>{{ _('VAT / ضريبة القيمة المضافة') }}</h6>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gVat" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#64B5F6"/><stop offset="100%" stop-color="#0D47A1"/></linearGradient></defs><circle cx="32" cy="24" r="10" fill="url(#gVat)"/><rect x="20" y="36" width="24" height="10" rx="5" fill="#fff6"/></svg>
+          <div class="title">{{ _('VAT') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    
-
-    <div class="group-card" data-group="acct">
+    <div class="group-card">
       <a href="{{ url_for('financials.accounts_hub') }}" class="card-link">
-        <div class="dashboard-card kind-financials" data-target="{{ url_for('financials.accounts_hub') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gAcc" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#a5d6a7"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><rect x="18" y="18" width="28" height="28" rx="6" fill="url(#gAcc)"/><rect x="22" y="24" width="20" height="4" rx="2" fill="#fff9"/><rect x="22" y="32" width="20" height="4" rx="2" fill="#fff6"/></svg>
-          <h6>{{ _('Accounts / الحسابات') }}</h6>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gAcc" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#81D4FA"/><stop offset="100%" stop-color="#0277BD"/></linearGradient></defs><rect x="18" y="18" width="28" height="28" rx="6" fill="url(#gAcc)"/><rect x="22" y="24" width="20" height="4" rx="2" fill="#fff9"/><rect x="22" y="32" width="20" height="4" rx="2" fill="#fff6"/></svg>
+          <div class="title">{{ _('Accounts') }}</div>
         </div>
       </a>
     </div>
 
-    {% if can('journal','view') %}
-    <div class="group-card" data-group="acct">
-      <a href="{{ url_for('journal.list_entries') }}" class="card-link">
-        <div class="dashboard-card kind-journal" data-target="{{ url_for('journal.list_entries') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gJournal" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c8e6c9"/><stop offset="100%" stop-color="#66bb6a"/></linearGradient></defs><rect x="20" y="16" width="28" height="32" rx="6" fill="url(#gJournal)"/><circle cx="28" cy="32" r="3" fill="#fff9"/><circle cx="40" cy="32" r="3" fill="#fff9"/></svg>
-          <h6>{{ _('Journal Entries / قيود اليومية') }}</h6>
+    <div class="group-card">
+      <a href="{{ url_for('financials.statements_hub') }}" class="card-link" data-full-reload>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gStmt" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#64B5F6"/><stop offset="100%" stop-color="#0D47A1"/></linearGradient></defs><path d="M20 16h24v6H20z" fill="url(#gStmt)"/><path d="M20 26h16v4H20z" fill="url(#gStmt)" opacity=".8"/><path d="M20 34h20v4H20z" fill="url(#gStmt)" opacity=".6"/><rect x="20" y="42" width="12" height="4" rx="2" fill="url(#gStmt)" opacity=".5"/></svg>
+          <div class="title">{{ _('Financial Statements') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('customers','view') %}
-    <div class="group-card" data-group="sales">
-      <a href="{{ url_for('main.customers') }}" class="card-link">
-        <div class="dashboard-card kind-customers" data-target="{{ url_for('main.customers') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCust" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f8bbd0"/><stop offset="100%" stop-color="#ec407a"/></linearGradient></defs><circle cx="24" cy="26" r="7" fill="url(#gCust)"/><circle cx="40" cy="26" r="7" fill="url(#gCust)"/><rect x="18" y="36" width="28" height="10" rx="5" fill="#fff6"/></svg>
-          <h6>{{ _('Customers / العملاء') }}</h6>
+    <div class="group-card">
+      <a href="{{ url_for('customers.customers') }}" class="card-link">
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gCust" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#90CAF9"/><stop offset="100%" stop-color="#1976D2"/></linearGradient></defs><circle cx="24" cy="26" r="7" fill="url(#gCust)"/><circle cx="40" cy="26" r="7" fill="url(#gCust)"/><rect x="18" y="36" width="28" height="10" rx="5" fill="#fff6"/></svg>
+          <div class="title">{{ _('Customers') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('menu','view') %}
-    <div class="group-card" data-group="sales">
+    <div class="group-card">
       <a href="{{ url_for('main.menu') }}" class="card-link">
-        <div class="dashboard-card kind-menu" data-target="{{ url_for('main.menu') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gMenu" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fff59d"/><stop offset="100%" stop-color="#fbc02d"/></linearGradient></defs><path d="M20 18h24v28H20z" fill="url(#gMenu)"/><rect x="24" y="24" width="16" height="3" rx="1.5" fill="#fff9"/><rect x="24" y="30" width="16" height="3" rx="1.5" fill="#fff6"/></svg>
-          <h6>{{ _('Menu / المنيو') }}</h6>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gMenu" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#BBDEFB"/><stop offset="100%" stop-color="#1565C0"/></linearGradient></defs><path d="M20 18h24v28H20z" fill="url(#gMenu)"/><rect x="24" y="24" width="16" height="3" rx="1.5" fill="#fff9"/><rect x="24" y="30" width="16" height="3" rx="1.5" fill="#fff6"/></svg>
+          <div class="title">{{ _('Menu') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('settings','view') %}
-    <div class="group-card" data-group="sys">
+    <div class="group-card">
       <a href="{{ url_for('main.settings') }}" class="card-link">
-        <div class="dashboard-card kind-settings" data-target="{{ url_for('main.settings') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gGear" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#b0bec5"/><stop offset="100%" stop-color="#607d8b"/></linearGradient></defs><circle cx="32" cy="32" r="8" fill="#fff6"/><path d="M32 16l4 6 6 4-6 4-4 6-4-6-6-4 6-4z" fill="url(#gGear)"/></svg>
-          <h6>{{ _('Settings / الإعدادات') }}</h6>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gGear" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#90A4AE"/><stop offset="100%" stop-color="#546E7A"/></linearGradient></defs><circle cx="32" cy="32" r="8" fill="#fff6"/><path d="M32 16l4 6 6 4-6 4-4 6-4-6-6-4 6-4z" fill="url(#gGear)"/></svg>
+          <div class="title">{{ _('Settings') }}</div>
         </div>
       </a>
     </div>
-    {% endif %}
 
-    {% if can('table_settings','view') %}
-    <div class="group-card" data-group="sys">
-      <a href="{{ url_for('main.table_settings') }}" class="card-link">
-        <div class="dashboard-card kind-tables" data-target="{{ url_for('main.table_settings') }}">
-          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gChair" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#aed581"/><stop offset="100%" stop-color="#7cb342"/></linearGradient></defs><rect x="20" y="24" width="24" height="8" rx="2" fill="url(#gChair)"/><rect x="24" y="32" width="16" height="12" rx="2" fill="#fff6"/></svg>
-          <h6>{{ _('Table Settings / إعدادات الطاولات') }}</h6>
+    <div class="group-card">
+      <a href="{{ url_for('main.table_settings') }}" class="card-link" data-full-reload>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gChair" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#81D4FA"/><stop offset="100%" stop-color="#0288D1"/></linearGradient></defs><rect x="20" y="24" width="24" height="8" rx="2" fill="url(#gChair)"/><rect x="24" y="32" width="16" height="12" rx="2" fill="#fff6"/></svg>
+          <div class="title">{{ _('Table Settings') }}</div>
         </div>
       </a>
-    {% endif %}
     </div>
-    <div class="stats-row" id="kpi-row"></div>
+
+    <div class="group-card">
+      <a href="{{ url_for('main.employees') }}" class="card-link" data-full-reload>
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gEmp" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#90CAF9"/><stop offset="100%" stop-color="#1565C0"/></linearGradient></defs><circle cx="32" cy="22" r="8" fill="url(#gEmp)"/><path d="M20 48c0-8 5-14 12-14s12 6 12 14" fill="none" stroke="url(#gEmp)" stroke-width="4"/><rect x="28" y="36" width="8" height="12" rx="2" fill="url(#gEmp)" opacity=".7"/></svg>
+          <div class="title">{{ _('Employees') }}</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="group-card">
+      <a href="{{ url_for('main.users') }}" class="card-link">
+        <div class="dashboard-card">
+          <svg class="icon-3d" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gUsers" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#90CAF9"/><stop offset="100%" stop-color="#1565C0"/></linearGradient></defs><circle cx="20" cy="24" r="6" fill="url(#gUsers)"/><circle cx="44" cy="24" r="6" fill="url(#gUsers)"/><path d="M12 42c0-6 6-10 16-10s16 4 16 10" fill="none" stroke="url(#gUsers)" stroke-width="4"/></svg>
+          <div class="title">{{ _('Users') }}</div>
+        </div>
+      </a>
+    </div>
+
     </div>
   </div>
 
   {% if (current_user.role|default('')) == 'user' %}
-  <div class="mt-4">
-    <div class="alert alert-info">
+  <div class="mt-4 mx-auto" style="max-width:1200px;">
+    <div class="alert alert-info mb-0">
       {{ _('Sales users only see sales. Use the top menu to access your branch sales tables.') }}
     </div>
   </div>
   {% endif %}
 </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function(){
-
-  function showGroup(group){
-    document.querySelectorAll('.side-nested').forEach(function(ul){
-      ul.style.display = (ul.dataset.group === group) ? 'block' : 'none';
-    });
-
-    document.querySelectorAll('.group-card').forEach(function(card){
-      var groups = String(card.dataset.group||'').split(' ');
-      card.style.display = groups.includes(group) ? 'block' : 'none';
-    });
-
-    buildKpiCards(group);
-  }
-  document.querySelectorAll('.dashboard-side .side-item').forEach(function(it){
-    it.addEventListener('click', function(ev){ ev.preventDefault(); var g = this.getAttribute('data-group'); document.querySelectorAll('.dashboard-side .side-item').forEach(function(x){ x.classList.remove('active'); }); this.classList.add('active'); showGroup(g); });
-  });
-  showGroup('sales');
-
-
-  async function buildKpiCards(group){
-    var grid = document.getElementById('kpi-row');
-    if(!grid) return;
-    grid.innerHTML = '';
-
-    function card(icon, title, value){
-      var div = document.createElement('div');
-      div.className = 'stat-card';
-      div.innerHTML = '<div class="stat-icon">'+icon+'</div>'+
-                      '<div class="stat-text">'+
-                        '<div class="value">'+value+'</div>'+
-                        '<div class="label">'+title+'</div>'+
-                      '</div>';
-      return div;
-    }
-
-    var today = null;
-    try{
-      today = await fetch('/api/kpi/dashboard_full').then(function(r){ return r.json(); }).catch(function(){ return null; });
-    }catch(e){ today = null; }
-    if(!today) return;
-
-    if(group === 'sales'){
-      Object.keys(today.branches || {}).forEach(function(branch){
-        var val = Number((today.branches[branch]||{}).sales || 0).toFixed(2) + ' '+ '{{ _("ريال") }}';
-        grid.appendChild(card('🏪', 'مبيعات '+branch, val));
-      });
-
-      grid.appendChild(card('💵', 'إجمالي الكاش', Number(today.payment_cash||0).toFixed(2) + ' '+ '{{ _("ريال") }}'));
-      grid.appendChild(card('🏦', 'إجمالي البنك', Number(today.payment_bank||0).toFixed(2) + ' '+ '{{ _("ريال") }}'));
-      grid.appendChild(card('🧾', 'عدد الفواتير', String(today.invoices_count||0)));
-      grid.appendChild(card('🍽️', 'عدد الوجبات', String(today.items_sold||0)));
-    }
-  }
-});
-</script>
 
 {% endblock %}

@@ -1,96 +1,83 @@
 {% extends "base.html" %}
 
-{% block title %}{{ _('Edit Expense Invoice / تعديل فاتورة المصروفات') }} - {{ invoice.invoice_number }}{% endblock %}
+{% block title %}{{ _('Edit Expense Invoice') }} - {{ invoice.invoice_number }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-0">✏️ {{ _('Edit Expense Invoice / تعديل فاتورة المصروفات') }}</h2>
-                    <p class="text-muted mb-0">{{ invoice.invoice_number }}</p>
-                </div>
-                <div>
-                    <a href="{{ url_for('expenses') }}" class="btn btn-outline-secondary me-2">
-                        ← {{ _('Back to Expenses / العودة للمصروفات') }}
-                    </a>
-                </div>
-            </div>
-        </div>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-pen-to-square"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Edit Expense Invoice') }}</h1>
+      <span class="ops-subtitle">{{ invoice.invoice_number }}</span>
     </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('expenses.expenses') }}" class="btn btn-sm btn-outline-secondary" data-full-reload><i class="fa-solid fa-arrow-left me-1"></i>{{ _('Back to Expenses') }}</a>
+    </div>
+  </div>
 
-    <!-- Edit Form -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0">📝 {{ _('Edit Invoice Details / تعديل تفاصيل الفاتورة') }}</h5>
-                </div>
-                <div class="card-body">
-                    <form method="POST">
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Edit Invoice Details') }}</div>
+    <div class="ops-form-body">
+      <form method="POST">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         
                         <div class="row g-3 mb-4">
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">{{ _('Invoice Number / رقم الفاتورة') }}</label>
+                                <label class="form-label fw-bold">{{ _('Invoice Number') }}</label>
                                 <input type="text" class="form-control" value="{{ invoice.invoice_number }}" readonly>
-                                <small class="form-text text-muted">{{ _('Invoice number cannot be changed / لا يمكن تغيير رقم الفاتورة') }}</small>
+                                <small class="form-text text-muted">{{ _('Invoice number cannot be changed') }}</small>
                             </div>
                             
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">{{ _('Date / التاريخ') }}</label>
+                                <label class="form-label fw-bold">{{ _('Date') }}</label>
                                 <input type="date" name="date" class="form-control" value="{{ invoice.date.strftime('%Y-%m-%d') }}" required>
                             </div>
                             
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">{{ _('Payment Method / طريقة الدفع') }}</label>
+                                <label class="form-label fw-bold">{{ _('Payment Method') }}</label>
                                 <select name="payment_method" class="form-select" required>
-                                    <option value="cash" {% if invoice.payment_method == 'cash' %}selected{% endif %}>💰 {{ _('Cash / نقداً') }}</option>
-                                    <option value="bank" {% if invoice.payment_method == 'bank' %}selected{% endif %}>🏦 {{ _('Bank / بنك') }}</option>
+                                    <option value="cash" {% if invoice.payment_method == 'cash' %}selected{% endif %}>{{ _('Cash') }}</option>
+                                    <option value="bank" {% if invoice.payment_method == 'bank' %}selected{% endif %}>{{ _('Bank') }}</option>
                                 </select>
                             </div>
                         </div>
 
                         <div class="row g-3 mb-4">
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">{{ _('Payment Status / حالة الدفع') }}</label>
+                                <label class="form-label fw-bold">{{ _('Payment Status') }}</label>
                                 <select name="status" class="form-select" required>
-                                    <option value="paid" {% if invoice.status == 'paid' %}selected{% endif %}>✅ {{ _('Paid / مدفوع') }}</option>
-                                    <option value="partial" {% if invoice.status == 'partial' %}selected{% endif %}>⚠️ {{ _('Partial / مدفوع جزئياً') }}</option>
-                                    <option value="unpaid" {% if invoice.status == 'unpaid' %}selected{% endif %}>❌ {{ _('Unpaid / غير مدفوع') }}</option>
+                                    <option value="paid" {% if invoice.status == 'paid' %}selected{% endif %}>{{ _('Paid') }}</option>
+                                    <option value="partial" {% if invoice.status == 'partial' %}selected{% endif %}>{{ _('Partial') }}</option>
+                                    <option value="unpaid" {% if invoice.status == 'unpaid' %}selected{% endif %}>{{ _('Unpaid') }}</option>
                                 </select>
                             </div>
                             
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">{{ _('Total Amount / المبلغ الإجمالي') }}</label>
+                                <label class="form-label fw-bold">{{ _('Total Amount') }}</label>
                                 <input type="text" class="form-control" value="${{ "%.2f"|format(invoice.total_after_tax_discount) }}" readonly>
-                                <small class="form-text text-muted">{{ _('Total cannot be changed here / لا يمكن تغيير الإجمالي هنا') }}</small>
+                                <small class="form-text text-muted">{{ _('Total cannot be changed here') }}</small>
                             </div>
                             
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">{{ _('Items Count / عدد العناصر') }}</label>
-                                <input type="text" class="form-control" value="{{ items|length }} {{ _('items / عناصر') }}" readonly>
+                                <label class="form-label fw-bold">{{ _('Items Count') }}</label>
+                                <input type="text" class="form-control" value="{{ items|length }} {{ _('items') }}" readonly>
                             </div>
                         </div>
 
                         <!-- Items Display (Read-only) -->
-                        <div class="card border-0 bg-light mb-4">
-                            <div class="card-header bg-info text-white">
-                                <h6 class="mb-0">🧾 {{ _('Invoice Items / بنود الفاتورة') }} ({{ _('Read-only / للقراءة فقط') }})</h6>
-                            </div>
-                            <div class="card-body">
+                        <div class="screen-section mt-3">
+                            <div class="screen-section-title">{{ _('Invoice Items') }} ({{ _('Read-only') }})</div>
+                            <div class="screen-section-body">
                                 {% if items %}
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead class="table-dark">
+                                <div class="screen-table-wrap">
+                                    <table class="table screen-table table-sm">
+                                        <thead>
                                             <tr>
-                                                <th>{{ _('Description / الوصف') }}</th>
-                                                <th class="text-center">{{ _('Qty / الكمية') }}</th>
-                                                <th class="text-end">{{ _('Price / السعر') }}</th>
-                                                <th class="text-end">{{ _('Tax / الضريبة') }}</th>
-                                                <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+                                                <th>{{ _('Description') }}</th>
+                                                <th class="text-center">{{ _('Qty') }}</th>
+                                                <th class="text-end">{{ _('Price') }}</th>
+                                                <th class="text-end">{{ _('Tax') }}</th>
+                                                <th class="text-end">{{ _('Total') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -107,40 +94,24 @@
                                     </table>
                                 </div>
                                 {% else %}
-                                <p class="text-muted">{{ _('No items found / لم يتم العثور على عناصر') }}</p>
+                                <p class="text-muted mb-0">{{ _('No items found') }}</p>
                                 {% endif %}
                             </div>
                         </div>
 
-                        <!-- Action Buttons -->
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <a href="{{ url_for('expenses') }}" class="btn btn-outline-secondary">
-                                    ← {{ _('Cancel / إلغاء') }}
-                                </a>
-                            </div>
-                            <div>
-                                <button type="submit" class="btn btn-warning">
-                                    💾 {{ _('Save Changes / حفظ التغييرات') }}
-                                </button>
-                            </div>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <a href="{{ url_for('expenses.expenses') }}" class="btn btn-outline-secondary" data-full-reload><i class="fa-solid fa-times me-1"></i>{{ _('Cancel') }}</a>
+                            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>{{ _('Save Changes') }}</button>
                         </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+      </form>
     </div>
+  </div>
 
-    <!-- Note -->
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                <strong>{{ _('Note / ملاحظة') }}:</strong>
-                {{ _('Currently, you can only edit basic invoice information. Item editing will be available in a future update. / حالياً، يمكنك تعديل معلومات الفاتورة الأساسية فقط. تعديل العناصر سيكون متاحاً في تحديث مستقبلي.') }}
-            </div>
-        </div>
-    </div>
+  <div class="alert alert-info mt-3 mb-0">
+    <i class="fa-solid fa-circle-info me-2"></i>
+    <strong>{{ _('Note') }}:</strong>
+    {{ _('Currently, you can only edit basic invoice information. Item editing will be available in a future update.') }}
+  </div>
 </div>
 {% endblock %}
 

@@ -1,6 +1,13 @@
+#!/usr/bin/env python3
+"""
+وضع المطور الموحّد: يشغّل tools/run_local.py (create_app، قاعدة محلية، منفذ 5000).
+لتشغيل الخادم: python run_dev.py  ->  http://127.0.0.1:5000
+"""
 import os
-from app import app, socketio
+import subprocess
+import sys
 
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))  # 5000 افتراضيًا
-    socketio.run(app, host="0.0.0.0", port=port, debug=True, use_reloader=True)
+ROOT = os.path.dirname(os.path.abspath(__file__))
+os.chdir(ROOT)
+script = os.path.join(ROOT, "tools", "run_local.py")
+sys.exit(subprocess.run([sys.executable, script], cwd=ROOT).returncode)

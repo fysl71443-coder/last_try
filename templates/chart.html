@@ -1,32 +1,37 @@
 {% extends 'base.html' %}
 {% block title %}شجرة الحسابات{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-sitemap"></i></span>
     <div>
-      <h4 class="mb-0">شجرة الحسابات</h4>
-      <small class="text-muted">إدارة وإضافة وتفعيل/تعطيل الحسابات</small>
+      <h1 class="ops-title mb-0">شجرة الحسابات</h1>
+      <span class="ops-subtitle">إدارة وإضافة وتفعيل/تعطيل الحسابات والربط بالأب والرصيد الافتتاحي</span>
     </div>
-    <div>
-      <button class="btn btn-outline-secondary me-2" id="btnRefresh">تحديث الشجرة</button>
-      <button class="btn btn-outline-primary me-2" id="btnOpening">إضافة رصيد افتتاحي</button>
-      <button class="btn btn-primary" id="btnAdd">إضافة حساب جديد</button>
+    <div class="ops-actions">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary me-1"><i class="fa-solid fa-house me-1"></i>لوحة التحكم</a>
+      <button class="btn btn-sm btn-outline-secondary me-1" id="btnRefresh"><i class="fa-solid fa-arrows-rotate me-1"></i>تحديث الشجرة</button>
+      <button class="btn btn-sm btn-outline-primary me-1" id="btnOpening"><i class="fa-solid fa-wallet me-1"></i>إضافة رصيد افتتاحي</button>
+      <button class="btn btn-sm btn-primary" id="btnAdd"><i class="fa-solid fa-plus me-1"></i>إضافة حساب جديد</button>
     </div>
   </div>
 
-  <div class="mb-3">
-    <div class="input-group">
-      <span class="input-group-text">🔎</span>
-      <input type="text" class="form-control" id="search" placeholder="ابحث بالاسم أو الكود">
-      <button class="btn btn-outline-secondary" id="clearSearch">مسح</button>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">بحث</div>
+    <div class="ops-form-body">
+      <div class="input-group" style="max-width:400px">
+        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+        <input type="text" class="form-control" id="search" placeholder="ابحث بالاسم أو الكود">
+        <button class="btn btn-outline-secondary" id="clearSearch">مسح</button>
+      </div>
     </div>
   </div>
 
   <div class="row g-3">
     <div class="col-md-6">
-      <div class="card">
-        <div class="card-header fw-semibold">الشجرة</div>
-        <div class="card-body">
+      <div class="ops-form-card">
+        <div class="ops-form-head">الشجرة</div>
+        <div class="ops-form-body">
           <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
             <div class="input-group input-group-sm" style="max-width:340px">
               <span class="input-group-text">من</span>
@@ -45,18 +50,18 @@
       </div>
     </div>
     <div class="col-md-6">
-      <div class="card">
-        <div class="card-header fw-semibold">تفاصيل الحساب</div>
-        <div class="card-body" id="accountDetails">
+      <div class="ops-form-card">
+        <div class="ops-form-head">تفاصيل الحساب</div>
+        <div class="ops-form-body" id="accountDetails">
           <div class="text-muted">اختر حسابًا لعرض التفاصيل</div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="card mt-3">
-    <div class="card-header fw-semibold">دمج بالحروف (بالاسم)</div>
-    <div class="card-body">
+  <div class="ops-form-card mt-3">
+    <div class="ops-form-head">دمج بالحروف (بالاسم)</div>
+    <div class="ops-form-body">
       <div class="row g-2 align-items-end">
         <div class="col-md-3">
           <label class="form-label">كود الهدف</label>
@@ -80,7 +85,7 @@
           </select>
         </div>
         <div class="col-md-2">
-          <button class="btn btn-success w-100" id="btnAddMerge">إضافة قاعدة</button>
+          <button class="btn btn-outline-primary w-100" id="btnAddMerge"><i class="fa-solid fa-plus me-1"></i>إضافة قاعدة</button>
         </div>
       </div>
       <div class="form-text mt-2">تطبيق قواعد الدمج يحدث تلقائياً عند فتح ميزان المراجعة. القاعدة ستنقل القيود إلى كود الهدف وتحذف الحسابات المطابقة غير الضرورية.</div>
@@ -88,7 +93,7 @@
     </div>
   </div>
 
-  <div class="modal fade" id="addModal" tabindex="-1" aria-hidden="true">
+  <div class="modal fade screen-modal" id="addModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
@@ -142,12 +147,12 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
-          <button class="btn btn-success" id="saveAcc">حفظ</button>
+          <button class="btn btn-primary" id="saveAcc">حفظ</button>
         </div>
       </div>
     </div>
   </div>
-  <div class="modal fade" id="openingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal fade screen-modal" id="openingModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
@@ -181,7 +186,7 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
-          <button class="btn btn-success" id="saveOpening">حفظ</button>
+          <button class="btn btn-primary" id="saveOpening">حفظ</button>
         </div>
       </div>
     </div>

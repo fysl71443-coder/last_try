@@ -145,6 +145,24 @@ ALTER TABLE draft_orders ALTER COLUMN status SET DEFAULT 'draft';
 
 ---
 
+## 🛠 وضع المطور (Dev Server)
+
+**نقطة تشغيل واحدة فقط** — استخدم أحد الأمرين:
+
+```bash
+python tools/run_local.py
+# أو
+python run_dev.py
+```
+
+- **العنوان:** http://127.0.0.1:5000  
+- **قاعدة البيانات:** `instance/local.db` (SQLite محلي)  
+- **التصحيح:** مُفعّل (إعادة تحميل تلقائية عند تعديل ملفات .py)
+
+أوقف أي خادم آخر على المنفذ 5000 أو 5001 قبل التشغيل لتجنب نسخة قديمة.
+
+---
+
 **Status: ✅ READY FOR PRODUCTION**
 
 All safety measures implemented. Database schema issues resolved.

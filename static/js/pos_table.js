@@ -34,8 +34,13 @@
         tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
         payment_method: (qs('#payMethod')?.value || '')
       };
-      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-      if(navigator && typeof navigator.sendBeacon === 'function'){
+      const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+      const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
+      const body = JSON.stringify(payload);
+      if(typeof fetch === 'function'){
+        fetch(`/api/draft-order/${BRANCH}/${TABLE_NO}`, { method:'POST', headers, body, credentials:'same-origin', keepalive:true });
+      } else if(navigator && typeof navigator.sendBeacon === 'function'){
+        const blob = new Blob([body], { type: 'application/json' });
         navigator.sendBeacon(`/api/draft-order/${BRANCH}/${TABLE_NO}`, blob);
       }
     }catch(_e){ /* ignore */ }
@@ -305,7 +310,9 @@
   async function payAndPrint(){
     if(items.length === 0){ await window.showAlert('أضف عنصرًا واحدًا على الأقل / Add at least one item'); return; }
     const pm = (qs('#payMethod')?.value || '').toUpperCase();
-    if(!(pm==='CASH' || pm==='CARD')){ await window.showAlert('يرجى اختيار طريقة الدفع (CASH أو CARD) / Please choose payment method (CASH or CARD)'); return; }
+    if(!(pm==='CASH' || pm==='CARD' || pm==='CREDIT')){ await window.showAlert('يرجى اختيار طريقة الدفع (CASH أو CARD أو آجل) / Please choose payment method (CASH, CARD or Credit)'); return; }
+    const custIdVal = (qs('#custId')?.value || '').trim();
+    if(pm === 'CREDIT' && !custIdVal){ await window.showAlert('يجب اختيار عميل آجل مسجل من القائمة / Select a registered credit customer from the list'); return; }
     try{ const btn = qs('#btnPayPrint'); if(btn && window.triggerCelebration){ window.triggerCelebration(btn, 26); } }catch(_e){}
 
     // Ensure latest items are saved as draft and we have a draft id
@@ -375,8 +382,10 @@
         // Finalize and redirect preview to final receipt
         const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
+        const custIdVal = (qs('#custId')?.value || '').trim();
         const res = await fetch('/api/draft/checkout', { method:'POST', headers, credentials:'same-origin', body: JSON.stringify({
           draft_id: CURRENT_DRAFT_ID,
+          customer_id: custIdVal ? parseInt(custIdVal, 10) : null,
           customer_name: qs('#custName')?.value || '',
           customer_phone: qs('#custPhone')?.value || '',
           discount_pct: number(qs('#discountPct')?.value || 0),
@@ -420,16 +429,23 @@
   async function generateInvoice(){
     if(items.length === 0){ await window.showAlert('لا يمكن إصدار فاتورة فارغة / Cannot issue empty invoice'); return; }
 
-    // Validate customer if provided
+    const custIdVal = (qs('#custId')?.value || '').trim();
     const custName = (qs('#custName')?.value || '').trim();
     const custPhone = (qs('#custPhone')?.value || '').trim();
+    const pm = (qs('#payMethod')?.value || '').trim().toUpperCase();
+
+    if(pm === 'CREDIT' && !custIdVal){
+      await window.showAlert('يجب اختيار عميل آجل مسجل من القائمة — لا يمكن إصدار فاتورة آجلة لعميل غير مسجل / Select a registered credit customer from the list'); return;
+    }
+    if(custName && !custIdVal && pm === 'CREDIT'){
+      await window.showAlert('العميل المدخل غير مسجل كعميل آجل — اختر عميلاً من القائمة أو غيّر طريقة الدفع / Entered customer is not registered as credit'); return;
+    }
+
     if(custName){
       if(custPhone && custPhone.replace(/\D/g,'').length < 8){ await window.showAlert('رقم هاتف العميل غير صالح / Invalid customer phone'); return; }
     }
 
-    // Validate payment method
-    const pm = (qs('#payMethod')?.value || '').trim().toUpperCase();
-    if(!(pm==='CASH' || pm==='CARD')){ await window.showAlert('يرجى اختيار طريقة الدفع (CASH أو CARD) / Please choose payment method (CASH or CARD)'); return; }
+    if(!(pm==='CASH' || pm==='CARD' || pm==='CREDIT')){ await window.showAlert('يرجى اختيار طريقة الدفع (CASH أو CARD أو آجل) / Please choose payment method (CASH, CARD or Credit)'); return; }
 
     // Validate discount/tax
     const disc = number(qs('#discountPct')?.value || 0);
@@ -466,13 +482,17 @@
     try{
       const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
       const headers = {'Content-Type':'application/json'}; if(token) headers['X-CSRFToken']=token;
+      const sendCustId = custIdVal ? parseInt(custIdVal, 10) : null;
+      const sendCustName = (pm === 'CREDIT' && sendCustId) ? custName : (pm !== 'CREDIT' ? custName : '');
+      const sendCustPhone = (pm === 'CREDIT' && sendCustId) ? custPhone : (pm !== 'CREDIT' ? custPhone : '');
       const res = await fetch('/api/sales/checkout', { 
         method:'POST', headers, credentials:'same-origin',
         body: JSON.stringify({
           draft_id: CURRENT_DRAFT_ID,
           items: items.map(x=>({ meal_id:x.meal_id, name:x.name, price:x.unit, qty:x.qty })),
-          customer_name: custName,
-          customer_phone: custPhone,
+          customer_id: sendCustId,
+          customer_name: sendCustName,
+          customer_phone: sendCustPhone,
           discount_pct: disc,
           tax_pct: tax,
           payment_method: pm,
@@ -543,6 +563,7 @@
         if(typeof tax !== 'undefined'){ const el = qs('#taxPct'); if(el) el.value = String(number(tax)); }
         if(pay){ const el = qs('#payMethod'); if(el) el.value = pay; }
         setTotals();
+        if(typeof updatePaymentMethodFromCustomer === 'function') updatePaymentMethodFromCustomer();
       }catch(_e){}
     })();
     const catMapRaw = init?.getAttribute('data-cat-map') || '{}';
@@ -654,6 +675,27 @@
     function hideCustList(){ if(custList){ custList.style.display='none'; custList.innerHTML=''; } }
     function showCustList(){ if(custList){ custList.style.display='block'; } }
 
+    function updatePaymentMethodFromCustomer(){
+      const paySel = qs('#payMethod'); if(!paySel) return;
+      const custIdEl = qs('#custId');
+      const custNameVal = (custInput?.value || '').trim().toLowerCase();
+      const customerType = custIdEl?.getAttribute('data-customer-type') || '';
+      const isCredit = (customerType === 'credit') || (custNameVal.indexOf('keeta') !== -1) || (custNameVal.indexOf('hunger') !== -1);
+      const cur = (paySel.value || '').toUpperCase();
+      if(isCredit){
+        paySel.innerHTML = '<option value="">-- اختر --</option><option value="CREDIT">Credit / آجل</option>';
+        paySel.value = 'CREDIT';
+        const dp = qs('#discountPct');
+        if(dp && dp.hasAttribute('readonly')){ try{ dp.removeAttribute('readonly'); dp.classList.remove('bg-light'); }catch(_e){} }
+      } else {
+        paySel.innerHTML = '<option value="">-- اختر طريقة الدفع --</option><option value="CASH">CASH</option><option value="CARD">CARD</option>';
+        if(cur === 'CREDIT') paySel.value = 'CASH';
+        else if(cur && cur !== 'CASH' && cur !== 'CARD') paySel.value = 'CASH';
+        setDiscountFieldForCustomer(false, 0);
+      }
+      scheduleSave();
+    }
+
     async function fetchCustomers(q){
       try{
         const resp = await fetch(`/api/customers/search?q=${encodeURIComponent(q)}`, { credentials:'same-origin' });
@@ -663,8 +705,36 @@
       }catch(e){ return []; }
     }
 
+    function setDiscountFieldForCustomer(isCredit, discountPct){
+      const dp = qs('#discountPct');
+      if(!dp) return;
+      if(isCredit){
+        dp.value = String(number(discountPct, 0));
+        try{ dp.removeAttribute('readonly'); dp.classList.remove('bg-light'); dp.title = 'قابل للتعديل — عميل آجل'; }catch(_e){}
+      } else {
+        dp.value = '0';
+        try{ dp.setAttribute('readonly',''); dp.classList.add('bg-light'); dp.title = 'لا خصم للعميل النقدي — عميل نقدي مسجل'; }catch(_e){}
+      }
+      setTotals(); scheduleSave();
+    }
+    window.setDiscountFieldForCustomer = setDiscountFieldForCustomer;
+    window.updatePaymentMethodFromCustomer = updatePaymentMethodFromCustomer;
+
+    async function checkCreditCustomer(name, phone){
+      try{
+        let url = `/api/customers/check-credit?q=${encodeURIComponent((name||'').trim())}`;
+        if(phone && (phone||'').trim()) url += `&phone=${encodeURIComponent((phone||'').trim())}`;
+        const resp = await fetch(url, { credentials: 'same-origin' });
+        if(!resp.ok) return { found: false };
+        const j = await resp.json().catch(()=>({}));
+        return j;
+      }catch(e){ return { found: false }; }
+    }
+
     async function handleCustInput(){
       const val = (custInput?.value || '').trim();
+      const custIdEl = qs('#custId');
+      if(!val && custIdEl){ custIdEl.value = ''; if(custIdEl.removeAttribute) custIdEl.removeAttribute('data-customer-type'); updatePaymentMethodFromCustomer(); }
       const up = val.toUpperCase();
       if(up === 'KEETA' || up === 'HUNGER'){
         const dp = qs('#discountPct');
@@ -678,27 +748,72 @@
       }
       clearTimeout(custFetchTimer);
       if(!val){ hideCustList(); return; }
+      updatePaymentMethodFromCustomer();
       custFetchTimer = setTimeout(async ()=>{
         const results = await fetchCustomers(val);
         if(!custList) return;
         custList.innerHTML = '';
         results.forEach(r=>{
           const a = document.createElement('a'); a.href='#'; a.className='list-group-item list-group-item-action';
-          a.textContent = `${r.name}${r.phone ? ' ('+r.phone+')' : ''} — خصم ${number(r.discount_percent||0).toFixed(2)}%`;
+          const typeLabel = (r.customer_type||'cash')==='credit' ? ' (آجل)' : '';
+          a.textContent = `${r.name}${r.phone ? ' ('+r.phone+')' : ''}${typeLabel} — خصم ${number(r.discount_percent||0).toFixed(2)}%`;
           a.addEventListener('click', (e)=>{
             e.preventDefault();
+            const custIdEl = qs('#custId');
+            if(custIdEl){
+              custIdEl.value = r.id ? String(r.id) : '';
+              custIdEl.setAttribute('data-customer-type', (r.customer_type || 'cash'));
+            }
             if(custInput) custInput.value = r.name || '';
             if(custPhone) custPhone.value = r.phone || '';
-            const dp = qs('#discountPct'); if(dp){ dp.value = String(number(r.discount_percent||0)); }
-            hideCustList(); setTotals(); saveDraftOrder();
+            hideCustList();
+            if((r.customer_type||'cash')==='credit'){
+              setDiscountFieldForCustomer(true, number(r.discount_percent||0));
+            } else {
+              setDiscountFieldForCustomer(false, 0);
+            }
+            updatePaymentMethodFromCustomer();
           });
           custList.appendChild(a);
         });
         if(results.length){ showCustList(); } else { hideCustList(); }
       }, 250);
     }
+
     custInput?.addEventListener('input', handleCustInput);
+
+    custInput?.addEventListener('blur', async function(){
+      const custIdEl = qs('#custId');
+      if(custIdEl && (custIdEl.value||'').trim()) return;
+      const name = (custInput?.value || '').trim();
+      if(!name) return;
+      const phone = (custPhone?.value || '').trim();
+      const j = await checkCreditCustomer(name, phone);
+      if(!j.found){
+        custInput.value = ''; if(custPhone) custPhone.value = '';
+        if(custIdEl){ custIdEl.value = ''; custIdEl.removeAttribute('data-customer-type'); }
+        setDiscountFieldForCustomer(false, 0);
+        updatePaymentMethodFromCustomer();
+        showToast('العميل غير مسجل أو غير مسجل كعميل آجل — لا يتم إضافته للفاتورة');
+        return;
+      }
+      if(!j.is_credit){
+        custInput.value = ''; if(custPhone) custPhone.value = '';
+        if(custIdEl){ custIdEl.value = ''; custIdEl.removeAttribute('data-customer-type'); }
+        setDiscountFieldForCustomer(false, 0);
+        updatePaymentMethodFromCustomer();
+        showToast('العميل غير مسجل كعميل آجل — لا خصم ولا إضافة للفاتورة');
+        return;
+      }
+      custIdEl.value = String(j.id); custIdEl.setAttribute('data-customer-type', 'credit');
+      if(custInput) custInput.value = j.name || name;
+      if(custPhone) custPhone.value = j.phone || phone || '';
+      setDiscountFieldForCustomer(true, number(j.discount_percent||0));
+      updatePaymentMethodFromCustomer();
+    });
+
     document.addEventListener('click', (e)=>{ if(!custList) return; if(!custList.contains(e.target) && e.target !== custInput){ hideCustList(); } });
+    updatePaymentMethodFromCustomer();
 
     // Initial render
     renderItems();

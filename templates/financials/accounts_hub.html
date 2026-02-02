@@ -2,29 +2,72 @@
 <html lang="ar">
 <head>
   <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>شاشة الحسابات المتكاملة</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
   <style>
-    :root{ --bg:#F7F8FA; --fg:#1E293B; --card:#ffffff; --primary:#3B82F6; --muted:#64748B; --border:#e5e7eb; --shadow:0 2px 10px rgba(0,0,0,.06); --debit:#2563EB; --credit:#DC2626 }
+    :root{
+      --ops-blue-dark:#0d47a1;
+      --ops-blue:#1565c0;
+      --ops-blue-light:#e3f2fd;
+      --bg:#f1f5f9;
+      --fg:#1e293b;
+      --card:#ffffff;
+      --primary:#1565c0;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --shadow:0 1px 3px rgba(0,0,0,.06);
+      --debit:#2563eb;
+      --credit:#dc2626;
+      --ops-card-radius:12px;
+    }
     [data-theme="dark"]{ --bg:#0b1220; --fg:#e5e7eb; --card:#111827; --primary:#60a5fa; --muted:#94a3b8; --border:#1f2937; --shadow:none }
-    body{ background:var(--bg); color:var(--fg) }
-    .card{ background:var(--card); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:12px }
+    body{ font-family:'Cairo', 'Tajawal', sans-serif; background:var(--bg); color:var(--fg); direction:rtl; }
+    .card{ background:var(--card); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:var(--ops-card-radius) }
     .btn-primary{ background:var(--primary); border-color:var(--primary) }
-    .table thead th{ background:rgba(99,102,241,.06) }
-    .table-striped tbody tr:nth-child(odd){ background:rgba(148,163,184,.10) }
+    .btn-primary:hover{ background:var(--ops-blue-dark); border-color:var(--ops-blue-dark) }
+    .nav-tabs .nav-link{ color:var(--muted); font-weight:600 }
+    .nav-tabs .nav-link.active{ color:var(--primary); border-color:var(--border) var(--border) var(--card); background:var(--card) }
+    .table thead th{ background:var(--ops-blue-light); color:var(--ops-blue-dark); font-weight:700; border-color:var(--border) }
+    .table-striped tbody tr:nth-child(odd){ background:rgba(227,242,253,.2) }
+    .table-striped tbody tr:hover{ background:rgba(227,242,253,.4) }
     .toolbar{ display:flex; gap:.5rem; align-items:center; justify-content:flex-end }
     .text-debit{ color:var(--debit) }
     .text-credit{ color:var(--credit) }
+    .badge-draft{ background:#fef3c7; color:#92400e }
+    .badge-posted{ background:#d1fae5; color:#065f46 }
+    .acc-type-asset{ color:#0d47a1 }
+    .acc-type-liability{ color:#3949ab }
+    .acc-type-equity{ color:#00695c }
+    .acc-type-revenue{ color:#2e7d32 }
+    .acc-type-expense{ color:#e65100 }
+    .acc-type-cogs{ color:#f9a825 }
+    .acc-type-tax{ color:#4e342e }
+    .coa-toggle{ width:1.5rem; text-align:center; color:var(--primary); cursor:pointer; border:none; background:transparent }
+    .coa-toggle[aria-expanded="true"]::before{ content:'\f078' }
+    .coa-toggle[aria-expanded="false"]::before{ content:'\f054' }
+    .coa-toggle::before{ font-family:'Font Awesome 6 Free'; font-weight:900; font-size:.7rem }
+    .tb-toggle{ width:1.5rem; text-align:center; color:var(--primary); cursor:pointer; border:none; background:transparent }
+    .tb-toggle[aria-expanded="true"]::before{ content:'\f078' }
+    .tb-toggle[aria-expanded="false"]::before{ content:'\f054' }
+    .tb-toggle::before{ font-family:'Font Awesome 6 Free'; font-weight:900; font-size:.7rem }
+    .tb-parent-noval{ color:var(--muted) }
     @media print{ .no-print{ display:none !important } .print-sheet{ width:210mm; min-height:297mm; margin:0 auto } .print-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px } .print-footer{ margin-top:24px; display:flex; gap:20px; justify-content:space-between } .print-footer .line{ border-top:1px solid #000; width:30%; padding-top:6px } }
   </style>
 </head>
 <body class="p-3">
   <div class="container-fluid" id="page" data-theme="light">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-      <h5 class="mb-0">شاشة الحسابات المتكاملة</h5>
+    <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom" style="border-color:var(--border)!important;">
+      <div class="d-flex align-items-center gap-2">
+        <a href="{{ url_for('main.financial_dashboard') }}" class="btn btn-sm btn-outline-secondary no-print" title="الرجوع"><i class="fa-solid fa-arrow-right me-1"></i>الرجوع</a>
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-primary no-print" title="الرئيسية"><i class="fa-solid fa-house me-1"></i>الرئيسية</a>
+        <h1 class="h4 mb-0 ms-2" style="color:var(--ops-blue-dark); font-weight:700;">شاشة الحسابات المتكاملة</h1>
+      </div>
       <div class="no-print"><button class="btn btn-sm btn-outline-secondary" id="theme-toggle">الوضع الليلي</button></div>
     </div>
-    <ul class="nav nav-tabs" id="accTabs">
+    <ul class="nav nav-tabs gap-1" id="accTabs">
       <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-coa">شجرة الحسابات</a></li>
       <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-journal">قيود اليومية</a></li>
       <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-ledger">دفتر الأستاذ</a></li>
@@ -41,7 +84,10 @@
             <div class="col-md-2"><select id="coa-type" class="form-select"><option value="">الكل</option><option>ASSET</option><option>LIABILITY</option><option>EQUITY</option><option>REVENUE</option><option>EXPENSE</option><option>COGS</option><option>TAX</option></select></div>
             <div class="col-md-2"><button class="btn btn-secondary w-100" id="coa-search">بحث</button></div>
             <div class="col-md-2"><button class="btn btn-primary w-100" id="coa-print">طباعة</button></div>
-            <div class="col-md-3 text-end"><button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modal-add-account">إضافة حساب</button></div>
+            <div class="col-md-3 text-end">
+              <button class="btn btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#modal-add-account">إضافة حساب</button>
+              <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal-add-sub-account"><i class="fa-solid fa-folder-plus me-1"></i>إنشاء حساب فرعي</button>
+            </div>
           </div>
         </div>
         <div class="card p-3">
@@ -59,6 +105,33 @@
                 </div>
               </div>
               <div class="modal-footer"><button class="btn btn-primary" id="m-ac-add">حفظ</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal fade" id="modal-add-sub-account" tabindex="-1">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header"><h6 class="modal-title">إنشاء حساب فرعي</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+              <div class="modal-body">
+                <p class="text-muted small mb-2">اختر الحساب الأب (رئيسي أو فرعي) ثم أدخل الاسم. يُولَّد رمز الحساب تلقائياً.</p>
+                <div class="row g-2">
+                  <div class="col-12">
+                    <label class="form-label">الحساب الأب</label>
+                    <select id="m-sub-parent" class="form-select">
+                      <option value="">اختر الحساب الأب</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">الاسم (عربي)</label>
+                    <input type="text" id="m-sub-name-ar" class="form-control" placeholder="اسم الحساب بالعربية"/>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">الاسم (إنجليزي)</label>
+                    <input type="text" id="m-sub-name-en" class="form-control" placeholder="Account name (English)"/>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer"><button class="btn btn-primary" id="m-sub-add">حفظ</button></div>
             </div>
           </div>
         </div>
@@ -93,9 +166,23 @@
             <div class="col-md-3 toolbar"><button class="btn btn-secondary" id="jr-load">عرض</button><button class="btn btn-outline-primary" id="jr-print">طباعة</button><button class="btn btn-outline-secondary" id="jr-export">تصدير CSV</button></div>
           </div>
           <table class="table table-striped table-sm" id="jr-table">
-            <thead><tr><th>رقم القيد</th><th>التاريخ</th><th>الوصف</th><th class="text-end">مدين</th><th class="text-end">دائن</th><th>الحالة</th></tr></thead>
+            <thead><tr><th>رقم القيد</th><th>التاريخ</th><th>الوصف</th><th class="text-end">مدين</th><th class="text-end">دائن</th><th>الحالة</th><th>إجراءات</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+        <div class="modal fade" id="modal-view-entry" tabindex="-1" aria-labelledby="modal-view-entry-label" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+              <div class="modal-header" style="border-color:var(--border);">
+                <h5 class="modal-title" id="modal-view-entry-label" style="color:var(--ops-blue-dark); font-weight:700;">عرض القيد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+              </div>
+              <div class="modal-body" id="modal-view-entry-body" style="background:var(--bg);">
+                <div id="modal-view-entry-loading" class="text-center text-muted py-4">جاري التحميل...</div>
+                <div id="modal-view-entry-content" style="display:none;"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -127,7 +214,7 @@
             <div class="col-md-3 toolbar"><button class="btn btn-secondary" id="tb-load">عرض</button><button class="btn btn-outline-primary" id="tb-print">طباعة</button><button class="btn btn-outline-secondary" id="tb-export">تصدير CSV</button></div>
           </div>
           <table class="table table-sm" id="tb-table">
-            <thead><tr><th>رقم الحساب</th><th>اسم الحساب</th><th class="text-end">مدين</th><th class="text-end">دائن</th><th class="text-end">الرصيد</th></tr></thead>
+            <thead><tr><th style="width:2rem"></th><th>رقم الحساب</th><th>اسم الحساب</th><th class="text-end">مدين</th><th class="text-end">دائن</th><th class="text-end">الرصيد</th></tr></thead>
             <tbody></tbody>
           </table>
           <div class="d-flex justify-content-end"><span class="me-3">الإجمالي مدين: <strong id="tb-td">0.00</strong></span><span>الإجمالي دائن: <strong id="tb-tc">0.00</strong></span></div>
@@ -149,62 +236,130 @@
       </div>
 
       <div class="tab-pane fade show active" id="tab-operations">
-        <div class="card p-3 mb-3">
-          <div class="row g-3">
-            <div class="col-md-4">
-              <label class="form-label">نوع العملية</label>
-              <select id="op-type" class="form-select">
-                <option value="supplier_payment">دفعة لمورد</option>
-                <option value="supplier_ap">إنشاء ذمة مورد</option>
-                <option value="customer_receipt">استلام من عميل</option>
-                <option value="employee_advance">سلفة موظف</option>
-                <option value="owner_draw">مسحوبات شخصية</option>
-                <option value="operating_expense">مصروف تشغيل</option>
-                <option value="bank_deposit">إيداع بالبنك</option>
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">التاريخ</label>
-              <input type="date" id="op-date" class="form-control"/>
-              <small class="text-muted">يوم/شهر/سنة</small>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">المبلغ</label>
-              <input type="number" step="0.01" id="op-amount" class="form-control"/>
-            </div>
-          </div>
-          <div class="row g-3 mt-2">
-            <div class="col-md-4" id="grp-supplier" style="display:none">
-              <label class="form-label">المورد</label>
-              <select id="op-supplier" class="form-select"></select>
-              <div class="mt-2">
-                <label class="form-label">تصنيف</label>
-                <select id="op-category" class="form-select"><option value="inventory">مشتريات مخزون</option><option value="expense">مصروف</option></select>
+        <p class="text-muted mb-3">كل عملية تتطلب: تاريخ، مبلغ، طريقة دفع. عند اختيار نوع العملية أو المورد/العميل يُعرض المطلوب للتحصيل أو السداد.</p>
+        <ul class="nav nav-pills gap-1 mb-3" id="op-section-tabs">
+          <li class="nav-item"><button type="button" class="nav-link active" data-section="sadad">سداد</button></li>
+          <li class="nav-item"><button type="button" class="nav-link" data-section="tahsil">تحصيل</button></li>
+          <li class="nav-item"><button type="button" class="nav-link" data-section="idayaa">إيداع</button></li>
+          <li class="nav-item"><button type="button" class="nav-link" data-section="sahb">سحب</button></li>
+        </ul>
+        <div class="card p-3 mb-3" style="border-color:var(--border);">
+          <div id="op-section-sadad" class="op-section">
+            <h6 class="mb-2" style="color:var(--ops-blue-dark);">سداد — لجميع الدائنين (موظفين، موردين، ضريبة مستحقة، أي جهة لها مستحقات)</h6>
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label">نوع المستحق</label>
+                <select id="op-sadad-type" class="form-select">
+                  <option value="supplier">مورد</option>
+                  <option value="payroll">مسير رواتب</option>
+                  <option value="liability">ضريبة / مستحقات أخرى</option>
+                  <option value="platform">استحقاق المنصات الإلكترونية</option>
+                </select>
               </div>
-            </div>
-            <div class="col-md-4" id="grp-customer" style="display:none">
-              <label class="form-label">العميل</label>
-              <select id="op-customer" class="form-select"></select>
-            </div>
-            <div class="col-md-4" id="grp-method">
-              <label class="form-label">طريقة الدفع</label>
-              <select id="op-method" class="form-select">
-                <option value="cash">نقد</option>
-                <option value="bank">بنك</option>
-                <option value="card">نقاط بيع</option>
-                <option value="wallet">محفظة</option>
-              </select>
-            </div>
-            <div class="col-md-8">
-              <label class="form-label">ملاحظة (اختياري)</label>
-              <input type="text" id="op-note" class="form-control" placeholder="تفاصيل العملية"/>
+              <div class="col-md-3" id="grp-sadad-supplier">
+                <label class="form-label">المورد</label>
+                <select id="op-sadad-supplier" class="form-select"><option value="">اختر المورد</option></select>
+              </div>
+              <div class="col-md-3" id="grp-sadad-payroll" style="display:none">
+                <label class="form-label">المسير (سنة-شهر)</label>
+                <select id="op-sadad-payroll" class="form-select"><option value="">اختر المسير</option></select>
+              </div>
+              <div class="col-md-3" id="grp-sadad-liability" style="display:none">
+                <label class="form-label">حساب المستحقات</label>
+                <select id="op-sadad-liability" class="form-select">
+                  <option value="2121">رواتب مستحقة</option>
+                  <option value="2122">بدلات مستحقة</option>
+                  <option value="2141">ضريبة قيمة مضافة مستحقة</option>
+                  <option value="2131">GOSI</option>
+                  <option value="2135">ضرائب حكومية أخرى</option>
+                  <option value="2112">ذمم دائنة أخرى</option>
+                </select>
+              </div>
+              <div class="col-md-3" id="grp-sadad-platform" style="display:none">
+                <label class="form-label">المنصة</label>
+                <select id="op-sadad-platform" class="form-select">
+                  <option value="">اختر المنصة</option>
+                </select>
+              </div>
+              <div class="col-md-3"><label class="form-label">التاريخ</label><input type="date" id="op-sadad-date" class="form-control"/></div>
+              <div class="col-md-3"><label class="form-label">المبلغ</label><input type="number" step="0.01" id="op-sadad-amount" class="form-control" placeholder="0.00"/></div>
+              <div class="col-md-3"><label class="form-label">طريقة الدفع</label><select id="op-sadad-method" class="form-select"><option value="cash">نقد</option><option value="bank">بنك</option><option value="card">نقاط بيع</option></select></div>
+              <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" id="op-sadad-submit">تنفيذ السداد</button></div>
             </div>
           </div>
-          <div class="mt-3 d-flex gap-2">
-            <button class="btn btn-primary" id="op-submit">إنشاء العملية</button>
-            <div id="op-result" class="ms-2"></div>
+          <div id="op-section-tahsil" class="op-section" style="display:none">
+            <h6 class="mb-2" style="color:var(--ops-blue-dark);">تحصيل — من العملاء، السلف المقدمة للموظفين، الضريبة المستردة، أو أي جهة مدينة</h6>
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label">نوع المدين</label>
+                <select id="op-tahsil-type" class="form-select">
+                  <option value="customer">عميل</option>
+                  <option value="employee_advance">سلفة موظف</option>
+                  <option value="other">أخرى (مدينون)</option>
+                </select>
+              </div>
+              <div class="col-md-3" id="grp-tahsil-customer">
+                <label class="form-label">العميل</label>
+                <select id="op-tahsil-customer" class="form-select"><option value="">اختر العميل</option></select>
+              </div>
+              <div class="col-md-3" id="grp-tahsil-employee" style="display:none">
+                <label class="form-label">الموظف</label>
+                <select id="op-tahsil-employee" class="form-select"><option value="">اختر الموظف</option></select>
+              </div>
+              <div class="col-md-3"><label class="form-label">التاريخ</label><input type="date" id="op-tahsil-date" class="form-control"/></div>
+              <div class="col-md-3"><label class="form-label">المبلغ</label><input type="number" step="0.01" id="op-tahsil-amount" class="form-control" placeholder="0.00"/></div>
+              <div class="col-md-3"><label class="form-label">طريقة الدفع</label><select id="op-tahsil-method" class="form-select"><option value="cash">نقد</option><option value="bank">بنك</option><option value="card">نقاط بيع</option></select></div>
+              <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" id="op-tahsil-submit">تنفيذ التحصيل</button></div>
+            </div>
+          </div>
+          <div id="op-section-idayaa" class="op-section" style="display:none">
+            <h6 class="mb-2" style="color:var(--ops-blue-dark);">إيداع — يتم دائماً في حساب الراجحي (من بنك آخر، صندوق نقد الكاشير، أو زيادة رأس المال)</h6>
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label">مصدر الإيداع</label>
+                <select id="op-idayaa-source" class="form-select">
+                  <option value="cash">صندوق النقد (كاشير)</option>
+                  <option value="other_bank">بنك آخر</option>
+                  <option value="capital">زيادة رأس المال</option>
+                </select>
+              </div>
+              <div class="col-md-3"><label class="form-label">التاريخ</label><input type="date" id="op-idayaa-date" class="form-control"/></div>
+              <div class="col-md-3"><label class="form-label">المبلغ</label><input type="number" step="0.01" id="op-idayaa-amount" class="form-control" placeholder="0.00"/></div>
+              <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" id="op-idayaa-submit">تنفيذ الإيداع</button></div>
+            </div>
+          </div>
+          <div id="op-section-sahb" class="op-section" style="display:none">
+            <h6 class="mb-2" style="color:var(--ops-blue-dark);">سحب — بواسطة المالك (من نقدية نقطة البيع أو أحد الحسابات البنكية)</h6>
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label">مصدر السحب</label>
+                <select id="op-sahb-source" class="form-select">
+                  <option value="cash">نقدية نقطة البيع</option>
+                  <option value="bank">أحد الحسابات البنكية</option>
+                </select>
+              </div>
+              <div class="col-md-3"><label class="form-label">التاريخ</label><input type="date" id="op-sahb-date" class="form-control"/></div>
+              <div class="col-md-3"><label class="form-label">المبلغ</label><input type="number" step="0.01" id="op-sahb-amount" class="form-control" placeholder="0.00"/></div>
+              <div class="col-md-3"><label class="form-label">طريقة الدفع</label><select id="op-sahb-method" class="form-select"><option value="cash">نقد</option><option value="bank">بنك</option></select></div>
+              <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" id="op-sahb-submit">تنفيذ السحب</button></div>
+            </div>
           </div>
         </div>
+        <div class="card p-3 mb-3" style="border-color:var(--border);">
+          <h6 class="mb-2" style="color:var(--ops-blue-dark);"><i class="fa-solid fa-file-invoice me-1"></i> الفاتورة المرتبطة / المبلغ المطلوب</h6>
+          <p class="text-muted small mb-2">يُعرض هنا الفاتورة أو المستحقات عند اختيار المورد أو العميل أو المسير أو نوع المستحق.</p>
+          <div id="op-related-loading" class="text-center text-muted py-2" style="display:none;">جاري التحميل...</div>
+          <div id="op-related-empty" class="text-muted py-2">اختر نوع العملية والجهة (مورد / عميل / مسير) لعرض المستحقات.</div>
+          <div id="op-related-content" style="display:none;">
+            <div id="op-related-label" class="fw-bold mb-2"></div>
+            <table class="table table-sm table-bordered">
+              <thead><tr><th>رقم الفاتورة/المستند</th><th>التاريخ</th><th class="text-end">الإجمالي</th><th class="text-end">المدفوع</th><th class="text-end">المتبقي</th></tr></thead>
+              <tbody id="op-related-tbody"></tbody>
+            </table>
+            <div class="mt-2"><strong>المبلغ المطلوب سداده/تحصيله:</strong> <span id="op-related-total" class="text-primary">0.00</span> ر.س</div>
+          </div>
+        </div>
+        <div id="op-result" class="mb-2"></div>
       </div>
 
       <div class="tab-pane fade" id="tab-settings">
@@ -241,9 +396,89 @@
   function addLine(){ const tbody=document.querySelector('#je-lines tbody'); const tr=document.createElement('tr'); const codeTd=document.createElement('td'); const nameTd=document.createElement('td'); const debitTd=document.createElement('td'); const creditTd=document.createElement('td'); const ccTd=document.createElement('td'); const actTd=document.createElement('td'); const codeInput=document.createElement('input'); codeInput.className='form-control form-control-sm code'; codeInput.readOnly=true; codeTd.appendChild(codeInput); const sel=buildAccSelect(); nameTd.appendChild(sel); const debitInput=document.createElement('input'); debitInput.className='form-control form-control-sm text-end debit'; debitInput.type='number'; debitInput.step='0.01'; debitTd.appendChild(debitInput); const creditInput=document.createElement('input'); creditInput.className='form-control form-control-sm text-end credit'; creditInput.type='number'; creditInput.step='0.01'; creditTd.appendChild(creditInput); const ccInput=document.createElement('input'); ccInput.className='form-control form-control-sm costcenter'; ccTd.appendChild(ccInput); const rmBtn=document.createElement('button'); rmBtn.className='btn btn-sm btn-outline-danger rm'; rmBtn.textContent='×'; actTd.appendChild(rmBtn); tr.appendChild(codeTd); tr.appendChild(nameTd); tr.appendChild(debitTd); tr.appendChild(creditTd); tr.appendChild(ccTd); tr.appendChild(actTd); tbody.appendChild(tr); rmBtn.addEventListener('click',()=>{ tr.remove(); totals(); }); ['debit','credit'].forEach(cls=>{ (cls==='debit'?debitInput:creditInput).addEventListener('input', totals); }); sel.addEventListener('change', function(){ const code=this.value||''; codeInput.value=code; }); }
   function totals(){ const tbody=document.querySelector('#je-lines tbody'); let td=0, tc=0; tbody.querySelectorAll('tr').forEach(tr=>{ td += parseFloat(tr.querySelector('.debit').value||0); tc += parseFloat(tr.querySelector('.credit').value||0); }); document.getElementById('je-total-debit').textContent=num(td); document.getElementById('je-total-credit').textContent=num(tc); }
   async function postJE(){ try{ const btn = document.getElementById('je-post'); btn.disabled = true; const date=document.getElementById('je-date').value||new Date().toISOString().slice(0,10); const desc=document.getElementById('je-desc').value||'Manual JE'; const lines=[]; document.querySelectorAll('#je-lines tbody tr').forEach(tr=>{ const code=(tr.querySelector('.code').value||'').trim(); const debit=parseFloat(tr.querySelector('.debit').value||0); const credit=parseFloat(tr.querySelector('.credit').value||0); const cc=(tr.querySelector('.costcenter').value||'').trim(); if(code) lines.push({ account_code: code, debit, credit, description: desc, date, cost_center: cc }); }); if(lines.length===0){ alert('أضف سطرًا واحدًا على الأقل'); btn.disabled=false; return; } const payload={ entries:[{ date, description: desc, lines }] }; const r=await fetch('/journal/api/transactions/post', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }); if(!r.ok){ alert('فشل الاتصال بالخادم (HTTP '+r.status+')'); btn.disabled=false; return; } let j={}; try{ j = await r.json(); }catch(e){ alert('استجابة غير صالحة (ليست JSON)'); btn.disabled=false; return; } if(j.ok){ alert('تم نشر القيد'); document.querySelector('#je-lines tbody').innerHTML=''; addLine(); addLine(); totals(); } else { alert('فشل نشر القيد: '+(j.error||'')); } btn.disabled=false; }catch(e){ alert('خطأ: '+e); const btn = document.getElementById('je-post'); if(btn) btn.disabled=false; } }
-  async function loadJournal(){ const s=document.getElementById('jr-start').value||'2025-10-01'; const e=document.getElementById('jr-end').value||new Date().toISOString().slice(0,10); const acc=document.getElementById('jr-account').value||''; const u='/journal/api/journals?start='+s+'&end='+e+(acc?('&account='+encodeURIComponent(acc)):''); const j=await fetchJSON(u); const tbody=document.querySelector('#jr-table tbody'); tbody.innerHTML=''; (j.entries||[]).forEach(je=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${je.entry_number}</td><td>${je.date}</td><td>${je.description||''}</td><td class='text-end'>${num(je.total_debit||0)}</td><td class='text-end'>${num(je.total_credit||0)}</td><td>${je.status||''}</td><td><button class='btn btn-sm btn-outline-danger del-je' data-entry='${je.entry_number}'>حذف</button></td>`; tbody.appendChild(tr); }); tbody.querySelectorAll('.del-je').forEach(btn=>{ btn.addEventListener('click', async function(){ const entry = this.getAttribute('data-entry'); if(!entry) return; if(!confirm('تأكيد حذف القيد؟')) return; const r = await fetch('/journal/api/journals/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entry_number: entry }) }); const jr = await r.json(); if(jr && jr.ok){ alert('تم حذف القيد'); loadJournal(); } else { alert('فشل حذف القيد: '+(jr && jr.error ? jr.error : '')); } }); }); }
+  function buildViewEntryContent(j){ const e=j.entry||{}; const op=j.operational||{}; const fin=j.financial; const lines=j.lines||[]; const dateStr=(e.date||'').slice(0,10); const dd=dateStr?dateStr.split('-').reverse().join('-'):'-'; let html='<div class="card p-3 mb-2" style="border-color:var(--border);">'; html+='<table class="table table-sm table-borderless mb-0">'; html+='<tr><td class="text-muted" style="width:8rem;">نوع العملية</td><td><strong>'+(op.op_type_ar||'-')+'</strong></td></tr>'; html+='<tr><td class="text-muted">رقم القيد</td><td><strong>'+(e.entry_number||'-')+'</strong></td></tr>'; html+='<tr><td class="text-muted">تاريخ العملية</td><td><strong>'+dd+'</strong></td></tr>'; html+='<tr><td class="text-muted">الخصم</td><td>'+(fin&&fin.discount!=null&&fin.discount>0?num(fin.discount)+' ر.س':'-')+'</td></tr>'; html+='<tr><td class="text-muted">الضريبة</td><td>'+(fin&&fin.tax!=null&&fin.tax>0?num(fin.tax)+' ر.س':'-')+'</td></tr>'; html+='<tr><td class="text-muted">طريقة الدفع</td><td>'+(op.payment_method||'-')+'</td></tr>'; html+='</table></div>'; html+='<div class="card p-3" style="border-color:var(--border);"><h6 class="mb-2" style="color:var(--ops-blue-dark);">تفاصيل الأسطر</h6>'; html+='<table class="table table-sm table-bordered"><thead><tr><th>الحساب</th><th class="text-end">مدين</th><th class="text-end">دائن</th></tr></thead><tbody>'; lines.forEach(l=>{ html+='<tr><td>'+(l.account_code||'')+' – '+(l.account_name||'')+'</td><td class="text-end">'+num(l.debit||0)+'</td><td class="text-end">'+num(l.credit||0)+'</td></tr>'; }); html+='</tbody></table></div>'; return html; }
+  async function showJournalDetail(jid){ const modal=document.getElementById('modal-view-entry'); const loading=document.getElementById('modal-view-entry-loading'); const content=document.getElementById('modal-view-entry-content'); loading.style.display='block'; content.style.display='none'; content.innerHTML=''; const bsModal=typeof bootstrap!=='undefined'&&bootstrap.Modal?bootstrap.Modal.getOrCreateInstance(modal):null; if(bsModal) bsModal.show(); try{ const r=await fetch('/journal/'+jid+'/detail',{credentials:'same-origin'}); const j=await r.json(); loading.style.display='none'; if(j&&j.ok){ content.innerHTML=buildViewEntryContent(j); content.style.display='block'; } else { content.innerHTML='<div class="alert alert-danger">فشل تحميل التفاصيل</div>'; content.style.display='block'; } }catch(err){ loading.style.display='none'; content.innerHTML='<div class="alert alert-danger">خطأ في الاتصال</div>'; content.style.display='block'; } }
+  async function loadJournal(){ const s=document.getElementById('jr-start').value||'2025-10-01'; const e=document.getElementById('jr-end').value||new Date().toISOString().slice(0,10); const acc=document.getElementById('jr-account').value||''; const u='/journal/api/journals?start='+s+'&end='+e+(acc?('&account='+encodeURIComponent(acc)):''); const j=await fetchJSON(u); const tbody=document.querySelector('#jr-table tbody'); tbody.innerHTML=''; (j.entries||[]).forEach(je=>{ const st=(je.status||'').toLowerCase(); const isPosted=st==='posted'; const statusLabel=isPosted?'منشور':'مسودة'; const statusClass=isPosted?'badge-posted':'badge-draft'; const actions=[]; actions.push('<button type="button" class="btn btn-sm btn-outline-primary me-1 view-je" data-jid="'+je.id+'">عرض</button>'); if(isPosted) actions.push('<button type="button" class="btn btn-sm btn-outline-warning revert-je me-1" data-entry="'+je.entry_number+'">إرجاع لمسودة</button>'); if(!isPosted) actions.push('<button type="button" class="btn btn-sm btn-outline-danger del-je" data-entry="'+je.entry_number+'">حذف</button>'); const tr=document.createElement('tr'); tr.innerHTML='<td>'+je.entry_number+'</td><td>'+je.date+'</td><td>'+(je.description||'')+'</td><td class="text-end">'+num(je.total_debit||0)+'</td><td class="text-end">'+num(je.total_credit||0)+'</td><td><span class="badge '+statusClass+'">'+statusLabel+'</span></td><td>'+actions.join('')+'</td>'; tbody.appendChild(tr); }); tbody.querySelectorAll('.del-je').forEach(btn=>{ btn.addEventListener('click', async function(){ const entry=this.getAttribute('data-entry'); if(!entry) return; if(!confirm('تأكيد حذف القيد؟')) return; const r=await fetch('/journal/api/journals/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entry_number: entry }) }); const jr=await r.json(); if(jr&&jr.ok){ alert('تم حذف القيد'); loadJournal(); } else { alert('فشل: '+(jr&&jr.message?jr.message:(jr&&jr.error?jr.error:''))); } }); }); tbody.querySelectorAll('.revert-je').forEach(btn=>{ btn.addEventListener('click', async function(){ const entry=this.getAttribute('data-entry'); if(!entry) return; if(!confirm('إرجاع القيد لمسودة؟ لن يظهر في التقارير حتى يُنشر مجدداً.')) return; const r=await fetch('/journal/api/journals/revert', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entry_number: entry }) }); const jr=await r.json(); if(jr&&jr.ok){ alert('تم إرجاع القيد لمسودة'); loadJournal(); } else { alert('فشل: '+(jr&&jr.message?jr.message:(jr&&jr.error?jr.error:''))); } }); }); tbody.querySelectorAll('.view-je').forEach(btn=>{ btn.addEventListener('click', function(){ const jid=this.getAttribute('data-jid'); if(jid) showJournalDetail(parseInt(jid,10)); }); }); }
   async function loadLedger(){ const code=(document.getElementById('lg-code').value||'').trim(); const s=document.getElementById('lg-start').value||'2025-10-01'; const e=document.getElementById('lg-end').value||new Date().toISOString().slice(0,10); const j=await fetchJSON('/financials/api/account_ledger_json?code='+encodeURIComponent(code)+'&start_date='+s+'&end_date='+e); if(!j.ok){ alert('الحساب غير موجود'); return; } const head=document.getElementById('lg-header'); head.innerHTML=`اسم الحساب: ${j.account.code} · ${j.account.name} — الرصيد الافتتاحي: ${num(j.opening_balance)} ريال`; const tbody=document.querySelector('#lg-table tbody'); tbody.innerHTML=''; (j.lines||[]).forEach(row=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${row.date}</td><td>${row.entry_number}</td><td>${row.description||''}</td><td class='text-end'>${num(row.debit||0)}</td><td class='text-end'>${num(row.credit||0)}</td><td class='text-end'>${num(row.balance||0)}</td>`; tbody.appendChild(tr); }); head.innerHTML += ` — الرصيد النهائي: ${num(j.final_balance)} ريال`; }
-  async function loadTrial(){ const d=document.getElementById('tb-date').value||new Date().toISOString().slice(0,10); const j=await fetchJSON('/financials/api/trial_balance_json?date='+d); const tbody=document.querySelector('#tb-table tbody'); tbody.innerHTML=''; let td=0, tc=0; (j.order||[]).forEach(t=>{ const grp=(j.grouped||{})[t]||[]; grp.forEach(r=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.code}</td><td>${r.name}</td><td class='text-end ${ (parseFloat(r.debit||0)>0?'text-debit':'') }'>${num(r.debit)}</td><td class='text-end ${ (parseFloat(r.credit||0)>0?'text-credit':'') }'>${num(r.credit)}</td><td class='text-end'>${num(r.balance)}</td>`; tbody.appendChild(tr); td+=parseFloat(r.debit||0); tc+=parseFloat(r.credit||0); }); }); document.getElementById('tb-td').textContent=num(td); document.getElementById('tb-tc').textContent=num(tc); }
+  async function loadTrial(){
+    const d=document.getElementById('tb-date').value||new Date().toISOString().slice(0,10);
+    const j=await fetchJSON('/financials/api/trial_balance_json?date='+d);
+    const tbody=document.querySelector('#tb-table tbody');
+    tbody.innerHTML='';
+    const order=j.order||[];
+    order.forEach(t=>{
+      const grp=(j.grouped||{})[t]||[];
+      grp.forEach((r,idx)=>{
+        const lvl=parseInt(r.level,10)||1;
+        const hasChildren=!!(r.has_children);
+        const tr=document.createElement('tr');
+        tr.dataset.level=String(lvl);
+        tr.dataset.idx=String(tbody.querySelectorAll('tr').length+idx);
+        const indent=(lvl-1)*1.2;
+        const toggleCell=hasChildren?'<td><button type="button" class="tb-toggle" aria-expanded="false" title="طي/توسيع"></button></td>':'<td></td>';
+        const debitCls=parseFloat(r.debit||0)>0?'text-debit':'';
+        const creditCls=parseFloat(r.credit||0)>0?'text-credit':'';
+        const debitVal=num(r.debit||0);
+        const creditVal=num(r.credit||0);
+        const balVal=num(r.balance||0);
+        tr.dataset.debit=debitVal;
+        tr.dataset.credit=creditVal;
+        tr.dataset.balance=balVal;
+        tr.innerHTML=toggleCell+'<td style="padding-right:'+indent+'em">'+r.code+'</td><td>'+r.name+'</td><td class="text-end '+debitCls+' tb-num-debit">'+debitVal+'</td><td class="text-end '+creditCls+' tb-num-credit">'+creditVal+'</td><td class="text-end tb-num-balance">'+balVal+'</td>';
+        tbody.appendChild(tr);
+      });
+    });
+    document.getElementById('tb-td').textContent=num(j.total_debit||0);
+    document.getElementById('tb-tc').textContent=num(j.total_credit||0);
+    const allRows=tbody.querySelectorAll('tr');
+    allRows.forEach((tr,idx)=>{
+      const btn=tr.querySelector('.tb-toggle');
+      if(!btn)return;
+      const lvl=parseInt(tr.dataset.level,10);
+      for(let k=idx+1;k<allRows.length;k++){
+        if(parseInt(allRows[k].dataset.level,10)<=lvl)break;
+        allRows[k].style.display='none';
+      }
+    });
+    tbody.querySelectorAll('.tb-toggle').forEach(btn=>{
+      btn.addEventListener('click',function(){
+        const tr=this.closest('tr');
+        const rows=tbody.querySelectorAll('tr');
+        const idx=Array.prototype.indexOf.call(rows,tr);
+        const lvl=parseInt(tr.dataset.level,10);
+        const isExp=this.getAttribute('aria-expanded')==='true';
+        this.setAttribute('aria-expanded',isExp?'false':'true');
+        const numDebit=tr.querySelector('.tb-num-debit');
+        const numCredit=tr.querySelector('.tb-num-credit');
+        const numBalance=tr.querySelector('.tb-num-balance');
+        if(isExp){
+          numDebit.textContent='—';
+          numCredit.textContent='—';
+          numBalance.textContent='—';
+          numDebit.classList.add('tb-parent-noval');
+          numCredit.classList.add('tb-parent-noval');
+          numBalance.classList.add('tb-parent-noval');
+          for(let k=idx+1;k<rows.length;k++){
+            const rl=parseInt(rows[k].dataset.level,10);
+            if(rl<=lvl)break;
+            rows[k].style.display='';
+          }
+        } else {
+          numDebit.textContent=tr.dataset.debit;
+          numCredit.textContent=tr.dataset.credit;
+          numBalance.textContent=tr.dataset.balance;
+          numDebit.classList.remove('tb-parent-noval');
+          numCredit.classList.remove('tb-parent-noval');
+          numBalance.classList.remove('tb-parent-noval');
+          for(let k=idx+1;k<rows.length;k++){
+            const rl=parseInt(rows[k].dataset.level,10);
+            if(rl<=lvl)break;
+            rows[k].style.display='none';
+          }
+        }
+      });
+    });
+  }
   async function addAccount(){ const code=(document.getElementById('ac-code').value||'').trim(); const name=(document.getElementById('ac-name').value||'').trim(); const type=(document.getElementById('ac-type').value||'').trim(); if(!code||!name){ alert('أدخل الرمز والاسم'); return; } const j=await fetchJSON('/financials/api/accounts/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code, name, type }) }); if(j.ok){ document.getElementById('ac-code').value=''; document.getElementById('ac-name').value=''; loadAccounts(); } else { alert('فشل إضافة الحساب'); }
   }
   document.getElementById('je-add').addEventListener('click', addLine);
@@ -267,11 +502,65 @@
   });
   (async function(){ try{ await fetch('/financials/api/accounts/seed_official', { method:'POST' }); await fetch('/financials/api/accounts/apply_official_names', { method:'POST' }); }catch(e){} })();
   loadAccounts(); loadJournal();
-  function iconForType(t){ if(t==='ASSET') return '🟦'; if(t==='LIABILITY') return '🟥'; if(t==='EQUITY') return '🟪'; if(t==='REVENUE') return '🟩'; if(t==='EXPENSE') return '🟧'; if(t==='COGS') return '🟨'; if(t==='TAX') return '🟫'; return '📁'; }
-  function buildCoa(){ const types=['ASSET','LIABILITY','EQUITY','REVENUE','EXPENSE','COGS','TAX']; const acc=document.getElementById('coaAccordion'); acc.innerHTML=''; const q=(document.getElementById('coa-q').value||'').toLowerCase(); const ft=(document.getElementById('coa-type').value||''); types.forEach((t,i)=>{ const list = accountsList.filter(a=> a.type===t && (!ft||a.type===ft) && (a.code.toLowerCase().includes(q)||a.name.toLowerCase().includes(q)||a.type.toLowerCase().includes(q)) ).sort((a,b)=> a.code.localeCompare(b.code)); if(list.length===0) return; const item=document.createElement('div'); item.className='accordion-item'; const hid=`coa-h-${i}`; const cid=`coa-c-${i}`; item.innerHTML=`<h2 class='accordion-header' id='${hid}'><button class='accordion-button ${i===0?'':'collapsed'}' type='button' data-bs-toggle='collapse' data-bs-target='#${cid}' aria-expanded='${i===0?'true':'false'}' aria-controls='${cid}'>${iconForType(t)} ${t}</button></h2><div id='${cid}' class='accordion-collapse collapse ${i===0?'show':''}' aria-labelledby='${hid}' data-bs-parent='#coaAccordion'><div class='accordion-body'><table class='table table-sm'><thead><tr><th>رمز</th><th>اسم</th><th>نوع</th><th>نشط</th></tr></thead><tbody></tbody></table></div></div>`; acc.appendChild(item); const tbody=item.querySelector('tbody'); list.forEach(a=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${a.code}</td><td>${a.name}</td><td>${a.type}</td><td>${a.active?'✓':'✗'}</td>`; tbody.appendChild(tr); }); }); }
+  function iconForType(t){ const icons={ASSET:'<i class="fa-solid fa-building-columns me-1 acc-type-asset"></i>',LIABILITY:'<i class="fa-solid fa-scale-balanced me-1 acc-type-liability"></i>',EQUITY:'<i class="fa-solid fa-landmark me-1 acc-type-equity"></i>',REVENUE:'<i class="fa-solid fa-arrow-trend-up me-1 acc-type-revenue"></i>',EXPENSE:'<i class="fa-solid fa-sack-dollar me-1 acc-type-expense"></i>',COGS:'<i class="fa-solid fa-box me-1 acc-type-cogs"></i>',TAX:'<i class="fa-solid fa-percent me-1 acc-type-tax"></i>'}; return icons[t]||'<i class="fa-solid fa-folder me-1"></i>'; }
+  function coaFlatOrder(list){
+    const byParent={};
+    list.forEach(a=>{ const p=a.parent_account_code==null||a.parent_account_code===undefined?'__root__':a.parent_account_code; if(!byParent[p])byParent[p]=[]; byParent[p].push(a); });
+    function walk(p){ const ch=(byParent[p]||[]).sort((a,b)=>a.code.localeCompare(b.code)); let out=[]; ch.forEach(a=>{ out.push(a); out=out.concat(walk(a.code)); }); return out; }
+    return walk('__root__');
+  }
+  function buildCoa(){
+    const types=['ASSET','LIABILITY','EQUITY','REVENUE','EXPENSE','COGS','TAX'];
+    const acc=document.getElementById('coaAccordion');
+    acc.innerHTML='';
+    const q=(document.getElementById('coa-q').value||'').toLowerCase();
+    const ft=(document.getElementById('coa-type').value||'');
+    types.forEach((t,i)=>{
+      let list=accountsList.filter(a=>a.type===t&&(!ft||a.type===ft)&&(a.code.toLowerCase().includes(q)||(a.name||'').toLowerCase().includes(q)||(a.type||'').toLowerCase().includes(q)));
+      const codes=new Set(list.map(a=>a.code));
+      list.forEach(a=>{ let p=a.parent_account_code; while(p){ const parent=accountsList.find(x=>x.code===p&&x.type===t); if(parent&&!codes.has(p)){ codes.add(p); list=list.concat([parent]); } p=parent?parent.parent_account_code:null; } });
+      if(list.length===0)return;
+      const flat=coaFlatOrder(list);
+      const hasChild=code=>flat.some(a=>a.parent_account_code===code);
+      const item=document.createElement('div');
+      item.className='accordion-item';
+      const hid=`coa-h-${i}`;
+      const cid=`coa-c-${i}`;
+      item.innerHTML=`<h2 class='accordion-header' id='${hid}'><button class='accordion-button ${i===0?'':'collapsed'}' type='button' data-bs-toggle='collapse' data-bs-target='#${cid}' aria-expanded='${i===0}' aria-controls='${cid}'>${iconForType(t)} ${t}</button></h2><div id='${cid}' class='accordion-collapse collapse ${i===0?'show':''}' data-bs-parent='#coaAccordion'><div class='accordion-body'><table class='table table-sm'><thead><tr><th style="width:2rem"></th><th>رمز</th><th>اسم</th><th>نوع</th><th>نشط</th></tr></thead><tbody></tbody></table></div></div>`;
+      acc.appendChild(item);
+      const tbody=item.querySelector('tbody');
+      flat.forEach((a,idx)=>{
+        const tr=document.createElement('tr');
+        tr.dataset.level=String(a.level||1);
+        tr.dataset.code=a.code;
+        const indent=(a.level||1)-1;
+        const hasChildren=hasChild(a.code);
+        const toggleCell=hasChildren?'<td><button type="button" class="coa-toggle" data-idx="'+idx+'" aria-expanded="true" title="طي/توسيع"></button></td>':'<td></td>';
+        tr.innerHTML=toggleCell+'<td style="padding-right:'+(indent*1.2)+'em">'+a.code+'</td><td>'+a.name+'</td><td>'+a.type+'</td><td>'+(a.active?'✓':'✗')+'</td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('.coa-toggle').forEach(btn=>{
+        btn.addEventListener('click',function(){
+          const idx=parseInt(this.getAttribute('data-idx'),10);
+          const rows=tbody.querySelectorAll('tr');
+          const tr=rows[idx];
+          const lvl=parseInt(tr.dataset.level,10);
+          const isExp=this.getAttribute('aria-expanded')==='true';
+          this.setAttribute('aria-expanded',isExp?'false':'true');
+          for(let k=idx+1;k<rows.length;k++){
+            const rl=parseInt(rows[k].dataset.level,10);
+            if(rl<=lvl)break;
+            rows[k].style.display=isExp?'none':'';
+          }
+        });
+      });
+    });
+  }
   document.getElementById('coa-search').addEventListener('click', buildCoa);
   document.getElementById('coa-print').addEventListener('click', function(){ printSection('Chart of Accounts / شجرة الحسابات', 'coaAccordion'); });
   document.getElementById('m-ac-add').addEventListener('click', async function(){ const code=(document.getElementById('m-ac-code').value||'').trim(); const name=(document.getElementById('m-ac-name').value||'').trim(); const type=(document.getElementById('m-ac-type').value||'').trim(); if(!code||!name){ alert('أدخل الرمز والاسم'); return; } const j=await fetchJSON('/financials/api/accounts/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code, name, type }) }); if(j.ok){ document.getElementById('m-ac-code').value=''; document.getElementById('m-ac-name').value=''; loadAccounts(); buildCoa(); bootstrap.Modal.getInstance(document.getElementById('modal-add-account')).hide(); } else { alert('فشل إضافة الحساب'); } });
+  document.getElementById('modal-add-sub-account').addEventListener('show.bs.modal', function(){ const sel=document.getElementById('m-sub-parent'); sel.innerHTML='<option value="">اختر الحساب الأب</option>'; accountsList.forEach(a=>{ const o=document.createElement('option'); o.value=a.code; o.textContent=a.code+' — '+(a.name||a.name_ar||''); sel.appendChild(o); }); });
+  document.getElementById('m-sub-add').addEventListener('click', async function(){ const parent_code=(document.getElementById('m-sub-parent').value||'').trim(); const name_ar=(document.getElementById('m-sub-name-ar').value||'').trim(); const name_en=(document.getElementById('m-sub-name-en').value||'').trim(); if(!parent_code||!name_ar){ alert('اختر الحساب الأب وأدخل الاسم بالعربية'); return; } const j=await fetchJSON('/financials/api/accounts/add_sub', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ parent_code, name_ar, name_en }) }); if(j.ok){ document.getElementById('m-sub-name-ar').value=''; document.getElementById('m-sub-name-en').value=''; loadAccounts(); buildCoa(); bootstrap.Modal.getInstance(document.getElementById('modal-add-sub-account')).hide(); alert('تم إنشاء الحساب الفرعي: '+j.code); } else { alert('فشل: '+(j.error||'')); } });
   async function loadStatement(){ const code=(document.getElementById('st-code').value||'').trim(); const s=document.getElementById('st-start').value||'2025-10-01'; const e=document.getElementById('st-end').value||new Date().toISOString().slice(0,10); const j=await fetchJSON('/financials/api/account_ledger_json?code='+encodeURIComponent(code)+'&start_date='+s+'&end_date='+e); if(!j.ok){ alert('الحساب غير موجود'); return; } const head=document.getElementById('st-header'); head.innerHTML=`كشف حساب: ${j.account.code} · ${j.account.name}`; const tbody=document.querySelector('#st-table tbody'); tbody.innerHTML=''; (j.lines||[]).forEach(row=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${row.date}</td><td>${row.entry_number}</td><td>${row.description||''}</td><td class='text-end'>${num(row.debit||0)}</td><td class='text-end'>${num(row.credit||0)}</td><td class='text-end'>${num(row.balance||0)}</td>`; tbody.appendChild(tr); }); }
   document.getElementById('st-load').addEventListener('click', loadStatement);
   document.getElementById('st-print').addEventListener('click', function(){ printSection('Statement of Account / كشف حساب', 'st-table'); });
@@ -280,13 +569,207 @@
   setTimeout(buildCoa, 300);
 
 
-  async function opsFetch(u){ const r = await fetch(u); return await r.json(); }
-  async function opsLoadSuppliers(){ const j = await opsFetch('/financials/api/list_suppliers'); const sel=document.getElementById('op-supplier'); sel.innerHTML=''; (j.suppliers||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.name; o.textContent=s.name; sel.appendChild(o); }); }
-  async function opsLoadCustomers(){ const j = await opsFetch('/financials/api/list_customers'); const sel=document.getElementById('op-customer'); sel.innerHTML=''; (j.customers||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; sel.appendChild(o); }); }
-  function opsShowFields(){ const t=document.getElementById('op-type').value; const sup=document.getElementById('grp-supplier'); const cus=document.getElementById('grp-customer'); const mth=document.getElementById('grp-method'); sup.style.display='none'; cus.style.display='none'; mth.style.display=''; if(t==='supplier_ap' || t==='supplier_payment'){ sup.style.display=''; opsLoadSuppliers(); document.getElementById('op-category').parentElement.style.display = (t==='supplier_ap') ? '' : 'none'; } else if(t==='customer_receipt'){ cus.style.display=''; opsLoadCustomers(); } else if(t==='bank_deposit'){ mth.style.display='none'; } }
-  document.getElementById('op-type').addEventListener('change', opsShowFields);
-  opsShowFields();
-  document.getElementById('op-submit').addEventListener('click', async function(){ try{ const btn=this; btn.disabled=true; const type=document.getElementById('op-type').value; const date=document.getElementById('op-date').value||new Date().toISOString().slice(0,10); const amount=parseFloat(document.getElementById('op-amount').value||0); const method=document.getElementById('op-method').value||''; const note=document.getElementById('op-note').value||''; const out=document.getElementById('op-result'); if(!(amount>0)){ out.innerHTML=`<div class='alert alert-warning'>أدخل مبلغًا صالحًا</div>`; btn.disabled=false; return; } let party=''; let category=''; if(type==='supplier_ap' || type==='supplier_payment'){ party=document.getElementById('op-supplier').value||''; if(type==='supplier_ap'){ category=document.getElementById('op-category').value||''; } } if(type==='customer_receipt'){ party=document.getElementById('op-customer').value||''; } const payload={ date, rows:[{ type, party, amount, method, description: note, category }] }; const r=await fetch('/financials/api/batch/generate',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}); if(!r.ok){ out.innerHTML=`<div class='alert alert-danger'>فشل الاتصال بالخادم (HTTP ${r.status})</div>`; btn.disabled=false; return; } const j=await r.json(); if(j && j.ok){ out.innerHTML=`<div class='alert alert-success'>تم إنشاء العملية — قيود منشأة: ${ (j.created||[]).join(', ') }</div>`; document.getElementById('op-amount').value=''; document.getElementById('op-note').value=''; document.getElementById('op-method').value='cash'; if(type==='supplier_ap' || type==='supplier_payment'){ document.getElementById('op-supplier').value=''; } if(type==='customer_receipt'){ document.getElementById('op-customer').value=''; } } else { out.innerHTML=`<div class='alert alert-danger'>فشل: ${ (j && j.error) ? j.error : 'استجابة غير متوقعة' }</div>`; } btn.disabled=false; }catch(e){ const out=document.getElementById('op-result'); out.innerHTML=`<div class='alert alert-danger'>خطأ: ${e}</div>`; } });
+  (function opsInit(){
+    const out=document.getElementById('op-result');
+    function showResult(html){ if(out){ out.innerHTML=html; } }
+    function setToday(el){ if(el&&!el.value) el.value=new Date().toISOString().slice(0,10); }
+    document.querySelectorAll('#op-sadad-date,#op-tahsil-date,#op-idayaa-date,#op-sahb-date').forEach(setToday);
+
+    document.querySelectorAll('#op-section-tabs button').forEach(btn=>{
+      btn.addEventListener('click', function(){
+        const sec=this.getAttribute('data-section');
+        document.querySelectorAll('#op-section-tabs .nav-link').forEach(l=>l.classList.remove('active'));
+        this.classList.add('active');
+        document.querySelectorAll('.op-section').forEach(s=>s.style.display='none');
+        const panel=document.getElementById('op-section-'+sec);
+        if(panel) panel.style.display='block';
+        document.getElementById('op-related-empty').style.display='block';
+        document.getElementById('op-related-content').style.display='none';
+      });
+    });
+
+    const sadadType=document.getElementById('op-sadad-type');
+    const grpSadadSupplier=document.getElementById('grp-sadad-supplier');
+    const grpSadadPayroll=document.getElementById('grp-sadad-payroll');
+    const grpSadadLiability=document.getElementById('grp-sadad-liability');
+    const grpSadadPlatform=document.getElementById('grp-sadad-platform');
+    function opsSadadShow(){
+      const t=sadadType.value;
+      grpSadadSupplier.style.display=t==='supplier'?'':'none';
+      grpSadadPayroll.style.display=t==='payroll'?'':'none';
+      grpSadadLiability.style.display=t==='liability'?'':'none';
+      if(grpSadadPlatform) grpSadadPlatform.style.display=t==='platform'?'':'none';
+      if(t==='supplier') opsLoadSadadSuppliers();
+      if(t==='payroll') opsLoadPayrollRuns();
+      if(t==='platform') opsLoadPlatforms();
+      opsLoadOutstanding();
+    }
+    sadadType.addEventListener('change', opsSadadShow);
+
+    async function opsLoadSadadSuppliers(){
+      const j=await fetchJSON('/financials/api/list_suppliers');
+      const sel=document.getElementById('op-sadad-supplier');
+      sel.innerHTML='<option value="">اختر المورد</option>';
+      (j.suppliers||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.name; o.textContent=s.name; sel.appendChild(o); });
+    }
+    async function opsLoadPayrollRuns(){
+      const j=await fetchJSON('/financials/api/unpaid_payroll_runs');
+      const sel=document.getElementById('op-sadad-payroll');
+      sel.innerHTML='<option value="">اختر المسير</option>';
+      (j.runs||[]).forEach(r=>{ const o=document.createElement('option'); o.value=r.year+'-'+String(r.month).padStart(2,'0'); o.textContent=r.label_ar+' — متبقي '+num(r.remaining)+' ر.س'; sel.appendChild(o); });
+    }
+    async function opsLoadPlatforms(){
+      const j=await fetchJSON('/financials/api/platform_accounts');
+      const sel=document.getElementById('op-sadad-platform');
+      if(!sel) return;
+      sel.innerHTML='<option value="">اختر المنصة</option>';
+      (j.platforms||[]).forEach(p=>{ const o=document.createElement('option'); o.value=p.code; o.textContent=p.name_ar||p.name_en||p.code; sel.appendChild(o); });
+    }
+    document.getElementById('op-sadad-supplier').addEventListener('change', opsLoadOutstanding);
+    document.getElementById('op-sadad-payroll').addEventListener('change', opsLoadOutstanding);
+    document.getElementById('op-sadad-liability').addEventListener('change', opsLoadOutstanding);
+    document.getElementById('op-sadad-platform').addEventListener('change', opsLoadOutstanding);
+    document.getElementById('op-tahsil-customer').addEventListener('change', opsLoadOutstanding);
+
+    const tahsilType=document.getElementById('op-tahsil-type');
+    const grpTahsilCustomer=document.getElementById('grp-tahsil-customer');
+    const grpTahsilEmployee=document.getElementById('grp-tahsil-employee');
+    function opsTahsilShow(){
+      const t=tahsilType.value;
+      grpTahsilCustomer.style.display=t==='customer'?'':'none';
+      grpTahsilEmployee.style.display=t==='employee_advance'?'':'none';
+      if(t==='customer'){ opsLoadTahsilCustomers(); }
+      if(t==='employee_advance'){ opsLoadTahsilEmployees(); }
+      opsLoadOutstanding();
+    }
+    tahsilType.addEventListener('change', opsTahsilShow);
+
+    async function opsLoadTahsilCustomers(){
+      const j=await fetchJSON('/financials/api/list_customers');
+      const sel=document.getElementById('op-tahsil-customer');
+      sel.innerHTML='<option value="">اختر العميل</option>';
+      (j.customers||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; sel.appendChild(o); });
+      sel.addEventListener('change', opsLoadOutstanding);
+    }
+    async function opsLoadTahsilEmployees(){
+      const j=await fetchJSON('/financials/api/list_employees');
+      const sel=document.getElementById('op-tahsil-employee');
+      sel.innerHTML='<option value="">اختر الموظف</option>';
+      (j.employees||[]).forEach(e=>{ const o=document.createElement('option'); o.value=e.name; o.textContent=e.name; sel.appendChild(o); });
+    }
+
+    async function opsLoadOutstanding(){
+      document.getElementById('op-related-loading').style.display='none';
+      document.getElementById('op-related-empty').style.display='block';
+      document.getElementById('op-related-content').style.display='none';
+      const active=document.querySelector('#op-section-tabs .nav-link.active');
+      const sec=active?active.getAttribute('data-section'):'sadad';
+      let url='';
+      if(sec==='sadad'){
+        const t=document.getElementById('op-sadad-type').value;
+        if(t==='supplier'){ const n=document.getElementById('op-sadad-supplier').value; if(n) url='/financials/api/operations/outstanding?party_type=supplier&party_name='+encodeURIComponent(n); }
+        else if(t==='payroll'){ const v=document.getElementById('op-sadad-payroll').value; if(v){ const p=v.split('-'); url='/financials/api/operations/outstanding?party_type=payroll&payroll_year='+p[0]+'&payroll_month='+p[1]; } }
+        else if(t==='liability'){ const c=document.getElementById('op-sadad-liability').value; if(c) url='/financials/api/operations/outstanding?party_type=liability&liability_code='+encodeURIComponent(c); }
+        else if(t==='platform'){ const c=document.getElementById('op-sadad-platform').value; if(c) url='/financials/api/operations/outstanding?party_type=liability&liability_code='+encodeURIComponent(c); }
+      } else if(sec==='tahsil'){
+        const t=document.getElementById('op-tahsil-type').value;
+        if(t==='customer'){ const n=document.getElementById('op-tahsil-customer').value; if(n) url='/financials/api/operations/outstanding?party_type=customer&party_name='+encodeURIComponent(n); }
+      }
+      if(!url){ return; }
+      document.getElementById('op-related-loading').style.display='block';
+      try{
+        const j=await fetchJSON(url);
+        document.getElementById('op-related-loading').style.display='none';
+        if(j&&j.ok&&(j.invoices||[]).length>0){
+          document.getElementById('op-related-empty').style.display='none';
+          document.getElementById('op-related-content').style.display='block';
+          document.getElementById('op-related-label').textContent=j.label||'';
+          const tbody=document.getElementById('op-related-tbody');
+          tbody.innerHTML='';
+          (j.invoices||[]).forEach(inv=>{
+            const tr=document.createElement('tr');
+            tr.innerHTML='<td>'+(inv.invoice_number||'')+'</td><td>'+(inv.date||'')+'</td><td class="text-end">'+num(inv.total)+'</td><td class="text-end">'+num(inv.paid)+'</td><td class="text-end"><strong>'+num(inv.remaining)+'</strong></td>';
+            tbody.appendChild(tr);
+          });
+          document.getElementById('op-related-total').textContent=num(j.total_remaining||0);
+        } else {
+          document.getElementById('op-related-empty').style.display='block';
+          document.getElementById('op-related-empty').textContent=j&&j.label?j.label:'لا توجد فواتير/مستحقات مرتبطة.';
+        }
+      } catch(e){
+        document.getElementById('op-related-loading').style.display='none';
+        document.getElementById('op-related-empty').style.display='block';
+        document.getElementById('op-related-empty').textContent='خطأ في تحميل المستحقات.';
+      }
+    }
+
+    (async function(){
+      await opsLoadSadadSuppliers();
+      await opsLoadPayrollRuns();
+      await opsLoadTahsilCustomers();
+      await opsLoadTahsilEmployees();
+      opsSadadShow();
+      opsTahsilShow();
+    })();
+
+    async function opSubmitSadad(){
+      const date=document.getElementById('op-sadad-date').value||new Date().toISOString().slice(0,10);
+      const amount=parseFloat(document.getElementById('op-sadad-amount').value||0);
+      const method=document.getElementById('op-sadad-method').value||'cash';
+      if(!(amount>0)){ showResult('<div class="alert alert-warning">أدخل مبلغًا صالحًا</div>'); return; }
+      const t=document.getElementById('op-sadad-type').value;
+      let type='supplier_payment'; let party='';
+      if(t==='supplier'){ party=document.getElementById('op-sadad-supplier').value||''; if(!party){ showResult('<div class="alert alert-warning">اختر المورد</div>'); return; } type='supplier_payment'; }
+      else if(t==='payroll'){ const v=document.getElementById('op-sadad-payroll').value; if(!v){ showResult('<div class="alert alert-warning">اختر المسير</div>'); return; } const p=v.split('-'); const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'pay_liability', date, amount, payment_method:method, liability_code:'2121', payroll_year:parseInt(p[0],10), payroll_month:parseInt(p[1],10) })}); const jr=await r.json(); if(jr&&jr.ok&&jr.entry_number){ showResult('<div class="alert alert-success">تم سداد مسير الرواتب — قيد: '+jr.entry_number+'</div>'); document.getElementById('op-sadad-amount').value=''; opsLoadPayrollRuns(); opsLoadOutstanding(); } else { showResult('<div class="alert alert-danger">'+(jr&&jr.error?jr.error:'فشل إنشاء القيد')+'</div>'); } return; }
+      else if(t==='liability'){ const code=document.getElementById('op-sadad-liability').value||'2121'; const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'pay_liability', date, amount, payment_method:method, liability_code:code })}); const jr=await r.json(); if(jr&&jr.ok&&jr.entry_number){ showResult('<div class="alert alert-success">تم السداد — قيد: '+jr.entry_number+'</div>'); document.getElementById('op-sadad-amount').value=''; opsLoadOutstanding(); } else { showResult('<div class="alert alert-danger">'+(jr&&jr.error?jr.error:'فشل إنشاء القيد')+'</div>'); } return; }
+      else if(t==='platform'){ const code=document.getElementById('op-sadad-platform').value; if(!code){ showResult('<div class="alert alert-warning">اختر المنصة</div>'); return; } const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'pay_liability', date, amount, payment_method:method, liability_code:code, note: 'سداد عمولات منصة إلكترونية' })}); const jr=await r.json(); if(jr&&jr.ok&&jr.entry_number){ showResult('<div class="alert alert-success">تم سداد عمولات المنصة — قيد: '+jr.entry_number+'</div>'); document.getElementById('op-sadad-amount').value=''; opsLoadOutstanding(); } else { showResult('<div class="alert alert-danger">'+(jr&&jr.error?jr.error:'فشل إنشاء القيد')+'</div>'); } return; }
+      const payload={ type:'supplier_payment', date, amount, payment_method:method, supplier_name:party, note:'سداد من شاشة العمليات' };
+      const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      const j=await r.json();
+      if(j&&j.ok&&j.entry_number){ showResult('<div class="alert alert-success">تم إنشاء العملية — قيد: '+j.entry_number+'</div>'); document.getElementById('op-sadad-amount').value=''; opsLoadOutstanding(); }
+      else { showResult('<div class="alert alert-danger">'+(j&&j.error?j.error:'فشل إنشاء القيد — العملية لم تُنفَّذ')+'</div>'); }
+    }
+    document.getElementById('op-sadad-submit').addEventListener('click', opSubmitSadad);
+
+    document.getElementById('op-tahsil-submit').addEventListener('click', async function(){
+      const date=document.getElementById('op-tahsil-date').value||new Date().toISOString().slice(0,10);
+      const amount=parseFloat(document.getElementById('op-tahsil-amount').value||0);
+      const method=document.getElementById('op-tahsil-method').value||'cash';
+      const t=document.getElementById('op-tahsil-type').value;
+      let party=''; let debtor_type='customer';
+      if(t==='customer'){ party=document.getElementById('op-tahsil-customer').value||''; debtor_type='customer'; }
+      else if(t==='employee_advance'){ party=document.getElementById('op-tahsil-employee').value||''; debtor_type='employee_advance'; }
+      else { debtor_type='other_receivable'; party='أخرى'; }
+      if(!(amount>0)){ showResult('<div class="alert alert-warning">أدخل مبلغًا صالحًا</div>'); return; }
+      const payload={ type:'collection', date, amount, payment_method:method, debtor_type, party, note:'تحصيل من شاشة العمليات' };
+      const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      const j=await r.json();
+      if(j&&j.ok&&j.entry_number){ showResult('<div class="alert alert-success">تم إنشاء العملية — قيد: '+j.entry_number+'</div>'); document.getElementById('op-tahsil-amount').value=''; opsLoadOutstanding(); }
+      else { showResult('<div class="alert alert-danger">'+(j&&j.error?j.error:'فشل إنشاء القيد — العملية لم تُنفَّذ')+'</div>'); }
+    });
+
+    document.getElementById('op-idayaa-submit').addEventListener('click', async function(){
+      const date=document.getElementById('op-idayaa-date').value||new Date().toISOString().slice(0,10);
+      const amount=parseFloat(document.getElementById('op-idayaa-amount').value||0);
+      if(!(amount>0)){ showResult('<div class="alert alert-warning">أدخل مبلغًا صالحًا</div>'); return; }
+      const payload={ type:'bank_deposit', date, amount, payment_method:'bank', note:'إيداع من شاشة العمليات' };
+      const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      const j=await r.json();
+      if(j&&j.ok&&j.entry_number){ showResult('<div class="alert alert-success">تم الإيداع — قيد: '+j.entry_number+'</div>'); document.getElementById('op-idayaa-amount').value=''; }
+      else { showResult('<div class="alert alert-danger">'+(j&&j.error?j.error:'فشل إنشاء القيد — العملية لم تُنفَّذ')+'</div>'); }
+    });
+
+    document.getElementById('op-sahb-submit').addEventListener('click', async function(){
+      const date=document.getElementById('op-sahb-date').value||new Date().toISOString().slice(0,10);
+      const amount=parseFloat(document.getElementById('op-sahb-amount').value||0);
+      const method=document.getElementById('op-sahb-source').value||'cash';
+      if(!(amount>0)){ showResult('<div class="alert alert-warning">أدخل مبلغًا صالحًا</div>'); return; }
+      const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'owner_draw', date, amount, payment_method:method, note: 'سحب من شاشة العمليات' })});
+      const j=await r.json();
+      if(j&&j.ok&&j.entry_number){ showResult('<div class="alert alert-success">تم السحب — قيد: '+j.entry_number+'</div>'); document.getElementById('op-sahb-amount').value=''; }
+      else { showResult('<div class="alert alert-danger">'+(j&&j.error?j.error:'فشل إنشاء القيد — العملية لم تُنفَّذ')+'</div>'); }
+    });
+  })();
 
   (function activateTabFromUrl(){ try{ const h = window.location.hash || ''; const p = new URLSearchParams(window.location.search); const tabName = p.get('tab') || (h.startsWith('#tab-')? h.substring(1): ''); if(tabName){ const el = document.querySelector(`a[data-bs-toggle="tab"][href="#${tabName}"]`); if(el){ const tab = new bootstrap.Tab(el); tab.show(); } } }catch(e){} })();
   </script>

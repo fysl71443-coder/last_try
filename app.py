@@ -1635,8 +1635,8 @@ def api_pay_and_print():
                 base = max(0.0, float(subtotal) - float(discount_amount or 0.0))
                 vat = float(vat_amount or 0.0)
                 gross = float(total or (base + vat))
-                rev_code = '4110' if (branch_code or '').strip() == 'place_india' else '4100'
-                cash_code = '1020' if (payment_method or '').strip().upper() in ('BANK','CARD','VISA','MASTERCARD','MADA','ONLINE','TRANSFER') else '1110'
+                rev_code = '4111'
+                cash_code = '1121' if (payment_method or '').strip().upper() in ('BANK','CARD','VISA','MASTERCARD','MADA','ONLINE','TRANSFER') else '1111'
                 je = JournalEntry(entry_number=f"JE-SAL-{invoice.invoice_number}", date=invoice.date, branch_code=branch_code, description=f"Sales {invoice.invoice_number}", status='posted', total_debit=gross, total_credit=gross, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=invoice.id, invoice_type='sales')
                 db.session.add(je); db.session.flush()
                 cash_acc = acc_by_code(cash_code)
@@ -1645,7 +1645,7 @@ def api_pay_and_print():
                     rev_acc = acc_by_code(rev_code)
                     db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=rev_acc.id, debit=0, credit=base, description=f"Revenue {invoice.invoice_number}", line_date=invoice.date))
                 if vat > 0:
-                    vat_out_acc = acc_by_code('6100')
+                    vat_out_acc = acc_by_code('2141')
                     ln_no = 3 if base > 0 else 2
                     db.session.add(JournalLine(journal_id=je.id, line_no=ln_no, account_id=vat_out_acc.id, debit=0, credit=vat, description=f"VAT Output {invoice.invoice_number}", line_date=invoice.date))
                 db.session.commit()
@@ -1840,11 +1840,17 @@ def toggle_theme():
 
 
 
-# Make get_locale available in templates
+# Make get_locale and _ (gettext) available in templates for full language switching
 @app.context_processor
 def inject_conf_vars():
+    try:
+        from flask_babel import gettext
+        _fn = gettext
+    except Exception:
+        _fn = lambda s, **kw: (s.format(**kw) if kw else s)
     return {
-        'get_locale': get_locale
+        'get_locale': get_locale,
+        '_': _fn,
     }
 
 # Asset version for cache busting of static files
@@ -2830,7 +2836,7 @@ def get_categories():
     """Get all active categories for POS system (simplified approach)"""
     try:
         from models import Category
-        categories = Category.query.filter_by(status='Active').all()
+        categories = Category.query.filter_by(status='Active').order_by(Category.name.asc()).limit(500).all()
         return jsonify([cat.to_dict() for cat in categories])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2844,9 +2850,9 @@ def get_items():
         category_id = request.args.get('category_id', type=int)
 
         if category_id:
-            items = Item.query.filter_by(category_id=category_id, status='Active').all()
+            items = Item.query.filter_by(category_id=category_id, status='Active').order_by(Item.name.asc()).limit(1000).all()
         else:
-            items = Item.query.filter_by(status='Active').all()
+            items = Item.query.filter_by(status='Active').order_by(Item.name.asc()).limit(1000).all()
 
         return jsonify([item.to_dict() for item in items])
     except Exception as e:
@@ -3336,8 +3342,8 @@ def confirm_payment():
                 base = max(0.0, float(subtotal) - float(discount_amount or 0.0))
                 vat = float(tax_amount or 0.0)
                 gross = float(total or (base + vat))
-                rev_code = '4110' if (branch_code or '').strip() == 'place_india' else '4100'
-                cash_code = '1020' if (payment_method or '').strip().upper() in ('BANK','CARD','VISA','MASTERCARD','MADA','ONLINE','TRANSFER') else '1110'
+                rev_code = '4111'
+                cash_code = '1121' if (payment_method or '').strip().upper() in ('BANK','CARD','VISA','MASTERCARD','MADA','ONLINE','TRANSFER') else '1111'
                 je = JournalEntry(entry_number=f"JE-SAL-{invoice.invoice_number}", date=invoice.date, branch_code=branch_code, description=f"Sales {invoice.invoice_number}", status='posted', total_debit=gross, total_credit=gross, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=invoice.id, invoice_type='sales')
                 db.session.add(je); db.session.flush()
                 cash_acc = acc_by_code(cash_code)
@@ -3346,7 +3352,7 @@ def confirm_payment():
                     rev_acc = acc_by_code(rev_code)
                     db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=rev_acc.id, debit=0, credit=base, description=f"Revenue {invoice.invoice_number}", line_date=invoice.date))
                 if vat > 0:
-                    vat_out_acc = acc_by_code('6100')
+                    vat_out_acc = acc_by_code('2141')
                     ln_no = 3 if base > 0 else 2
                     db.session.add(JournalLine(journal_id=je.id, line_no=ln_no, account_id=vat_out_acc.id, debit=0, credit=vat, description=f"VAT Output {invoice.invoice_number}", line_date=invoice.date))
                 db.session.commit()
@@ -3414,7 +3420,7 @@ def get_pos_categories(branch):
             return jsonify({'error': 'Invalid branch'}), 400
 
         # Get active categories
-        categories = MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).all()
+        categories = MenuCategory.query.filter_by(active=True).order_by(MenuCategory.name.asc()).limit(200).all()
 
         result = []
         for cat in categories:
@@ -3434,13 +3440,14 @@ def get_pos_category_items(branch, category_id):
     """Get menu items for a specific category"""
     try:
         from models import MenuItem, Meal
+        from sqlalchemy.orm import joinedload
 
         # Validate branch
         if branch not in ['china_town', 'palace_india']:
             return jsonify({'error': 'Invalid branch'}), 400
 
-        # Get menu items for this category
-        items = MenuItem.query.filter_by(category_id=category_id).order_by(MenuItem.display_order.asc().nulls_last()).all()
+        # Get menu items for this category (eager load meal to avoid N+1)
+        items = MenuItem.query.options(joinedload(MenuItem.meal)).filter_by(category_id=category_id).order_by(MenuItem.display_order.asc().nulls_last()).limit(500).all()
 
         result = []
         for item in items:
@@ -5292,8 +5299,8 @@ def purchases():
                     db.session.add(a); db.session.flush()
                 return a
             exp_code = '1210'
-            vat_in_code = '6200'
-            ap_code = '2110'
+            vat_in_code = '1170'
+            ap_code = '2111'
             exp_acc = acc_by_code(exp_code)
             vat_in_acc = acc_by_code(vat_in_code)
             ap_acc = acc_by_code(ap_code)
@@ -5429,8 +5436,8 @@ def expenses():
                         a = Account(code=code, name=meta.get('name',''), type=meta.get('type','EXPENSE'))
                         db.session.add(a); db.session.flush()
                     return a
-                vat_in_acc = acc_by_code('6200')
-                ap_acc = acc_by_code('2110')
+                vat_in_acc = acc_by_code('1170')
+                ap_acc = acc_by_code('2111')
                 total_before = float(invoice.total_before_tax or 0)
                 tax_amt = float(invoice.tax_amount or 0)
                 total_inc_tax = float(invoice.total_after_tax_discount or (total_before + tax_amt))
@@ -6007,8 +6014,8 @@ def api_draft_checkout():
             base = max(0.0, float(subtotal) - float(discount_val or 0.0))
             vat = float(tax_total or 0.0)
             gross = float(grand_total or (base + vat))
-            rev_code = '4110' if (draft.branch_code or '').strip() == 'place_india' else '4100'
-            cash_code = '1020' if (payment_method or '').strip().upper() in ('BANK','CARD','VISA','MASTERCARD','MADA','ONLINE','TRANSFER') else '1110'
+            rev_code = '4111'
+            cash_code = '1121' if (payment_method or '').strip().upper() in ('BANK','CARD','VISA','MASTERCARD','MADA','ONLINE','TRANSFER') else '1111'
             je = JournalEntry(entry_number=f"JE-SAL-{invoice_number}", date=invoice.date, branch_code=draft.branch_code, description=f"Sales {invoice.invoice_number}", status='posted', total_debit=gross, total_credit=gross, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=invoice.id, invoice_type='sales')
             db.session.add(je); db.session.flush()
             cash_acc = acc_by_code(cash_code)
@@ -6017,7 +6024,7 @@ def api_draft_checkout():
                 rev_acc = acc_by_code(rev_code)
                 db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=rev_acc.id, debit=0, credit=base, description=f"Revenue {invoice.invoice_number}", line_date=invoice.date))
             if vat > 0:
-                vat_out_acc = acc_by_code('6100')
+                vat_out_acc = acc_by_code('2141')
                 ln_no = 3 if base > 0 else 2
                 db.session.add(JournalLine(journal_id=je.id, line_no=ln_no, account_id=vat_out_acc.id, debit=0, credit=vat, description=f"VAT Output {invoice.invoice_number}", line_date=invoice.date))
             db.session.commit()
@@ -6102,7 +6109,7 @@ def confirm_print_and_pay():
                 try:
                     from app.routes import SHORT_TO_NUMERIC, CHART_OF_ACCOUNTS
                 except Exception:
-                    SHORT_TO_NUMERIC = {'CASH': ('1110', '', ''), 'BANK': ('1120', '', ''), 'REV_CT': ('4100', '', ''), 'REV_PI': ('4110', '', '')}
+                    SHORT_TO_NUMERIC = {'CASH': ('1111', '', ''), 'BANK': ('1121', '', ''), 'REV_CT': ('4111', '', ''), 'REV_PI': ('4111', '', '')}
                     CHART_OF_ACCOUNTS = {}
                 def acc_by_code(code):
                     a = Account.query.filter_by(code=code).first()
@@ -6115,14 +6122,14 @@ def confirm_print_and_pay():
                     bc = invoice.branch
                     rev_code = SHORT_TO_NUMERIC['REV_PI'][0] if bc == 'place_india' else SHORT_TO_NUMERIC['REV_CT'][0]
                 else:
-                    rev_code = SHORT_TO_NUMERIC.get('REV_CT', ('4100',))[0]
+                    rev_code = SHORT_TO_NUMERIC.get('REV_CT', ('4111',))[0]
                 total_before = float(invoice.total_before_tax or 0)
                 discount_amt = float(invoice.discount_amount or 0)
                 tax_amt = float(invoice.tax_amount or 0)
                 net_rev = max(0.0, total_before - discount_amt)
                 total_inc_tax = float(invoice.total_after_tax_discount or (net_rev + tax_amt))
                 cash_code = SHORT_TO_NUMERIC['BANK'][0] if payment_method.upper() in ('BANK','TRANSFER') else SHORT_TO_NUMERIC['CASH'][0]
-                vat_out_code = '6100'
+                vat_out_code = '2141'
                 cash_acc = acc_by_code(cash_code)
                 rev_acc = acc_by_code(rev_code)
                 vat_out_acc = acc_by_code(vat_out_code)
@@ -6916,7 +6923,7 @@ def salaries():
                         db.session.add(a); db.session.flush()
                     return a
                 sal_exp = acc_by_code('5310')
-                sal_pay = acc_by_code('2130')
+                sal_pay = acc_by_code('2121')
                 je = JournalEntry(entry_number=f"JE-SAL-{salary.year}{salary.month:02d}-{salary.employee_id}", date=get_saudi_now().date(), branch_code=None, description=f"Salary accrual {salary.employee_id}", status='posted', total_debit=total, total_credit=total, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), salary_id=salary.id)
                 db.session.add(je); db.session.flush()
                 db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=sal_exp.id, debit=total, credit=0, description='Salary expense', line_date=get_saudi_now().date()))
@@ -7468,7 +7475,7 @@ def register_payment_ajax():
         try:
             from app.routes import SHORT_TO_NUMERIC, CHART_OF_ACCOUNTS
         except Exception:
-            SHORT_TO_NUMERIC = {'CASH': ('1110', '', ''), 'BANK': ('1120', '', '')}
+            SHORT_TO_NUMERIC = {'CASH': ('1111', '', ''), 'BANK': ('1121', '', '')}
             CHART_OF_ACCOUNTS = {}
         def acc_by_code(code):
             a = Account.query.filter_by(code=code).first()
@@ -7483,8 +7490,8 @@ def register_payment_ajax():
             _pdate = get_saudi_now().date()
         cash_code = SHORT_TO_NUMERIC['BANK'][0] if method in ('BANK','TRANSFER') else SHORT_TO_NUMERIC['CASH'][0]
         cash_acc = acc_by_code(cash_code)
-        ap_acc = acc_by_code('2110')
-        ar_acc = acc_by_code('1050')
+        ap_acc = acc_by_code('2111')
+        ar_acc = acc_by_code('1141')
         if invoice_type == 'sales':
             je = JournalEntry(entry_number=f"JE-REC-{invoice_id}", date=_pdate, branch_code=None, description=f"Receipt sales #{invoice_id}", status='posted', total_debit=amount, total_credit=amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
             db.session.add(je); db.session.flush()
@@ -9153,10 +9160,10 @@ def print_invoice(invoice_id: int):
         def pm_code(pm: str) -> str:
             p = (pm or 'CASH').strip().upper()
             if p in ('CASH',):
-                return '1010'  # Cash
+                return '1111'  # صندوق رئيسي
             if p in ('BANK','CARD','VISA','MASTERCARD','MADA','ONLINE','TRANSFER'):
-                return '1020'  # Bank
-            return '1110'      # Accounts Receivable
+                return '1121'  # بنك الراجحي
+            return '1141'      # عملاء (ذمم مدينة)
 
         desc_key = f"Sales {inv.invoice_number}"
         exists = db.session.query(LedgerEntry.id).filter(LedgerEntry.description == desc_key).first()
@@ -9164,12 +9171,11 @@ def print_invoice(invoice_id: int):
             gross = float(inv.total_after_tax_discount or 0.0)
             base = max(0.0, float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0))
             vat = float(inv.tax_amount or 0.0)
-            cash_code = pm_code(inv.payment_method)
-            cash_acc = get_or_create(cash_code, 'Cash' if cash_code=='1010' else ('Bank' if cash_code=='1020' else 'Accounts Receivable'), 'ASSET')
-            rev_code = '4010' if (inv.branch or '').strip() == 'place_india' else ('4020' if (inv.branch or '').strip() == 'china_town' else '4010')
-            rev_name = 'مبيعات Place India' if rev_code=='4010' else 'مبيعات China Town'
-            rev_acc = get_or_create(rev_code, rev_name, 'REVENUE')
-            vat_out_acc = get_or_create('6020', 'VAT Output – مبيعات', 'LIABILITY')
+            cash_code = '1121' if (str(getattr(inv,'payment_method','') or '').upper() in ('BANK','TRANSFER','CARD','VISA','MASTERCARD')) else '1111'
+            cash_acc = get_or_create(cash_code, 'صندوق رئيسي' if cash_code=='1111' else 'بنك الراجحي', 'ASSET')
+            rev_code = '4111'
+            rev_acc = get_or_create(rev_code, 'مبيعات CHINA TOWN', 'REVENUE')
+            vat_out_acc = get_or_create('2141', 'ضريبة القيمة المضافة – مستحقة', 'LIABILITY')
             db.session.add(LedgerEntry(date=inv.date, account_id=cash_acc.id, debit=gross, credit=0, description=desc_key))
             if base > 0:
                 db.session.add(LedgerEntry(date=inv.date, account_id=rev_acc.id, debit=0, credit=base, description=desc_key))

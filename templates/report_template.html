@@ -13,8 +13,11 @@
     th { background: #f0f0f0; }
     tfoot th { background: #e0e0e0; }
     .footer { text-align: left; font-size: 12px; margin-top: 15px; }
+    .no-print { display: block; }
     @media print {
-      .no-print { display: none; }
+      .no-print { display: none !important; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { margin: 15mm; size: A4; }
     }
   </style>
 </head>
@@ -22,9 +25,9 @@
 
   <!-- الترويسة -->
   <div class="header">
-    <h2>مطعم CHINA TOWN & PALACE INDIA</h2>
-    <div>📅 التاريخ: {{ current_date }}</div>
-    <div>📄 التقرير: {{ report_title }}</div>
+    <h2>مطعم CHINA TOWN &amp; PLACE INDIA</h2>
+    <div>التاريخ: {{ current_date }}</div>
+    <div>التقرير: {{ report_title }}</div>
   </div>
 
   <!-- جدول التقرير -->
@@ -59,9 +62,10 @@
     </tfoot>
   </table>
 
-  <!-- زر الطباعة -->
+  <div class="footer">تم الإعداد بواسطة النظام — تاريخ الطباعة: <span id="rt-print-date"></span></div>
   <div class="footer no-print">
-    <button onclick="window.print()">🖨️ طباعة</button>
+    <button onclick="window.print()" style="padding:8px 16px;cursor:pointer;">طباعة</button>
   </div>
+  <script>document.getElementById('rt-print-date').textContent = new Date().toLocaleDateString('ar-SA');</script>
 </body>
 </html>

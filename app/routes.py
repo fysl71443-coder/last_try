@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, date, timedelta
 from datetime import date as _date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, send_from_directory, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, send_from_directory, send_file, session
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func, inspect, text, or_
 from sqlalchemy.exc import IntegrityError
@@ -18,16 +18,19 @@ from models import get_saudi_now, KSA_TZ
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
 main = Blueprint('main', __name__)
-@main.before_app_request
-def _block_employee_screens():
-    try:
-        p = (request.path or '').lower()
-    except Exception:
-        p = ''
-    legacy_prefixes = ['/employees/payroll', '/employees/payroll/detailed']
-    if any(p.startswith(pref) for pref in legacy_prefixes):
-        return ('', 404)
-# --- Employees: Detailed Payroll Report (across months with totals) ---
+
+
+@main.route('/set_language')
+def set_language():
+    """تبديل لغة الواجهة (ar/en) وحفظها في الجلسة."""
+    lang = (request.args.get('lang') or 'ar').strip().lower()
+    if lang in ('ar', 'en'):
+        session['locale'] = lang
+    next_url = request.args.get('next') or request.referrer or url_for('main.dashboard')
+    return redirect(next_url)
+
+
+# --- Employees: Detailed Payroll Report (legacy; kept for compatibility) ---
 @main.route('/employees/payroll/detailed', methods=['GET'], endpoint='payroll_detailed')
 @login_required
 def payroll_detailed():
@@ -37,99 +40,9 @@ def payroll_detailed():
 
 
 
-@main.route('/suppliers/edit/<int:sid>', methods=['GET', 'POST'], endpoint='suppliers_edit')
-@login_required
-def suppliers_edit(sid):
-    supplier = Supplier.query.get_or_404(sid)
-    if request.method == 'POST':
-        supplier.name = request.form.get('name', supplier.name)
-        supplier.contact_person = request.form.get('contact_person', supplier.contact_person)
-        supplier.phone = request.form.get('phone', supplier.phone)
-        supplier.email = request.form.get('email', supplier.email)
-        supplier.tax_number = request.form.get('tax_number', supplier.tax_number)
-        supplier.address = request.form.get('address', supplier.address)
-        supplier.notes = request.form.get('notes', supplier.notes)
-        supplier.active = True if str(request.form.get('active', supplier.active)).lower() in ['1','true','yes','on'] else False
-        try:
-            db.session.commit()
-            flash('✅ Supplier updated successfully', 'success')
-            return redirect(url_for('main.suppliers'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating supplier: {e}', 'danger')
-    return render_template('supplier_edit.html', supplier=supplier)
 
-# --- Simple helpers / constants ---
-BRANCH_LABELS = {
-    'place_india': 'Place India',
-    'china_town': 'China Town',
-}
-
-# --- Helper functions ---
-def safe_table_number(table_number) -> int:
-    """Safely convert table_number to int, default to 0 if None/invalid"""
-    try:
-        return int(table_number or 0)
-    except (ValueError, TypeError):
-        return 0
-
-# --- Permission helpers (reuse AppKV like template can()) ---
-def _normalize_scope(s: str) -> str:
-    s = (s or '').strip().lower()
-    if s in ('place','palace','india','palace_india'): return 'place_india'
-    if s in ('china','china town','chinatown'): return 'china_town'
-    return s or 'all'
-
-
-def _read_user_perms(uid: int, scope: str):
-    try:
-        k = f"user_perms:{scope}:{int(uid)}"
-        row = AppKV.query.filter_by(k=k).first()
-        if not row:
-            return {}
-        data = json.loads(row.v)
-        items = data.get('items') or []
-        out = {}
-        for it in items:
-            key = (it.get('screen_key') or '').strip()
-            if not key:
-                continue
-            out[key] = {
-                'view': bool(it.get('view')),
-                'add': bool(it.get('add')),
-                'edit': bool(it.get('edit')),
-                'delete': bool(it.get('delete')),
-                'print': bool(it.get('print')),
-            }
-        return out
-    except Exception:
-        return {}
-
-
-def user_can(screen: str, action: str = 'view', branch_scope: str = None) -> bool:
-    try:
-        if not getattr(current_user, 'is_authenticated', False):
-            return False
-        # Admin bypass
-        if getattr(current_user, 'username', '') == 'admin' or getattr(current_user, 'id', None) == 1:
-            return True
-        if getattr(current_user, 'role', '') == 'admin':
-            return True
-        scopes = []
-        if branch_scope:
-            scopes = [_normalize_scope(branch_scope), 'all']
-        else:
-            scopes = ['all']
-        for sc in scopes:
-            perms = _read_user_perms(current_user.id, sc)
-            scr = perms.get(screen)
-            if scr and scr.get(action):
-                return True
-        return False
-    except Exception:
-        return False
-
-
+# Phase 2: shared helpers from routes.common (no accounts/settings/permissions here)
+from routes.common import kv_get, kv_set, BRANCH_LABELS, safe_table_number, user_can
 
 # Safe helper: current time in Saudi Arabia timezone
 try:
@@ -165,41 +78,6 @@ def _set_table_status_concurrent(branch_code: str, table_number: str, status: st
         # Do not propagate table-status errors to main flow
         try: db.session.rollback()
         except Exception: pass
-
-def kv_get(key, default=None):
-    rec = AppKV.query.filter_by(k=key).first()
-    if not rec:
-        return default
-    try:
-        return json.loads(rec.v)
-    except Exception:
-        return default
-
-def kv_set(key, value):
-    data = json.dumps(value or {})
-    rec = AppKV.query.filter_by(k=key).first()
-    if rec:
-        rec.v = data
-    else:
-        rec = AppKV(k=key, v=data)
-        db.session.add(rec)
-    db.session.commit()
-
-@main.route('/api/purchase-categories', methods=['GET'])
-def api_purchase_categories():
-    try:
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        data_path = os.path.join(base_dir, 'data', 'purchase_categories.json')
-        with open(data_path, 'r', encoding='utf-8') as f:
-            payload = json.load(f)
-        return jsonify(payload)
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return jsonify({'error': str(e), 'purchase_categories': []}), 500
-
 
 # Ensure tables exist (safe for first runs) and seed a demo menu if empty
 _DEF_MENU = {
@@ -412,32 +290,6 @@ def seed_menu_if_empty():
             for nm, pr in items:
                 db.session.add(MenuItem(name=nm, price=float(pr), category_id=cat.id))
         db.session.commit()
-        try:
-            total_amt = float(inv.total_after_tax_discount or 0.0)
-            db.session.add(Payment(
-                invoice_id=inv.id,
-                invoice_type='sales',
-                amount_paid=total_amt,
-                payment_method=(payment_method or '').lower() or 'cash',
-                payment_date=get_saudi_now()
-            ))
-            inv.status = 'paid'
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-        try:
-            total_amt = float(inv.total_after_tax_discount or 0.0)
-            db.session.add(Payment(
-                invoice_id=inv.id,
-                invoice_type='sales',
-                amount_paid=total_amt,
-                payment_method=(payment_method or '').lower() or 'cash',
-                payment_date=get_saudi_now()
-            ))
-            inv.status = 'paid'
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
     except Exception:
         db.session.rollback()
         # ignore seed errors in production path
@@ -469,24 +321,14 @@ def _bool(v):
 def api_coa_get():
     try:
         ensure_account_extended_columns()
-        from models import Account
-        rows = Account.query.order_by(Account.code.asc()).all()
-        out = []
-        for a in rows:
-            out.append({
-                'account_code': getattr(a,'code',None),
-                'account_name_ar': getattr(a,'name_ar',None),
-                'account_name_en': getattr(a,'name_en',None),
-                'account_type': getattr(a,'type',None),
-                'level': getattr(a,'level',None),
-                'parent_account_code': getattr(a,'parent_account_code',None),
-                'allow_opening_balance': bool(getattr(a,'allow_opening_balance', True)),
-                'vat_link_code': getattr(a,'vat_link_code',None),
-                'pos_mapping_key': getattr(a,'pos_mapping_key',None),
-                'inventory_link': bool(getattr(a,'inventory_link', False)),
-                'depreciation_policy_id': getattr(a,'depreciation_policy_id',None),
-                'notes': getattr(a,'notes',None),
-            })
+        from utils.cache_helpers import get_cached_coa
+        out = get_cached_coa()
+        if out is None:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return jsonify({'ok': False, 'error': 'Failed to load COA'}), 500
         return jsonify({'ok': True, 'accounts': out})
     except Exception as e:
         try:
@@ -610,6 +452,11 @@ def api_coa_import():
             db.session.flush()
             created += 1
         db.session.commit()
+        try:
+            from utils.cache_helpers import invalidate_coa_cache
+            invalidate_coa_cache()
+        except Exception:
+            pass
         return jsonify({'ok': True, 'created': created, 'updated': updated, 'duplicates_skipped': len(duplicates)})
     except Exception as e:
         try:
@@ -1041,47 +888,8 @@ def logout():
 @main.route('/dashboard', endpoint='dashboard')
 @login_required
 def dashboard():
-    try:
-        from sqlalchemy import func
-        from models import SalesInvoice
-        from models import get_saudi_now
-        today = get_saudi_now().date()
-
-        q = SalesInvoice.query.with_entities(
-            func.coalesce(func.count(SalesInvoice.id), 0).label('cnt'),
-            func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('sum'),
-            func.coalesce(func.avg(SalesInvoice.total_after_tax_discount), 0).label('avg'),
-        ).filter(SalesInvoice.date == today)
-        row = q.first()
-
-        orders_count = int(row.cnt or 0)
-        total_earnings = float(row.sum or 0)
-        avg_order_value = float(row.avg or 0)
-
-        if orders_count == 0:
-            from datetime import timedelta
-            start_dt = today - timedelta(days=30)
-            row2 = SalesInvoice.query.with_entities(
-                func.coalesce(func.count(SalesInvoice.id), 0).label('cnt'),
-                func.coalesce(func.sum(SalesInvoice.total_after_tax_discount), 0).label('sum'),
-                func.coalesce(func.avg(SalesInvoice.total_after_tax_discount), 0).label('avg'),
-            ).filter(SalesInvoice.date.between(start_dt, today)).first()
-            orders_count = int((row2.cnt or 0))
-            total_earnings = float(row2.sum or 0)
-            avg_order_value = float(row2.avg or 0)
-
-        stats = {
-            'orders_count': orders_count,
-            'total_earnings': total_earnings,
-            'avg_order_value': avg_order_value,
-        }
-    except Exception as e:
-        # Log the error for debugging
-        import traceback
-        print(f"Error in dashboard function: {e}")
-        traceback.print_exc()
-        stats = {'orders_count': 0, 'total_earnings': 0.0, 'avg_order_value': 0.0}
-    return render_template('dashboard.html', stats=stats)
+    # Hub only: no heavy queries. Dashboard = gateway via cards.
+    return render_template('dashboard.html')
 
 # Orders Invoices screen
 @main.route('/orders', endpoint='order_invoices_list')
@@ -1159,2000 +967,6 @@ def order_invoices_clear_all():
         flash('فشل حذف فواتير الطلبات', 'danger')
     return redirect(url_for('main.order_invoices_list'))
 
-@main.route('/sales', endpoint='sales')
-@login_required
-def sales():
-    # Modern flow: show branches, then tables, then table invoice
-    branches = [
-        {'code': 'china_town', 'label': 'CHINA TOWN', 'url': url_for('main.sales_tables', branch_code='china_town')},
-        {'code': 'place_india', 'label': 'PALACE INDIA', 'url': url_for('main.sales_tables', branch_code='place_india')},
-    ]
-    # Filter branches by user permissions (allow via specific branch or global 'all')
-    branches = [b for b in branches if user_can('sales', 'view', b['code'])]
-    return render_template('sales_branches.html', branches=branches)
-
-@main.route('/purchases', methods=['GET','POST'], endpoint='purchases')
-@login_required
-def purchases():
-    warmup_db_once()
-    # Prepare form and lists
-    form = PurchaseInvoiceForm()
-    try:
-        if not form.date.data:
-            form.date.data = get_saudi_now().date()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        pass
-    suppliers = []
-    try:
-        if 'Supplier' in globals():
-            suppliers = Supplier.query.order_by(Supplier.name.asc()).all()
-    except Exception:
-        suppliers = []
-    suppliers_json = []
-    for s in suppliers:
-        cr = getattr(s, 'cr_number', None)
-        iban = getattr(s, 'iban', None)
-        if (not cr or not iban):
-            try:
-                notes = (getattr(s, 'notes', '') or '')
-                if notes:
-                    for part in notes.split('|'):
-                        p = (part or '').strip()
-                        if (not cr) and p[:3].upper() == 'CR:':
-                            cr = p[3:].strip()
-                        if (not iban) and p[:5].upper() == 'IBAN:':
-                            iban = p[5:].strip()
-            except Exception:
-                pass
-        suppliers_json.append({
-            'id': s.id,
-            'name': s.name,
-            'phone': getattr(s, 'phone', None),
-            'tax_number': getattr(s, 'tax_number', None),
-            'address': getattr(s, 'address', None),
-            'cr_number': cr,
-            'iban': iban,
-            'active': getattr(s, 'active', True),
-        })
-    # Ensure RawMaterial table contains bilingual items from purchase_categories
-    try:
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        data_path = os.path.join(base_dir, 'data', 'purchase_categories.json')
-        if os.path.exists(data_path):
-            with open(data_path, 'r', encoding='utf-8') as f:
-                payload = json.load(f)
-            pcs = payload.get('purchase_categories') or []
-            existing = RawMaterial.query.all() if 'RawMaterial' in globals() else []
-            # Build lookup by name and by name_ar (lowercased)
-            name_lut = { (getattr(m,'name','') or '').strip().lower(): m for m in existing }
-            ar_lut = { (getattr(m,'name_ar','') or '').strip().lower(): m for m in existing }
-            def bi(sen, sar):
-                sen = (sen or '').strip()
-                sar = (sar or '').strip()
-                if sen and sar:
-                    return f"{sen} / {sar}"
-                return sen or sar
-            def _map_unit(nm):
-                s = (nm or '').strip().lower()
-                if any(k in s for k in ['meat','beef','lamb','chicken','fish','seafood','لحم','بقر','غنم','دجاج','سمك','بحرية']):
-                    return 'kg'
-                if any(k in s for k in ['vegetable','veg','greens','herb','خضار','أعشاب']):
-                    return 'kg'
-                if any(k in s for k in ['spice','spices','powder','tea','coffee','بهار','بهارات','بودرة','شاي','قهوة']):
-                    return 'gram'
-                if any(k in s for k in ['oil','sauce','liquid','milk','drink','juice','زيت','صلصة','سائل','حليب','مشروب','عصير']):
-                    return 'liter'
-                if any(k in s for k in ['rice','grain','pulses','lentil','flour','sugar','salt','أرز','حبوب','بقول','عدس','طحين','سكر','ملح']):
-                    return 'kg'
-                return 'piece'
-            for cat in pcs:
-                subs = cat.get('subcategories') or []
-                for sub in subs:
-                    nm = sub.get('name') or {}
-                    items = sub.get('items') or []
-                    for it in items:
-                        if isinstance(it, dict):
-                            en = (it.get('en') or '').strip()
-                            ar = (it.get('ar') or '').strip()
-                        else:
-                            # if string, use as both
-                            en = str(it).strip()
-                            ar = str(it).strip()
-                        disp = bi(en, ar)
-                        key_en = disp.strip().lower()
-                        key_ar = ar.strip().lower()
-                        rm = name_lut.get(key_en) or ar_lut.get(key_ar)
-                        if not rm:
-                            try:
-                                cat_name = bi((nm.get('en') if isinstance(nm, dict) else str(nm)), (nm.get('ar') if isinstance(nm, dict) else str(nm)))
-                                unit = _map_unit(cat_name)
-                                rm = RawMaterial(
-                                    name=disp,
-                                    name_ar=ar or None,
-                                    unit=unit,
-                                    cost_per_unit=0,
-                                    category=cat_name,
-                                )
-                                db.session.add(rm)
-                                db.session.flush()
-                                name_lut[key_en] = rm
-                                if key_ar:
-                                    ar_lut[key_ar] = rm
-                            except Exception:
-                                try:
-                                    db.session.rollback()
-                                except Exception:
-                                    pass
-            try:
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-    except Exception:
-        pass
-
-    try:
-        materials = RawMaterial.query.filter_by(active=True).order_by(RawMaterial.name.asc()).all() if 'RawMaterial' in globals() else []
-    except Exception:
-        materials = []
-    materials_json = []
-    for m in materials:
-        name = m.name
-        materials_json.append({
-            'id': m.id,
-            'name': name,
-            'unit': m.unit,
-            'cost_per_unit': float(m.cost_per_unit or 0),
-            'stock_quantity': float(m.stock_quantity or 0),
-            'category': getattr(m, 'category', None) or '',
-        })
-
-    if request.method == 'POST':
-        pm = (request.form.get('payment_method') or 'cash').strip().lower()
-        date_str = request.form.get('date') or get_saudi_now().date().isoformat()
-        inv_type = (request.form.get('invoice_type') or 'VAT').strip().upper()
-        supplier_name = (request.form.get('supplier_name') or '').strip() or None
-        supplier_free = (request.form.get('supplier_name_free') or '').strip()
-        if inv_type == 'NO_VAT' and supplier_free:
-            supplier_name = supplier_free
-        supplier_id = request.form.get('supplier_id', type=int)
-        supplier_invoice_number = (request.form.get('supplier_invoice_number') or '').strip()
-        notes_val = (request.form.get('notes') or '').strip()
-        try:
-            inv = PurchaseInvoice(
-                invoice_number=f"INV-PUR-{get_saudi_now().year}-{(PurchaseInvoice.query.count()+1):04d}",
-                date=datetime.strptime(date_str, '%Y-%m-%d').date(),
-                supplier_name=supplier_name,
-                supplier_id=supplier_id,
-                payment_method=pm,
-                user_id=getattr(current_user, 'id', 1)
-            )
-            try:
-                inv.supplier_invoice_number = supplier_invoice_number
-                inv.notes = notes_val
-            except Exception:
-                pass
-            inv.status = (request.form.get('status') or (getattr(PurchaseInvoice, 'status', None) and 'unpaid') or 'unpaid').strip().lower()
-            if inv.status not in ('paid','partial','unpaid'):
-                inv.status = 'unpaid'
-            # Initialize totals; will be computed from items below
-            inv.total_before_tax = 0.0
-            inv.tax_amount = 0.0
-            inv.discount_amount = 0.0
-            inv.total_after_tax_discount = 0.0
-            if ext_db is not None:
-                ext_db.session.add(inv); ext_db.session.commit()
-            else:
-                db.session.add(inv); db.session.commit()
-        except Exception as e:
-            if ext_db is not None:
-                ext_db.session.rollback()
-            else:
-                db.session.rollback()
-            flash(f'Could not save purchase invoice: {e}', 'danger')
-            return redirect(url_for('main.purchases'))
-
-        # Save posted purchase items and update inventory
-        try:
-            from decimal import Decimal
-            def _to_ascii_digits(s):
-                try:
-                    if s is None:
-                        return ''
-                    s = str(s)
-                    # Arabic-Indic and Persian digits to ASCII
-                    trans = str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789')
-                    s = s.translate(trans)
-                    # Arabic decimal separator
-                    s = s.replace('٫', '.')
-                    s = s.replace('،', '.')
-                    return s
-                except Exception:
-                    return str(s or '')
-            idxs = set()
-            for k in request.form.keys():
-                if k.startswith('items-') and k.endswith('-raw_material_id'):
-                    try:
-                        idxs.add(int(k.split('-')[1]))
-                    except Exception:
-                        pass
-            total_before_tax_dec = Decimal('0')
-            total_tax_dec = Decimal('0')
-            total_discount_dec = Decimal('0')
-            items_saved = 0
-            VAT_RATE = Decimal('0.15') if inv_type == 'VAT' else Decimal('0')
-            for i in sorted(idxs):
-                try:
-                    rm_id = int(request.form.get(f'items-{i}-raw_material_id') or 0)
-                except Exception:
-                    rm_id = 0
-                qty_raw = _to_ascii_digits(request.form.get(f'items-{i}-quantity'))
-                price_raw = _to_ascii_digits(request.form.get(f'items-{i}-price_before_tax'))
-                disc_raw = _to_ascii_digits(request.form.get(f'items-{i}-discount'))
-                try:
-                    qty = Decimal(str(qty_raw)) if (qty_raw not in (None, '')) else Decimal('0')
-                except Exception:
-                    qty = Decimal('0')
-                try:
-                    unit_price = Decimal(str(price_raw)) if (price_raw not in (None, '')) else Decimal('0')
-                except Exception:
-                    unit_price = Decimal('0')
-                try:
-                    disc = Decimal(str(disc_raw)) if (disc_raw not in (None, '')) else Decimal('0')
-                except Exception:
-                    disc = Decimal('0')
-                if rm_id and qty > 0:
-                    raw_material = RawMaterial.query.get(rm_id)
-                    if raw_material:
-                        line_base = (qty * unit_price) - disc
-                        if line_base < 0:
-                            line_base = Decimal('0')
-                        line_tax = (line_base * VAT_RATE) if VAT_RATE > 0 else Decimal('0')
-                        line_total = line_base + line_tax
-                        prev_qty = Decimal(str(raw_material.stock_quantity or 0))
-                        prev_cost = Decimal(str(raw_material.cost_per_unit or 0))
-                        new_total_qty = prev_qty + qty
-                        if new_total_qty > 0:
-                            new_total_cost = (prev_cost * prev_qty) + (unit_price * qty)
-                            raw_material.cost_per_unit = (new_total_cost / new_total_qty).quantize(Decimal('0.0001'))
-                            raw_material.stock_quantity = new_total_qty
-                        else:
-                            raw_material.stock_quantity = prev_qty + qty
-                        inv_item = PurchaseInvoiceItem(
-                            invoice_id=inv.id,
-                            raw_material_id=raw_material.id,
-                            raw_material_name=getattr(raw_material, 'display_name', raw_material.name),
-                            quantity=float(qty),
-                            price_before_tax=float(unit_price),
-                            tax=float(line_tax),
-                            discount=float(disc),
-                            total_price=float(line_total)
-                        )
-                        db.session.add(inv_item)
-                        total_before_tax_dec += line_base
-                        total_tax_dec += line_tax
-                        total_discount_dec += disc
-                        items_saved += 1
-            inv.total_before_tax = float(total_before_tax_dec)
-            inv.tax_amount = float(total_tax_dec)
-            inv.discount_amount = float(total_discount_dec)
-            inv.total_after_tax_discount = float(total_before_tax_dec + total_tax_dec - total_discount_dec)
-            if items_saved > 0:
-                try:
-                    inv.notes = ((inv.notes or '') + f" | ITEMS:{items_saved}").strip(' |')
-                except Exception:
-                    pass
-            db.session.commit()
-        except Exception as e:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            flash(f'Failed to save purchase items: {e}', 'warning')
-
-        # Auto-create payment and ledger outside main try
-        st = (getattr(inv, 'status', '') or '').lower()
-        total_amt = float(inv.total_after_tax_discount or 0.0)
-        base_amt = float(getattr(inv, 'total_before_tax', 0) or 0.0) - float(getattr(inv, 'discount_amount', 0) or 0.0)
-        tax_amt = float(getattr(inv, 'tax_amount', 0) or 0.0)
-        extra = []
-        if supplier_invoice_number:
-            extra.append(f"SUPREF:{supplier_invoice_number}")
-        if notes_val:
-            extra.append(f"NOTE:{notes_val[:50]}")
-        ref = f"PUR {inv.invoice_number}" + ((' ' + ' '.join(extra)) if extra else '')
-        production_flag = ((request.form.get('production_flag') or '').strip().lower() in ('1','true','yes','on'))
-        inv_kind = (request.form.get('inventory_kind') or '').strip().upper()
-        inv_acc = '1020' if inv_kind == 'FOOD' else ('1025' if inv_kind == 'OTHER' else None)
-        debit_code = None
-        if inv_type == 'VAT':
-            debit_code = inv_acc if production_flag and inv_acc else '5000'
-        else:
-            debit_code = inv_acc if production_flag and inv_acc else 'COGS'
-        if debit_code:
-            # Use resolved COA mapping for debit
-            nm = CHART_OF_ACCOUNTS.get(debit_code, {}).get('name', 'Purchases/COGS')
-            tp = CHART_OF_ACCOUNTS.get(debit_code, {}).get('type', 'expense')
-            _post_ledger(inv.date, debit_code, nm, tp, base_amt, 0.0, ref)
-        if tax_amt > 0:
-            _post_ledger(inv.date, 'VAT_IN', 'VAT Input', 'tax', tax_amt, 0.0, ref)
-        _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', 0.0, base_amt + tax_amt, ref)
-        if st == 'paid' and total_amt > 0:
-            db.session.add(Payment(invoice_id=inv.id, invoice_type='purchase', amount_paid=total_amt, payment_method=(pm or 'CASH').upper()))
-            db.session.commit()
-            cash_acc = _pm_account(pm)
-            _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', total_amt, 0.0, f'PAY PUR {inv.invoice_number}')
-            if cash_acc:
-                _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', 0.0, total_amt, f'PAY PUR {inv.invoice_number}')
-                try:
-                    if (pm or '').strip().lower() == 'bank':
-                        fee = round(total_amt * 0.02, 2)
-                        if fee > 0:
-                            _post_ledger(inv.date, '5025', 'عمولات بنكية', 'expense', fee, 0.0, f'BANK FEE {inv.invoice_number}')
-                            _post_ledger(inv.date, '1010', 'البنك', 'asset', 0.0, fee, f'BANK FEE {inv.invoice_number}')
-                except Exception:
-                    pass
-        elif st == 'partial':
-            amt_raw = request.form.get('partial_paid_amount')
-            amt = float(amt_raw or 0.0)
-            if total_amt > 0 and amt > 0:
-                if amt > total_amt:
-                    amt = total_amt
-                db.session.add(Payment(invoice_id=inv.id, invoice_type='purchase', amount_paid=amt, payment_method=(pm or 'CASH').upper()))
-                db.session.commit()
-                cash_acc = _pm_account(pm)
-                _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', amt, 0.0, f'PAY PUR {inv.invoice_number}')
-                if cash_acc:
-                    _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', 0.0, amt, f'PAY PUR {inv.invoice_number}')
-                    try:
-                        if (pm or '').strip().lower() == 'bank':
-                            fee = round(amt * 0.02, 2)
-                            if fee > 0:
-                                _post_ledger(inv.date, '5025', 'عمولات بنكية', 'expense', fee, 0.0, f'BANK FEE {inv.invoice_number}')
-                                _post_ledger(inv.date, '1010', 'البنك', 'asset', 0.0, fee, f'BANK FEE {inv.invoice_number}')
-                    except Exception:
-                        pass
-        try:
-            _create_purchase_journal(inv)
-        except Exception:
-            pass
-        flash('Purchase invoice saved', 'success')
-        return redirect(url_for('main.purchases'))
-
-    return render_template('purchases.html', form=form, suppliers_list=suppliers, suppliers_json=suppliers_json, materials_json=materials_json)
-
-@main.route('/raw-materials', methods=['GET', 'POST'], endpoint='raw_materials')
-@login_required
-def raw_materials():
-    form = RawMaterialForm()
-    mode = (request.args.get('mode') or '').strip().lower()
-    if request.method == 'POST' and (request.form.get('action') or '') == 'bulk_update_quantities':
-        try:
-            mats = RawMaterial.query.filter_by(active=True).all()
-            for m in mats:
-                qv = request.form.get(f'qty_{int(m.id)}')
-                cv = request.form.get(f'cost_{int(m.id)}')
-                try:
-                    q = float(qv or 0)
-                except Exception:
-                    q = 0.0
-                try:
-                    c = float(cv or 0)
-                except Exception:
-                    c = 0.0
-                if q > 0:
-                    m.stock_quantity = float(m.stock_quantity or 0.0) + q
-                if c > 0:
-                    m.cost_per_unit = c
-            db.session.commit()
-            flash('تم تحديث الكميات بنجاح', 'success')
-        except Exception:
-            db.session.rollback()
-            flash('فشل تحديث الكميات', 'danger')
-        return redirect(url_for('main.raw_materials', mode='quantities'))
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
-            rm = RawMaterial(
-                name=form.name.data,
-                name_ar=form.name_ar.data,
-                unit=form.unit.data,
-                cost_per_unit=form.cost_per_unit.data,
-                category=form.category.data,
-            )
-            db.session.add(rm)
-            db.session.commit()
-            flash('تم حفظ المادة الخام بنجاح', 'success')
-            return redirect(url_for('main.raw_materials'))
-        except Exception as e:
-            db.session.rollback()
-            flash('فشل حفظ المادة الخام', 'danger')
-    materials = RawMaterial.query.filter_by(active=True).all()
-    return render_template('raw_materials.html', form=form, materials=materials, mode=mode)
-
-@main.route('/api/raw_materials', methods=['GET'], endpoint='api_raw_materials')
-@login_required
-def api_raw_materials():
-    try:
-        cat = (request.args.get('category') or '').strip()
-        mats_q = RawMaterial.query.filter_by(active=True)
-        if cat:
-            mats_q = mats_q.filter(RawMaterial.category == cat)
-        mats = mats_q.order_by(RawMaterial.name.asc()).all()
-        data = [
-            {
-                'id': int(m.id),
-                'name': (m.display_name if hasattr(m, 'display_name') else m.name),
-                'name_ar': (getattr(m, 'name_ar', '') or ''),
-                'unit': (m.unit or ''),
-                'stock_quantity': float(getattr(m, 'stock_quantity', 0.0) or 0.0),
-                'cost_per_unit': float(getattr(m, 'cost_per_unit', 0.0) or 0.0),
-                'category': (m.category or '')
-            }
-            for m in mats
-        ]
-        return jsonify({'ok': True, 'items': data})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@main.route('/api/raw_materials/categories', methods=['GET'], endpoint='api_raw_materials_categories')
-@login_required
-def api_raw_materials_categories():
-    try:
-        cats = db.session.query(RawMaterial.category).filter(RawMaterial.active == True).distinct().all()
-        items = [
-            {
-                'name': (c[0] or ''),
-                'label': (c[0] or '')
-            }
-            for c in cats if c and c[0]
-        ]
-        return jsonify({'ok': True, 'categories': items})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@main.route('/meals', methods=['GET', 'POST'], endpoint='meals')
-@login_required
-def meals():
-    # Build form and context similar to monolith, but within blueprint
-    raw_materials = RawMaterial.query.filter_by(active=True).all()
-    material_choices = [(m.id, m.display_name) for m in raw_materials]
-
-    form = MealForm()
-    # Ensure ingredient subforms have choices
-    for ingredient_form in form.ingredients:
-        ingredient_form.raw_material_id.choices = material_choices
-
-    materials_json = json.dumps([
-        {
-            'id': m.id,
-            'name': m.display_name,
-            'cost_per_unit': float(m.cost_per_unit),
-            'unit': m.unit,
-        }
-        for m in raw_materials
-    ])
-
-    if form.validate_on_submit():
-        try:
-            from decimal import Decimal
-            meal = Meal(
-                name=form.name.data,
-                name_ar=form.name_ar.data,
-                description=form.description.data,
-                category=form.category.data,
-                profit_margin_percent=form.profit_margin_percent.data,
-                user_id=current_user.id,
-            )
-            db.session.add(meal)
-            db.session.flush()  # get meal.id
-
-            total_cost = 0
-            # Parse dynamic ingredient rows from POST keys
-            idxs = set()
-            for k in request.form.keys():
-                if k.startswith('ingredients-') and k.endswith('-raw_material_id'):
-                    try:
-                        idxs.add(int(k.split('-')[1]))
-                    except Exception:
-                        pass
-            for i in sorted(idxs):
-                try:
-                    rm_id = int(request.form.get(f'ingredients-{i}-raw_material_id') or 0)
-                    qty_raw = request.form.get(f'ingredients-{i}-quantity')
-                    qty = Decimal(qty_raw) if qty_raw not in (None, '') else Decimal('0')
-                except Exception:
-                    rm_id, qty = 0, Decimal('0')
-                if rm_id and qty > 0:
-                    raw_material = RawMaterial.query.get(rm_id)
-                    if raw_material:
-                        ing = MealIngredient(meal_id=meal.id, raw_material_id=raw_material.id, quantity=qty)
-                        try:
-                            ing_cost = qty * raw_material.cost_per_unit
-                            ing.total_cost = ing_cost
-                        except Exception:
-                            ing.total_cost = 0
-                        db.session.add(ing)
-                        total_cost += float(ing.total_cost)
-
-            meal.total_cost = total_cost
-            meal.calculate_selling_price()
-            db.session.commit()
-            flash('تم إنشاء الوجبة بنجاح', 'success')
-            return redirect(url_for('main.meals'))
-        except Exception as e:
-            db.session.rollback()
-            flash('فشل حفظ الوجبة', 'danger')
-
-    all_meals = Meal.query.filter_by(active=True).all()
-    return render_template('meals.html', form=form, meals=all_meals, materials_json=materials_json)
-
-# -------- Meals import (Excel/CSV): Name, Name (Arabic), Selling Price --------
-@main.route('/meals/import', methods=['POST'], endpoint='meals_import')
-@login_required
-def meals_import():
-    import os, csv
-    from io import TextIOWrapper
-    file = request.files.get('file')
-    if not file or not file.filename:
-        flash('لم يتم اختيار ملف', 'warning')
-        return redirect(url_for('main.menu'))
-
-    # إن وُجد قسم حالي مرسل من النموذج نعيد التوجيه إليه بعد الاستيراد
-    cat_id = request.form.get('cat_id', type=int)
-
-    ext = os.path.splitext(file.filename)[1].lower()
-
-    def upsert_meal(name_en, name_ar, price_val):
-        name_en = (name_en or '').strip()
-        name_ar = (name_ar or '').strip() or None
-        try:
-            price = float(str(price_val).replace(',', '').strip()) if price_val is not None else 0.0
-        except Exception:
-            price = 0.0
-        # محاولة إيجاد وجبة موجودة بنفس الاسم (و/أو الاسم العربي)
-        existing = None
-        if name_en and name_ar:
-            existing = Meal.query.filter_by(name=name_en, name_ar=name_ar).first()
-        if not existing and name_en:
-            existing = Meal.query.filter_by(name=name_en).first()
-        if existing:
-            # تأكد من وجود user_id، ثم حدّث سعر البيع فقط
-            try:
-                if getattr(existing, 'user_id', None) is None:
-                    existing.user_id = current_user.id
-            except Exception:
-                pass
-            try:
-                existing.selling_price = price
-            except Exception:
-                pass
-            return existing
-        # إنشاء وجبة جديدة مع تعيين user_id
-        m = Meal(name=name_en or 'Unnamed', name_ar=name_ar, description=None, category=None, user_id=current_user.id)
-        try:
-            m.selling_price = price
-        except Exception:
-            pass
-        db.session.add(m)
-        return m
-
-    imported, errors = 0, 0
-
-    if ext == '.csv':
-        try:
-            stream = TextIOWrapper(file.stream, encoding='utf-8')
-            reader = csv.DictReader(stream)
-            def norm(s):
-                return (s or '').strip().lower()
-            for row in reader:
-                cols = {norm(k): v for k, v in row.items()}
-                name = cols.get('name') or cols.get('اسم') or cols.get('product')
-                name_ar = cols.get('name (arabic)') or cols.get('name_ar') or cols.get('arabic') or cols.get('الاسم العربي')
-                price = cols.get('selling price') or cols.get('price') or cols.get('السعر')
-                if not name and not name_ar:
-                    continue
-                try:
-                    upsert_meal(name, name_ar, price)
-                    imported += 1
-                except Exception:
-                    errors += 1
-            db.session.commit()
-            flash(f'تم استيراد {imported} وجبة بنجاح' + (f'، أخطاء: {errors}' if errors else ''), 'success')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'فشل استيراد CSV: {e}', 'danger')
-        return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
-
-    elif ext in ('.xlsx', '.xls'):
-        try:
-            try:
-                import openpyxl
-            except Exception:
-                flash('لا يمكن قراءة ملفات Excel بدون تثبيت openpyxl. يمكنك رفع CSV بدلاً من ذلك أو اسمح لي بتثبيت openpyxl.', 'warning')
-                return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
-            wb = openpyxl.load_workbook(file, data_only=True)
-            ws = wb.active
-            headers = []
-            for cell in next(ws.iter_rows(min_row=1, max_row=1, values_only=True)):
-                headers.append((cell or '').strip().lower())
-            index = {h: i for i, h in enumerate(headers)}
-            def get_val(row, keys):
-                for k in keys:
-                    if k in index:
-                        return row[index[k]]
-                return None
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                name = get_val(row, ['name', 'اسم'])
-                name_ar = get_val(row, ['name (arabic)', 'name_ar', 'arabic', 'الاسم العربي'])
-                price = get_val(row, ['selling price', 'price', 'السعر'])
-                if not name and not name_ar:
-                    continue
-                try:
-                    upsert_meal(name, name_ar, price)
-                    imported += 1
-                except Exception:
-                    errors += 1
-            db.session.commit()
-            flash(f'تم استيراد {imported} وجبة من Excel' + (f'، أخطاء: {errors}' if errors else ''), 'success')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'فشل استيراد Excel: {e}', 'danger')
-        return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
-
-    else:
-        flash('صيغة الملف غير مدعومة. الرجاء رفع ملف CSV أو Excel (.xlsx/.xls).', 'warning')
-        return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
-
-@main.route('/inventory', endpoint='inventory')
-@login_required
-def inventory():
-    from sqlalchemy import func
-    raw_materials = RawMaterial.query.filter_by(active=True).all()
-    meals = Meal.query.filter_by(active=True).all()
-
-    # Build inventory cost ledger from purchases
-    ledger_rows = []
-    try:
-        q = db.session.query(
-            PurchaseInvoiceItem.raw_material_id.label('rm_id'),
-            func.max(PurchaseInvoice.date).label('last_date'),
-            func.sum(PurchaseInvoiceItem.quantity).label('qty'),
-            func.sum(PurchaseInvoiceItem.total_price).label('total_cost')
-        ).join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-        q = q.group_by(PurchaseInvoiceItem.raw_material_id)
-        rm_map = {m.id: m for m in raw_materials}
-        for r in q.all():
-            rm = rm_map.get(int(r.rm_id)) if r.rm_id is not None else None
-            name = (rm.display_name if rm else '-')
-            unit = (rm.unit if rm else '-')
-            # Quantities and costs
-            qty = float(r.qty or 0)
-            total_cost = float(r.total_cost or 0)
-            avg_cost = (total_cost / qty) if qty else 0.0
-            # Current stock equals cumulative purchased quantity (no consumption tracking here)
-            current_stock = qty
-            stock_value = current_stock * avg_cost
-            ledger_rows.append({
-                'material': name,
-                'unit': unit,
-                'purchased_qty': qty,
-                'avg_cost': avg_cost,
-                'total_cost': total_cost,
-                'current_stock': current_stock,
-                'stock_value': stock_value,
-                'last_date': r.last_date.strftime('%Y-%m-%d') if r.last_date else ''
-            })
-        ledger_rows.sort(key=lambda x: (x['material'] or '').lower())
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        ledger_rows = []
-
-    purchases = []
-    try:
-        invs = PurchaseInvoice.query.order_by(PurchaseInvoice.id.desc()).limit(1000).all()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        invs = []
-    items_map = {}
-    try:
-        ids = [inv.id for inv in invs]
-        if ids:
-            rows = PurchaseInvoiceItem.query.filter(PurchaseInvoiceItem.invoice_id.in_(ids)).order_by(PurchaseInvoiceItem.id.asc()).all()
-            for it in rows:
-                items_map.setdefault(it.invoice_id, []).append(it)
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        items_map = {}
-    for inv in invs:
-        items_ctx = []
-        for it in items_map.get(inv.id, []):
-            items_ctx.append({
-                'name': it.raw_material_name,
-                'quantity': float(it.quantity or 0),
-                'price_before_tax': float(it.price_before_tax or 0),
-                'discount': float(it.discount or 0),
-                'tax': float(it.tax or 0),
-                'total_price': float(it.total_price or 0),
-            })
-        purchases.append({
-            'id': inv.id,
-            'invoice_number': inv.invoice_number,
-            'date': inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '',
-            'supplier_name': getattr(inv, 'supplier_name', '') or '',
-            'payment_method': (getattr(inv, 'payment_method', '') or '').upper(),
-            'status': getattr(inv, 'status', '') or '',
-            'total_before_tax': float(getattr(inv, 'total_before_tax', 0.0) or 0.0),
-            'tax_amount': float(getattr(inv, 'tax_amount', 0.0) or 0.0),
-            'discount_amount': float(getattr(inv, 'discount_amount', 0.0) or 0.0),
-            'total_after_tax_discount': float(getattr(inv, 'total_after_tax_discount', 0.0) or 0.0),
-            'items': items_ctx,
-        })
-    try:
-        today = get_saudi_now().date()
-        start_month = today.replace(day=1)
-        start_arg = (request.args.get('start_date') or '').strip()
-        end_arg = (request.args.get('end_date') or '').strip()
-        branch_arg = (request.args.get('branch') or '').strip()
-        def _parse_date(s):
-            try:
-                from datetime import datetime as _dt
-                return _dt.strptime(s, '%Y-%m-%d').date()
-            except Exception:
-                return None
-        start_period = _parse_date(start_arg) or start_month
-        end_period = _parse_date(end_arg) or today
-        def latest_cost_per_unit(rm_id: int):
-            try:
-                row = (
-                    db.session.query(PurchaseInvoiceItem.price_before_tax, PurchaseInvoice.date)
-                    .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                    .filter(PurchaseInvoiceItem.raw_material_id == rm_id)
-                    .order_by(PurchaseInvoice.date.desc(), PurchaseInvoiceItem.id.desc())
-                    .first()
-                )
-                if row and row[0] is not None:
-                    return float(row[0])
-            except Exception:
-                pass
-            try:
-                avg = (
-                    db.session.query(func.coalesce(func.avg(PurchaseInvoiceItem.price_before_tax), 0))
-                    .filter(PurchaseInvoiceItem.raw_material_id == rm_id)
-                    .scalar()
-                ) or 0
-                if float(avg) > 0:
-                    return float(avg)
-            except Exception:
-                pass
-            try:
-                rm = RawMaterial.query.get(int(rm_id))
-                return float(getattr(rm, 'cost_per_unit', 0) or 0)
-            except Exception:
-                return 0.0
-
-        total_inventory_cost = 0.0
-        for rm in (raw_materials or []):
-            unit_cost = latest_cost_per_unit(int(getattr(rm, 'id', 0) or 0))
-            qty = float(getattr(rm, 'stock_quantity', 0) or 0)
-            total_inventory_cost += unit_cost * qty
-
-        try:
-            total_purchases_month = float(
-                db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
-                .scalar() or 0
-            )
-        except Exception:
-            total_purchases_month = 0.0
-
-        try:
-            sales_invoices_q = (
-                db.session.query(SalesInvoice.id, SalesInvoice.date, SalesInvoice.total_after_tax_discount)
-                .filter(SalesInvoice.date >= start_period, SalesInvoice.date <= end_period)
-            )
-            if branch_arg:
-                sales_invoices_q = sales_invoices_q.filter(SalesInvoice.branch == branch_arg)
-            sales_invoice_ids = [int(r[0]) for r in sales_invoices_q.all()]
-            total_sales_revenue_month = float(
-                sum([float(r[2] or 0) for r in sales_invoices_q.all()])
-            )
-            sales_qty_rows = (
-                db.session.query(func.coalesce(func.sum(SalesInvoiceItem.quantity), 0))
-                .filter(SalesInvoiceItem.invoice_id.in_(sales_invoice_ids))
-                .scalar() or 0
-            )
-            total_meals_sold_month = float(sales_qty_rows or 0)
-        except Exception:
-            total_sales_revenue_month = 0.0
-            total_meals_sold_month = 0.0
-
-        meals_list = Meal.query.filter_by(active=True).all()
-        meal_by_name = { (getattr(m, 'name', '') or '').strip(): m for m in (meals_list or []) }
-        sales_qty_by_meal = {}
-        try:
-            rows = (
-                db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0))
-                .filter(SalesInvoiceItem.invoice_id.in_(sales_invoice_ids))
-                .group_by(SalesInvoiceItem.product_name)
-                .all()
-            )
-            for name, qty in (rows or []):
-                k = (name or '').strip()
-                sales_qty_by_meal[k] = float(qty or 0)
-        except Exception:
-            sales_qty_by_meal = {}
-
-        estimated_total_meal_cost = 0.0
-        meals_analysis = []
-        outdated_meals = []
-        sold_details_map = {}
-        def latest_purchase_date(rm_id: int):
-            try:
-                d = (
-                    db.session.query(PurchaseInvoice.date)
-                    .join(PurchaseInvoiceItem, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                    .filter(PurchaseInvoiceItem.raw_material_id == rm_id)
-                    .order_by(PurchaseInvoice.date.desc(), PurchaseInvoiceItem.id.desc())
-                    .first()
-                )
-                return d[0] if d and d[0] else None
-            except Exception:
-                return None
-        OUTDATED_DAYS = 60
-        for m_name, sold_qty in sales_qty_by_meal.items():
-            meal = meal_by_name.get(m_name)
-            if not meal:
-                continue
-            total_cost = 0.0
-            outdated_flag = False
-            try:
-                ingrs = MealIngredient.query.filter_by(meal_id=int(meal.id)).all()
-            except Exception:
-                ingrs = []
-            for ing in (ingrs or []):
-                unit_cost = latest_cost_per_unit(int(getattr(ing, 'raw_material_id', 0) or 0))
-                last_dt = latest_purchase_date(int(getattr(ing, 'raw_material_id', 0) or 0))
-                if not last_dt or (today - last_dt).days > OUTDATED_DAYS:
-                    outdated_flag = True
-                qty_needed = float(getattr(ing, 'quantity', 0) or 0)
-                total_cost += unit_cost * qty_needed * float(sold_qty or 0)
-            estimated_total_meal_cost += total_cost
-            revenue = float(getattr(meal, 'selling_price', 0) or 0) * float(sold_qty or 0)
-            profit = revenue - total_cost
-            meals_analysis.append({
-                'meal_name': m_name,
-                'sold_qty': float(sold_qty or 0),
-                'consumption_cost': float(total_cost or 0),
-                'revenue': float(revenue or 0),
-                'profit': float(profit or 0),
-            })
-            if outdated_flag:
-                outdated_meals.append(m_name)
-
-        try:
-            det_rows = (
-                db.session.query(
-                    SalesInvoiceItem.product_name,
-                    SalesInvoice.invoice_number,
-                    SalesInvoice.date,
-                    SalesInvoiceItem.quantity,
-                    SalesInvoiceItem.total_price,
-                    SalesInvoiceItem.price_before_tax
-                )
-                .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
-                .filter(SalesInvoiceItem.invoice_id.in_(sales_invoice_ids))
-                .filter((SalesInvoice.branch == branch_arg) if branch_arg else True)
-                .order_by(SalesInvoice.date.desc(), SalesInvoiceItem.id.desc())
-                .limit(1000)
-                .all()
-            )
-            for name, inv_no, dt, qty, total_p, unit_p in (det_rows or []):
-                key = (name or '').strip()
-                sold_details_map.setdefault(key, []).append({
-                    'invoice_number': inv_no,
-                    'date': (dt.isoformat() if dt else ''),
-                    'quantity': float(qty or 0),
-                    'unit_price': float(unit_p or 0),
-                    'total_price': float(total_p or 0),
-                })
-        except Exception:
-            sold_details_map = {}
-
-        total_profit_generated = float(total_sales_revenue_month or 0) - float(estimated_total_meal_cost or 0)
-
-        purchases_rows = []
-        try:
-            invs_m = (
-                PurchaseInvoice.query
-                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
-                .order_by(PurchaseInvoice.date.desc(), PurchaseInvoice.id.desc())
-                .limit(500)
-                .all()
-            )
-            for inv in (invs_m or []):
-                items_count = int(PurchaseInvoiceItem.query.filter_by(invoice_id=inv.id).count() or 0)
-                purchases_rows.append({
-                    'date': inv.date.isoformat() if getattr(inv, 'date', None) else '',
-                    'invoice_number': getattr(inv, 'invoice_number', ''),
-                    'supplier': getattr(inv, 'supplier_name', '') or '-',
-                    'payment_method': getattr(inv, 'payment_method', '') or '-',
-                    'status': getattr(inv, 'status', '') or '-',
-                    'subtotal': float(getattr(inv, 'total_before_tax', 0) or 0),
-                    'vat': float(getattr(inv, 'tax_amount', 0) or 0),
-                    'discount': float(getattr(inv, 'discount_amount', 0) or 0),
-                    'final_total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                    'items_count': items_count,
-                })
-        except Exception:
-            purchases_rows = []
-
-        top_ingredients = []
-        purchase_trend = []
-        try:
-            rows_t = (
-                db.session.query(PurchaseInvoiceItem.raw_material_name, func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0))
-                .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
-                .group_by(PurchaseInvoiceItem.raw_material_name)
-                .order_by(func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0).desc())
-                .limit(10)
-                .all()
-            )
-            top_ingredients = [{'name': n, 'total': float(t or 0)} for n, t in (rows_t or [])]
-            trows = (
-                db.session.query(PurchaseInvoice.date, func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
-                .group_by(PurchaseInvoice.date)
-                .order_by(PurchaseInvoice.date.asc())
-                .all()
-            )
-            purchase_trend = [{'date': (d.isoformat() if d else ''), 'total': float(t or 0)} for d, t in (trows or [])]
-        except Exception:
-            top_ingredients = []
-            purchase_trend = []
-        try:
-            trend_max_total = max([float(x.get('total') or 0) for x in (purchase_trend or [])]) if purchase_trend else 1.0
-        except Exception:
-            trend_max_total = 1.0
-        try:
-            top_total_max = max([float(x.get('total') or 0) for x in (top_ingredients or [])]) if top_ingredients else 1.0
-        except Exception:
-            top_total_max = 1.0
-
-        stock_rows = []
-        try:
-            p_qty_rows = (
-                db.session.query(PurchaseInvoiceItem.raw_material_id, func.coalesce(func.sum(PurchaseInvoiceItem.quantity), 0))
-                .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                .filter(PurchaseInvoice.date >= start_period, PurchaseInvoice.date <= end_period)
-                .group_by(PurchaseInvoiceItem.raw_material_id)
-                .all()
-            )
-            p_qty_map = {int(rm_id): float(qty or 0) for rm_id, qty in (p_qty_rows or []) if rm_id is not None}
-            usage_map = {}
-            for m in (meals_list or []):
-                sold = float(sales_qty_by_meal.get((getattr(m, 'name', '') or '').strip(), 0) or 0)
-                if sold <= 0:
-                    continue
-                ingrs = MealIngredient.query.filter_by(meal_id=int(m.id)).all()
-                for ing in (ingrs or []):
-                    usage_map[int(getattr(ing, 'raw_material_id', 0) or 0)] = usage_map.get(int(getattr(ing, 'raw_material_id', 0) or 0), 0.0) + (float(getattr(ing, 'quantity', 0) or 0) * sold)
-            for rm in (raw_materials or []):
-                rid = int(getattr(rm, 'id', 0) or 0)
-                opening_qty = float(getattr(rm, 'stock_quantity', 0) or 0)
-                purchases_qty = float(p_qty_map.get(rid, 0) or 0)
-                estimated_usage = float(usage_map.get(rid, 0) or 0)
-                expected_stock = max(opening_qty + purchases_qty - estimated_usage, 0.0)
-                risk = 'low' if expected_stock < max(1.0, opening_qty * 0.1) else ('excess' if purchases_qty > estimated_usage * 1.5 else 'ok')
-                stock_rows.append({
-                    'ingredient': rm.display_name,
-                    'opening_qty': opening_qty,
-                    'purchases_qty': purchases_qty,
-                    'estimated_usage': estimated_usage,
-                    'expected_stock': expected_stock,
-                    'risk': risk,
-                })
-        except Exception:
-            stock_rows = []
-
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return render_template(
-            'inventory.html',
-            raw_materials=raw_materials,
-            meals=meals,
-            ledger_rows=ledger_rows,
-            purchases=purchases,
-            _=(lambda s, **kw: s),
-            kpi={
-                'total_inventory_cost': float(total_inventory_cost or 0),
-                'total_purchases_month': float(total_purchases_month or 0),
-                'total_meals_sold_month': float(total_meals_sold_month or 0),
-                'estimated_total_meal_cost': float(estimated_total_meal_cost or 0),
-                'total_profit_generated': float(total_profit_generated or 0),
-            },
-            purchases_summary=purchases_rows,
-            top_ingredients=top_ingredients,
-            purchase_trend=purchase_trend,
-            trend_max_total=trend_max_total,
-            top_total_max=top_total_max,
-            meals_analysis=meals_analysis,
-            outdated_meals=outdated_meals,
-            sold_details_map=sold_details_map,
-            stock_rows=stock_rows,
-            branches=BRANCH_LABELS,
-            selected_branch=branch_arg,
-            start_date_val=start_period.isoformat() if start_period else '',
-            end_date_val=end_period.isoformat() if end_period else '',
-        )
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return render_template(
-            'inventory.html',
-            raw_materials=raw_materials,
-            meals=meals,
-            ledger_rows=ledger_rows,
-            purchases=purchases,
-            _=(lambda s, **kw: s),
-            kpi={
-                'total_inventory_cost': 0.0,
-                'total_purchases_month': 0.0,
-                'total_meals_sold_month': 0.0,
-                'estimated_total_meal_cost': 0.0,
-                'total_profit_generated': 0.0,
-            },
-            purchases_summary=[],
-            top_ingredients=[],
-            purchase_trend=[],
-            trend_max_total=1.0,
-            top_total_max=1.0,
-            meals_analysis=[],
-            outdated_meals=[],
-            sold_details_map={},
-            stock_rows=[],
-            branches=BRANCH_LABELS,
-            selected_branch='',
-            start_date_val='',
-            end_date_val='',
-        )
-
-@main.route('/inventory-intelligence', methods=['GET'], endpoint='inventory_intelligence')
-@login_required
-def inventory_intelligence():
-    try:
-        today = get_saudi_now().date()
-        start_month = today.replace(day=1)
-        def latest_cost_per_unit(rm_id: int):
-            try:
-                row = (
-                    db.session.query(PurchaseInvoiceItem.price_before_tax, PurchaseInvoice.date)
-                    .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                    .filter(PurchaseInvoiceItem.raw_material_id == rm_id)
-                    .order_by(PurchaseInvoice.date.desc(), PurchaseInvoiceItem.id.desc())
-                    .first()
-                )
-                if row and row[0] is not None:
-                    return float(row[0])
-            except Exception:
-                pass
-            try:
-                avg = (
-                    db.session.query(func.coalesce(func.avg(PurchaseInvoiceItem.price_before_tax), 0))
-                    .filter(PurchaseInvoiceItem.raw_material_id == rm_id)
-                    .scalar()
-                ) or 0
-                if float(avg) > 0:
-                    return float(avg)
-            except Exception:
-                pass
-            try:
-                rm = RawMaterial.query.get(int(rm_id))
-                return float(getattr(rm, 'cost_per_unit', 0) or 0)
-            except Exception:
-                return 0.0
-
-        raw_materials = RawMaterial.query.filter_by(active=True).all()
-        total_inventory_cost = 0.0
-        for rm in (raw_materials or []):
-            unit_cost = latest_cost_per_unit(int(getattr(rm, 'id', 0) or 0))
-            qty = float(getattr(rm, 'stock_quantity', 0) or 0)
-            total_inventory_cost += unit_cost * qty
-
-        try:
-            total_purchases_month = float(
-                db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
-                .scalar() or 0
-            )
-        except Exception:
-            total_purchases_month = 0.0
-
-        try:
-            sales_invoices_q = (
-                db.session.query(SalesInvoice.id, SalesInvoice.date, SalesInvoice.total_after_tax_discount)
-                .filter(SalesInvoice.date >= start_month, SalesInvoice.date <= today)
-            )
-            sales_invoice_ids = [int(r[0]) for r in sales_invoices_q.all()]
-            total_sales_revenue_month = float(
-                sum([float(r[2] or 0) for r in sales_invoices_q.all()])
-            )
-            sales_qty_rows = (
-                db.session.query(func.coalesce(func.sum(SalesInvoiceItem.quantity), 0))
-                .filter(SalesInvoiceItem.invoice_id.in_(sales_invoice_ids))
-                .scalar() or 0
-            )
-            total_meals_sold_month = float(sales_qty_rows or 0)
-        except Exception:
-            total_sales_revenue_month = 0.0
-            total_meals_sold_month = 0.0
-
-        meals = Meal.query.filter_by(active=True).all()
-        meal_by_name = { (getattr(m, 'name', '') or '').strip(): m for m in (meals or []) }
-        sales_qty_by_meal = {}
-        try:
-            rows = (
-                db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0))
-                .filter(SalesInvoiceItem.invoice_id.in_(sales_invoice_ids))
-                .group_by(SalesInvoiceItem.product_name)
-                .all()
-            )
-            for name, qty in (rows or []):
-                k = (name or '').strip()
-                sales_qty_by_meal[k] = float(qty or 0)
-        except Exception:
-            sales_qty_by_meal = {}
-
-        estimated_total_meal_cost = 0.0
-        meals_analysis = []
-        outdated_meals = []
-        def latest_purchase_date(rm_id: int):
-            try:
-                d = (
-                    db.session.query(PurchaseInvoice.date)
-                    .join(PurchaseInvoiceItem, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                    .filter(PurchaseInvoiceItem.raw_material_id == rm_id)
-                    .order_by(PurchaseInvoice.date.desc(), PurchaseInvoiceItem.id.desc())
-                    .first()
-                )
-                return d[0] if d and d[0] else None
-            except Exception:
-                return None
-        OUTDATED_DAYS = 60
-        for m_name, sold_qty in sales_qty_by_meal.items():
-            meal = meal_by_name.get(m_name)
-            if not meal:
-                continue
-            total_cost = 0.0
-            outdated_flag = False
-            try:
-                ingrs = MealIngredient.query.filter_by(meal_id=int(meal.id)).all()
-            except Exception:
-                ingrs = []
-            for ing in (ingrs or []):
-                unit_cost = latest_cost_per_unit(int(getattr(ing, 'raw_material_id', 0) or 0))
-                last_dt = latest_purchase_date(int(getattr(ing, 'raw_material_id', 0) or 0))
-                if not last_dt or (today - last_dt).days > OUTDATED_DAYS:
-                    outdated_flag = True
-                qty_needed = float(getattr(ing, 'quantity', 0) or 0)
-                total_cost += unit_cost * qty_needed * float(sold_qty or 0)
-            estimated_total_meal_cost += total_cost
-            revenue = float(getattr(meal, 'selling_price', 0) or 0) * float(sold_qty or 0)
-            profit = revenue - total_cost
-            meals_analysis.append({
-                'meal_name': m_name,
-                'sold_qty': float(sold_qty or 0),
-                'consumption_cost': float(total_cost or 0),
-                'revenue': float(revenue or 0),
-                'profit': float(profit or 0),
-            })
-            if outdated_flag:
-                outdated_meals.append(m_name)
-
-        total_profit_generated = float(total_sales_revenue_month or 0) - float(estimated_total_meal_cost or 0)
-
-        purchases_rows = []
-        try:
-            invs = (
-                PurchaseInvoice.query
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
-                .order_by(PurchaseInvoice.date.desc(), PurchaseInvoice.id.desc())
-                .limit(500)
-                .all()
-            )
-            for inv in (invs or []):
-                items_count = int(PurchaseInvoiceItem.query.filter_by(invoice_id=inv.id).count() or 0)
-                purchases_rows.append({
-                    'date': inv.date.isoformat() if getattr(inv, 'date', None) else '',
-                    'invoice_number': getattr(inv, 'invoice_number', ''),
-                    'supplier': getattr(inv, 'supplier_name', '') or '-',
-                    'payment_method': getattr(inv, 'payment_method', '') or '-',
-                    'status': getattr(inv, 'status', '') or '-',
-                    'subtotal': float(getattr(inv, 'total_before_tax', 0) or 0),
-                    'vat': float(getattr(inv, 'tax_amount', 0) or 0),
-                    'discount': float(getattr(inv, 'discount_amount', 0) or 0),
-                    'final_total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                    'items_count': items_count,
-                })
-        except Exception:
-            purchases_rows = []
-
-        # Top purchased ingredients and trend (this month)
-        top_ingredients = []
-        purchase_trend = []
-        try:
-            rows = (
-                db.session.query(PurchaseInvoiceItem.raw_material_name, func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0))
-                .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
-                .group_by(PurchaseInvoiceItem.raw_material_name)
-                .order_by(func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0).desc())
-                .limit(10)
-                .all()
-            )
-            top_ingredients = [{'name': n, 'total': float(t or 0)} for n, t in (rows or [])]
-            trows = (
-                db.session.query(PurchaseInvoice.date, func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
-                .group_by(PurchaseInvoice.date)
-                .order_by(PurchaseInvoice.date.asc())
-                .all()
-            )
-            purchase_trend = [{'date': (d.isoformat() if d else ''), 'total': float(t or 0)} for d, t in (trows or [])]
-        except Exception:
-            top_ingredients = []
-            purchase_trend = []
-
-        stock_rows = []
-        try:
-            p_qty_rows = (
-                db.session.query(PurchaseInvoiceItem.raw_material_id, func.coalesce(func.sum(PurchaseInvoiceItem.quantity), 0))
-                .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                .filter(PurchaseInvoice.date >= start_month, PurchaseInvoice.date <= today)
-                .group_by(PurchaseInvoiceItem.raw_material_id)
-                .all()
-            )
-            p_qty_map = {int(rm_id): float(qty or 0) for rm_id, qty in (p_qty_rows or []) if rm_id is not None}
-            usage_map = {}
-            for m in (meals or []):
-                sold = float(sales_qty_by_meal.get((getattr(m, 'name', '') or '').strip(), 0) or 0)
-                if sold <= 0:
-                    continue
-                ingrs = MealIngredient.query.filter_by(meal_id=int(m.id)).all()
-                for ing in (ingrs or []):
-                    usage_map[int(getattr(ing, 'raw_material_id', 0) or 0)] = usage_map.get(int(getattr(ing, 'raw_material_id', 0) or 0), 0.0) + (float(getattr(ing, 'quantity', 0) or 0) * sold)
-            for rm in (raw_materials or []):
-                rid = int(getattr(rm, 'id', 0) or 0)
-                opening_qty = float(getattr(rm, 'stock_quantity', 0) or 0)
-                purchases_qty = float(p_qty_map.get(rid, 0) or 0)
-                estimated_usage = float(usage_map.get(rid, 0) or 0)
-                expected_stock = max(opening_qty + purchases_qty - estimated_usage, 0.0)
-                risk = 'low' if expected_stock < max(1.0, opening_qty * 0.1) else ('excess' if purchases_qty > estimated_usage * 1.5 else 'ok')
-                stock_rows.append({
-                    'ingredient': rm.display_name,
-                    'opening_qty': opening_qty,
-                    'purchases_qty': purchases_qty,
-                    'estimated_usage': estimated_usage,
-                    'expected_stock': expected_stock,
-                    'risk': risk,
-                })
-        except Exception:
-            stock_rows = []
-
-        return render_template(
-            'inventory_intelligence.html',
-            kpi={
-                'total_inventory_cost': float(total_inventory_cost or 0),
-                'total_purchases_month': float(total_purchases_month or 0),
-                'total_meals_sold_month': float(total_meals_sold_month or 0),
-                'estimated_total_meal_cost': float(estimated_total_meal_cost or 0),
-                'total_profit_generated': float(total_profit_generated or 0),
-            },
-            purchases=purchases_rows,
-            top_ingredients=top_ingredients,
-            purchase_trend=purchase_trend,
-            meals_analysis=meals_analysis,
-            outdated_meals=outdated_meals,
-            stock_rows=stock_rows,
-        )
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        flash(f'فشل تحميل لوحة الذكاء: {e}', 'danger')
-        return redirect(url_for('main.inventory'))
-
-@main.route('/api/inventory/intelligence', methods=['GET'], endpoint='api_inventory_intelligence')
-@login_required
-def api_inventory_intelligence():
-    try:
-        import math
-        # Feature flag and access control
-        if not current_app.config.get('INVENTORY_INTEL_ENABLED', False):
-            return jsonify({"message": "⚠ Inventory Intelligence is disabled"}), 403
-        role = (getattr(current_user, 'role', '') or '').strip().lower()
-        username = (getattr(current_user, 'username', '') or '').strip().lower()
-        if role != 'admin' and username != 'admin' and getattr(current_user, 'id', None) != 1:
-            return jsonify({"error": "Access denied"}), 403
-
-        cost_method = (request.args.get('method') or 'avg').strip().lower()
-        locale = (request.args.get('locale') or 'ar').strip().lower()
-        sd = (request.args.get('start_date') or '').strip()
-        ed = (request.args.get('end_date') or '').strip()
-        today = get_saudi_now().date()
-        start_date = today.replace(day=1)
-        end_date = today
-        try:
-            if sd:
-                start_date = datetime.strptime(sd, '%Y-%m-%d').date()
-        except Exception:
-            start_date = today.replace(day=1)
-        try:
-            if ed:
-                end_date = datetime.strptime(ed, '%Y-%m-%d').date()
-        except Exception:
-            end_date = today
-
-        # If not preview mode, return lightweight KPI-only response
-        if (request.args.get('preview') or '').strip() != '1':
-            try:
-                month_purchases_total = float(
-                    db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0))
-                    .filter(PurchaseInvoice.date >= start_date, PurchaseInvoice.date <= end_date)
-                    .scalar() or 0
-                )
-            except Exception:
-                month_purchases_total = 0.0
-            try:
-                inv_ids = [int(r[0]) for r in db.session.query(SalesInvoice.id).filter(SalesInvoice.date >= start_date, SalesInvoice.date <= end_date).all()] or []
-                meals_sold = float(
-                    db.session.query(func.coalesce(func.sum(SalesInvoiceItem.quantity), 0))
-                    .filter(SalesInvoiceItem.invoice_id.in_(inv_ids) if inv_ids else text('1=0'))
-                    .scalar() or 0
-                )
-            except Exception:
-                meals_sold = 0.0
-            kpi = {
-                'total_inventory_value': 0.0,
-                'month_purchases_total': month_purchases_total,
-                'meals_sold': meals_sold,
-                'estimated_production_cost': 0.0,
-                'total_profit': 0.0,
-                'label_en': 'KPI Overview',
-                'label_ar': 'المؤشرات الرئيسية',
-                'note': 'Preview mode required for full analysis (use preview=1)'
-            }
-            return jsonify({
-                'kpi': kpi,
-                'purchases_summary': [],
-                'meal_analysis': [],
-                'stock_analysis': [],
-                'alerts': []
-            })
-
-        def latest_unit_cost_map():
-            rows = (
-                db.session.query(PurchaseInvoiceItem.raw_material_id, PurchaseInvoiceItem.price_before_tax, PurchaseInvoice.date)
-                .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                .order_by(PurchaseInvoiceItem.raw_material_id.asc(), PurchaseInvoice.date.desc(), PurchaseInvoiceItem.id.desc())
-                .all()
-            )
-            m = {}
-            seen = set()
-            for rid, price, dt in rows:
-                if rid is None:
-                    continue
-                if rid in seen:
-                    continue
-                m[int(rid)] = float(price or 0)
-                seen.add(int(rid))
-            return m
-
-        def avg_unit_cost_map():
-            rows = (
-                db.session.query(PurchaseInvoiceItem.raw_material_id, func.coalesce(func.sum(PurchaseInvoiceItem.quantity * PurchaseInvoiceItem.price_before_tax), 0), func.coalesce(func.sum(PurchaseInvoiceItem.quantity), 0))
-                .group_by(PurchaseInvoiceItem.raw_material_id)
-                .all()
-            )
-            m = {}
-            for rid, total_cost, total_qty in rows:
-                if rid is None:
-                    continue
-                denom = float(total_qty or 0)
-                m[int(rid)] = (float(total_cost or 0) / denom) if denom > 0 else 0.0
-            return m
-
-        def get_purchase_lots(rm_id: int):
-            lots = (
-                db.session.query(PurchaseInvoiceItem.quantity, PurchaseInvoiceItem.price_before_tax)
-                .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-                .filter(PurchaseInvoiceItem.raw_material_id == rm_id)
-                .order_by(PurchaseInvoice.date.asc(), PurchaseInvoiceItem.id.asc())
-                .all()
-            )
-            return [{'qty': float(q or 0), 'price': float(p or 0)} for q, p in (lots or [])]
-
-        def fifo_cost(usage_qty: float, lots: list):
-            remaining = float(usage_qty or 0)
-            cost = 0.0
-            for lot in lots:
-                if remaining <= 0:
-                    break
-                take = min(remaining, float(lot.get('qty') or 0))
-                cost += take * float(lot.get('price') or 0)
-                remaining -= take
-            return cost
-
-        latest_cost = latest_unit_cost_map()
-        avg_cost = avg_unit_cost_map()
-        cost_map = avg_cost if cost_method == 'fifo' and not avg_cost else (avg_cost if cost_method == 'avg' else latest_cost)
-
-        invs = (
-            db.session.query(PurchaseInvoice)
-            .filter(PurchaseInvoice.date >= start_date, PurchaseInvoice.date <= end_date)
-            .order_by(PurchaseInvoice.date.desc(), PurchaseInvoice.id.desc())
-            .limit(500)
-            .all()
-        )
-        purchases_summary = []
-        for inv in (invs or []):
-            items_count = int(PurchaseInvoiceItem.query.filter_by(invoice_id=inv.id).count() or 0)
-            purchases_summary.append({
-                'date': inv.date.isoformat() if getattr(inv, 'date', None) else '',
-                'invoice_no': getattr(inv, 'invoice_number', ''),
-                'supplier': getattr(inv, 'supplier_name', '') or '-',
-                'subtotal': float(getattr(inv, 'total_before_tax', 0) or 0),
-                'vat': float(getattr(inv, 'tax_amount', 0) or 0),
-                'discount': float(getattr(inv, 'discount_amount', 0) or 0),
-                'final_total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                'items_count': items_count,
-                'label_en': 'Purchases Summary',
-                'label_ar': 'ملخص المشتريات',
-            })
-
-        sales_ids = [int(r[0]) for r in (
-            db.session.query(SalesInvoice.id)
-            .filter(SalesInvoice.date >= start_date, SalesInvoice.date <= end_date)
-            .all()
-        )]
-
-        name_qty_rev = {}
-        if sales_ids:
-            rows = (
-                db.session.query(SalesInvoiceItem.product_name, func.coalesce(func.sum(SalesInvoiceItem.quantity), 0), func.coalesce(func.sum(SalesInvoiceItem.quantity * SalesInvoiceItem.price_before_tax), 0))
-                .filter(SalesInvoiceItem.invoice_id.in_(sales_ids))
-                .group_by(SalesInvoiceItem.product_name)
-                .all()
-            )
-            for name, qty, rev in (rows or []):
-                k = (name or '').strip()
-                name_qty_rev[k] = {'qty_sold': float(qty or 0), 'revenue': float(rev or 0)}
-
-        meals = Meal.query.filter_by(active=True).all()
-        def _norm_txt(x: str) -> str:
-            import unicodedata, re
-            t = (x or '').strip().lower()
-            t = t.translate(str.maketrans('٠١٢٣٤٥٦٧٨٩٬٫', '0123456789,.'))
-            repl = {'أ':'ا','إ':'ا','آ':'ا','ى':'ي','ؤ':'و','ئ':'ي','ة':'ه'}
-            t = ''.join(repl.get(ch, ch) for ch in t)
-            t = unicodedata.normalize('NFD', t)
-            t = ''.join(ch for ch in t if unicodedata.category(ch) != 'Mn')
-            t = re.sub(r"[^0-9a-z\u0621-\u064A ]+", " ", t)
-            t = re.sub(r"\s+", " ", t).strip()
-            return t
-        def _meal_index(meals_list):
-            idx = {}
-            for m in (meals_list or []):
-                n1 = (getattr(m, 'name', '') or '').strip()
-                n2 = (getattr(m, 'name_ar', '') or '').strip()
-                if n1:
-                    idx[_norm_txt(n1)] = m
-                if n2:
-                    idx[_norm_txt(n2)] = m
-                dn = (getattr(m, 'display_name', '') or '').strip()
-                if dn:
-                    for part in [p.strip() for p in dn.split('/') if p.strip()]:
-                        idx[_norm_txt(part)] = m
-            return idx
-        _idx = _meal_index(meals)
-        from difflib import SequenceMatcher
-        def _resolve_meal(name):
-            if not (name or '').strip():
-                return None
-            q = _norm_txt(name)
-            m = _idx.get(q)
-            if m:
-                return m
-            best = None
-            best_score = 0.0
-            for k, mv in _idx.items():
-                r = SequenceMatcher(None, q, k).ratio()
-                if r > best_score:
-                    best = mv
-                    best_score = r
-            if best_score >= 0.86:
-                return best
-            tokens_q = set(q.split())
-            for k, mv in _idx.items():
-                toks_k = set(k.split())
-                inter = len(tokens_q & toks_k)
-                base = max(len(tokens_q), 1)
-                if base > 0 and (inter / base) >= 0.7:
-                    return mv
-            return None
-        meal_analysis = []
-        total_profit = 0.0
-        for m_name, s in name_qty_rev.items():
-            meal = _resolve_meal(m_name)
-            if not meal:
-                continue
-            ingrs = MealIngredient.query.filter_by(meal_id=int(meal.id)).all()
-            cost_val = 0.0
-            for ing in (ingrs or []):
-                rid = int(getattr(ing, 'raw_material_id', 0) or 0)
-                usage = float(s['qty_sold'] or 0) * float(getattr(ing, 'quantity', 0) or 0)
-                if cost_method == 'fifo':
-                    cost_val += fifo_cost(usage, get_purchase_lots(rid))
-                else:
-                    unit_cost = float(cost_map.get(rid, latest_cost.get(rid, 0)) or 0)
-                    cost_val += usage * unit_cost
-            revenue = float(s['revenue'] or 0)
-            profit = revenue - cost_val
-            total_profit += profit
-            meal_analysis.append({
-                'meal_id': int(getattr(meal, 'id', 0) or 0),
-                'meal_name': m_name,
-                'qty_sold': float(s['qty_sold'] or 0),
-                'consumption_cost': float(cost_val or 0),
-                'revenue': float(revenue or 0),
-                'profit': float(profit or 0),
-            })
-        for m in meal_analysis:
-            rev = float(m.get('revenue') or 0)
-            prof = float(m.get('profit') or 0)
-            m['margin_pct'] = (prof / rev) if rev > 0 else 0.0
-            m['contribution_pct'] = (prof / total_profit) if total_profit > 0 else 0.0
-
-        usage_map = {}
-        for m_name, s in name_qty_rev.items():
-            meal = _resolve_meal(m_name)
-            if not meal:
-                continue
-            ingrs = MealIngredient.query.filter_by(meal_id=int(meal.id)).all()
-            for ing in (ingrs or []):
-                rid = int(getattr(ing, 'raw_material_id', 0) or 0)
-                usage_map[rid] = usage_map.get(rid, 0.0) + (float(s['qty_sold'] or 0) * float(getattr(ing, 'quantity', 0) or 0))
-
-        opening_map = {int(getattr(rm, 'id', 0) or 0): float(getattr(rm, 'stock_quantity', 0) or 0) for rm in RawMaterial.query.filter_by(active=True).all()}
-        p_qty_rows = (
-            db.session.query(PurchaseInvoiceItem.raw_material_id, func.coalesce(func.sum(PurchaseInvoiceItem.quantity), 0))
-            .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-            .filter(PurchaseInvoice.date >= start_date, PurchaseInvoice.date <= end_date)
-            .group_by(PurchaseInvoiceItem.raw_material_id)
-            .all()
-        )
-        purchases_qty = {int(rm_id): float(qty or 0) for rm_id, qty in (p_qty_rows or []) if rm_id is not None}
-        last_batch_rows = (
-            db.session.query(PurchaseInvoiceItem.raw_material_id, PurchaseInvoiceItem.quantity)
-            .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-            .order_by(PurchaseInvoiceItem.raw_material_id.asc(), PurchaseInvoice.date.desc(), PurchaseInvoiceItem.id.desc())
-            .all()
-        )
-        last_batch_qty = {}
-        seen = set()
-        for rid, q in (last_batch_rows or []):
-            if rid is None:
-                continue
-            if int(rid) in seen:
-                continue
-            last_batch_qty[int(rid)] = float(q or 0)
-            seen.add(int(rid))
-
-        stock_analysis = []
-        for rid in set(list(opening_map.keys()) + list(purchases_qty.keys()) + list(usage_map.keys())):
-            opening_qty = float(opening_map.get(rid, 0) or 0)
-            purchases_q = float(purchases_qty.get(rid, 0) or 0)
-            usage_q = float(usage_map.get(rid, 0) or 0)
-            expected = opening_qty + purchases_q - usage_q
-            last_q = float(last_batch_qty.get(rid, 0) or 0)
-            thr = last_q * 0.10
-            risk = 'ok'
-            if expected < 0:
-                risk = 'negative'
-            elif expected <= thr:
-                risk = 'low'
-            stock_analysis.append({
-                'ingredient_id': rid,
-                'opening_qty': opening_qty,
-                'purchases_qty': purchases_q,
-                'estimated_usage': usage_q,
-                'expected_stock': expected,
-                'risk': risk,
-                'label_en': 'Stock Analysis',
-                'label_ar': 'تحليل المخزون',
-            })
-
-        total_inventory_value = 0.0
-        for s in stock_analysis:
-            rid = int(s.get('ingredient_id') or 0)
-            unit_cost = float(latest_cost.get(rid, avg_cost.get(rid, 0)) or 0)
-            total_inventory_value += max(float(s.get('expected_stock') or 0), 0.0) * unit_cost
-
-        kpi = {
-            'total_inventory_value': float(total_inventory_value or 0),
-            'month_purchases_total': float(sum([ps['final_total'] for ps in purchases_summary]) or 0),
-            'meals_sold': float(sum([s['qty_sold'] for s in name_qty_rev.values()]) or 0),
-            'estimated_production_cost': float(sum([m['consumption_cost'] for m in meal_analysis]) or 0),
-            'total_profit': float(sum([m['profit'] for m in meal_analysis]) or 0),
-            'label_en': 'KPI Overview',
-            'label_ar': 'المؤشرات الرئيسية',
-        }
-
-        outdated_ids = []
-        rows_last = (
-            db.session.query(PurchaseInvoiceItem.raw_material_id, PurchaseInvoice.date)
-            .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceItem.invoice_id)
-            .order_by(PurchaseInvoiceItem.raw_material_id.asc(), PurchaseInvoice.date.desc())
-            .all()
-        )
-        seen = set()
-        for rid, dt in (rows_last or []):
-            if rid is None:
-                continue
-            if int(rid) in seen:
-                continue
-            seen.add(int(rid))
-            if not dt or (today - dt).days > 60:
-                outdated_ids.append(int(rid))
-        alerts = []
-        for m in meal_analysis:
-            if float(m.get('margin_pct', 0) or 0) < 0.15:
-                alerts.append({'type': 'low_margin', 'meal_id': int(m.get('meal_id') or 0), 'label_en': 'Low Margin', 'label_ar': 'هامش منخفض'})
-        for rid in outdated_ids:
-            alerts.append({'type': 'outdated_cost', 'ingredient_id': rid, 'label_en': 'Outdated Cost', 'label_ar': 'سعر قديم'})
-        for s in stock_analysis:
-            if (s.get('risk') or '') in ('negative','low'):
-                alerts.append({'type': 'stock_risk', 'ingredient_id': int(s.get('ingredient_id') or 0), 'risk': s.get('risk'), 'label_en': 'Stock Risk', 'label_ar': 'مخاطر المخزون'})
-
-        payload = {
-            'kpi': kpi,
-            'purchases_summary': purchases_summary,
-            'meal_analysis': meal_analysis,
-            'stock_analysis': stock_analysis,
-            'alerts': alerts,
-        }
-        return jsonify(payload)
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@main.route('/expenses', methods=['GET', 'POST'], endpoint='expenses')
-@login_required
-def expenses():
-    try:
-        form = ExpenseInvoiceForm()
-    except Exception as e:
-        try:
-            import traceback, os
-            root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-            p2 = os.path.join(root, 'static', 'uploads', 'exp_err.txt')
-            with open(p2, 'a', encoding='utf-8') as _f:
-                _f.write('\n=== /expenses form init error ===\n')
-                _f.write(str(e) + '\n')
-                _f.write(traceback.format_exc() + '\n')
-        except Exception:
-            pass
-        return ('', 500)
-    try:
-        form.date.data = get_saudi_now().date()
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        pass
-    if request.method == 'POST':
-        try:
-            date_str = request.form.get('date') or get_saudi_now().date().isoformat()
-            pm = (request.form.get('payment_method') or 'CASH').strip().upper()
-            if pm not in ('CASH','BANK'):
-                pm = 'CASH'
-            status_val = (request.form.get('status') or 'paid').strip().lower()
-            if status_val not in ('paid','partial','unpaid'):
-                status_val = 'paid'
-            idx = 0
-            from decimal import Decimal
-            def _parse_decimal(s):
-                try:
-                    t = (s or '').strip()
-                    if not t:
-                        return Decimal('0')
-                    trans = str.maketrans('٠١٢٣٤٥٦٧٨٩٬٫', '0123456789,.')
-                    t = t.translate(trans).replace(',', '')
-                    return Decimal(t)
-                except Exception:
-                    return Decimal('0')
-            total_before = Decimal('0.00')
-            total_tax = Decimal('0.00')
-            total_disc = Decimal('0.00')
-            items_buffer = []
-            while True:
-                prefix = f"items-{idx}-"
-                desc = request.form.get(prefix + 'description')
-                qty = request.form.get(prefix + 'quantity')
-                price = request.form.get(prefix + 'price_before_tax')
-                tax = request.form.get(prefix + 'tax')
-                disc = request.form.get(prefix + 'discount')
-                acc_code = request.form.get(prefix + 'account_code')
-                if desc is None and qty is None and price is None and tax is None and disc is None:
-                    break
-                if not desc and not qty and not price:
-                    idx += 1
-                    continue
-                try:
-                    qf = _parse_decimal(qty)
-                    pf = _parse_decimal(price)
-                    tf = _parse_decimal(tax)
-                    df = _parse_decimal(disc)
-                except Exception:
-                    qf = Decimal('0'); pf = Decimal('0'); tf = Decimal('0'); df = Decimal('0')
-                line_total = (qf * pf) - df + tf
-                total_before += (qf * pf)
-                total_tax += tf
-                total_disc += df
-                try:
-                    current_app.logger.info(f"Expense item: desc={(desc or '').strip()} qty={qf} price={pf} tax={tf} disc={df} acc={(acc_code or '').strip().upper()}")
-                except Exception:
-                    pass
-                items_buffer.append({
-                    'description': (desc or '').strip(),
-                    'quantity': qf,
-                    'price_before_tax': pf,
-                    'tax': tf,
-                    'discount': df,
-                    'total_price': line_total,
-                    'account_code': (acc_code or '').strip().upper(),
-                })
-                idx += 1
-            try:
-                last = ExpenseInvoice.query.order_by(ExpenseInvoice.id.desc()).first()
-                seq = (int(getattr(last, 'id', 0)) + 1) if last and getattr(last, 'id', None) else 1
-                inv_no = f"INV-EXP-{get_saudi_now().year}-{seq:04d}"
-            except Exception:
-                inv_no = f"INV-EXP-{get_saudi_now().strftime('%Y%m%d%H%M%S')}"
-            inv = ExpenseInvoice(
-                invoice_number=inv_no,
-                date=datetime.strptime(date_str, '%Y-%m-%d').date(),
-                payment_method=pm,
-                total_before_tax=total_before,
-                tax_amount=total_tax,
-                discount_amount=total_disc,
-                total_after_tax_discount=(total_before - total_disc + total_tax),
-                status=status_val,
-                user_id=getattr(current_user, 'id', 1)
-            )
-            db.session.add(inv)
-            db.session.flush()
-            for row in items_buffer:
-                item = ExpenseInvoiceItem(
-                    invoice_id=inv.id,
-                    description=row['description'],
-                    quantity=row['quantity'] or Decimal('0'),
-                    price_before_tax=row['price_before_tax'] or Decimal('0'),
-                    tax=row['tax'] or Decimal('0'),
-                    discount=row['discount'] or Decimal('0'),
-                    total_price=row['total_price'] or Decimal('0')
-                )
-                db.session.add(item)
-            db.session.commit()
-            try:
-                tax_amt = float(inv.tax_amount or 0.0)
-                for row in items_buffer:
-                    try:
-                        base = float((row.get('quantity',Decimal('0')) or Decimal('0')) * (row.get('price_before_tax',Decimal('0')) or Decimal('0')) - (row.get('discount',Decimal('0')) or Decimal('0')))
-                        sel = _expense_account_by_code(row.get('account_code'))
-                        if not sel:
-                            sel = _expense_account_for(row.get('description',''))
-                        acc_code, acc_name, acc_type = sel
-                        if base > 0:
-                            _post_ledger(inv.date, acc_code, acc_name, acc_type, base, 0.0, f'EXP {inv.invoice_number}')
-                    except Exception:
-                        continue
-                if tax_amt > 0:
-                    _post_ledger(inv.date, 'VAT_IN', 'VAT Input', 'tax', tax_amt, 0.0, f'EXP {inv.invoice_number}')
-                total_base = float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0)
-                _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', 0.0, total_base + tax_amt, f'EXP {inv.invoice_number}')
-            except Exception:
-                pass
-            try:
-                pay_amt = 0.0
-                if status_val == 'paid':
-                    pay_amt = float(inv.total_after_tax_discount or 0.0)
-                elif status_val == 'partial':
-                    pv = request.form.get('partial_paid_amount')
-                    try:
-                        pv_dec = _parse_decimal(pv)
-                        pay_amt = float(pv_dec or Decimal('0'))
-                    except Exception:
-                        pay_amt = 0.0
-                    total_inc_tax = float(inv.total_after_tax_discount or 0.0)
-                    if pay_amt > total_inc_tax:
-                        pay_amt = total_inc_tax
-                if pay_amt > 0.0:
-                    db.session.add(Payment(invoice_id=inv.id, invoice_type='expense', amount_paid=pay_amt, payment_method=pm))
-                    db.session.commit()
-                    _post_ledger(inv.date, 'AP', 'Accounts Payable', 'liability', pay_amt, 0.0, f'PAY EXP {inv.invoice_number}')
-                    ca = _pm_account(pm)
-                if ca:
-                    _post_ledger(inv.date, ca.code, ca.name, 'asset', 0.0, pay_amt, f'PAY EXP {inv.invoice_number}')
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-            try:
-                _create_expense_journal(inv)
-            except Exception:
-                pass
-            flash('Expense saved', 'success')
-        except Exception as e:
-            db.session.rollback()
-            try:
-                current_app.logger.exception('Failed to save expense: %s', e)
-                try:
-                    current_app.logger.info(f"Expense form meta: date={date_str} pm={pm} status={status_val}")
-                except Exception:
-                    pass
-            except Exception:
-                pass
-            flash('Failed to save expense', 'danger')
-        return redirect(url_for('main.expenses'))
-    invs = []
-    invs_json = []
-    invs_json_str = '[]'
-    try:
-        invs = ExpenseInvoice.query.order_by(ExpenseInvoice.date.desc()).limit(50).all()
-        for inv in invs:
-            items = []
-            for it in (getattr(inv, 'items', []) or []):
-                items.append({
-                    'description': getattr(it, 'description', ''),
-                    'quantity': float(getattr(it, 'quantity', 0) or 0),
-                    'price_before_tax': float(getattr(it, 'price_before_tax', 0) or 0),
-                    'tax': float(getattr(it, 'tax', 0) or 0),
-                    'discount': float(getattr(it, 'discount', 0) or 0),
-                    'total_price': float(getattr(it, 'total_price', 0) or 0),
-                })
-            invs_json.append({
-                'id': inv.id,
-                'invoice_number': inv.invoice_number,
-                'date': inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '',
-                'payment_method': getattr(inv, 'payment_method', ''),
-                'total': float(getattr(inv, 'total_after_tax_discount', 0) or 0),
-                'status': getattr(inv, 'status', ''),
-                'items': items,
-            })
-        try:
-            import json as _json
-            invs_json_str = _json.dumps(invs_json)
-        except Exception:
-            invs_json_str = '[]'
-    except Exception as e:
-        try:
-            import traceback, os
-            root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-            p2 = os.path.join(root, 'static', 'uploads', 'exp_err.txt')
-            with open(p2, 'a', encoding='utf-8') as _f:
-                _f.write('\n=== /expenses query build error ===\n')
-                _f.write(str(e) + '\n')
-                _f.write(traceback.format_exc() + '\n')
-        except Exception:
-            pass
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-    try:
-        return render_template('expenses.html', form=form, invoices=invs, invoices_json=invs_json_str)
-    except Exception as e:
-        try:
-            current_app.logger.exception('Expenses template render error: %s', e)
-        except Exception:
-            pass
-        try:
-            import traceback
-            print('Expenses template render error:', e)
-            print(traceback.format_exc())
-        except Exception:
-            pass
-        try:
-            import os, traceback
-            root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-            p1 = os.path.join(root, 'exp_err.txt')
-            p2 = os.path.join(root, 'static', 'uploads', 'exp_err.txt')
-            for fp in (p1, p2):
-                try:
-                    with open(fp, 'a', encoding='utf-8') as _f:
-                        _f.write('\n=== /expenses render error ===\n')
-                        _f.write(str(e) + '\n')
-                        _f.write(traceback.format_exc() + '\n')
-                except Exception:
-                    continue
-        except Exception:
-            pass
-        return ('', 500)
-
-@main.route('/expenses/delete/<int:eid>', methods=['POST'], endpoint='expense_delete')
-@login_required
-def expense_delete(eid):
-    try:
-        inv = ExpenseInvoice.query.get(int(eid))
-        if not inv:
-            flash('Expense invoice not found', 'warning')
-            return redirect(url_for('main.expenses'))
-        # Delete children items first
-        for it in (inv.items or []):
-            try:
-                db.session.delete(it)
-            except Exception:
-                pass
-        try:
-            Payment.query.filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'expense').delete(synchronize_session=False)
-        except Exception:
-            pass
-        try:
-            from models import JournalEntry, JournalLine
-            rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
-            for je in (rows or []):
-                JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
-                db.session.delete(je)
-        except Exception:
-            pass
-        try:
-            db.session.query(LedgerEntry).filter(LedgerEntry.description.ilike('%{}%'.format(inv.invoice_number))).delete(synchronize_session=False)
-        except Exception:
-            pass
-        db.session.delete(inv)
-        db.session.commit()
-        flash('Expense invoice deleted', 'success')
-    except Exception:
-        db.session.rollback()
-        flash('Failed to delete expense invoice', 'danger')
-    return redirect(url_for('main.expenses'))
-
-@main.route('/expenses/test', methods=['GET'], endpoint='expenses_test')
-@login_required
-def expenses_test():
-    try:
-        form = ExpenseInvoiceForm()
-        return render_template('expenses.html', form=form, invoices=[], invoices_json=[])
-    except Exception as e:
-        try:
-            import traceback
-            print('Expenses test render error:', e)
-            print(traceback.format_exc())
-        except Exception:
-            pass
-        return ('', 500)
-
 @main.route('/invoices', endpoint='invoices')
 @login_required
 def invoices():
@@ -3184,36 +998,18 @@ def invoices():
             s_ids = [int(getattr(s, 'id', 0) or 0) for s in (sales or [])]
             s_paid = paid_sum('sales', s_ids)
             for s in (sales or []):
-                cust = (getattr(s, 'customer_name', '') or '').strip().lower()
-                def _norm_group(n: str):
-                    x = (n or '').lower()
-                    if ('hunger' in x) or ('هنقر' in x) or ('هونقر' in x):
-                        return 'hunger'
-                    if ('keeta' in x) or ('كيتا' in x) or ('كيت' in x):
-                        return 'keeta'
-                    return ''
-                grp = _norm_group(cust)
                 total = float(getattr(s, 'total_after_tax_discount', 0) or 0)
                 paid = float(s_paid.get(int(getattr(s, 'id', 0) or 0), 0.0))
                 remaining = max(total - paid, 0.0)
-                # في تبويب المبيعات: اعرض فقط فواتير المنصات غير المدفوعة
-                if t == 'sales':
-                    if grp not in ('keeta','hunger'):
-                        continue
-                    if remaining <= 0.0:
-                        continue
-                    status_calc = 'partial' if paid > 0 else 'unpaid'
+                # حساب الحالة: احترم السجل إن وجد وإلا احسب من المدفوع
+                if remaining <= 0.0 and (getattr(s, 'status', '') or '').lower() == '':
+                    status_calc = 'paid'
                 else:
-                    # في تبويب all اعرض جميع فواتير المبيعات بالحالة الفعلية
-                    if remaining <= 0.0 and (getattr(s, 'status', '') or '').lower() == '':
-                        status_calc = 'paid'
+                    st = (getattr(s, 'status', '') or '').lower()
+                    if st in ('paid', 'partial', 'unpaid'):
+                        status_calc = st
                     else:
-                        # احترم حالة السجل إن وجدت وإلا احسب من المدفوع
-                        st = (getattr(s, 'status', '') or '').lower()
-                        if st in ('paid','partial','unpaid'):
-                            status_calc = st
-                        else:
-                            status_calc = ('paid' if remaining <= 0.0 and total > 0 else ('partial' if paid > 0 else 'unpaid'))
+                        status_calc = ('paid' if remaining <= 0.0 and total > 0 else ('partial' if paid > 0 else 'unpaid'))
                 invoices.append({
                     'id': int(getattr(s, 'id', 0) or 0),
                     'invoice_number': getattr(s, 'invoice_number', None) or f"S-{getattr(s, 'id', '')}",
@@ -3273,111 +1069,48 @@ def invoices():
         invoices = []
 
     return render_template('invoices.html', current_type=t, invoices=invoices)
-@main.route('/reports/print/payments', methods=['GET'], endpoint='reports_print_payments')
+
+
+@main.route('/invoices/<string:kind>/<int:invoice_id>', endpoint='view_invoice')
 @login_required
-def reports_print_payments():
-    try:
-        from datetime import datetime as _dt, date as _date
-        from sqlalchemy import func
-        from models import PurchaseInvoice, ExpenseInvoice, Payment, Settings
-
-        inv_type = (request.args.get('type') or 'purchase').strip().lower()
-        if inv_type not in ('purchase','expense'):
-            inv_type = 'purchase'
-
-        start_s = request.args.get('start_date') or ''
-        end_s = request.args.get('end_date') or ''
-        try:
-            start_d = _dt.strptime(start_s, '%Y-%m-%d').date() if start_s else _date.min
-        except Exception:
-            start_d = _date.min
-        try:
-            end_d = _dt.strptime(end_s, '%Y-%m-%d').date() if end_s else _date.max
-        except Exception:
-            end_d = _date.max
-
-        rows = []
-        totals_by_party = {}
-
-        if inv_type == 'purchase':
-            q = PurchaseInvoice.query.filter(PurchaseInvoice.date.between(start_d, end_d))
-            for inv in q.order_by(PurchaseInvoice.date.desc(), PurchaseInvoice.id.desc()).all():
-                total = float(inv.total_after_tax_discount or 0.0)
-                paid = float(
-                    db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                      .filter(Payment.invoice_type=='purchase', Payment.invoice_id==inv.id).scalar() or 0.0
-                )
-                remaining = max(total - paid, 0.0)
-                party = getattr(inv, 'supplier_name', '-') or '-'
-                rows.append({
-                    'BILL NO': inv.invoice_number,
-                    'DATE': inv.date.strftime('%Y-%m-%d') if inv.date else '',
-                    'SUPPLIER': party,
-                    'ITEMS/QTY/TOTAL': f"{len(getattr(inv,'items',[]) or [])} items",
-                    'PAID': paid,
-                    'REMAINING': remaining,
-                    'METHOD': (inv.payment_method or '').upper(),
-                    'STATUS': (inv.status or '').upper()
-                })
-                t = totals_by_party.setdefault(party, {'TOTAL':0.0,'PAID':0.0,'REMAINING':0.0})
-                t['TOTAL'] += total; t['PAID'] += paid; t['REMAINING'] += remaining
-        else:
-            q = ExpenseInvoice.query.filter(ExpenseInvoice.date.between(start_d, end_d))
-            for inv in q.order_by(ExpenseInvoice.date.desc(), ExpenseInvoice.id.desc()).all():
-                total = float(inv.total_after_tax_discount or 0.0)
-                paid = float(
-                    db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                      .filter(Payment.invoice_type=='expense', Payment.invoice_id==inv.id).scalar() or 0.0
-                )
-                remaining = max(total - paid, 0.0)
-                party = 'Expense'
-                rows.append({
-                    'BILL NO': inv.invoice_number,
-                    'DATE': inv.date.strftime('%Y-%m-%d') if inv.date else '',
-                    'SUPPLIER': party,
-                    'ITEMS/QTY/TOTAL': f"{len(getattr(inv,'items',[]) or [])} items",
-                    'PAID': paid,
-                    'REMAINING': remaining,
-                    'METHOD': (inv.payment_method or '').upper(),
-                    'STATUS': (inv.status or '').upper()
-                })
-                t = totals_by_party.setdefault(party, {'TOTAL':0.0,'PAID':0.0,'REMAINING':0.0})
-                t['TOTAL'] += total; t['PAID'] += paid; t['REMAINING'] += remaining
-
-        columns = ['BILL NO','DATE','SUPPLIER','ITEMS/QTY/TOTAL','PAID','REMAINING','METHOD','STATUS']
-        data = rows
-        totals = {
-            'PAID': sum(r.get('PAID',0.0) for r in rows),
-            'REMAINING': sum(r.get('REMAINING',0.0) for r in rows),
-        }
-        settings = Settings.query.first()
-        # Render with payment totals by method per the template optional block
-        payment_totals = {}
-        for r in rows:
-            pm = r.get('METHOD') or 'UNKNOWN'
-            payment_totals[pm] = payment_totals.get(pm, 0.0) + float(r.get('PAID') or 0.0)
-
-        # Supplier totals: show remaining by supplier; adapt labels
-        supplier_totals = { k: v['REMAINING'] for k, v in totals_by_party.items() }
-
-        return render_template('print_report.html',
-                               report_title=("Purchases" if inv_type=='purchase' else "Expenses"),
-                               columns=columns,
-                               data=data,
-                               totals=totals,
-                               totals_columns=['PAID','REMAINING'],
-                               totals_colspan=4,
-                               settings=settings,
-                               start_date=start_s, end_date=end_s,
-                               payment_method=request.args.get('payment_method') or 'all',
-                               generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
-                               item_totals=supplier_totals,
-                               item_totals_title=('Supplier Totals' if inv_type=='purchase' else 'Expense Totals'),
-                               item_totals_name_label=('Supplier' if inv_type=='purchase' else 'Expense'),
-                               item_totals_value_label='Remaining',
-                               payment_totals=payment_totals)
-    except Exception:
-        return redirect(url_for('payments'))
+def view_invoice(kind, invoice_id):
+    from flask import flash
+    from flask_babel import gettext as _
+    kind = (kind or '').lower()
+    # Normalize: invoices list uses 'sales','purchases','expenses'; route accepts 'sales','purchase','expense'
+    if kind == 'purchases':
+        kind = 'purchase'
+    elif kind == 'expenses':
+        kind = 'expense'
+    inv = None
+    items = []
+    title = 'Invoice'
+    if kind == 'sales':
+        inv = SalesInvoice.query.get_or_404(invoice_id)
+        if not user_can('sales', 'view', getattr(inv, 'branch', None)):
+            flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
+            return redirect(url_for('main.invoices'))
+        items = SalesInvoiceItem.query.filter_by(invoice_id=inv.id).all()
+        title = 'Sales Invoice'
+    elif kind == 'purchase':
+        inv = PurchaseInvoice.query.get_or_404(invoice_id)
+        items = PurchaseInvoiceItem.query.filter_by(invoice_id=inv.id).all()
+        title = 'Purchase Invoice'
+    elif kind == 'expense':
+        inv = ExpenseInvoice.query.get_or_404(invoice_id)
+        items = ExpenseInvoiceItem.query.filter_by(invoice_id=inv.id).all()
+        title = 'Expense Invoice'
+    else:
+        flash(_('Unknown invoice type / نوع فاتورة غير معروف'), 'danger')
+        return redirect(url_for('main.invoices'))
+    from sqlalchemy import func
+    paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).
+        filter_by(invoice_type=kind, invoice_id=invoice_id).scalar() or 0)
+    total = float(getattr(inv, 'total_after_tax_discount', 0) or 0)
+    remaining = max(total - paid, 0.0)
+    # Back link tab: invoices list uses 'sales','purchases','expenses'
+    back_type = 'purchases' if kind == 'purchase' else ('expenses' if kind == 'expense' else kind)
+    return render_template('invoice_view.html', kind=kind, back_type=back_type, inv=inv, items=items, title=title, paid=paid, remaining=remaining)
 
 
 @main.route('/invoices/delete', methods=['POST'], endpoint='invoices_delete')
@@ -3491,6 +1224,46 @@ def invoices_delete():
 
 
 
+@main.route('/employees', methods=['GET'], endpoint='employees')
+@login_required
+def employees():
+    """شاشة الموظفين الموحدة: إضافة، مسير رواتب، كشوفات، سلف، مستحقات غير مدفوعة."""
+    from calendar import month_name
+    tab = (request.args.get('tab') or 'add').strip().lower()
+    year = request.args.get('year', type=int) or get_saudi_now().year
+    month = request.args.get('month', type=int) or get_saudi_now().month
+    pay_status = (request.args.get('status') or 'all').strip().lower()
+    pay_dept = (request.args.get('dept') or '').strip()
+    years = list(range(get_saudi_now().year - 2, get_saudi_now().year + 3))
+    months = [{'value': i, 'label': month_name[i]} for i in range(1, 13)]
+    try:
+        from sqlalchemy import func as _f
+        rows_d = db.session.query(_f.lower(Employee.department)).filter(Employee.department.isnot(None)).distinct().all()
+        dept_options = sorted([str(r[0]) for r in rows_d if r and r[0]])
+    except Exception:
+        dept_options = []
+    emps = Employee.query.order_by(Employee.full_name.asc()).all()
+    today = get_saudi_now().date()
+    start_default = today.replace(day=1)
+    end_default = today
+    start_date = request.args.get('start_date') or start_default.isoformat()
+    end_date = request.args.get('end_date') or end_default.isoformat()
+    return render_template(
+        'employees.html',
+        tab=tab,
+        employees=emps,
+        dept_options=dept_options,
+        years=years,
+        months=months,
+        year=year,
+        month=month,
+        pay_status=pay_status,
+        pay_dept=pay_dept,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
 @main.route('/employees/<int:eid>/delete', methods=['POST'], endpoint='employee_delete')
 @main.route('/employees/delete', methods=['POST'], endpoint='employee_delete_by_query')
 @login_required
@@ -3522,7 +1295,7 @@ def employee_delete(eid=None):
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting employee: {e}', 'danger')
-    return redirect(url_for('main.dashboard'))
+    return redirect(url_for('main.employees'))
 
 @main.route('/employees/create-salary', methods=['POST'], endpoint='employees_create_salary')
 @login_required
@@ -3746,7 +1519,7 @@ def salaries_pay():
                             try:
                                 from models import JournalEntry, JournalLine
                                 cash_acc = _pm_account(method)
-                                pay_liab = _account(SHORT_TO_NUMERIC['PAYROLL_LIAB'][0], CHART_OF_ACCOUNTS['2130']['name'], CHART_OF_ACCOUNTS['2130']['type'])
+                                pay_liab = _account(*SHORT_TO_NUMERIC['PAYROLL_LIAB'])
                                 je = JournalEntry(entry_number=f"JE-SALPAY-{row.id}", date=get_saudi_now().date(), branch_code=None, description=f"Salary payment {row.year}-{row.month} EMP {row.employee_id}", status='posted', total_debit=pay_amount, total_credit=pay_amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), salary_id=row.id)
                                 db.session.add(je); db.session.flush()
                                 db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=pay_liab.id, debit=pay_amount, credit=0, description='Payroll liability', line_date=get_saudi_now().date(), employee_id=row.employee_id))
@@ -3805,7 +1578,7 @@ def salaries_pay():
                                 _post_ledger(get_saudi_now().date(), cash_acc.code, cash_acc.name, 'asset', 0.0, remaining_payment, f'ADV EMP {adv_row.employee_id} {adv_row.year}-{adv_row.month}')
                             try:
                                 from models import JournalEntry, JournalLine
-                                emp_adv_acc = _account(SHORT_TO_NUMERIC['EMP_ADV'][0], CHART_OF_ACCOUNTS['1030']['name'], CHART_OF_ACCOUNTS['1030']['type'])
+                                emp_adv_acc = _account(*SHORT_TO_NUMERIC['EMP_ADV'])
                                 je2 = JournalEntry(entry_number=f"JE-ADV-{adv_row.employee_id}-{adv_row.year}{adv_row.month:02d}", date=get_saudi_now().date(), branch_code=None, description=f"Employee advance {adv_row.employee_id} {adv_row.year}-{adv_row.month}", status='posted', total_debit=remaining_payment, total_credit=remaining_payment, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), salary_id=adv_row.id)
                                 db.session.add(je2); db.session.flush()
                                 db.session.add(JournalLine(journal_id=je2.id, line_no=1, account_id=emp_adv_acc.id, debit=remaining_payment, credit=0, description='Employee advance', line_date=get_saudi_now().date(), employee_id=adv_row.employee_id))
@@ -4513,7 +2286,7 @@ def api_payroll_seed_test():
                     try:
                         from models import JournalEntry, JournalLine
                         cash_acc = _pm_account('cash')
-                        pay_liab = _account(SHORT_TO_NUMERIC['PAYROLL_LIAB'][0], CHART_OF_ACCOUNTS['2130']['name'], CHART_OF_ACCOUNTS['2130']['type'])
+                        pay_liab = _account(*SHORT_TO_NUMERIC['PAYROLL_LIAB'])
                         je = JournalEntry(entry_number=f"JE-SALPAY-{srow.id}", date=get_saudi_now().date(), branch_code=None, description=f"Salary payment {y}-{m} EMP {emp_id}", status='posted', total_debit=amt_pay, total_credit=amt_pay, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), salary_id=srow.id)
                         db.session.add(je); db.session.flush()
                         db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=pay_liab.id, debit=amt_pay, credit=0.0, description='Payroll liability', line_date=get_saudi_now().date(), employee_id=emp_id))
@@ -4551,299 +2324,136 @@ def api_payroll_seed_test():
             pass
         return jsonify({'ok': False, 'error': str(e)}), 400
 
-@main.route('/reports/print/salaries', methods=['GET'], endpoint='reports_print_salaries')
-@login_required
-def reports_print_salaries():
-    # Redirect to detailed payroll statement to ensure new screen is used everywhere
-    try:
-        q = request.query_string.decode('utf-8') if request.query_string else ''
-    except Exception:
-        q = ''
-    target = url_for('main.reports_print_salaries_detailed')
-    if q:
-        target = f"{target}?{q}"
-    return redirect(target)
-
-
-@main.route('/reports/print/salaries_detailed', methods=['GET'], endpoint='reports_print_salaries_detailed')
-@login_required
-def reports_print_salaries_detailed():
-    # period input
-    month_param = (request.args.get('month') or '').strip()
-    if '-' in month_param:
-        try:
-            y, m = month_param.split('-'); year = int(y); month = int(m)
-        except Exception:
-            year = get_saudi_now().year; month = get_saudi_now().month
-    else:
-        year = request.args.get('year', type=int) or get_saudi_now().year
-        month = request.args.get('month', type=int) or get_saudi_now().month
-
-    # header
-    try:
-        settings = Settings.query.first()
-        company_name = settings.company_name or 'Company'
-    except Exception:
-        company_name = 'Company'
-    period_label = f"{year:04d}-{month:02d}"
-
-    # Build detailed month-by-month allocations (FIFO: pay oldest dues first)
-    employees_data = []
-    try:
-        # defaults
-        try:
-            from models import EmployeeSalaryDefault
-            defaults_map = {d.employee_id: d for d in EmployeeSalaryDefault.query.all()}
-        except Exception:
-            defaults_map = {}
-
-        # helper iterator
-        def month_iter(y0, m0, y1, m1):
-            y, m = y0, m0
-            cnt = 0
-            while (y < y1) or (y == y1 and m <= m1):
-                yield y, m
-                m += 1
-                if m > 12:
-                    m = 1; y += 1
-                cnt += 1
-                if cnt > 240:
-                    break
-
-        for emp in Employee.query.order_by(Employee.full_name.asc()).all():
-            # range from hire to current+1 (to place credit if needed)
-            if getattr(emp, 'hire_date', None):
-                y0, m0 = int(emp.hire_date.year), int(emp.hire_date.month)
-            else:
-                y0, m0 = year, month
-
-            # gather dues per month and salary ids
-            dues = []
-            sal_ids = []
-            for yy, mm in month_iter(y0, m0, year, month):
-                srow = Salary.query.filter_by(employee_id=emp.id, year=yy, month=mm).first()
-                if srow:
-                    base = float(srow.basic_salary or 0.0)
-                    allow = float(srow.allowances or 0.0)
-                    ded = float(srow.deductions or 0.0)
-                    due_amt = max(0.0, base + allow - ded)
-                    sal_ids.append(int(srow.id))
-                else:
-                    d = defaults_map.get(int(emp.id))
-                    base = float(getattr(d, 'base_salary', 0.0) or 0.0)
-                    allow = float(getattr(d, 'allowances', 0.0) or 0.0)
-                    ded = float(getattr(d, 'deductions', 0.0) or 0.0)
-                    due_amt = max(0.0, base + allow - ded)
-                dues.append({'y': yy, 'm': mm, 'base': base, 'allow': allow, 'ded': ded, 'due': due_amt})
-
-            total_paid_all = 0.0
-            if sal_ids:
-                total_paid_all = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                                       .filter(Payment.invoice_type == 'salary', Payment.invoice_id.in_(sal_ids))
-                                       .scalar() or 0.0)
-
-            # FIFO allocate against previous dues first
-            remaining_payment = total_paid_all
-            detailed_rows = []
-            prev_running_due = 0.0
-            for d in dues:
-                month_due = float(d['due'] or 0.0)
-                prev_for_row = float(prev_running_due or 0.0)
-                total_for_row = prev_for_row + month_due
-
-                pay = 0.0
-                if remaining_payment > 0 and total_for_row > 0:
-                    pay = total_for_row if remaining_payment >= total_for_row else remaining_payment
-                    remaining_payment -= pay
-
-                remaining = total_for_row - pay
-
-                # Status with tolerance for tiny residuals
-                tol = 0.01
-                if total_for_row <= tol and pay <= tol:
-                    status = 'paid'
-                elif remaining <= tol:
-                    status = 'paid'
-                elif pay > tol:
-                    status = 'partial'
-                else:
-                    status = 'due'
-
-                detailed_rows.append(type('Row', (), {
-                    'month': date(d['y'], d['m'], 1),
-                    'basic': d['base'],
-                    'allowances': d['allow'],
-                    'deductions': d['ded'],
-                    'prev_due': prev_for_row,
-                    'total': total_for_row,
-                    'paid_amount': pay,
-                    'remaining_amount': remaining,
-                    'status': status,
-                }))
-
-                # Carry forward any unpaid balance as previous due for next month
-                prev_running_due = remaining
-
-            # leftover payment -> credit month (next month)
-            if remaining_payment > 0:
-                from calendar import monthrange
-                nm_y = year + (1 if month == 12 else 0)
-                nm_m = 1 if month == 12 else month + 1
-                detailed_rows.append(type('Row', (), {
-                    'month': date(nm_y, nm_m, 1),
-                    'basic': 0.0,
-                    'allowances': 0.0,
-                    'deductions': 0.0,
-                    'prev_due': 0.0,
-                    'total': 0.0,
-                    'paid_amount': remaining_payment,
-                    'remaining_amount': -remaining_payment,
-                    'status': 'credit',
-                }))
-
-            employees_data.append(type('Emp', (), {
-                'name': emp.full_name,
-                'salaries': detailed_rows
-            }))
-    except Exception:
-        employees_data = []
-
-    return render_template(
-        'print/payroll_statement.html',
-        company_name=company_name,
-        period_label=period_label,
-        generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
-        employees=employees_data
-    )
-
-
-
 @main.route('/employees/payroll', methods=['GET'], endpoint='payroll')
 @login_required
 def payroll():
-    # Exact context and data shape per provided template
-    from calendar import month_name
-    years = list(range(get_saudi_now().year - 2, get_saudi_now().year + 3))
     year = request.args.get('year', type=int) or get_saudi_now().year
     month = request.args.get('month', type=int) or get_saudi_now().month
     status = (request.args.get('status') or 'all').strip().lower()
-
-    # months as value/label pairs
-    months = [{ 'value': i, 'label': month_name[i] } for i in range(1, 13)]
-    # department filter
     dept_f = (request.args.get('dept') or '').strip().lower()
-    # build department options
-    try:
-        from sqlalchemy import func as _func
-        rows_dept = db.session.query(_func.lower(Employee.department)).filter(Employee.department.isnot(None)).distinct().all()
-        dept_options = sorted([str(r[0]) for r in rows_dept if r and r[0]])
-    except Exception:
-        dept_options = []
+    return redirect(url_for('main.employees', tab='payroll', year=year, month=month, status=status, dept=dept_f or ''))
 
-    # Build payrolls rows
+
+@main.route('/api/payroll', methods=['GET'], endpoint='api_payroll')
+@login_required
+def api_payroll():
+    """JSON payroll data for employees hub payroll tab. مصدر الحقيقة: مسيرات الرواتب فقط — عدم وجود مسيرات = عدم عرض أي بيانات. for_new_run=1: قائمة موظفين مع الأساسي من بيانات التسجيل لملء فورم إنشاء مسير."""
+    year = request.args.get('year', type=int) or get_saudi_now().year
+    month = request.args.get('month', type=int) or get_saudi_now().month
+    status = (request.args.get('status') or 'all').strip().lower()
+    dept_f = (request.args.get('dept') or '').strip().lower()
+    for_new_run = request.args.get('for_new_run', '').strip() in ('1', 'true', 'yes')
     payrolls = []
-    try:
-        from sqlalchemy import func
-        q_emps = Employee.query.order_by(Employee.full_name.asc())
-        if dept_f:
-            q_emps = q_emps.filter(func.lower(Employee.department) == dept_f)
-        emps = q_emps.all()
-        from models import EmployeeSalaryDefault
-        defaults_map = {int(d.employee_id): d for d in EmployeeSalaryDefault.query.all()}
-        for emp in (emps or []):
-            # current month components
-            s = Salary.query.filter_by(employee_id=emp.id, year=year, month=month).first()
-            if s:
-                basic = float(s.basic_salary or 0)
-                allow = float(s.allowances or 0)
-                ded = float(s.deductions or 0)
-            else:
-                d = defaults_map.get(int(emp.id))
-                basic = float(getattr(d, 'base_salary', 0) or 0)
-                allow = float(getattr(d, 'allowances', 0) or 0)
-                ded = float(getattr(d, 'deductions', 0) or 0)
-            current_due = max(0.0, basic + allow - ded)
-
-            # previous dues sum (exclude current)
-            prev_due = 0.0
-            if getattr(emp, 'hire_date', None):
-                sy, sm = int(emp.hire_date.year), int(emp.hire_date.month)
-            else:
-                sy, sm = year, month
-            yy, mm = sy, sm
-            guard = 0
-            while (yy < year) or (yy == year and mm < month):
-                s2 = Salary.query.filter_by(employee_id=emp.id, year=yy, month=mm).first()
-                if s2:
-                    bb = float(s2.basic_salary or 0); aa = float(s2.allowances or 0); dd = float(s2.deductions or 0)
-                else:
-                    d2 = defaults_map.get(int(emp.id))
-                    bb = float(getattr(d2, 'base_salary', 0) or 0)
-                    aa = float(getattr(d2, 'allowances', 0) or 0)
-                    dd = float(getattr(d2, 'deductions', 0) or 0)
-                prev_due += max(0.0, bb + aa - dd)
-                mm += 1
-                if mm > 12:
-                    mm = 1; yy += 1
-                guard += 1
-                if guard > 240:
-                    break
-
-            # total paid overall across existing salary rows
-            sal_ids = [int(x.id) for x in Salary.query.filter_by(employee_id=emp.id).all() if getattr(x, 'id', None)]
-            paid_all = 0.0
-            if sal_ids:
-                paid_all = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                                 .filter(Payment.invoice_type == 'salary', Payment.invoice_id.in_(sal_ids)).scalar() or 0.0)
-
-            # FIFO: allocate to previous first
-            remaining_payment = paid_all
-            prev_alloc = min(prev_due, remaining_payment)
-            remaining_payment -= prev_alloc
-            current_alloc = min(current_due, remaining_payment)
-
-            total = current_due + max(0.0, prev_due - prev_alloc)
-            remaining = max(0.0, total - current_alloc)
-            status_v = 'paid' if (total > 0 and remaining <= 0.01) else ('partial' if current_alloc > 0 else ('paid' if total == 0 else 'due'))
-
-            payrolls.append(type('Row', (), {
-                'employee': type('E', (), {'id': int(emp.id), 'full_name': emp.full_name}),
-                'basic': basic,
-                'allowances': allow,
-                'deductions': ded,
-                'prev_due': max(0.0, prev_due - prev_alloc),
-                'total': total,
-                'paid': current_alloc,
-                'remaining': remaining,
-                'status': status_v,
-            }))
-    except Exception:
-        payrolls = []
-
-    if status in ('paid','due','partial'):
-        payrolls = [r for r in payrolls if (str(getattr(r, 'status', '')).lower() == status)]
-
-    # Summary metrics for header cards
     journal_count = 0
     emp_adv_total = 0.0
+    try:
+        from sqlalchemy import func
+        from models import EmployeeSalaryDefault
+        defaults_map = {int(d.employee_id): d for d in EmployeeSalaryDefault.query.all()}
+        # فورم إنشاء مسير: إرجاع كل الموظفين مع الأساسي من بيانات التسجيل (قابل للتعديل) وباقي الحقول 0
+        if for_new_run:
+            q_emps = Employee.query.order_by(Employee.full_name.asc())
+            if dept_f:
+                q_emps = q_emps.filter(func.lower(Employee.department) == dept_f)
+            for emp in q_emps.all():
+                d = defaults_map.get(int(emp.id))
+                basic = float(getattr(d, 'base_salary', 0) or 0) if d else 0.0
+                extra = absence = incentive = 0.0
+                allow = float(getattr(d, 'allowances', 0) or 0) if d else 0.0
+                ded = float(getattr(d, 'deductions', 0) or 0) if d else 0.0
+                total_row = max(0.0, basic + extra - absence + incentive + allow - ded)
+                payrolls.append({
+                    'employee_id': int(emp.id),
+                    'employee_name': emp.full_name,
+                    'has_salary_record': False,
+                    'department': getattr(emp, 'department', None) or '',
+                    'basic': basic, 'extra': extra, 'absence': absence, 'incentive': incentive,
+                    'allowances': allow, 'deductions': ded,
+                    'prev_due': 0.0, 'total': total_row, 'paid': 0.0, 'remaining': total_row, 'status': 'due',
+                })
+        else:
+            # مصدر الحقيقة: قيود المسير فقط — نعرض فقط موظفين لديهم سجل راتب (مسير) للشهر المحدد
+            salary_rows = Salary.query.filter_by(year=year, month=month).all()
+            if not salary_rows:
+                # لا توجد مسيرات لهذا الشهر = لا نعرض أي بيانات (ماضي، حاضر، مستقبل)
+                payrolls = []
+            else:
+                emp_ids = [int(s.employee_id) for s in salary_rows]
+                emps_map = {int(e.id): e for e in Employee.query.filter(Employee.id.in_(emp_ids)).all()}
+                for s in salary_rows:
+                    emp = emps_map.get(int(s.employee_id))
+                    if not emp:
+                        continue
+                    if dept_f and (getattr(emp, 'department', None) or '').strip().lower() != dept_f:
+                        continue
+                    basic = float(s.basic_salary or 0)
+                    extra = float(getattr(s, 'extra', 0) or 0)
+                    absence = float(getattr(s, 'absence', 0) or 0)
+                    incentive = float(getattr(s, 'incentive', 0) or 0)
+                    allow = float(s.allowances or 0)
+                    ded = float(s.deductions or 0)
+                    current_due = max(0.0, basic + extra - absence + incentive + allow - ded)
+                    total_sal = float(s.total_salary or current_due)
+                    sal_id = int(s.id)
+                    paid_all = 0.0
+                    paid_all = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                                     .filter(Payment.invoice_type == 'salary', Payment.invoice_id == sal_id).scalar() or 0.0)
+                    remaining = max(0.0, total_sal - paid_all)
+                    status_v = 'paid' if (total_sal > 0 and remaining <= 0.01) else ('partial' if paid_all > 0 else 'due')
+                    payrolls.append({
+                        'employee_id': int(emp.id),
+                        'employee_name': emp.full_name,
+                        'has_salary_record': True,
+                        'department': getattr(emp, 'department', None) or '',
+                        'basic': basic,
+                        'extra': extra,
+                        'absence': absence,
+                        'incentive': incentive,
+                        'allowances': allow,
+                        'deductions': ded,
+                        'prev_due': 0.0,
+                        'total': total_sal,
+                        'paid': paid_all,
+                        'remaining': remaining,
+                        'status': status_v,
+                    })
+                payrolls.sort(key=lambda r: (r.get('employee_name') or ''))
+        if status in ('paid', 'due', 'partial'):
+            payrolls = [r for r in payrolls if (r.get('status') or '').lower() == status]
+    except Exception:
+        payrolls = []
     try:
         from models import JournalEntry, LedgerEntry, Account
         from sqlalchemy import func as _func
         journal_count = int(JournalEntry.query.filter(JournalEntry.date.between(date(year, month, 1), get_saudi_now().date())).count() or 0)
-        adv_code = SHORT_TO_NUMERIC.get('EMP_ADV', ('1030',))[0]
+        adv_code = SHORT_TO_NUMERIC.get('EMP_ADV', ('1151',))[0]
         acc = Account.query.filter(Account.code == adv_code).first()
         if acc:
             row = db.session.query(
                 _func.coalesce(_func.sum(LedgerEntry.debit), 0),
                 _func.coalesce(_func.sum(LedgerEntry.credit), 0)
             ).filter(LedgerEntry.account_id == acc.id).first()
-            dsum, csum = row or (0,0)
+            dsum, csum = row or (0, 0)
             emp_adv_total = max(0.0, float(dsum or 0) - float(csum or 0))
     except Exception:
-        journal_count = 0
-        emp_adv_total = 0.0
-
-    return ('', 404)
+        pass
+    totals = {'basic': sum(r['basic'] for r in payrolls), 'allowances': sum(r['allowances'] for r in payrolls),
+              'deductions': sum(r['deductions'] for r in payrolls), 'prev_due': sum(r['prev_due'] for r in payrolls),
+              'total': sum(r['total'] for r in payrolls), 'paid': sum(r['paid'] for r in payrolls),
+              'remaining': sum(r['remaining'] for r in payrolls)}
+    accrual_posted = False
+    run_saved = False
+    try:
+        accrual_posted = kv_get(f'payroll_accrual_{year}_{month}') is not None
+        if not accrual_posted:
+            from models import JournalEntry
+            je_pr = JournalEntry.query.filter_by(entry_number=f"JE-PR-{year}{month:02d}", status='posted').first()
+            accrual_posted = je_pr is not None
+        run_saved = Salary.query.filter_by(year=year, month=month).count() > 0
+    except Exception:
+        pass
+    return jsonify({'ok': True, 'payrolls': payrolls, 'totals': totals, 'journal_count': journal_count,
+                    'emp_adv_total': emp_adv_total, 'year': year, 'month': month, 'accrual_posted': accrual_posted, 'run_saved': run_saved})
 
 
 @main.route('/employees/<int:emp_id>/pay', methods=['GET', 'POST'], endpoint='pay_salary')
@@ -5212,8 +2822,8 @@ def employees_settings():
                     from models import JournalEntry, JournalLine
                     existing = JournalEntry.query.filter(JournalEntry.salary_id == s.id, JournalEntry.description.ilike('%Payroll accrual%')).first()
                     if not existing:
-                        exp_acc = _account(SHORT_TO_NUMERIC['SAL_EXP'][0], CHART_OF_ACCOUNTS['5310']['name'], CHART_OF_ACCOUNTS['5310']['type'])
-                        liab_acc = _account(SHORT_TO_NUMERIC['PAYROLL_LIAB'][0], CHART_OF_ACCOUNTS['2130']['name'], CHART_OF_ACCOUNTS['2130']['type'])
+                        exp_acc = _account(*SHORT_TO_NUMERIC['SAL_EXP'])
+                        liab_acc = _account(*SHORT_TO_NUMERIC['PAYROLL_LIAB'])
                         je = JournalEntry(entry_number=f"JE-SALACC-{emp.id}-{year}{month:02d}", date=get_saudi_now().date(), branch_code=None, description=f"Payroll accrual {emp.id} {year}-{month}", status='posted', total_debit=total, total_credit=total, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), salary_id=s.id)
                         db.session.add(je); db.session.flush()
                         if exp_acc:
@@ -5341,8 +2951,8 @@ def salaries_save_hours():
             try:
                 existing = JournalEntry.query.filter(JournalEntry.salary_id == s.id, JournalEntry.description.ilike('%Payroll accrual%')).first()
                 if not existing and total > 0:
-                    exp_acc = _account(SHORT_TO_NUMERIC['SAL_EXP'][0], CHART_OF_ACCOUNTS['5310']['name'], CHART_OF_ACCOUNTS['5310']['type'])
-                    liab_acc = _account(SHORT_TO_NUMERIC['PAYROLL_LIAB'][0], CHART_OF_ACCOUNTS['2130']['name'], CHART_OF_ACCOUNTS['2130']['type'])
+                    exp_acc = _account(*SHORT_TO_NUMERIC['SAL_EXP'])
+                    liab_acc = _account(*SHORT_TO_NUMERIC['PAYROLL_LIAB'])
                     je = JournalEntry(entry_number=f"JE-SALACC-{emp_id}-{year}{month:02d}", date=get_saudi_now().date(), branch_code=None, description=f"Payroll accrual {emp_id} {year}-{month}", status='posted', total_debit=total, total_credit=total, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), salary_id=s.id)
                     db.session.add(je); db.session.flush()
                     if exp_acc:
@@ -5651,1082 +3261,6 @@ def api_employee_hours_get():
 @csrf.exempt
 def salary_receipt_bulk():
     return ('', 404)
-@main.route('/reports/print/salaries', methods=['GET'], endpoint='reports_print_salaries_legacy')
-@login_required
-def reports_print_salaries_legacy():
-    return ('', 404)
-
-@main.route('/payments', endpoint='payments')
-@login_required
-def payments():
-    # Build unified list of purchase and expense invoices with paid totals
-    status_f = (request.args.get('status') or '').strip().lower()
-    type_f = (request.args.get('type') or '').strip().lower()
-    supplier_f = (request.args.get('supplier') or '').strip().lower()
-    group_f = (request.args.get('cust_group') or 'all').strip().lower()
-    invoices = []
-    PAYMENT_METHODS = ['CASH','CARD','BANK','ONLINE','MADA','VISA']
-    sd_str = (request.args.get('start_date') or '2025-10-01').strip()
-    ed_str = (request.args.get('end_date') or get_saudi_now().date().isoformat()).strip()
-    def _to_ascii_digits(s: str):
-        try:
-            arabic = '٠١٢٣٤٥٦٧٨٩'
-            for i, d in enumerate('0123456789'):
-                s = s.replace(arabic[i], d)
-            return s
-        except Exception:
-            return s
-    def _parse_date(s: str):
-        s = _to_ascii_digits((s or '').strip())
-        try:
-            if '-' in s:
-                return datetime.fromisoformat(s)
-            if '/' in s:
-                try:
-                    return datetime.strptime(s, '%d/%m/%Y')
-                except Exception:
-                    return datetime.strptime(s, '%m/%d/%Y')
-        except Exception:
-            pass
-        return None
-    sd_dt = _parse_date(sd_str) or datetime(get_saudi_now().year, 10, 1)
-    ed_dt = _parse_date(ed_str) or get_saudi_now()
-
-    try:
-        built_counts = {'purchase':0,'expense':0,'sales':0}
-        # Use decimal rounding to avoid float precision issues causing wrong statuses
-        from decimal import Decimal, ROUND_HALF_UP
-        def to_cents(value):
-            try:
-                return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            except Exception:
-                return Decimal('0.00')
-        def compute_status(total_amt, paid_amt):
-            total_c = to_cents(total_amt)
-            paid_c = to_cents(paid_amt)
-            # Treat small residuals (<= 0.01) as fully paid
-            if (total_c - paid_c) <= Decimal('0.01'):
-                return 'paid'
-            if paid_c > Decimal('0.00'):
-                return 'partial'
-            return 'unpaid'
-        q = PurchaseInvoice.query
-        try:
-            q = q.filter(or_(PurchaseInvoice.created_at.between(sd_dt, ed_dt), PurchaseInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        p_rows = q.order_by(PurchaseInvoice.created_at.desc()).limit(1000).all()
-        p_ids = [int(inv.id) for inv in p_rows]
-        p_paid = {}
-        if p_ids:
-            _rows = (db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0))
-                     .filter(Payment.invoice_type == 'purchase', Payment.invoice_id.in_(p_ids))
-                     .group_by(Payment.invoice_id)
-                     .all())
-            for i, s in _rows:
-                p_paid[int(i)] = float(s or 0.0)
-        for inv in p_rows:
-            total = float(inv.total_after_tax_discount or 0.0)
-            paid = float(p_paid.get(int(inv.id), 0.0))
-            status_calc = compute_status(total, paid)
-            invoices.append({'id': inv.id, 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id, 'type': 'purchase', 'party': inv.supplier_name or 'Supplier', 'total': total, 'paid': paid, 'status': status_calc, 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')})
-            built_counts['purchase'] += 1
-    except Exception:
-        pass
-
-    try:
-        q = ExpenseInvoice.query
-        try:
-            q = q.filter(or_(ExpenseInvoice.created_at.between(sd_dt, ed_dt), ExpenseInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        e_rows = q.order_by(ExpenseInvoice.created_at.desc()).limit(1000).all()
-        e_ids = [int(inv.id) for inv in e_rows]
-        e_paid = {}
-        if e_ids:
-            _rows = (db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0))
-                     .filter(Payment.invoice_type == 'expense', Payment.invoice_id.in_(e_ids))
-                     .group_by(Payment.invoice_id)
-                     .all())
-            for i, s in _rows:
-                e_paid[int(i)] = float(s or 0.0)
-        for inv in e_rows:
-            total = float(inv.total_after_tax_discount or 0.0)
-            paid = float(e_paid.get(int(inv.id), 0.0))
-            status_calc = compute_status(total, paid)
-            invoices.append({'id': inv.id, 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id, 'type': 'expense', 'party': 'Expense', 'total': total, 'paid': paid, 'status': status_calc, 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')})
-            built_counts['expense'] += 1
-    except Exception:
-        pass
-
-    try:
-        import re
-        def _norm_group(n: str):
-            raw = (n or '').lower()
-            if ('هنقر' in raw) or ('هونقر' in raw) or ('هَنقَر' in raw):
-                return 'hunger'
-            if ('كيتا' in raw) or ('كيت' in raw):
-                return 'keeta'
-            s = re.sub(r'[^a-z]', '', raw)
-            if s.startswith('hunger'):
-                return 'hunger'
-            if s.startswith('keeta') or s.startswith('keet'):
-                return 'keeta'
-            return ''
-        q = SalesInvoice.query
-        try:
-            q = q.filter(or_(SalesInvoice.created_at.between(sd_dt, ed_dt), SalesInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        s_rows = q.order_by(SalesInvoice.created_at.desc()).limit(1000).all()
-        s_ids = [int(inv.id) for inv in s_rows]
-        s_paid = {}
-        if s_ids:
-            _rows = (db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0))
-                     .filter(Payment.invoice_type == 'sales', Payment.invoice_id.in_(s_ids))
-                     .group_by(Payment.invoice_id)
-                     .all())
-            for i, s in _rows:
-                s_paid[int(i)] = float(s or 0.0)
-        for inv in s_rows:
-            total = float(inv.total_after_tax_discount or 0.0)
-            paid = float(s_paid.get(int(inv.id), 0.0))
-            status_calc = compute_status(total, paid)
-            name = (inv.customer_name or '').strip() or 'Customer'
-            grp = _norm_group(name)
-            if grp not in ('keeta','hunger'):
-                continue
-            if group_f in ('keeta','hunger') and grp != group_f:
-                continue
-            invoices.append({'id': inv.id, 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id, 'type': 'sales', 'party': name, 'total': total, 'paid': paid, 'status': status_calc, 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')})
-            built_counts['sales'] += 1
-    except Exception:
-        pass
-
-    suppliers_groups = []
-    suppliers_totals = {'total': 0.0, 'paid': 0.0, 'remaining': 0.0, 'count': 0}
-    try:
-        by_supplier = {}
-        q = PurchaseInvoice.query
-        try:
-            q = q.filter(or_(PurchaseInvoice.created_at.between(sd_dt, ed_dt), PurchaseInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        q = q.order_by(PurchaseInvoice.created_at.desc()).limit(2000)
-        invs = q.all()
-        ids = [int(inv.id) for inv in invs]
-        paid_map = {}
-        if ids:
-            _rows = (db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0))
-                     .filter(Payment.invoice_type == 'purchase', Payment.invoice_id.in_(ids))
-                     .group_by(Payment.invoice_id)
-                     .all())
-            for i, s in _rows:
-                paid_map[int(i)] = float(s or 0.0)
-        for inv in invs:
-            name = (inv.supplier_name or (getattr(inv, 'supplier', None).name if getattr(inv, 'supplier', None) else '') or 'Supplier').strip()
-            if supplier_f and (name.lower().find(supplier_f) == -1):
-                continue
-            total = float(inv.total_after_tax_discount or 0.0)
-            paid = float(paid_map.get(int(inv.id), 0.0))
-            remaining = max(0.0, total - paid)
-            status_calc = compute_status(total, paid)
-            if status_f in ('due','unpaid') and status_calc == 'paid':
-                continue
-            if status_f == 'paid' and status_calc != 'paid':
-                continue
-            by_supplier.setdefault(name, {'supplier': name, 'invoices': [], 'total': 0.0, 'paid': 0.0, 'remaining': 0.0})
-            by_supplier[name]['invoices'].append({
-                'id': inv.id,
-                'invoice_number': getattr(inv, 'invoice_number', None) or inv.id,
-                'type': 'purchase',
-                'party': name,
-                'total': total,
-                'paid': paid,
-                'remaining': remaining,
-                'status': status_calc,
-                'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
-            })
-            by_supplier[name]['total'] += total
-            by_supplier[name]['paid'] += paid
-            by_supplier[name]['remaining'] += remaining
-        suppliers_groups = sorted(by_supplier.values(), key=lambda g: g['remaining'], reverse=True)
-        suppliers_totals['total'] = sum(g['total'] for g in suppliers_groups)
-        suppliers_totals['paid'] = sum(g['paid'] for g in suppliers_groups)
-        suppliers_totals['remaining'] = sum(g['remaining'] for g in suppliers_groups)
-        suppliers_totals['count'] = len(suppliers_groups)
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        suppliers_groups = []
-        suppliers_totals = {'total': 0.0, 'paid': 0.0, 'remaining': 0.0, 'count': 0}
-
-    debtors_groups = []
-    debtors_totals = {'total': 0.0, 'paid': 0.0, 'remaining': 0.0, 'count': 0}
-    try:
-        import re
-        def normalize_group(n: str):
-            raw = (n or '').lower()
-            if ('هنقر' in raw) or ('هونقر' in raw) or ('هَنقَر' in raw):
-                return 'hunger'
-            if ('كيتا' in raw) or ('كيت' in raw):
-                return 'keeta'
-            s = re.sub(r'[^a-z]', '', raw)
-            if s.startswith('hunger'):
-                return 'hunger'
-            if s.startswith('keeta') or s.startswith('keet'):
-                return 'keeta'
-            return ''
-        by_group = { 'keeta': {'group': 'keeta', 'invoices': [], 'total': 0.0, 'paid': 0.0, 'remaining': 0.0},
-                     'hunger': {'group': 'hunger', 'invoices': [], 'total': 0.0, 'paid': 0.0, 'remaining': 0.0} }
-        q = SalesInvoice.query
-        try:
-            q = q.filter(or_(SalesInvoice.created_at.between(sd_dt, ed_dt), SalesInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        q = q.order_by(SalesInvoice.created_at.desc()).limit(2000)
-        invs = q.all()
-        ids = [int(inv.id) for inv in invs]
-        paid_map = {}
-        if ids:
-            _rows = (db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0))
-                     .filter(Payment.invoice_type == 'sales', Payment.invoice_id.in_(ids))
-                     .group_by(Payment.invoice_id)
-                     .all())
-            for i, s in _rows:
-                paid_map[int(i)] = float(s or 0.0)
-        for inv in invs:
-            grp = normalize_group(inv.customer_name or '')
-            if grp not in by_group:
-                continue
-            if group_f in ('keeta','hunger') and grp != group_f:
-                continue
-            total = float(inv.total_after_tax_discount or 0.0)
-            paid = float(paid_map.get(int(inv.id), 0.0))
-            remaining = max(0.0, total - paid)
-            status_calc = compute_status(total, paid)
-            by_group[grp]['invoices'].append({
-                'id': inv.id,
-                'invoice_number': getattr(inv, 'invoice_number', None) or inv.id,
-                'type': 'sales',
-                'party': grp,
-                'total': total,
-                'paid': paid,
-                'remaining': remaining,
-                'status': status_calc,
-                'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
-            })
-            by_group[grp]['total'] += total
-            by_group[grp]['paid'] += paid
-            by_group[grp]['remaining'] += remaining
-        debtors_groups = [by_group['keeta'], by_group['hunger']]
-        debtors_totals['total'] = sum(g['total'] for g in debtors_groups)
-        debtors_totals['paid'] = sum(g['paid'] for g in debtors_groups)
-        debtors_totals['remaining'] = sum(g['remaining'] for g in debtors_groups)
-        debtors_totals['count'] = sum(1 for g in debtors_groups if g['invoices'])
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        debtors_groups = []
-        debtors_totals = {'total': 0.0, 'paid': 0.0, 'remaining': 0.0, 'count': 0}
-
-    # Apply filters
-    if status_f:
-        invoices = [i for i in invoices if (i.get('status') or '').lower() == status_f]
-    if type_f:
-        # normalize: purchases->purchase, expenses->expense, sales ignored
-        if type_f == 'purchases': type_f = 'purchase'
-        if type_f == 'expenses': type_f = 'expense'
-        invoices = [i for i in invoices if (i.get('type') or '') == type_f]
-
-    # Fallback: if no rows (or Sales selected), load sales invoices unconditionally within date range
-    if ((type_f or '') == 'sales' or not type_f) and not invoices:
-        try:
-            q = SalesInvoice.query
-            try:
-                q = q.filter(or_(SalesInvoice.created_at.between(sd_dt, ed_dt), SalesInvoice.date.between(sd_dt.date(), ed_dt.date())))
-            except Exception:
-                pass
-            invs = q.order_by(SalesInvoice.created_at.desc()).limit(1000).all()
-            ids = [int(inv.id) for inv in invs]
-            paid_map = {}
-            if ids:
-                _rows = (db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0))
-                         .filter(Payment.invoice_type == 'sales', Payment.invoice_id.in_(ids))
-                         .group_by(Payment.invoice_id)
-                         .all())
-                for i, s in _rows:
-                    paid_map[int(i)] = float(s or 0.0)
-            for inv in invs:
-                total = float(inv.total_after_tax_discount or 0.0)
-                paid = float(paid_map.get(int(inv.id), 0.0))
-                status_calc = compute_status(total, paid)
-                name = (inv.customer_name or '').strip() or 'Customer'
-                import re
-                raw = name.lower()
-                def _norm_group_fallback(n: str):
-                    if ('هنقر' in n) or ('هونقر' in n) or ('هَنقَر' in n):
-                        return 'hunger'
-                    if ('كيتا' in n) or ('كيت' in n):
-                        return 'keeta'
-                    s = re.sub(r'[^a-z]', '', n)
-                    if s.startswith('hunger'):
-                        return 'hunger'
-                    if s.startswith('keeta') or s.startswith('keet'):
-                        return 'keeta'
-                    return ''
-                g = _norm_group_fallback(raw)
-                if g not in ('keeta','hunger'):
-                    continue
-                if group_f in ('keeta','hunger') and g != group_f:
-                    continue
-                invoices.append({
-                    'id': inv.id,
-                    'invoice_number': getattr(inv, 'invoice_number', None) or inv.id,
-                    'type': 'sales',
-                    'party': name,
-                    'total': total,
-                    'paid': paid,
-                    'status': status_calc,
-                    'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
-                })
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            pass
-
-        # Re-apply status/type filters after fallback to honor user selection
-        if status_f:
-            invoices = [i for i in invoices if (i.get('status') or '').lower() == status_f]
-        if type_f:
-            invoices = [i for i in invoices if (i.get('type') or '') == type_f]
-
-    try:
-        current_app.logger.info(f"payments range sd={sd_dt} ed={ed_dt} built_counts={built_counts} final_count={len(invoices)} type_f={type_f} status_f={status_f} group_f={group_f}")
-    except Exception as e:
-        # Log the error for debugging
-        import traceback
-        print(f"Error in payments logging: {e}")
-        traceback.print_exc()
-        pass
-
-    return render_template('payments.html', invoices=invoices, PAYMENT_METHODS=PAYMENT_METHODS, status_f=status_f, type_f=type_f,
-                           suppliers_groups=suppliers_groups, suppliers_totals=suppliers_totals,
-                           debtors_groups=debtors_groups, debtors_totals=debtors_totals, start_date=sd_dt.date().isoformat(), end_date=ed_dt.date().isoformat(), group_f=group_f, supplier_f=supplier_f)
-
-@main.route('/payments.json', methods=['GET'], endpoint='payments_json')
-@login_required
-def payments_json():
-    status_f = (request.args.get('status') or '').strip().lower()
-    type_f = (request.args.get('type') or '').strip().lower()
-    supplier_f = (request.args.get('supplier') or '').strip().lower()
-    group_f = (request.args.get('cust_group') or 'all').strip().lower()
-    invoices = []
-    sd_str = (request.args.get('start_date') or '2025-10-01').strip()
-    ed_str = (request.args.get('end_date') or get_saudi_now().date().isoformat()).strip()
-    def _to_ascii_digits(s: str):
-        try:
-            arabic = '٠١٢٣٤٥٦٧٨٩'
-            for i, d in enumerate('0123456789'):
-                s = s.replace(arabic[i], d)
-            return s
-        except Exception:
-            return s
-    def _parse_date(s: str):
-        s = _to_ascii_digits((s or '').strip())
-        try:
-            if '-' in s:
-                return datetime.fromisoformat(s)
-            if '/' in s:
-                try:
-                    return datetime.strptime(s, '%d/%m/%Y')
-                except Exception:
-                    return datetime.strptime(s, '%m/%d/%Y')
-        except Exception:
-            pass
-        return None
-    sd_dt = _parse_date(sd_str) or datetime(get_saudi_now().year, 10, 1)
-    ed_dt = _parse_date(ed_str) or get_saudi_now()
-    try:
-        from decimal import Decimal, ROUND_HALF_UP
-        def to_cents(value):
-            try:
-                return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            except Exception:
-                return Decimal('0.00')
-        def compute_status(total_amt, paid_amt):
-            total_c = to_cents(total_amt)
-            paid_c = to_cents(paid_amt)
-            if (total_c - paid_c) <= Decimal('0.01'):
-                return 'paid'
-            if paid_c > Decimal('0.00'):
-                return 'partial'
-            return 'unpaid'
-        q = PurchaseInvoice.query
-        try:
-            q = q.filter(or_(PurchaseInvoice.created_at.between(sd_dt, ed_dt), PurchaseInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        p_rows = q.order_by(PurchaseInvoice.created_at.desc()).limit(1000).all()
-        p_ids = [int(inv.id) for inv in p_rows]
-        p_paid = {}
-        if p_ids:
-            for i, s in db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type == 'purchase', Payment.invoice_id.in_(p_ids)).group_by(Payment.invoice_id).all():
-                p_paid[int(i)] = float(s or 0.0)
-        for inv in p_rows:
-            total = float(inv.total_after_tax_discount or 0.0)
-            paid = float(p_paid.get(int(inv.id), 0.0))
-            invoices.append({'id': inv.id, 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id, 'type': 'purchase', 'party': inv.supplier_name or 'Supplier', 'total': total, 'paid': paid, 'status': compute_status(total, paid), 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')})
-    except Exception:
-        pass
-    try:
-        q = ExpenseInvoice.query
-        try:
-            q = q.filter(or_(ExpenseInvoice.created_at.between(sd_dt, ed_dt), ExpenseInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        e_rows = q.order_by(ExpenseInvoice.created_at.desc()).limit(1000).all()
-        e_ids = [int(inv.id) for inv in e_rows]
-        e_paid = {}
-        if e_ids:
-            for i, s in db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type == 'expense', Payment.invoice_id.in_(e_ids)).group_by(Payment.invoice_id).all():
-                e_paid[int(i)] = float(s or 0.0)
-        for inv in e_rows:
-            total = float(inv.total_after_tax_discount or 0.0)
-            paid = float(e_paid.get(int(inv.id), 0.0))
-            invoices.append({'id': inv.id, 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id, 'type': 'expense', 'party': 'Expense', 'total': total, 'paid': paid, 'status': compute_status(total, paid), 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')})
-    except Exception:
-        pass
-    try:
-        import re
-        def _norm_group(n: str):
-            raw = (n or '').lower()
-            if ('هنقر' in raw) or ('هونقر' in raw) or ('هَنقَر' in raw):
-                return 'hunger'
-            if ('كيتا' in raw) or ('كيت' in raw):
-                return 'keeta'
-            s = re.sub(r'[^a-z]', '', raw)
-            if s.startswith('hunger'):
-                return 'hunger'
-            if s.startswith('keeta') or s.startswith('keet'):
-                return 'keeta'
-            return ''
-        q = SalesInvoice.query
-        try:
-            q = q.filter(or_(SalesInvoice.created_at.between(sd_dt, ed_dt), SalesInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        s_rows = q.order_by(SalesInvoice.created_at.desc()).limit(1000).all()
-        s_ids = [int(inv.id) for inv in s_rows]
-        s_paid = {}
-        if s_ids:
-            for i, s in db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type == 'sales', Payment.invoice_id.in_(s_ids)).group_by(Payment.invoice_id).all():
-                s_paid[int(i)] = float(s or 0.0)
-        for inv in s_rows:
-            total = float(inv.total_after_tax_discount or 0.0)
-            paid = float(s_paid.get(int(inv.id), 0.0))
-            name = (inv.customer_name or '').strip() or 'Customer'
-            grp = _norm_group(name)
-            if grp not in ('keeta','hunger'):
-                continue
-            if group_f in ('keeta','hunger') and grp != group_f:
-                continue
-            invoices.append({'id': inv.id, 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id, 'type': 'sales', 'party': name, 'total': total, 'paid': paid, 'status': compute_status(total, paid), 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')})
-    except Exception:
-        pass
-    if status_f:
-        invoices = [i for i in invoices if (i.get('status') or '').lower() == status_f]
-    if type_f:
-        if type_f == 'purchases': type_f = 'purchase'
-        if type_f == 'expenses': type_f = 'expense'
-        invoices = [i for i in invoices if (i.get('type') or '') == type_f]
-    return jsonify({'ok': True, 'count': len(invoices), 'invoices': invoices})
-
-@main.route('/payments/export', methods=['GET'], endpoint='payments_export')
-@login_required
-def payments_export():
-    fmt = (request.args.get('format') or 'pdf').strip().lower()
-    group_f = (request.args.get('cust_group') or 'all').strip().lower()
-    sd_str = (request.args.get('start_date') or '2025-10-01').strip()
-    ed_str = (request.args.get('end_date') or get_saudi_now().date().isoformat()).strip()
-    def _to_ascii_digits(s: str):
-        try:
-            arabic = '٠١٢٣٤٥٦٧٨٩'
-            for i, d in enumerate('0123456789'):
-                s = s.replace(arabic[i], d)
-            return s
-        except Exception:
-            return s
-    def _parse_date(s: str):
-        s = _to_ascii_digits((s or '').strip())
-        try:
-            if '-' in s:
-                return datetime.fromisoformat(s)
-            if '/' in s:
-                try:
-                    return datetime.strptime(s, '%d/%m/%Y')
-                except Exception:
-                    return datetime.strptime(s, '%m/%d/%Y')
-        except Exception:
-            pass
-        return None
-    sd_dt = _parse_date(sd_str) or datetime(get_saudi_now().year, 10, 1)
-    ed_dt = _parse_date(ed_str) or get_saudi_now()
-
-    groups = {'keeta': {'rows': [], 'sums': {'Amount': 0.0, 'Discount': 0.0, 'VAT': 0.0, 'Total': 0.0}},
-              'hunger': {'rows': [], 'sums': {'Amount': 0.0, 'Discount': 0.0, 'VAT': 0.0, 'Total': 0.0}}}
-    try:
-        from sqlalchemy import or_
-        import re
-        items_sub = db.session.query(
-            SalesInvoiceItem.invoice_id.label('inv_id'),
-            func.count(SalesInvoiceItem.id).label('items_count'),
-            func.sum(SalesInvoiceItem.price_before_tax * SalesInvoiceItem.quantity).label('amount_sum'),
-            func.sum(SalesInvoiceItem.tax).label('tax_sum')
-        ).group_by(SalesInvoiceItem.invoice_id).subquery()
-
-        def norm_group(n: str):
-            raw = (n or '').lower()
-            if ('هنقر' in raw) or ('هونقر' in raw) or ('هَنقَر' in raw):
-                return 'hunger'
-            if ('كيتا' in raw) or ('كيت' in raw):
-                return 'keeta'
-            s = re.sub(r'[^a-z]', '', raw)
-            if s.startswith('hunger'):
-                return 'hunger'
-            if s.startswith('keeta') or s.startswith('keet'):
-                return 'keeta'
-            return ''
-
-        q = db.session.query(
-            SalesInvoice,
-            items_sub.c.items_count,
-            items_sub.c.amount_sum,
-            items_sub.c.tax_sum
-        ).outerjoin(items_sub, items_sub.c.inv_id == SalesInvoice.id)
-        try:
-            q = q.filter(or_(SalesInvoice.created_at.between(sd_dt, ed_dt), SalesInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        q = q.order_by(SalesInvoice.created_at.desc()).limit(5000)
-        for inv, items_count, amount_sum, tax_sum in q.all():
-            grp = norm_group(inv.customer_name or '')
-            if grp not in ('keeta','hunger'):
-                continue
-            if group_f in ('keeta','hunger') and grp != group_f:
-                continue
-            amount = float(amount_sum or 0.0)
-            discount = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-            vat = float(tax_sum or 0.0)
-            total = float(amount - discount + vat)
-            dt = getattr(inv, 'date', None)
-            date_str = dt.strftime('%Y-%m-%d') if dt else ''
-            branch = getattr(inv, 'branch', None) or ''
-            row = {
-                'Invoice': getattr(inv, 'invoice_number', None) or f"S-{inv.id}",
-                'Items': int(items_count or 0),
-                'Amount': amount,
-                'Discount': discount,
-                'Total': total,
-                'VAT': vat,
-                'Date': date_str,
-                'Branch': branch,
-            }
-            groups[grp]['rows'].append(row)
-            groups[grp]['sums']['Amount'] += amount
-            groups[grp]['sums']['Discount'] += discount
-            groups[grp]['sums']['VAT'] += vat
-            groups[grp]['sums']['Total'] += total
-    except Exception:
-        groups = {'keeta': {'rows': [], 'sums': {'Amount': 0.0, 'Discount': 0.0, 'VAT': 0.0, 'Total': 0.0}},
-                  'hunger': {'rows': [], 'sums': {'Amount': 0.0, 'Discount': 0.0, 'VAT': 0.0, 'Total': 0.0}}}
-
-    if fmt == 'excel':
-        try:
-            import pandas as pd
-            from io import BytesIO
-            buf = BytesIO()
-            with pd.ExcelWriter(buf, engine='openpyxl') as writer:
-                for name in ['keeta','hunger']:
-                    if group_f in ('keeta','hunger') and name != group_f:
-                        continue
-                    df = pd.DataFrame(groups[name]['rows'], columns=['Invoice','Items','Amount','Discount','Total','VAT','Date','Branch'])
-                    if not df.empty:
-                        totals_row = {'Invoice': 'Totals', 'Items': '', 'Amount': groups[name]['sums']['Amount'], 'Discount': groups[name]['sums']['Discount'], 'Total': groups[name]['sums']['Total'], 'VAT': groups[name]['sums']['VAT'], 'Date': '', 'Branch': ''}
-                        df = pd.concat([df, pd.DataFrame([totals_row])], ignore_index=True)
-                    df.to_excel(writer, index=False, sheet_name=name.upper())
-                sum_df = pd.DataFrame([
-                    {'Client': 'KEETA', 'Amount': groups['keeta']['sums']['Amount'], 'Discount': groups['keeta']['sums']['Discount'], 'VAT': groups['keeta']['sums']['VAT'], 'Total': groups['keeta']['sums']['Total']},
-                    {'Client': 'HUNGER', 'Amount': groups['hunger']['sums']['Amount'], 'Discount': groups['hunger']['sums']['Discount'], 'VAT': groups['hunger']['sums']['VAT'], 'Total': groups['hunger']['sums']['Total']},
-                    {'Client': 'GRAND', 'Amount': groups['keeta']['sums']['Amount'] + groups['hunger']['sums']['Amount'], 'Discount': groups['keeta']['sums']['Discount'] + groups['hunger']['sums']['Discount'], 'VAT': groups['keeta']['sums']['VAT'] + groups['hunger']['sums']['VAT'], 'Total': groups['keeta']['sums']['Total'] + groups['hunger']['sums']['Total']}
-                ])
-                sum_df.to_excel(writer, index=False, sheet_name='SUMMARY')
-            buf.seek(0)
-            filename = f"payments_keeta_hunger_{sd_dt.date().isoformat()}_{ed_dt.date().isoformat()}.xlsx"
-            return send_file(buf, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        except Exception:
-            return redirect(url_for('main.payments', cust_group=group_f, start_date=sd_dt.date().isoformat(), end_date=ed_dt.date().isoformat(), type='sales'))
-
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, LongTable, TableStyle, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet
-        from io import BytesIO
-        buf = BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=A4)
-        styles = getSampleStyleSheet()
-        elements = []
-        title = Paragraph('Payments — keeta/hunger', styles['Title'])
-        elements.append(title)
-        elements.append(Spacer(1, 12))
-        for name in ['keeta','hunger']:
-            if group_f in ('keeta','hunger') and name != group_f:
-                continue
-            elements.append(Paragraph(name.upper(), styles['Heading2']))
-            data = [['Invoice','Items','Amount','Discount','Total','VAT','Date','Branch']]
-            for r in groups[name]['rows']:
-                data.append([
-                    r.get('Invoice',''),
-                    str(r.get('Items',0)),
-                    f"{float(r.get('Amount',0) or 0):.2f}",
-                    f"{float(r.get('Discount',0) or 0):.2f}",
-                    f"{float(r.get('Total',0) or 0):.2f}",
-                    f"{float(r.get('VAT',0) or 0):.2f}",
-                    r.get('Date',''),
-                    r.get('Branch',''),
-                ])
-            totals_row = ['Totals','', f"{groups[name]['sums']['Amount']:.2f}", f"{groups[name]['sums']['Discount']:.2f}", f"{groups[name]['sums']['Total']:.2f}", f"{groups[name]['sums']['VAT']:.2f}", '', '']
-            data.append(totals_row)
-            table = LongTable(data, colWidths=[90,50,70,70,70,70,80,80], repeatRows=1)
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ]))
-            elements.append(table)
-            elements.append(Spacer(1, 12))
-        grand = {
-            'Amount': groups['keeta']['sums']['Amount'] + groups['hunger']['sums']['Amount'],
-            'Discount': groups['keeta']['sums']['Discount'] + groups['hunger']['sums']['Discount'],
-            'VAT': groups['keeta']['sums']['VAT'] + groups['hunger']['sums']['VAT'],
-            'Total': groups['keeta']['sums']['Total'] + groups['hunger']['sums']['Total']
-        }
-        elements.append(Paragraph('GRAND TOTALS', styles['Heading2']))
-        gdata = [['Amount','Discount','Total','VAT'], [f"{grand['Amount']:.2f}", f"{grand['Discount']:.2f}", f"{grand['Total']:.2f}", f"{grand['VAT']:.2f}"]]
-        gtable = LongTable(gdata, colWidths=[100,100,100,100], repeatRows=1)
-        gtable.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ]))
-        elements.append(gtable)
-        doc.build(elements)
-        buf.seek(0)
-        filename = f"payments_keeta_hunger_{sd_dt.date().isoformat()}_{ed_dt.date().isoformat()}.pdf"
-        return send_file(buf, as_attachment=True, download_name=filename, mimetype='application/pdf')
-    except Exception:
-        return redirect(url_for('main.payments', cust_group=group_f, start_date=sd_dt.date().isoformat(), end_date=ed_dt.date().isoformat(), type='sales'))
-
-@main.route('/reports', endpoint='reports')
-@login_required
-def reports():
-    return render_template('reports.html')
-
-@main.route('/api/reports/preview', methods=['GET'], endpoint='api_reports_preview')
-def api_reports_preview():
-    try:
-        from datetime import datetime as _dt, time as _time, timedelta as _td
-        inv_type = (request.args.get('type') or 'sales').strip().lower()
-        start_s = (request.args.get('start_date') or '').strip()
-        end_s = (request.args.get('end_date') or '').strip()
-        branch = (request.args.get('branch') or 'all').strip()
-        pm = (request.args.get('payment_method') or 'all').strip().lower()
-        def _parse(s):
-            try:
-                return _dt.strptime(s, '%Y-%m-%d').date()
-            except Exception:
-                return None
-        start_d = _parse(start_s)
-        end_d = _parse(end_s)
-        if (start_d is None) and (end_d is not None):
-            start_d = end_d
-        if (end_d is None) and (start_d is not None):
-            end_d = start_d
-        rows = []
-        if inv_type == 'sales':
-            q = db.session.query(SalesInvoice)
-            if start_d and end_d:
-                try:
-                    if hasattr(SalesInvoice, 'created_at'):
-                        start_dt = _dt.combine(start_d, _time.min)
-                        end_dt = _dt.combine(end_d, _time.max)
-                        q = q.filter(SalesInvoice.created_at >= start_dt, SalesInvoice.created_at <= end_dt)
-                    elif hasattr(SalesInvoice, 'date'):
-                        q = q.filter(SalesInvoice.date.between(start_d, end_d))
-                except Exception:
-                    pass
-            if branch and branch != 'all':
-                q = q.filter(SalesInvoice.branch == branch)
-            if pm and pm != 'all':
-                q = q.filter(SalesInvoice.payment_method == pm)
-            order_col = SalesInvoice.created_at if hasattr(SalesInvoice, 'created_at') else SalesInvoice.date
-            for r in q.order_by(order_col.asc()).all():
-                rows.append({
-                    'date': (r.created_at.date().isoformat() if getattr(r, 'created_at', None) else (r.date.isoformat() if getattr(r, 'date', None) else '')),
-                    'branch': BRANCH_LABELS.get(r.branch, r.branch),
-                    'customer': (r.customer_name or ''),
-                    'type': 'sales',
-                    'payment': (r.payment_method or ''),
-                    'total': float(r.total_after_tax_discount or 0.0),
-                })
-        elif inv_type == 'purchases':
-            q = db.session.query(PurchaseInvoice)
-            if start_d and end_d:
-                q = q.filter(PurchaseInvoice.date.between(start_d, end_d))
-            if pm and pm != 'all':
-                q = q.filter(PurchaseInvoice.payment_method == pm)
-            for r in q.order_by(PurchaseInvoice.date.asc()).all():
-                rows.append({
-                    'date': r.date.isoformat() if r.date else '',
-                    'branch': '—',
-                    'customer': (r.supplier_name or ''),
-                    'type': 'purchases',
-                    'payment': (r.payment_method or ''),
-                    'total': float(r.total_after_tax_discount or 0.0),
-                })
-        else:
-            q = db.session.query(ExpenseInvoice)
-            if start_d and end_d:
-                q = q.filter(ExpenseInvoice.date.between(start_d, end_d))
-            if pm and pm != 'all':
-                q = q.filter(ExpenseInvoice.payment_method == pm)
-            for r in q.order_by(ExpenseInvoice.date.asc()).all():
-                rows.append({
-                    'date': r.date.isoformat() if r.date else '',
-                    'branch': '—',
-                    'customer': '',
-                    'type': 'expenses',
-                    'payment': (r.payment_method or ''),
-                    'total': float(r.total_after_tax_discount or 0.0),
-                })
-        return jsonify({'ok': True, 'rows': rows})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@main.route('/api/reports/customer-sales', methods=['GET'], endpoint='api_reports_customer_sales')
-def api_reports_customer_sales():
-    try:
-        from datetime import datetime as _dt
-        names_csv = (request.args.get('customers') or '').strip()
-        start_s = (request.args.get('start_date') or '').strip()
-        end_s = (request.args.get('end_date') or '').strip()
-        branch = (request.args.get('branch') or 'all').strip()
-        groups = [x.strip() for x in names_csv.split(',') if x.strip()]
-        def _parse(s):
-            try:
-                return _dt.strptime(s, '%Y-%m-%d').date()
-            except Exception:
-                return None
-        start_d = _parse(start_s)
-        end_d = _parse(end_s)
-        q = db.session.query(SalesInvoice)
-        if start_d and end_d:
-            q = q.filter(SalesInvoice.date.between(start_d, end_d))
-        if branch and branch != 'all':
-            q = q.filter(SalesInvoice.branch == branch)
-        if groups:
-            q = q.filter(SalesInvoice.customer_name.in_(groups))
-        rows = []
-        for r in q.order_by(SalesInvoice.date.asc()).limit(1000).all():
-            rows.append({
-                'date': r.date.isoformat() if r.date else '',
-                'branch': BRANCH_LABELS.get(r.branch, r.branch),
-                'customer': (r.customer_name or ''),
-                'type': 'sales',
-                'payment': (r.payment_method or ''),
-                'total': float(r.total_after_tax_discount or 0.0),
-            })
-        return jsonify({'ok': True, 'rows': rows})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@main.route('/reports/monthly', methods=['GET'], endpoint='reports_monthly')
-@login_required
-def reports_monthly():
-    try:
-        from models import Employee
-        return render_template('reports_monthly.html', employees=Employee.query.all())
-    except Exception:
-        return render_template('reports_monthly.html', employees=[])
-
-@main.route('/api/reports/monthly', methods=['GET'], endpoint='api_reports_monthly')
-@login_required
-def api_reports_monthly():
-    try:
-        from datetime import date
-        from models import Salary, Employee, JournalLine, JournalEntry, Payment
-        month = (request.args.get('month') or '').strip()
-        year = request.args.get('year', type=int)
-        emp_id = request.args.get('emp_id', type=int) or request.args.get('emp', type=int)
-        emp_q = (request.args.get('emp') or '').strip().lower() if not emp_id else ''
-        dept_q = (request.args.get('dept') or '').strip()
-        start_dt = None; end_dt = None
-        if month:
-            y, m = month.split('-'); y = int(y); m = int(m)
-            start_dt = date(y, m, 1)
-            end_dt = date(y + (1 if m==12 else 0), 1 if m==12 else m+1, 1)
-        elif year:
-            start_dt = date(year, 1, 1)
-            end_dt = date(year+1, 1, 1)
-        emps = {}
-        try:
-            for e in Employee.query.all():
-                emps[int(e.id)] = {'name': e.full_name, 'dept': (e.department or '').strip()}
-        except Exception:
-            pass
-        sq = db.session.query(Salary)
-        if month:
-            y, m = month.split('-'); y = int(y); m = int(m)
-            sq = sq.filter(Salary.year == y, Salary.month == m)
-        elif year:
-            sq = sq.filter(Salary.year == year)
-        elif start_dt and end_dt:
-            sq = sq.filter(Salary.month_date >= start_dt, Salary.month_date < end_dt)
-        srows = sq.all()
-        # Resolve Employee Advances account (EMP_ADV -> '1030')
-        try:
-            adv_code = SHORT_TO_NUMERIC.get('EMP_ADV', ('1030',))[0]
-            adv_acc = _account(adv_code, CHART_OF_ACCOUNTS[adv_code]['name'], CHART_OF_ACCOUNTS[adv_code]['type'])
-        except Exception:
-            adv_acc = None
-        # Deductions within selected period (based on description keywords)
-        jlq = db.session.query(JournalLine, JournalEntry).join(JournalEntry, JournalLine.journal_id == JournalEntry.id)
-        if start_dt and end_dt:
-            jlq = jlq.filter(JournalEntry.date >= start_dt, JournalEntry.date < end_dt)
-        jrows = jlq.all()
-        ded_hist_by_emp = {}
-        try:
-            dq = db.session.query(Salary.employee_id, func.coalesce(func.sum(Salary.deductions), 0.0))
-            if end_dt:
-                dq = dq.filter(Salary.month_date < end_dt)
-            dq = dq.group_by(Salary.employee_id)
-            for emp_id_val, ded_sum in dq.all():
-                ded_hist_by_emp[int(emp_id_val or 0)] = float(ded_sum or 0.0)
-        except Exception:
-            ded_hist_by_emp = {}
-        # Advances as historical outstanding up to end of period: sum EMP_ADV debits minus credits up to end_dt
-        adv_debit_by_emp = {}
-        adv_credit_by_emp = {}
-        if adv_acc:
-            adv_q = db.session.query(JournalLine, JournalEntry).join(JournalEntry, JournalLine.journal_id == JournalEntry.id)
-            adv_q = adv_q.filter(JournalLine.account_id == adv_acc.id)
-            if end_dt:
-                adv_q = adv_q.filter(JournalEntry.date < end_dt)
-            for jl, je in adv_q.all():
-                eid = int(getattr(jl, 'employee_id', 0) or 0)
-                adv_debit_by_emp[eid] = adv_debit_by_emp.get(eid, 0.0) + float(getattr(jl, 'debit', 0) or 0)
-                adv_credit_by_emp[eid] = adv_credit_by_emp.get(eid, 0.0) + float(getattr(jl, 'credit', 0) or 0)
-        rows = []
-        payroll_total = 0.0
-        for s in srows:
-            eid = int(getattr(s, 'employee_id', 0) or 0)
-            nm = emps.get(eid, {}).get('name', '')
-            dp = (emps.get(eid, {}).get('dept', '') or '').strip()
-            if emp_id and eid != emp_id:
-                continue
-            if emp_q and nm.lower().find(emp_q) < 0:
-                continue
-            if dept_q and dp.lower() != dept_q.lower():
-                continue
-            basic = float(getattr(s, 'basic_salary', 0) or 0)
-            bonus = float(getattr(s, 'allowances', 0) or 0)
-            total = float(getattr(s, 'total_salary', 0) or 0)
-            ded_month = float(getattr(s, 'deductions', 0) or 0)
-            # Net monthly advances (granted - repaid) within the selected period
-            adv_deb = float(adv_debit_by_emp.get(eid, 0.0) or 0.0)
-            adv_cre = float(adv_credit_by_emp.get(eid, 0.0) or 0.0)
-            advances = max(0.0, adv_deb - adv_cre)
-            # Actual payments against this salary
-            try:
-                paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                             .filter(Payment.invoice_type=='salary', Payment.invoice_id==int(getattr(s,'id',0) or 0)).scalar() or 0.0)
-            except Exception:
-                paid = 0.0
-            remaining = max(0.0, total - paid)
-            # Normalize status to avoid marking zero totals as paid
-            st = (getattr(s, 'status', '') or '').strip().lower() or 'due'
-            if total <= 0:
-                st = 'due'
-            else:
-                if paid >= total:
-                    st = 'paid'
-                elif paid > 0:
-                    st = 'partial'
-                else:
-                    st = 'due'
-            # Skip completely empty rows (no totals, no payments, no advances, no deductions)
-            if total <= 0 and paid <= 0 and advances <= 0 and ded_month <= 0:
-                continue
-            net = max(0.0, total - advances - ded_month)
-            rows.append({
-                'employee_id': eid,
-                'name': nm,
-                'dept': dp,
-                'basic': basic,
-                'ot': 0.0,
-                'bonus': bonus,
-                'total': total,
-                'advances': advances,
-                'deductions': float(ded_hist_by_emp.get(eid, 0.0) or 0.0),
-                'net': net,
-                'status': st,
-                'month': f"{int(getattr(s,'year',0) or 0)}-{str(int(getattr(s,'month',0) or 0)).zfill(2)}"
-            })
-            payroll_total += total
-        # KPI totals should reflect only employees included in rows
-        adv_total = float(sum([r.get('advances', 0.0) for r in rows]) or 0.0)
-        ded_total = float(sum([r.get('deductions', 0.0) for r in rows]) or 0.0)
-        entries_count = len(jrows)
-        series = {
-            'payroll': [float(getattr(sr, 'total_salary', 0) or 0) for sr in srows][0:24],
-            'advances': [float(r.get('advances', 0.0)) for r in rows][0:24],
-            'deductions': [float(r.get('deductions', 0.0)) for r in rows][0:24],
-        }
-        return jsonify({'ok': True, 'kpis': { 'payroll_total': payroll_total, 'advances_total': adv_total, 'deductions_total': ded_total, 'entries_count': entries_count }, 'rows': rows, 'series': series})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@main.route('/reports/print/customer-sales', methods=['GET'], endpoint='reports_print_customer_sales')
-@login_required
-def reports_print_customer_sales():
-    customer = (request.args.get('customer') or '').strip()
-    customers_param = (request.args.get('customers') or '').strip()
-    start_date = (request.args.get('start_date') or '').strip()
-    end_date = (request.args.get('end_date') or '').strip()
-    branch = (request.args.get('branch') or 'all').strip()
-    rows = []
-    totals = {'Amount': 0.0, 'Discount': 0.0, 'VAT': 0.0, 'Total': 0.0}
-    payment_totals = {}
-    try:
-        from sqlalchemy import or_, and_
-        import re
-        def normalize_group(n: str):
-            s = re.sub(r'[^a-z]', '', (n or '').lower())
-            if s.startswith('hunger'): return 'hunger'
-            if s.startswith('keeta') or s.startswith('keet'): return 'keeta'
-            if s.startswith('noon'): return 'noon'
-            return s
-        # Aggregate items per invoice for amount and VAT
-        items_sub = db.session.query(
-            SalesInvoiceItem.invoice_id.label('inv_id'),
-            func.sum(SalesInvoiceItem.price_before_tax * SalesInvoiceItem.quantity).label('amount_sum'),
-            func.sum(SalesInvoiceItem.tax).label('vat_sum')
-        ).group_by(SalesInvoiceItem.invoice_id).subquery()
-
-        q = db.session.query(
-            SalesInvoice,
-            items_sub.c.amount_sum,
-            items_sub.c.vat_sum
-        ).outerjoin(items_sub, items_sub.c.inv_id == SalesInvoice.id)
-        q = q.filter(SalesInvoice.status == 'paid')
-        customers_list = []
-        if customers_param:
-            customers_list = [normalize_group(s) for s in customers_param.split(',') if s.strip()]
-        base_filters = []
-        if customers_list:
-            for base in customers_list:
-                if base:
-                    base_filters.append(SalesInvoice.customer_name.ilike(base + '%'))
-        elif customer:
-            base = normalize_group(customer)
-            if base:
-                base_filters.append(SalesInvoice.customer_name.ilike(base + '%'))
-        if base_filters:
-            q = q.filter(or_(*base_filters))
-        if branch and branch != 'all':
-            q = q.filter(SalesInvoice.branch == branch)
-        # Date range
-        sd_dt = None; ed_dt = None
-        try:
-            sd_dt = datetime.fromisoformat(start_date) if start_date else None
-        except Exception:
-            sd_dt = None
-        try:
-            ed_dt = datetime.fromisoformat(end_date) if end_date else None
-        except Exception:
-            ed_dt = None
-        if sd_dt and ed_dt:
-            q = q.filter(or_(SalesInvoice.created_at.between(sd_dt, ed_dt), SalesInvoice.date.between(sd_dt, ed_dt)))
-        elif sd_dt and (not ed_dt):
-            q = q.filter(or_(SalesInvoice.created_at >= sd_dt, SalesInvoice.date >= sd_dt))
-        elif ed_dt and (not sd_dt):
-            q = q.filter(or_(SalesInvoice.created_at <= ed_dt, SalesInvoice.date <= ed_dt))
-
-        q = q.order_by(SalesInvoice.created_at.desc(), SalesInvoice.date.desc()).limit(2000)
-        for inv, amount_sum, vat_sum in q.all():
-            dt = getattr(inv, 'created_at', None) or getattr(inv, 'date', None) or get_saudi_now()
-            day_name = dt.strftime('%A')
-            amount = float(amount_sum or 0.0)
-            discount = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-            vat = float(vat_sum or 0.0)
-            total = float(amount - discount + vat)
-            pm = (inv.payment_method or '').upper()
-            rows.append({
-                'Date': dt.strftime('%Y-%m-%d'),
-                'Day': day_name,
-                'Invoice': inv.invoice_number,
-                'Payment': pm,
-                'Amount': amount,
-                'Discount': discount,
-                'VAT': vat,
-                'Total': total,
-            })
-            totals['Amount'] += amount
-            totals['Discount'] += discount
-            totals['VAT'] += vat
-            totals['Total'] += total
-            payment_totals[pm] = payment_totals.get(pm, 0.0) + total
-    except Exception:
-        pass
-
-    try:
-        settings = Settings.query.first()
-    except Exception:
-        settings = None
-    title_customer = (normalize_group(customer) if customer else '')
-    if customers_list:
-        try:
-            title_customer = ', '.join(customers_list)
-        except Exception:
-            title_customer = title_customer or 'multiple'
-    meta = {
-        'title': f"Customer Sales — {title_customer}",
-        'customer': title_customer,
-        'branch': branch,
-        'start_date': start_date,
-        'end_date': end_date,
-        'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
-    }
-    columns = ['Date','Day','Invoice','Payment','Amount','Discount','VAT','Total']
-    return render_template('print_report.html', report_title=meta['title'], settings=settings,
-                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
-                           payment_method='all', branch=meta['branch'],
-                           columns=columns, data=rows, totals=totals, totals_columns=['Amount','Discount','VAT','Total'],
-                           totals_colspan=4, payment_totals=payment_totals)
 
 @main.route('/admin/reclassify-keeta-hunger', methods=['POST'], endpoint='admin_reclassify_keeta_hunger')
 @login_required
@@ -6771,2222 +3305,6 @@ def admin_reclassify_keeta_hunger():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 # ---------- POS/Tables: basic navigation ----------
-@main.route('/sales/<branch_code>/tables', endpoint='sales_tables')
-@login_required
-def sales_tables(branch_code):
-    if not user_can('sales','view', branch_code):
-        flash('لا تملك صلاحية الوصول لفرع المبيعات هذا', 'warning')
-        return redirect(url_for('main.sales'))
-    branch_label = BRANCH_LABELS.get(branch_code, branch_code)
-
-    grouped_tables = []
-    tables = []
-
-    try:
-        from models import TableSection, TableSectionAssignment
-
-        def decode_name(name: str):
-            name = name or ''
-            visible = name
-            layout = ''
-            if '[rows:' in name and name.endswith(']'):
-                try:
-                    before, bracket = name.rsplit('[rows:', 1)
-                    visible = before.rstrip()
-                    layout = bracket[:-1].strip()
-                except Exception:
-                    pass
-            return visible, layout
-
-        sections = TableSection.query.filter_by(branch_code=branch_code).order_by(TableSection.sort_order, TableSection.id).all()
-        assignments = TableSectionAssignment.query.filter_by(branch_code=branch_code).all()
-
-        # Build status map based on draft orders (occupied / available)
-        status_map = {}
-        for assignment in assignments:
-            number = safe_table_number(assignment.table_number)
-            if number <= 0:
-                continue
-            draft = kv_get(f'draft:{branch_code}:{number}', {}) or {}
-            status_map[number] = 'occupied' if (draft.get('items') or []) else 'available'
-
-        assignments_by_section = {}
-        for assignment in assignments:
-            assignments_by_section.setdefault(assignment.section_id, []).append(assignment)
-
-        # Build grouped tables honoring saved layout and showing empty sections as headers
-        for section in sections:
-            visible, layout = decode_name(section.name)
-
-            # Collect tables for this section (sorted by table number)
-            section_tables = []
-            section_assignments = assignments_by_section.get(section.id, [])
-            section_assignments.sort(key=lambda a: safe_table_number(a.table_number))
-            for assignment in section_assignments:
-                number = safe_table_number(assignment.table_number)
-                if number <= 0:
-                    continue
-                section_tables.append({
-                    'number': number,
-                    'status': status_map.get(number, 'available')
-                })
-
-            # Split into rows according to saved layout "1,3,4" etc.
-            rows = []
-            if layout:
-                try:
-                    counts = [int(x.strip()) for x in layout.split(',') if x.strip()]
-                except Exception:
-                    counts = []
-                i = 0
-                for cnt in counts:
-                    if cnt <= 0:
-                        continue
-                    rows.append(section_tables[i:i+cnt])
-                    i += cnt
-                if i < len(section_tables):
-                    rows.append(section_tables[i:])
-            else:
-                # If no layout saved and tables exist, place all tables in a single row
-                if section_tables:
-                    rows = [section_tables]
-                else:
-                    rows = []
-
-            section_entry = {
-                'section': visible or branch_label,
-                'rows': rows,
-                # Keep flat list for template fallback when rows is empty
-                'tables': section_tables
-            }
-
-            # Always append the section so saved sections appear even without assignments
-            grouped_tables.append(section_entry)
-
-    except Exception as e:
-        print(f"[sales_tables] Error loading grouped tables for {branch_code}: {e}")
-        grouped_tables = []
-        tables = []
-
-    if not grouped_tables:
-        settings = kv_get('table_settings', {}) or {}
-        default_count = 20
-        if branch_code == 'china_town':
-            count = int((settings.get('china') or {}).get('count', default_count))
-        elif branch_code == 'place_india':
-            count = int((settings.get('india') or {}).get('count', default_count))
-        else:
-            count = default_count
-        for i in range(1, count + 1):
-            draft = kv_get(f'draft:{branch_code}:{i}', {}) or {}
-            status = 'occupied' if (draft.get('items') or []) else 'available'
-            tables.append({'number': i, 'status': status})
-
-    return render_template('sales_tables.html', branch_code=branch_code, branch_label=branch_label, tables=tables, grouped_tables=grouped_tables or None)
-
-@main.route('/sales/china_town', endpoint='sales_china')
-@login_required
-def sales_china():
-    return redirect(url_for('main.sales_tables', branch_code='china_town'))
-
-
-@main.route('/sales/place_india', endpoint='sales_india')
-@login_required
-def sales_india():
-    return redirect(url_for('main.sales_tables', branch_code='place_india'))
-
-
-@main.route('/pos/<branch_code>', endpoint='pos_home')
-@login_required
-def pos_home(branch_code):
-    if not user_can('sales','view', branch_code):
-        flash('\u0644\u0627 \u062a\u0645\u0644\u0643 \u0635\u0644\u0627\u062d\u064a\u0629 \u0627\u0644\u0648\u0635\u0648\u0644 \u0644\u0641\u0631\u0639 \u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0647\u0630\u0627', 'warning')
-        return redirect(url_for('main.sales'))
-
-    return redirect(url_for('main.sales_tables', branch_code=branch_code))
-
-
-@main.route('/pos/<branch_code>/table/<int:table_number>', endpoint='pos_table')
-@login_required
-def pos_table(branch_code, table_number):
-    if not user_can('sales','view', branch_code):
-        # If XHR requested HTML (POS page) but user is not allowed, redirect to login preserving next
-        return redirect(url_for('main.login', next=request.path))
-    branch_label = BRANCH_LABELS.get(branch_code, branch_code)
-    vat_rate = 15
-    # Load any existing draft for this table
-    draft = kv_get(f'draft:{branch_code}:{table_number}', {}) or {}
-    draft_items = json.dumps(draft.get('items') or [])
-    current_draft = type('Obj', (), {'id': draft.get('draft_id')}) if draft.get('draft_id') else None
-    try:
-        init_cust = (draft.get('customer') or {})
-        init_cust_name = (init_cust.get('name') or '').strip()
-        init_cust_phone = (init_cust.get('phone') or '').strip()
-    except Exception:
-        init_cust_name = ''
-        init_cust_phone = ''
-    try:
-        init_discount_pct = float((draft.get('discount_pct') or 0) or 0)
-    except Exception:
-        init_discount_pct = 0.0
-    try:
-        init_tax_pct = float((draft.get('tax_pct') or vat_rate) or vat_rate)
-    except Exception:
-        init_tax_pct = float(vat_rate or 15)
-    init_payment_method = (draft.get('payment_method') or '').strip().upper()
-    # Warmup DB (avoid heavy create_all/seed on every request)
-    warmup_db_once()
-    # Load categories from DB for UI and provide a name->id map
-    try:
-
-
-        cats = MenuCategory.query.order_by(MenuCategory.sort_order, MenuCategory.name).all()
-    except Exception:
-        try:
-
-
-            cats = MenuCategory.query.order_by(MenuCategory.name).all()
-        except Exception:
-            cats = MenuCategory.query.all()
-    categories = [c.name for c in cats]
-    cat_map = {}
-    def _slug(s):
-        try:
-            import re
-            s = (s or '').strip().lower()
-            s = re.sub(r"[^a-z0-9]+", "-", s)
-            s = re.sub(r"-+", "-", s).strip('-')
-            return s or 'category'
-        except Exception:
-            return 'category'
-    def _static_image_url(*candidates):
-        try:
-            import os
-            for rel in candidates:
-                if not rel:
-                    continue
-                fp = os.path.join(current_app.static_folder, rel.replace('/', os.sep))
-                if os.path.exists(fp):
-                    return '/static/' + rel
-        except Exception:
-            pass
-        return None
-    cat_image_map = {}
-    try:
-        _def_cat_img = kv_get('menu:default_category_image', None) or kv_get('menu:default_image', None) or '/static/logo.svg'
-    except Exception:
-        _def_cat_img = '/static/logo.svg'
-    for c in cats:
-        cat_map[c.name] = c.id
-        cat_map[c.name.upper()] = c.id
-        try:
-            u = kv_get(f"menu:category_image:{c.id}", None) or kv_get(f"menu:category_image_by_name:{_slug(c.name)}", None)
-        except Exception:
-            u = None
-        if not u:
-            sslug = _slug(c.name)
-            u = _static_image_url(f"images/categories/{sslug}.webp", f"images/categories/{sslug}.jpg", f"images/categories/{sslug}.png") or _def_cat_img
-        cat_image_map[c.name] = u or _def_cat_img
-    cat_map_json = json.dumps(cat_map)
-    cat_image_map_json = json.dumps(cat_image_map)
-    today = get_saudi_now().date().isoformat()
-    # Load settings for currency icon, etc.
-    try:
-        s = Settings.query.first()
-    except Exception:
-        s = None
-    return render_template('sales_table_invoice.html',
-                           branch_code=branch_code,
-                           branch_label=branch_label,
-                           table_number=table_number,
-                           vat_rate=vat_rate,
-                           draft_items=draft_items,
-                           current_draft=current_draft,
-                           categories=categories,
-                           cat_map_json=cat_map_json,
-                           cat_image_map_json=cat_image_map_json,
-                           today=today,
-                           init_cust_name=init_cust_name,
-                           init_cust_phone=init_cust_phone,
-                           init_discount_pct=init_discount_pct,
-                           init_tax_pct=init_tax_pct,
-                           init_payment_method=init_payment_method,
-                           settings=s)
-
-
-# ---------- Lightweight APIs used by front-end JS ----------
-@main.route('/api/table-settings', methods=['GET', 'POST'], endpoint='api_table_settings')
-@login_required
-def api_table_settings():
-    if request.method == 'GET':
-        settings = kv_get('table_settings', {}) or {}
-        if not settings:
-            settings = {'china': {'count': 20, 'numbering': 'numeric'}, 'india': {'count': 20, 'numbering': 'numeric'}}
-        return jsonify({'success': True, 'settings': settings})
-    # POST
-    try:
-        data = request.get_json(force=True) or {}
-
-        kv_set('table_settings', data)
-        return jsonify({'success': True})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-
-
-@main.route('/api/table-sections/<branch_code>', methods=['GET', 'POST'], endpoint='api_table_sections')
-@login_required
-def api_table_sections(branch_code):
-    if not user_can('sales','view', branch_code):
-        return jsonify({'success': False, 'error': 'forbidden'}), 403
-    
-    if request.method == 'GET':
-        # Read from the same system as table-layout
-        try:
-            from models import TableSection, TableSectionAssignment
-            
-            def decode_name(name: str):
-                name = name or ''
-                visible = name
-                layout = ''
-                if '[rows:' in name and name.endswith(']'):
-                    try:
-                        before, bracket = name.rsplit('[rows:', 1)
-                        visible = before.rstrip()
-                        layout = bracket[:-1].strip()
-                    except Exception:
-                        pass
-                return visible, layout
-
-            sections = TableSection.query.filter_by(branch_code=branch_code).order_by(TableSection.sort_order, TableSection.id).all()
-            assignments = TableSectionAssignment.query.filter_by(branch_code=branch_code).all()
-            
-            sections_data = []
-            for s in sections:
-                visible, layout = decode_name(s.name)
-                sections_data.append({
-                    'id': s.id,
-                    'name': visible,
-                    'sort_order': s.sort_order,
-                    'layout': layout
-                })
-            
-            assignments_data = []
-            for a in assignments:
-                assignments_data.append({
-                    'table_number': a.table_number,
-                    'section_id': a.section_id
-                })
-            
-            return jsonify({'success': True, 'sections': sections_data, 'assignments': assignments_data})
-        except Exception as e:
-            return jsonify({'success': True, 'sections': [], 'assignments': []})
-    
-    try:
-        # Save to the same system as table-layout
-        from models import TableSection, TableSectionAssignment
-        
-        payload = request.get_json(force=True) or {}
-        sections_data = payload.get('sections') or []
-        assignments_data = payload.get('assignments') or []
-        
-        # Clear existing sections and assignments for this branch
-        TableSectionAssignment.query.filter_by(branch_code=branch_code).delete()
-        TableSection.query.filter_by(branch_code=branch_code).delete()
-        
-        # Create new sections
-        for section_idx, section in enumerate(sections_data):
-            section_name = section.get('name', '')
-            layout = section.get('layout', '')
-            encoded_name = f"{section_name} [rows:{layout}]" if layout else section_name
-            
-            new_section = TableSection(
-                branch_code=branch_code,
-                name=encoded_name,
-                sort_order=section.get('sort_order', section_idx)
-            )
-            db.session.add(new_section)
-            db.session.flush()
-            
-            # Create assignments for this section
-            for assignment in assignments_data:
-                if assignment.get('section_id') == section.get('id'):
-                    assignment_obj = TableSectionAssignment(
-                        branch_code=branch_code,
-                        table_number=str(assignment.get('table_number')),
-                        section_id=new_section.id
-                    )
-                    db.session.add(assignment_obj)
-        
-        db.session.commit()
-        return jsonify({'success': True, 'sections': sections_data})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-
-
-@main.route('/api/tables/<branch_code>', methods=['GET'], endpoint='api_tables_status')
-@login_required
-
-def api_tables_status(branch_code):
-    # Read drafts to mark occupied tables
-    if not user_can('sales','view', branch_code):
-        return jsonify({'success': False, 'error': 'forbidden'}), 403
-    settings = kv_get('table_settings', {}) or {}
-    if branch_code == 'china_town':
-        count = int((settings.get('china') or {}).get('count', 20))
-    elif branch_code == 'place_india':
-        count = int((settings.get('india') or {}).get('count', 20))
-    else:
-        count = 20
-    items = []
-    # Build a quick map of DB table statuses for this branch
-    try:
-        from models import Table
-        rows = Table.query.filter_by(branch_code=branch_code).all()
-        db_status = { (str(r.table_number).strip()): (r.status or 'available') for r in (rows or []) }
-        # Expand count to include highest table number present in DB
-        try:
-            max_db_no = 0
-            for r in (rows or []):
-                try:
-                    n = safe_table_number(getattr(r, 'table_number', None))
-                    if n > max_db_no:
-                        max_db_no = n
-                except Exception:
-                    continue
-            if max_db_no > count:
-                count = max_db_no
-        except Exception:
-            pass
-    except Exception:
-        db_status = {}
-    for i in range(1, count+1):
-        draft = kv_get(f'draft:{branch_code}:{i}', {}) or {}
-        has_draft = bool(draft.get('items') or [])
-        tbl_st = (db_status.get(str(i)) or 'available').lower()
-        status = 'occupied' if (has_draft or tbl_st == 'occupied') else 'available'
-        items.append({'table_number': i, 'status': status})
-    return jsonify(items)
-
-
-@main.route('/api/menu/<cat_id>/items', methods=['GET'], endpoint='api_menu_items')
-@login_required
-def api_menu_items(cat_id):
-    # Prefer DB; fallback to KV/demo — warm up once
-    warmup_db_once()
-    cat = None
-    try:
-        cid = int(cat_id)
-        cat = MenuCategory.query.get(cid)
-    except Exception:
-        pass
-    if not cat:
-        try:
-            cat = MenuCategory.query.filter(db.func.lower(MenuCategory.name) == (cat_id or '').lower()).first()
-        except Exception:
-            cat = None
-    def _slug(s):
-        try:
-            import re
-            s = (s or '').strip().lower()
-            s = re.sub(r"[^a-z0-9]+", "-", s)
-            s = re.sub(r"-+", "-", s).strip('-')
-            return s or 'item'
-        except Exception:
-            return 'item'
-    def _static_image_url(*candidates):
-        try:
-            import os
-            for rel in candidates:
-                if not rel:
-                    continue
-                fp = os.path.join(current_app.static_folder, rel.replace('/', os.sep))
-                if os.path.exists(fp):
-                    return '/static/' + rel
-        except Exception:
-            pass
-        return None
-    def _uploads_image_url(kind, slug):
-        try:
-            if not slug:
-                return None
-            rels = [
-                f'uploads/{kind}/{slug}.webp',
-                f'uploads/{kind}/{slug}.jpg',
-                f'uploads/{kind}/{slug}.png',
-            ]
-            for r in rels:
-                u = _static_image_url(r)
-                if u:
-                    return u
-        except Exception:
-            pass
-        return None
-    def _default_image_url():
-        try:
-            u = kv_get('menu:default_image', None) or kv_get('menu:default_item_image', None) or kv_get('menu:default_category_image', None)
-            if isinstance(u, str) and u:
-                return u
-        except Exception:
-            pass
-        return 'https://also3odyah.com/wp-content/uploads/2024/08/Best-Asian-Restaurants-in-Riyadh-Yauatcha-1024x768-1.jpg'
-    def _remote_image_for_keywords(name, kind):
-        try:
-            n = (name or '').lower()
-            keys = {
-                'category': {
-                    'appetizers': 'https://images.unsplash.com/photo-1547592180-85f173990554?q=80&w=1600&auto=format&fit=crop',
-                    'biryani': 'https://images.unsplash.com/photo-1604908176997-2846b8dce8e7?q=80&w=1600&auto=format&fit=crop',
-                    'rice': 'https://images.unsplash.com/photo-1547592180-85f173990554?q=80&w=1600&auto=format&fit=crop',
-                    'noodles': 'https://images.unsplash.com/photo-1526318472351-c75fd2f0703d?q=80&w=1600&auto=format&fit=crop',
-                    'soup': 'https://images.unsplash.com/photo-1505577058444-a3dab90d4253?q=80&w=1600&auto=format&fit=crop',
-                    'salad': 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?q=80&w=1600&auto=format&fit=crop',
-                    'seafood': 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?q=80&w=1600&auto=format&fit=crop',
-                    'prawn': 'https://images.unsplash.com/photo-1611253135999-daddb98d97a2?q=80&w=1600&auto=format&fit=crop',
-                    'chicken': 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=1600&auto=format&fit=crop',
-                    'beef': 'https://images.unsplash.com/photo-1553163147-622ab57be1c7?q=80&w=1600&auto=format&fit=crop',
-                    'lamb': 'https://images.unsplash.com/photo-1625944521360-4f098c2e8a04?q=80&w=1600&auto=format&fit=crop',
-                    'kebab': 'https://images.unsplash.com/photo-1604908554043-3df28557f9a5?q=80&w=1600&auto=format&fit=crop',
-                    'grill': 'https://images.unsplash.com/photo-1558031239-aa4ae7329230?q=80&w=1600&auto=format&fit=crop',
-                    'drinks': 'https://images.unsplash.com/photo-1509228627152-72ae9ae6848d?q=80&w=1600&auto=format&fit=crop',
-                    'chinese': 'https://images.unsplash.com/photo-1544510808-8b0b0f7de841?q=80&w=1600&auto=format&fit=crop',
-                    'indian': 'https://images.unsplash.com/photo-1543352634-8730a9b5e570?q=80&w=1600&auto=format&fit=crop',
-                },
-                'item': {
-                    'biryani': 'https://images.unsplash.com/photo-1604908176997-2846b8dce8e7?q=80&w=1600&auto=format&fit=crop',
-                    'noodles': 'https://images.unsplash.com/photo-1526318472351-c75fd2f0703d?q=80&w=1600&auto=format&fit=crop',
-                    'samosa': 'https://images.unsplash.com/photo-1625944519087-2a9c7b0f1ff4?q=80&w=1600&auto=format&fit=crop',
-                    'hummus': 'https://images.unsplash.com/photo-1552332386-f8dd00dc2f85?q=80&w=1600&auto=format&fit=crop',
-                    'potato': 'https://images.unsplash.com/photo-1518806118471-f66f1e488eae?q=80&w=1600&auto=format&fit=crop',
-                    'naan': 'https://images.unsplash.com/photo-1601050693721-03bba7dd6e61?q=80&w=1600&auto=format&fit=crop',
-                    'tempura': 'https://images.unsplash.com/photo-1562967915-6a88f1f68047?q=80&w=1600&auto=format&fit=crop',
-                    'kebab': 'https://images.unsplash.com/photo-1604908554043-3df28557f9a5?q=80&w=1600&auto=format&fit=crop',
-                    'prawn': 'https://images.unsplash.com/photo-1611253135999-daddb98d97a2?q=80&w=1600&auto=format&fit=crop',
-                    'shrimp': 'https://images.unsplash.com/photo-1611253135999-daddb98d97a2?q=80&w=1600&auto=format&fit=crop',
-                    'chicken': 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=1600&auto=format&fit=crop',
-                    'fish': 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?q=80&w=1600&auto=format&fit=crop'
-                }
-            }[kind]
-            syn = {
-                'biryani': ['برياني','بريان','biryani'],
-                'noodles': ['noodles','نودلز','معكرونة','chow','mein','chopsuey'],
-                'samosa': ['سمبوسة','سمبوسا','سموسا','samosa','samusa'],
-                'hummus': ['حمص','homous','hummus','humus','homouse'],
-                'potato': ['بطاطس','بطاطا','potato','chips','chope','chop','choap','frenchfry','french fry','fries','finger chips'],
-                'naan': ['خبز نان','نان','naan','nan','garlic nan','garlic naan','plain nan','plain naan'],
-                'tempura': ['تمبورا','تيمبورا','tempura'],
-                'kebab': ['كباب','kebab'],
-                'prawn': ['روبيان','ربيان','ribyan','prawn','prwn','prawns','fried prawns','gold.fri.prawns','gold fried prawns','prwnballs','prawn balls','prwn balls'],
-                'shrimp': ['جمبري','shrimp','fried shrimp'],
-                'chicken': ['دجاج','chicken','kaichai'],
-                'appetizers': ['appetizers','starter','starters','مقبلات','مقبا','mixed app','mixeed app','mixed appetizer','mix app','mixeed app(l)','mixeed app(m)','platter','مقبلات مشكل'],
-                'seafood': ['seafood','مأكولات بحرية'],
-                'fish': ['fish','fish finger','finger fish','fishfinger','fish-finger','سمك','فيش'],
-                'salad': ['سلطة','salad'],
-                'soup': ['شوربة','soup']
-            }
-            for k, lst in syn.items():
-                for t in lst:
-                    if t and t in n and k in keys:
-                        url = keys.get(k)
-                        if url:
-                            return url
-            for k, url in keys.items():
-                if k in n:
-                    return url
-        except Exception:
-            pass
-        return None
-    def _item_image_url(m):
-        return _default_image_url()
-    if cat:
-        items = MenuItem.query.filter_by(category_id=cat.id).order_by(MenuItem.name).all()
-        return jsonify([{'id': m.id, 'name': m.name, 'price': float(m.price), 'image_url': _item_image_url(m)} for m in items])
-    # KV fallback
-    data = kv_get(f'menu:items:{cat_id}', None)
-    if isinstance(data, list):
-        return jsonify(data)
-    # Demo fallback
-    demo_items = [{'id': None, 'name': nm, 'price': float(pr)} for (nm, pr) in _DEF_MENU.get(cat_id, [])]
-
-
-    out = []
-    # Force default image for demo items as well
-    for d in demo_items:
-        dd = dict(d)
-        dd['image_url'] = _default_image_url()
-        out.append(dd)
-    return jsonify(out)
-
-# ---------- Branch Settings API used by POS ----------
-@main.route('/api/branch-settings/<branch_code>', methods=['GET'], endpoint='api_branch_settings')
-@login_required
-def api_branch_settings(branch_code):
-    try:
-        from models import Settings
-        try:
-            s = Settings.query.first()
-        except Exception:
-            s = None
-
-        # Defaults
-        void_pwd = '1991'
-        vat_rate = 15.0
-        discount_rate = 0.0
-
-        if s:
-            if branch_code == 'china_town':
-                try:
-                    void_pwd = (getattr(s, 'china_town_void_password', void_pwd) or void_pwd)
-                except Exception:
-                    pass
-                try:
-                    vat_rate = float(getattr(s, 'china_town_vat_rate', vat_rate) or vat_rate)
-                except Exception:
-                    pass
-                try:
-                    discount_rate = float(getattr(s, 'china_town_discount_rate', discount_rate) or discount_rate)
-                except Exception:
-                    pass
-            elif branch_code == 'place_india':
-                try:
-                    void_pwd = (getattr(s, 'place_india_void_password', void_pwd) or void_pwd)
-                except Exception:
-                    pass
-                try:
-                    vat_rate = float(getattr(s, 'place_india_vat_rate', vat_rate) or vat_rate)
-                except Exception:
-                    pass
-                try:
-                    discount_rate = float(getattr(s, 'place_india_discount_rate', discount_rate) or discount_rate)
-                except Exception:
-                    pass
-
-        return jsonify({
-            'branch': branch_code,
-            'void_password': str(void_pwd),
-            'vat_rate': vat_rate,
-            'discount_rate': discount_rate
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@main.route('/api/draft-order/<branch_code>/<int:table_number>', methods=['GET','POST'], endpoint='api_draft_create_or_update')
-@login_required
-def api_draft_create_or_update(branch_code, table_number):
-    # Return 401 for unauthenticated XHR so the front-end can redirect cleanly
-    try:
-        if not getattr(current_user, 'is_authenticated', False):
-            return jsonify({'success': False, 'error': 'unauthenticated'}), 401
-    except Exception:
-        return jsonify({'success': False, 'error': 'unauthenticated'}), 401
-    if not user_can('sales','view', branch_code):
-        return jsonify({'success': False, 'error': 'forbidden'}), 403
-
-    # GET: return current draft details for prefill
-    if request.method == 'GET':
-        try:
-            rec = kv_get(f'draft:{branch_code}:{table_number}', {}) or {}
-            return jsonify({'success': True, 'draft': rec})
-        except Exception as e:
-            return jsonify({'success': False, 'error': str(e), 'draft': {}}), 400
-
-    # POST: create or update draft
-    try:
-        payload = request.get_json(silent=True) or {}
-        items = payload.get('items') or []
-        draft_id = f"{branch_code}:{table_number}"
-        kv_set(f'draft:{branch_code}:{table_number}', {
-            'draft_id': draft_id,
-            'items': items,
-            'customer': payload.get('customer') or {},
-            'discount_pct': float((payload.get('discount_pct') or 0) or 0),
-            'tax_pct': float((payload.get('tax_pct') or 15) or 15),
-            'payment_method': (payload.get('payment_method') or '')
-        })
-        # Persist table status in DB for multi-user consistency (transactional helper)
-        _set_table_status_concurrent(branch_code, str(table_number), 'available' if not items else 'occupied')
-        return jsonify({'success': True, 'draft_id': draft_id})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-
-
-def _parse_draft_id(draft_id):
-
-
-    # supports both branch:table and branch-table
-    if ':' in draft_id:
-        branch, num = draft_id.split(':', 1)
-    elif '-' in draft_id:
-        branch, num = draft_id.rsplit('-', 1)
-    else:
-        return None, None
-    try:
-        return branch, int(num)
-    except Exception:
-        return None, None
-
-
-@main.route('/api/draft_orders/<draft_id>/update', methods=['POST'], endpoint='api_draft_update')
-@login_required
-def api_draft_update(draft_id):
-    try:
-        branch, table = _parse_draft_id(draft_id)
-        if not branch:
-            return jsonify({'success': False, 'error': 'invalid_draft_id'}), 400
-        # Return 401 for unauthenticated XHR so the front-end can redirect cleanly
-        try:
-            if not getattr(current_user, 'is_authenticated', False):
-                return jsonify({'success': False, 'error': 'unauthenticated'}), 401
-        except Exception:
-            return jsonify({'success': False, 'error': 'unauthenticated'}), 401
-        payload = request.get_json(silent=True) or {}
-        if not user_can('sales','view', branch):
-            return jsonify({'success': False, 'error': 'forbidden'}), 403
-
-        rec = kv_get(f'draft:{branch}:{table}', {}) or {}
-        # map items to unified structure while preserving name/price
-        items = payload.get('items') or []
-        existing = rec.get('items') or []
-        by_id = {}
-        for eit in existing:
-            key = eit.get('meal_id') or eit.get('id')
-            if key is not None:
-                by_id[int(key)] = {
-                    'name': eit.get('name') or '',
-                    'price': float(eit.get('price') or eit.get('unit') or 0.0)
-                }
-        norm = []
-        for it in items:
-            mid = it.get('meal_id') or it.get('id')
-            qty = it.get('qty') or it.get('quantity') or 1
-            nm = it.get('name')
-            pr = it.get('price') or it.get('unit')
-            if (not nm or pr in [None, '', 0, 0.0]) and mid:
-                try:
-                    cached = by_id.get(int(mid))
-                except Exception:
-                    cached = None
-                if cached:
-                    nm = nm or cached.get('name')
-                    pr = pr or cached.get('price')
-            if (not nm or pr in [None, '', 0, 0.0]) and mid:
-                try:
-                    m = db.session.get(MenuItem, int(mid))
-                    if m:
-                        nm = nm or m.name
-                        pr = pr or float(m.price)
-                except Exception:
-                    pass
-            norm.append({
-                'meal_id': mid,
-                'name': nm or '',
-                'price': float(pr or 0.0),
-                'qty': qty
-            })
-        rec['items'] = norm
-        # update optional fields
-        if 'customer_name' in payload or 'customer_phone' in payload:
-            rec['customer'] = {
-                'name': (payload.get('customer_name') or '').strip(),
-                'phone': (payload.get('customer_phone') or '').strip(),
-            }
-        if 'payment_method' in payload:
-            rec['payment_method'] = payload.get('payment_method') or ''
-        if 'discount_pct' in payload:
-            try: rec['discount_pct'] = float(payload.get('discount_pct') or 0)
-            except Exception: rec['discount_pct'] = 0.0
-        if 'tax_pct' in payload:
-            try: rec['tax_pct'] = float(payload.get('tax_pct') or 15)
-            except Exception: rec['tax_pct'] = 15.0
-        kv_set(f'draft:{branch}:{table}', rec)
-        # Also ensure DB table status reflects occupied/available based on items
-        _set_table_status_concurrent(branch, str(table), 'occupied' if rec.get('items') else 'available')
-        return jsonify({'success': True})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-
-
-@main.route('/api/draft_orders/<draft_id>/cancel', methods=['POST'], endpoint='api_draft_cancel')
-@login_required
-def api_draft_cancel(draft_id):
-    try:
-        branch, table = _parse_draft_id(draft_id)
-
-
-        if not branch:
-            return jsonify({'success': False, 'error': 'invalid_draft_id'}), 400
-        if not user_can('sales','view', branch):
-            return jsonify({'success': False, 'error': 'forbidden'}), 403
-
-        # clear draft and mark table available in DB
-        kv_set(f'draft:{branch}:{table}', {'draft_id': draft_id, 'items': []})
-        _set_table_status_concurrent(branch, str(table), 'available')
-        return jsonify({'success': True})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-
-
-@main.route('/api/draft/checkout', methods=['POST'], endpoint='api_draft_checkout')
-
-
-@login_required
-def api_draft_checkout():
-    payload = request.get_json(force=True) or {}
-    draft_id = payload.get('draft_id') or ''
-    branch, table = _parse_draft_id(draft_id)
-    if not branch:
-        return jsonify({'error': 'invalid_draft_id'}), 400
-    if not user_can('sales','view', branch):
-        return jsonify({'success': False, 'error': 'forbidden'}), 403
-
-    warmup_db_once()
-    draft = kv_get(f'draft:{branch}:{table}', {}) or {}
-    items = draft.get('items') or []
-    subtotal = 0.0
-    for it in items:
-        qty = float(it.get('qty') or it.get('quantity') or 1)
-        price = float(it.get('price') or it.get('unit') or 0.0)
-        if price <= 0 and it.get('meal_id'):
-            m = MenuItem.query.get(int(it.get('meal_id')))
-            if m:
-                price = float(m.price)
-        subtotal += qty * (price or 0.0)
-    discount_pct = float(payload.get('discount_pct') or 0)
-    tax_pct = float(payload.get('tax_pct') or 15)
-    discount_amount = subtotal * (discount_pct/100.0)
-    taxable_amount = max(subtotal - discount_amount, 0.0)
-    vat_amount = taxable_amount * (tax_pct/100.0)
-    total_after = taxable_amount + vat_amount
-    payment_method = (payload.get('payment_method') or '').strip().upper()
-    if payment_method not in ['CASH','CARD']:
-        return jsonify({'success': False, 'error': 'اختر طريقة الدفع (CASH أو CARD)'}), 400
-    # Reuse preview invoice number if present to keep display number consistent
-    draft_data = kv_get(f'draft:{branch}:{table}', {}) or {}
-    preview_no = (draft_data.get('preview_invoice_number') or '').strip()
-    invoice_number = preview_no if preview_no else f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
-    try:
-        inv = SalesInvoice(
-            invoice_number=invoice_number,
-            branch=branch,
-            table_number=int(table),
-            customer_name=(payload.get('customer_name') or '').strip(),
-            customer_phone=(payload.get('customer_phone') or '').strip(),
-            payment_method=payment_method,
-            total_before_tax=round(subtotal, 2),
-            tax_amount=round(vat_amount, 2),
-            discount_amount=round(discount_amount, 2),
-            total_after_tax_discount=round(total_after, 2),
-            user_id=int(getattr(current_user, 'id', 1) or 1),
-            status='issued',
-        )
-        db.session.add(inv)
-        db.session.flush()
-        for it in items:
-            qty = float(it.get('qty') or it.get('quantity') or 1)
-            price = float(it.get('price') or it.get('unit') or 0.0)
-            if price <= 0 and it.get('meal_id'):
-                m = MenuItem.query.get(int(it.get('meal_id')))
-                if m:
-                    price = float(m.price)
-            db.session.add(SalesInvoiceItem(
-                invoice_id=inv.id,
-                product_name=(it.get('name') or ''),
-                quantity=qty,
-                price_before_tax=price or 0.0,
-                tax=0,
-                discount=0,
-                total_price=round((price or 0.0) * qty, 2),
-            ))
-        db.session.commit()
-        try:
-            base_amt = float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0)
-            tax_amt = float(inv.tax_amount or 0.0)
-            try:
-                cust = (customer_name or '').strip().lower()
-                grp = _platform_group(cust)
-                if grp == 'keeta':
-                    ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
-                elif grp == 'hunger':
-                    ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
-                else:
-                    ar_code = _acc_override('AR', SHORT_TO_NUMERIC['AR_KEETA'][0])
-            except Exception:
-                ar_code = SHORT_TO_NUMERIC['AR_KEETA'][0]
-            _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', float(inv.total_after_tax_discount or 0.0), 0.0, f'SALE {inv.invoice_number}')
-            try:
-                pm = (payment_method or '').strip().upper()
-                # Prefer platform-specific revenue when customer matches
-                cust = (customer_name or '').strip().lower()
-                grp = _platform_group(cust)
-                if grp == 'keeta':
-                    rev_code = _acc_override('REV_KEETA', SHORT_TO_NUMERIC['REV_KEETA'][0])
-                elif grp == 'hunger':
-                    rev_code = _acc_override('REV_HUNGER', SHORT_TO_NUMERIC['REV_HUNGER'][0])
-                else:
-                    if branch == 'place_india':
-                        rev_code = _acc_override('REV_PI', SHORT_TO_NUMERIC['REV_PI'][0])
-                    elif branch == 'china_town':
-                        rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
-                    else:
-                        rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
-                _post_ledger(inv.date, rev_code, CHART_OF_ACCOUNTS[rev_code]['name'], 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
-            except Exception:
-                _post_ledger(inv.date, rev_code, 'Revenue', 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
-            if tax_amt > 0:
-                _post_ledger(inv.date, 'VAT_OUT', 'VAT Output', 'tax', 0.0, tax_amt, f'SALE {inv.invoice_number}')
-        except Exception:
-            pass
-        try:
-            base_amt = float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0)
-            tax_amt = float(inv.tax_amount or 0.0)
-            _post_ledger(inv.date, 'AR', 'Accounts Receivable', 'asset', float(inv.total_after_tax_discount or 0.0), 0.0, f'SALE {inv.invoice_number}')
-            try:
-                pm = (payment_method or '').strip().upper()
-                # Prefer platform-specific revenue when customer matches
-                cust = (customer_name or '').strip().lower()
-                grp = _platform_group(cust)
-                if grp == 'keeta':
-                    rev_code = _acc_override('REV_KEETA', SHORT_TO_NUMERIC['REV_KEETA'][0])
-                elif grp == 'hunger':
-                    rev_code = _acc_override('REV_HUNGER', SHORT_TO_NUMERIC['REV_HUNGER'][0])
-                else:
-                    if branch == 'place_india':
-                        rev_code = _acc_override('REV_PI', SHORT_TO_NUMERIC['REV_PI'][0])
-                    elif branch == 'china_town':
-                        rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
-                    else:
-                        rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
-                _post_ledger(inv.date, rev_code, CHART_OF_ACCOUNTS[rev_code]['name'], 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
-            except Exception:
-                _post_ledger(inv.date, rev_code, 'Revenue', 'revenue', 0.0, base_amt, f'SALE {inv.invoice_number}')
-            if tax_amt > 0:
-                _post_ledger(inv.date, 'VAT_OUT', 'VAT Output', 'tax', 0.0, tax_amt, f'SALE {inv.invoice_number}')
-        except Exception:
-            pass
-        # Auto-mark paid for non Keeta/Hunger and create Payment record
-        try:
-            from models import Payment
-            cust = (payload.get('customer_name') or '').strip().lower()
-            grp = _platform_group(cust)
-            amt = float(inv.total_after_tax_discount or 0.0)
-            if grp in ('keeta','hunger'):
-                inv.status = 'unpaid'
-                db.session.commit()
-            else:
-                db.session.add(Payment(
-                    invoice_id=inv.id,
-                    invoice_type='sales',
-                    amount_paid=amt,
-                    payment_method=(payment_method or 'CASH').upper(),
-                    payment_date=get_saudi_now()
-                ))
-                inv.status = 'paid'
-                db.session.commit()
-                # Post payment ledger: DR Cash/Bank, CR Accounts Receivable (platform-specific when applicable)
-                cash_acc = _pm_account(payment_method)
-                try:
-                    cust = (getattr(inv, 'customer_name', '') or '').lower()
-                    grp = _platform_group(cust)
-                    if grp == 'keeta':
-                        ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
-                    elif grp == 'hunger':
-                        ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
-                    else:
-                        ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
-                except Exception:
-                    ar_code = CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020')
-                _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', 0.0, amt, f'PAY SALE {inv.invoice_number}')
-                if cash_acc:
-                    _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', amt, 0.0, f'PAY SALE {inv.invoice_number}')
-        except Exception:
-            pass
-        # Mark table available only after we confirm print+pay (handled in api_invoice_confirm_print)
-    except Exception as e:
-
-
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    return jsonify({'ok': True, 'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.print_receipt', invoice_number=invoice_number), 'branch_code': branch, 'table_number': int(table)})
-
-@main.route('/api/draft/<branch_code>/<int:table_number>', methods=['GET'], endpoint='api_draft_get')
-@login_required
-def api_draft_get(branch_code, table_number):
-    try:
-        if not user_can('sales','view', branch_code):
-            return jsonify({'success': False, 'error': 'forbidden'}), 403
-        rec = kv_get(f'draft:{branch_code}:{table_number}', {}) or {}
-        return jsonify({'success': True, 'draft': rec})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e), 'draft': {}}), 400
-
-
-@main.route('/api/sales/checkout', methods=['POST'], endpoint='api_sales_checkout')
-@login_required
-def api_sales_checkout():
-    payload = request.get_json(force=True) or {}
-    warmup_db_once()
-    branch = (payload.get('branch_code') or '').strip() or 'unknown'
-    table = int(payload.get('table_number') or 0)
-    if not user_can('sales','view', branch):
-        return jsonify({'success': False, 'error': 'forbidden'}), 403
-
-    items = payload.get('items') or []
-    # get prices from DB when missing
-    subtotal = 0.0
-    resolved = []
-    for it in items:
-        qty = float(it.get('qty') or 1)
-        price = float(it.get('price') or 0.0)
-        if price <= 0 and it.get('meal_id'):
-            m = MenuItem.query.get(int(it.get('meal_id')))
-            if m:
-                price = float(m.price)
-                name = m.name
-            else:
-                name = it.get('name') or ''
-        else:
-            name = it.get('name') or ''
-        subtotal += qty * (price or 0.0)
-        resolved.append({'meal_id': it.get('meal_id'), 'name': name, 'price': price or 0.0, 'qty': qty})
-    discount_pct = float(payload.get('discount_pct') or 0)
-    tax_pct = float(payload.get('tax_pct') or 15)
-    discount_amount = subtotal * (discount_pct/100.0)
-    taxable_amount = max(subtotal - discount_amount, 0.0)
-    vat_amount = taxable_amount * (tax_pct/100.0)
-    total_after = taxable_amount + vat_amount
-    payment_method = (payload.get('payment_method') or '').strip().upper()
-    if payment_method not in ['CASH','CARD']:
-        return jsonify({'success': False, 'error': '\u0627\u062e\u062a\u0631 \u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639 (CASH \u0623\u0648 CARD)'}), 400
-    invoice_number = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
-    try:
-        inv = SalesInvoice(
-            invoice_number=invoice_number,
-            branch=branch,
-            table_number=table,
-            customer_name=(payload.get('customer_name') or '').strip(),
-            customer_phone=(payload.get('customer_phone') or '').strip(),
-            payment_method=payment_method,
-            total_before_tax=round(subtotal, 2),
-            tax_amount=round(vat_amount, 2),
-            discount_amount=round(discount_amount, 2),
-            total_after_tax_discount=round(total_after, 2),
-            user_id=int(getattr(current_user, 'id', 1) or 1),
-            status='issued',
-        )
-        db.session.add(inv)
-        db.session.flush()
-        for it in resolved:
-            db.session.add(SalesInvoiceItem(
-                invoice_id=inv.id,
-                product_name=it.get('name'),
-                quantity=float(it.get('qty') or 1),
-                price_before_tax=float(it.get('price') or 0.0),
-                tax=0,
-                discount=0,
-                total_price=round(float(it.get('price') or 0.0) * float(it.get('qty') or 1), 2),
-            ))
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    try:
-        from models import Payment
-        cust = (payload.get('customer_name') or '').strip().lower()
-        grp = _platform_group(cust)
-        amt = float(inv.total_after_tax_discount or 0.0)
-        if grp:
-            inv.status = 'unpaid'
-            db.session.commit()
-        else:
-            db.session.add(Payment(
-                invoice_id=inv.id,
-                invoice_type='sales',
-                amount_paid=amt,
-                payment_method=(payment_method or 'CASH').upper(),
-                payment_date=get_saudi_now()
-            ))
-            inv.status = 'paid'
-            db.session.commit()
-            cash_acc = _pm_account(payment_method)
-            try:
-                cust2 = (getattr(inv, 'customer_name', '') or '').lower()
-                grp2 = _platform_group(cust2)
-                if grp2 == 'keeta':
-                    ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
-                elif grp2 == 'hunger':
-                    ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
-                else:
-                    ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
-            except Exception:
-                ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
-            _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', 0.0, amt, f'PAY SALE {inv.invoice_number}')
-            if cash_acc:
-                _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', amt, 0.0, f'PAY SALE {inv.invoice_number}')
-    except Exception:
-        pass
-    try:
-        _create_sale_journal(inv)
-    except Exception:
-        pass
-    return jsonify({'ok': True, 'invoice_id': invoice_number, 'payment_method': payment_method, 'total_amount': round(total_after, 2), 'print_url': url_for('main.invoice_print', invoice_id=invoice_number), 'branch_code': branch, 'table_number': table})
-
-
-@main.route('/api/invoice/confirm-print', methods=['POST'], endpoint='api_invoice_confirm_print')
-@login_required
-def api_invoice_confirm_print():
-    # Mark invoice paid and free the table. Create payment record.
-    try:
-        from models import SalesInvoice, Payment
-        payload = request.get_json(force=True) or {}
-        branch = (payload.get('branch_code') or '').strip()
-        table = int(payload.get('table_number') or 0)
-        raw_invoice_id = payload.get('invoice_id')
-        payment_method = (payload.get('payment_method') or '').upper() or None
-        total_amount = float(payload.get('total_amount') or 0)
-
-        # Resolve invoice by number or numeric id
-        inv = None
-        if isinstance(raw_invoice_id, str) and not raw_invoice_id.isdigit():
-            inv = SalesInvoice.query.filter_by(invoice_number=raw_invoice_id).first()
-        else:
-            try:
-                inv = SalesInvoice.query.get(int(raw_invoice_id))
-            except Exception:
-                inv = None
-        if not inv:
-            return jsonify({'success': False, 'error': 'Invoice not found'}), 404
-
-        if (inv.status or '').lower() != 'paid':
-            grp = _platform_group(inv.customer_name or '')
-            if grp in ('keeta','hunger'):
-                pass
-            else:
-                if payment_method:
-                    db.session.add(Payment(
-                        invoice_id=inv.id,
-                        invoice_type='sales',
-                        amount_paid=total_amount or float(inv.total_after_tax_discount or 0),
-                        payment_method=payment_method,
-                        payment_date=get_saudi_now()
-                    ))
-                inv.status = 'paid'
-                db.session.commit()
-            try:
-                key = f"pdf_path:sales:{inv.invoice_number}"
-                cur = kv_get(key, {}) or {}
-                if not (cur.get('saved_at')):
-                    kv_set(key, {'path': cur.get('path'), 'saved_at': get_saudi_now().isoformat()})
-            except Exception:
-                pass
-            try:
-                import re
-                s = re.sub(r'[^a-z]', '', (inv.customer_name or '').lower())
-                is_special = s.startswith('hunger') or s.startswith('keeta') or s.startswith('keet')
-                if not is_special:
-                    amt = float(total_amount or float(inv.total_after_tax_discount or 0))
-                    cash_acc = _pm_account(payment_method)
-                    try:
-                        cust = (getattr(inv, 'customer_name', '') or '').lower()
-                        grp = _platform_group(cust)
-                        if grp == 'keeta':
-                            ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
-                        elif grp == 'hunger':
-                            ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
-                        else:
-                            ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
-                    except Exception:
-                        ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
-                    _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', 0.0, amt, f'PAY SALE {inv.invoice_number}')
-                    if cash_acc:
-                        _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', amt, 0.0, f'PAY SALE {inv.invoice_number}')
-            except Exception:
-                pass
-            try:
-                _archive_invoice_pdf(inv)
-            except Exception as e:
-                current_app.logger.error('Archive PDF failed: %s', e)
-
-        # Clear draft to free the table and update DB table status to available
-        if branch and table:
-            kv_set(f'draft:{branch}:{table}', {'draft_id': f'{branch}:{table}', 'items': []})
-            try:
-                from models import Table
-                t = Table.query.filter_by(branch_code=branch, table_number=str(table)).first()
-                if t:
-                    t.status = 'available'
-                    t.updated_at = get_saudi_now()
-                    db.session.commit()
-            except Exception:
-                db.session.rollback()
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return jsonify({'success': False, 'error': str(e)}), 400
-    return jsonify({'success': True})
-
-@main.route('/api/sales/mark-unpaid-paid', methods=['POST'], endpoint='api_sales_mark_unpaid_paid')
-@login_required
-def api_sales_mark_unpaid_paid():
-    try:
-        from models import SalesInvoice, Payment
-        from sqlalchemy import func
-        q = SalesInvoice.query
-        # Only consider invoices not marked as paid
-        q = q.filter(func.lower(SalesInvoice.status) != 'paid') if hasattr(SalesInvoice, 'status') else q
-        rows = q.order_by(SalesInvoice.date.desc()).limit(5000).all()
-        updated = 0
-        for inv in (rows or []):
-            try:
-                total = float(getattr(inv, 'total_after_tax_discount', 0) or 0)
-                paid_sum = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                                 .filter(Payment.invoice_type == 'sales', Payment.invoice_id == inv.id)
-                                 .scalar() or 0.0)
-                remaining = max(total - paid_sum, 0.0)
-                if remaining <= 0:
-                    inv.status = 'paid'
-                    db.session.commit()
-                    updated += 1
-                    continue
-                pm = (getattr(inv, 'payment_method', '') or 'CASH').strip().upper()
-                db.session.add(Payment(
-                    invoice_id=inv.id,
-                    invoice_type='sales',
-                    amount_paid=remaining,
-                    payment_method=pm,
-                    payment_date=get_saudi_now()
-                ))
-                inv.status = 'paid'
-                db.session.commit()
-                # Post payment ledger: DR Cash/Bank, CR AR
-                try:
-                    cash_acc = _pm_account(pm)
-                    _post_ledger(inv.date, 'AR', 'Accounts Receivable', 'asset', 0.0, remaining, f'PAY SALE {inv.invoice_number}')
-                    if cash_acc:
-                        _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', remaining, 0.0, f'PAY SALE {inv.invoice_number}')
-                except Exception:
-                    pass
-                updated += 1
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-        return jsonify({'ok': True, 'updated': updated})
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-
-@main.route('/api/sales/mark-platform-unpaid', methods=['GET','POST'], endpoint='api_sales_mark_platform_unpaid')
-@main.route('/api/sales/mark-platform-unpaid/', methods=['GET','POST'])
-@login_required
-def api_sales_mark_platform_unpaid():
-    try:
-        from models import SalesInvoice, Payment
-        q = SalesInvoice.query
-        rows = q.order_by(SalesInvoice.date.desc()).limit(3000).all()
-        updated = 0
-        for inv in (rows or []):
-            grp = _norm_group(getattr(inv, 'customer_name', '') or '')
-            if grp in ('keeta','hunger'):
-                try:
-                    Payment.query.filter(Payment.invoice_type=='sales', Payment.invoice_id==inv.id).delete(synchronize_session=False)
-                except Exception:
-                    pass
-                try:
-                    inv.status = 'unpaid'
-                    db.session.commit()
-                except Exception:
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
-                updated += 1
-        return jsonify({'ok': True, 'updated': updated})
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@main.route('/api/sales/batch-pay', methods=['GET','POST'], endpoint='api_sales_batch_pay')
-@main.route('/api/sales/batch-pay/', methods=['GET','POST'])
-@login_required
-def api_sales_batch_pay():
-    try:
-        from models import SalesInvoice, Payment
-        payload = request.get_json(silent=True) or {}
-        customer = (request.form.get('customer') or payload.get('customer') or 'all').strip().lower()
-        method = (request.form.get('payment_method') or payload.get('payment_method') or 'CASH').strip().upper()
-        limit = int((request.form.get('limit') or payload.get('limit') or 3000))
-        def _norm_group(n: str):
-            s = (n or '').lower()
-            if ('hunger' in s) or ('هنقر' in s) or ('هونقر' in s):
-                return 'hunger'
-            if ('keeta' in s) or ('كيتا' in s) or ('كيت' in s):
-                return 'keeta'
-            return ''
-        q = SalesInvoice.query
-        # Consider only not-paid invoices
-        try:
-            q = q.filter(func.lower(SalesInvoice.status) != 'paid')
-        except Exception:
-            pass
-        rows = q.order_by(SalesInvoice.date.desc()).limit(limit).all()
-        updated = 0
-        for inv in (rows or []):
-            grp = _platform_group(getattr(inv, 'customer_name', '') or '')
-            if customer not in ('all','') and grp != customer:
-                continue
-            # Compute remaining
-            total = float(getattr(inv, 'total_after_tax_discount', 0.0) or 0.0)
-            paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                         .filter(Payment.invoice_type == 'sales', Payment.invoice_id == inv.id)
-                         .scalar() or 0.0)
-            remaining = max(total - paid, 0.0)
-            if remaining <= 0:
-                try:
-                    inv.status = 'paid'
-                    db.session.commit()
-                except Exception:
-                    try: db.session.rollback()
-                    except Exception: pass
-                continue
-            try:
-                db.session.add(Payment(
-                    invoice_id=inv.id,
-                    invoice_type='sales',
-                    amount_paid=remaining,
-                    payment_method=method,
-                    payment_date=get_saudi_now()
-                ))
-                inv.status = 'paid'
-                db.session.commit()
-                # Post payment ledger: DR Cash/Bank, CR AR (platform-specific when applicable)
-                cash_acc = _pm_account(method)
-                try:
-                    cust = (getattr(inv, 'customer_name', '') or '').lower()
-                    grp = _platform_group(cust)
-                    if grp == 'keeta':
-                        ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
-                    elif grp == 'hunger':
-                        ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
-                    else:
-                        ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
-                except Exception:
-                    ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
-                _post_ledger(inv.date, ar_code, 'Accounts Receivable', 'asset', 0.0, remaining, f'PAY SALE {inv.invoice_number}')
-                if cash_acc:
-                    _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', remaining, 0.0, f'PAY SALE {inv.invoice_number}')
-                updated += 1
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-        return jsonify({'ok': True, 'updated': updated})
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@main.route('/api/invoice/print-log', methods=['POST'], endpoint='api_invoice_print_log')
-@login_required
-def api_invoice_print_log():
-    try:
-        payload = request.get_json(force=True) or {}
-        invoice_id = (payload.get('invoice_id') or '').strip()
-        if not invoice_id:
-            return jsonify({'ok': False, 'error': 'missing_invoice_id'}), 400
-        key = f"print_log:{invoice_id}"
-        logs = kv_get(key, []) or []
-        logs.append({'ts': get_saudi_now().isoformat(), 'user_id': int(getattr(current_user, 'id', 0) or 0)})
-        kv_set(key, logs)
-        return jsonify({'ok': True, 'count': len(logs)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@main.route('/api/sales/void-check', methods=['POST'], endpoint='api_sales_void_check')
-@login_required
-def api_sales_void_check():
-    payload = request.get_json(force=True) or {}
-    ok = (str(payload.get('password') or '').strip() == '1991')
-    return jsonify({'ok': ok})
-
-
-@main.route('/api/payments/register', methods=['POST'], endpoint='register_payment_ajax')
-@login_required
-def register_payment_ajax():
-    # Accept both form and JSON
-    payload = request.get_json(silent=True) or {}
-    invoice_id = request.form.get('invoice_id') or payload.get('invoice_id')
-    invoice_type = (request.form.get('invoice_type') or payload.get('invoice_type') or '').strip().lower()
-    amount = request.form.get('amount') or payload.get('amount')
-    payment_method = (request.form.get('payment_method') or payload.get('payment_method') or 'CASH').strip().upper()
-    try:
-        inv_id = int(invoice_id)
-        amt = float(amount or 0)
-    except Exception:
-        return jsonify({'status': 'error', 'message': 'Invalid invoice id or amount'}), 400
-    if amt <= 0:
-        return jsonify({'status': 'error', 'message': 'Amount must be > 0'}), 400
-    if invoice_type not in ('purchase','expense','sales'):
-        return jsonify({'status': 'error', 'message': 'Unsupported invoice type'}), 400
-
-    try:
-        # Create payment record
-        p = Payment(invoice_id=inv_id, invoice_type=invoice_type, amount_paid=amt, payment_method=payment_method)
-        db.session.add(p)
-        db.session.flush()
-
-        # Fetch invoice and totals
-        if invoice_type == 'purchase':
-            inv = PurchaseInvoice.query.get(inv_id)
-            total = float(inv.total_after_tax_discount or 0.0) if inv else 0.0
-        elif invoice_type == 'sales':
-            inv = SalesInvoice.query.get(inv_id)
-            total = float(inv.total_after_tax_discount or 0.0) if inv else 0.0
-        else:
-            inv = ExpenseInvoice.query.get(inv_id)
-            total = float(inv.total_after_tax_discount or 0.0) if inv else 0.0
-
-        # Sum paid so far (including this payment)
-        paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                     .filter(Payment.invoice_id == inv_id, Payment.invoice_type == invoice_type).scalar() or 0.0)
-
-        # Robust status calculation with rounding tolerance (0.01)
-        from decimal import Decimal, ROUND_HALF_UP
-        def to_cents(value):
-            try:
-                return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            except Exception:
-                return Decimal('0.00')
-        total_c = to_cents(total)
-        paid_c = to_cents(paid)
-        if inv:
-            if (total_c - paid_c) <= Decimal('0.01') and total_c > Decimal('0.00'):
-                inv.status = 'paid'
-            elif paid_c > Decimal('0.00'):
-                inv.status = 'partial'
-            else:
-                inv.status = inv.status or ('unpaid' if invoice_type=='purchase' else 'paid')
-        db.session.commit()
-        
-        # === التحسين الجديد: إنشاء قيود محاسبية متوافقة ===
-        try:
-            # Create Journal Entry for payment using correct AR account
-            from models import JournalEntry, JournalLine
-            
-            # تحديد حساب المدينين الصحيح بناءً على القيد الأصلي
-            ar_account_code = get_original_ar_account_code(inv_id, invoice_type)
-            ar_acc = _account(ar_account_code, CHART_OF_ACCOUNTS.get(ar_account_code, {'name':'Accounts Receivable','type':'ASSET'}).get('name','Accounts Receivable'), 'ASSET')
-            
-            # حساب النقدية المناسب
-            cash_account_code = '1013' if payment_method in ('BANK','TRANSFER','CARD','VISA','MASTERCARD') else '1011'
-            cash_acc = _account(cash_account_code, CHART_OF_ACCOUNTS.get(cash_account_code, {'name':'Cash','type':'ASSET'}).get('name','Cash'), 'ASSET')
-            
-            # إنشاء قيد التحصيل
-            base_en = f"JE-REC-{invoice_type}-{inv_id}"
-            en = base_en
-            i = 2
-            from sqlalchemy import func
-            while JournalEntry.query.filter(func.lower(JournalEntry.entry_number) == en.lower()).first():
-                en = f"{base_en}-{i}"; i += 1
-            
-            je = JournalEntry(
-                entry_number=en,
-                date=get_saudi_now().date(),
-                branch_code=None,
-                description=f"Receipt {invoice_type} #{inv_id}",
-                status='posted',
-                total_debit=amt,
-                total_credit=amt,
-                created_by=getattr(current_user,'id',None),
-                posted_by=getattr(current_user,'id',None),
-                invoice_id=int(inv_id),
-                invoice_type=f"{invoice_type}_payment"
-            )
-            db.session.add(je); db.session.flush()
-            
-            # استخدام نفس حساب المدينين من القيد الأصلي
-            db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=cash_acc.id, debit=amt, credit=0, description=f"Cash receipt {inv_id}", line_date=get_saudi_now().date()))
-            db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ar_acc.id, debit=0, credit=amt, description=f"Clear AR {inv_id}", line_date=get_saudi_now().date()))
-            db.session.commit()
-            
-            # تسجيل في audit log
-            try:
-                from models import JournalAudit
-                db.session.add(JournalAudit(journal_id=je.id, action='create', user_id=getattr(current_user,'id',None), before_json=None, after_json=json.dumps({'entry_number': je.entry_number, 'total_debit': float(je.total_debit or 0), 'total_credit': float(je.total_credit or 0)})))
-                db.session.commit()
-            except Exception:
-                pass
-                
-        except Exception as e:
-            print(f"Warning: Failed to create journal entry for payment: {e}")
-            db.session.rollback()
-        
-        return jsonify({'status': 'success', 'invoice_id': inv_id, 'amount': amt, 'paid': paid, 'total': total, 'new_status': getattr(inv, 'status', None)})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'status': 'error', 'message': str(e)}), 400
-
-def get_original_ar_account_code(invoice_id, invoice_type):
-    """الحصول على رمز حساب المدينين المستخدم في القيد الأصلي"""
-    try:
-        # البحث عن القيد المحاسبي الأصلي
-        original_je = JournalEntry.query.filter_by(
-            invoice_id=invoice_id,
-            invoice_type=invoice_type
-        ).first()
-        
-        if original_je:
-            # البحث عن سجل المدينين في القيد الأصلي
-            ar_line = JournalLine.query.filter(
-                JournalLine.journal_id == original_je.id,
-                JournalLine.debit > 0,
-                JournalLine.description.like('%AR%')
-            ).first()
-            
-            if ar_line and ar_line.account:
-                return ar_line.account.code
-    except Exception as e:
-        print(f"خطأ في الحصول على حساب المدينين الأصلي: {e}")
-    
-    # القيمة الافتراضية
-    return '1020'  # حساب المدينين العام), 400
-
-
-
-@main.route('/api/payments/supplier/register', methods=['POST'], endpoint='register_payment_supplier')
-@login_required
-def register_payment_supplier():
-    payload = request.get_json(silent=True) or {}
-    supplier_name = (request.form.get('supplier') or payload.get('supplier') or '').strip()
-    amount = request.form.get('amount') or payload.get('amount')
-    method = (request.form.get('payment_method') or payload.get('payment_method') or 'CASH').strip().upper()
-    sd_str = (request.form.get('start_date') or payload.get('start_date') or '2025-10-01').strip()
-    ed_str = (request.form.get('end_date') or payload.get('end_date') or get_saudi_now().date().isoformat()).strip()
-    try:
-        amt = float(amount or 0)
-    except Exception:
-        return jsonify({'status': 'error', 'message': 'Invalid amount'}), 400
-    if not supplier_name:
-        return jsonify({'status': 'error', 'message': 'Supplier required'}), 400
-    if amt <= 0:
-        return jsonify({'status': 'error', 'message': 'Amount must be > 0'}), 400
-    try:
-        sd_dt = datetime.fromisoformat(sd_str)
-    except Exception:
-        sd_dt = datetime(get_saudi_now().year, 10, 1)
-    try:
-        ed_dt = datetime.fromisoformat(ed_str)
-    except Exception:
-        ed_dt = get_saudi_now()
-
-    from decimal import Decimal, ROUND_HALF_UP
-    def to_cents(value):
-        try:
-            return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        except Exception:
-            return Decimal('0.00')
-
-    allocations = []
-    remaining_pay = amt
-    try:
-        q = PurchaseInvoice.query
-        try:
-            q = q.filter(or_(PurchaseInvoice.created_at.between(sd_dt, ed_dt), PurchaseInvoice.date.between(sd_dt.date(), ed_dt.date())))
-        except Exception:
-            pass
-        # Case-insensitive supplier name match
-        q = q.filter(func.lower(PurchaseInvoice.supplier_name) == supplier_name.lower())
-        # Oldest-first FIFO allocation by date/created_at
-        q = q.order_by(PurchaseInvoice.date.asc(), PurchaseInvoice.created_at.asc())
-        rows = q.all()
-        for inv in rows:
-            if remaining_pay <= 0:
-                break
-            total = float(inv.total_after_tax_discount or 0.0)
-            paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                         .filter(Payment.invoice_id == inv.id, Payment.invoice_type == 'purchase').scalar() or 0.0)
-            total_c = to_cents(total); paid_c = to_cents(paid)
-            remaining = float(max(total_c - paid_c, Decimal('0.00')))
-            if remaining <= 0.0:
-                continue
-            alloc = min(remaining_pay, remaining)
-            db.session.add(Payment(invoice_id=inv.id, invoice_type='purchase', amount_paid=float(alloc), payment_method=method))
-            new_paid = float(paid + alloc)
-            # Update status robustly
-            np_c = to_cents(new_paid)
-            if (total_c - np_c) <= Decimal('0.01') and total_c > Decimal('0.00'):
-                inv.status = 'paid'
-            elif np_c > Decimal('0.00'):
-                inv.status = 'partial'
-            else:
-                inv.status = 'unpaid'
-            allocations.append({'invoice_id': inv.id, 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id, 'allocated': float(alloc)})
-            remaining_pay -= float(alloc)
-        db.session.commit()
-        # Ledger postings: Debit AP (reduce liability), Credit cash/bank
-        try:
-            _post_ledger(get_saudi_now().date(), 'AP', 'Accounts Payable', 'liability', amt, 0.0, f'PAY SUP {supplier_name}')
-            ca = _pm_account(method)
-            if ca:
-                _post_ledger(get_saudi_now().date(), ca.code, ca.name, 'asset', 0.0, amt, f'PAY SUP {supplier_name}')
-        except Exception:
-            pass
-        return jsonify({'status': 'success', 'supplier': supplier_name, 'amount': amt, 'allocated': allocations, 'unallocated': float(max(remaining_pay, 0.0))})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'status': 'error', 'message': str(e)}), 400
-
-@main.route('/api/payments/pay_all', methods=['POST'], endpoint='api_payments_pay_all')
-@login_required
-def api_payments_pay_all():
-    # Bulk pay remaining for filtered invoices
-    payload = request.get_json(silent=True) or {}
-    type_f = (payload.get('type') or request.form.get('type') or '').strip().lower()
-    method = (payload.get('payment_method') or request.form.get('payment_method') or 'CASH').strip().upper()
-    # Supported: purchase, expense
-    kinds = []
-    if type_f in ('purchase','expense'):
-        kinds = [type_f]
-    else:
-        kinds = ['purchase','expense']
-
-    from decimal import Decimal, ROUND_HALF_UP
-    def to_cents(value):
-        try:
-            return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        except Exception:
-            return Decimal('0.00')
-
-    affected = []
-    try:
-        for k in kinds:
-            if k == 'purchase':
-                rows = PurchaseInvoice.query.order_by(PurchaseInvoice.created_at.desc()).all()
-            else:
-                rows = ExpenseInvoice.query.order_by(ExpenseInvoice.created_at.desc()).all()
-            for inv in rows:
-                total = to_cents(float(getattr(inv, 'total_after_tax_discount', 0) or 0))
-                paid = to_cents(float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                          .filter(Payment.invoice_id == inv.id, Payment.invoice_type == k).scalar() or 0.0))
-                remaining = total - paid
-                if remaining > Decimal('0.01'):
-                    amt = float(remaining)
-                    db.session.add(Payment(invoice_id=inv.id, invoice_type=k, amount_paid=amt, payment_method=method))
-                    inv.status = 'paid'
-                    affected.append({'id': inv.id, 'type': k, 'amount': amt})
-        db.session.commit()
-        return jsonify({'status':'success', 'count': len(affected), 'items': affected})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'status':'error', 'message': str(e)}), 400
-
-
-# ---- Customers lightweight search API ----
-@main.route('/api/customers/search', methods=['GET'], endpoint='api_customers_search')
-@login_required
-def api_customers_search():
-    q = (request.args.get('q') or '').strip()
-    if not q:
-        rows = Customer.query.filter_by(active=True).order_by(Customer.name.asc()).limit(10).all()
-    else:
-        like = f"%{q}%"
-        rows = Customer.query.filter(
-            Customer.active == True,
-            (Customer.name.ilike(like)) | (Customer.phone.ilike(like))
-        ).order_by(Customer.name.asc()).limit(20).all()
-    data = [{
-        'id': c.id,
-        'name': c.name,
-        'phone': c.phone,
-        'discount_percent': float(c.discount_percent or 0)
-    } for c in rows]
-    return jsonify({'results': data})
-
-
-# ---- Print routes for sales receipts ----
-@main.route('/print/receipt/<invoice_number>', methods=['GET'], endpoint='print_receipt')
-def print_receipt(invoice_number):
-    inv = SalesInvoice.query.filter_by(invoice_number=invoice_number).first()
-    if not inv:
-        return 'Invoice not found', 404
-    items = SalesInvoiceItem.query.filter_by(invoice_id=inv.id).all()
-    # compute items context and use stored totals
-    items_ctx = []
-    for it in items:
-        line = float(it.price_before_tax or 0) * float(it.quantity or 0)
-        items_ctx.append({
-            'product_name': it.product_name or '',
-            'quantity': float(it.quantity or 0),
-            'total_price': line,
-        })
-
-    inv_ctx = {
-        'invoice_number': inv.invoice_number,
-        'table_number': inv.table_number,
-        'customer_name': inv.customer_name,
-        'customer_phone': inv.customer_phone,
-        'payment_method': inv.payment_method,
-        'status': 'PAID',
-        'total_before_tax': float(inv.total_before_tax or 0.0),
-        'tax_amount': float(inv.tax_amount or 0.0),
-        'discount_amount': float(inv.discount_amount or 0.0),
-        'total_after_tax_discount': float(inv.total_after_tax_discount or 0.0),
-        'branch': getattr(inv, 'branch', None),
-        'branch_code': getattr(inv, 'branch', None),
-    }
-    try:
-        s = Settings.query.first()
-    except Exception:
-        s = None
-    branch_name = BRANCH_LABELS.get(getattr(inv, 'branch', None) or '', getattr(inv, 'branch', ''))
-    # Use first print timestamp if available; fallback to archive saved_at or invoice.created_at
-    dt_str = None
-    try:
-        logs = kv_get(f"print_log:{inv.invoice_number}", []) or []
-    except Exception:
-        logs = []
-    try:
-        if logs:
-            from datetime import datetime as _dti
-            def _p(x):
-                try:
-                    return _dti.fromisoformat((x or {}).get('ts') or '')
-                except Exception:
-                    return None
-            cand = [_p(x) for x in logs]
-            cand = [c for c in cand if c]
-            if cand:
-                dtp = min(cand)
-                dt_str = dtp.strftime('%H:%M:%S %Y-%m-%d')
-    except Exception:
-        dt_str = None
-    if not dt_str:
-        try:
-            meta = kv_get(f"pdf_path:sales:{inv.invoice_number}", {}) or {}
-            sa = meta.get('saved_at')
-            if sa:
-                from datetime import datetime as _dti
-                try:
-                    dtp = _dti.fromisoformat(sa)
-                    dt_str = dtp.strftime('%H:%M:%S %Y-%m-%d')
-                except Exception:
-                    dt_str = None
-        except Exception:
-            dt_str = None
-    if not dt_str:
-        try:
-            from models import Payment
-            dtp_row = db.session.query(Payment.payment_date).\
-                filter(Payment.invoice_type == 'sales', Payment.invoice_id == inv.id).\
-                order_by(Payment.payment_date.asc()).first()
-            if dtp_row and dtp_row[0]:
-                dt_str = dtp_row[0].strftime('%H:%M:%S %Y-%m-%d')
-        except Exception:
-            pass
-    if not dt_str:
-        try:
-            if getattr(inv, 'created_at', None):
-                dt_str = inv.created_at.strftime('%H:%M:%S %Y-%m-%d')
-            else:
-                dt_str = get_saudi_now().strftime('%H:%M:%S %Y-%m-%d')
-        except Exception:
-            dt_str = get_saudi_now().strftime('%H:%M:%S %Y-%m-%d')
-    # Prepare embedded logo as data URL for more reliable thermal printing
-    logo_data_url = None
-    try:
-        if s and getattr(s, 'receipt_show_logo', False) and (s.logo_url or '').strip():
-            url = s.logo_url.strip()
-            import base64, mimetypes, os
-            fpath = None
-            # Static folder
-            if url.startswith('/static/'):
-                rel = url.split('/static/', 1)[1]
-                fpath = os.path.join(current_app.static_folder, rel)
-            # Persistent uploads folder
-            elif url.startswith('/uploads/'):
-                upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
-                rel = url.split('/uploads/', 1)[1]
-                fpath = os.path.join(upload_dir, rel)
-            if fpath and os.path.exists(fpath):
-                with open(fpath, 'rb') as f:
-                    b = f.read()
-                mime = mimetypes.guess_type(fpath)[0] or 'image/png'
-                logo_data_url = f'data:{mime};base64,' + base64.b64encode(b).decode('ascii')
-    except Exception:
-        logo_data_url = None
-    # Generate ZATCA-compliant QR (server-side) if possible
-    qr_data_url = None
-    try:
-        from utils.qr import generate_zatca_qr_from_invoice
-        b64 = generate_zatca_qr_from_invoice(inv, s, None)
-        if b64:
-            qr_data_url = 'data:image/png;base64,' + b64
-    except Exception:
-        qr_data_url = None
-    return render_template('print/receipt.html', inv=inv_ctx, items=items_ctx,
-                           settings=s, branch_name=branch_name, date_time=dt_str,
-                           display_invoice_number=inv.invoice_number,
-                           qr_data_url=qr_data_url,
-                           logo_data_url=logo_data_url,
-                           paid=True)
-
-
-@main.route('/print/order-preview/<branch>/<int:table>', methods=['GET'], endpoint='print_order_preview')
-@login_required
-def print_order_preview(branch, table):
-    # Read draft
-    rec = kv_get(f'draft:{branch}:{table}', {}) or {}
-    raw_items = rec.get('items') or []
-    items_ctx = []
-    subtotal = 0.0
-    for it in raw_items:
-        meal_id = it.get('meal_id') or it.get('id')
-        qty = float(it.get('qty') or it.get('quantity') or 1)
-        name = it.get('name') or ''
-        price = it.get('price') or 0.0
-        if (not name) or (not price) and meal_id:
-            m = MenuItem.query.get(int(meal_id))
-            if m:
-                name = name or m.name
-                price = price or float(m.price)
-        line = float(price or 0) * qty
-        subtotal += line
-        items_ctx.append({'product_name': name, 'quantity': qty, 'total_price': line})
-
-    tax_pct = float(rec.get('tax_pct') or 15)
-    discount_pct = float(rec.get('discount_pct') or 0)
-    vat_amount = subtotal * (tax_pct/100.0)
-    discount_amount = (subtotal + vat_amount) * (discount_pct/100.0)
-    total_after = subtotal + vat_amount - discount_amount
-
-    # Resolve payment method from draft if chosen in POS
-    try:
-        pm_raw = (rec.get('payment_method') or '').strip()
-    except Exception:
-        pm_raw = ''
-    inv_ctx = {
-        'invoice_number': '',  # no real invoice number for preview
-        'table_number': table,
-        'customer_name': (rec.get('customer') or {}).get('name') or '',
-        'customer_phone': (rec.get('customer') or {}).get('phone') or '',
-        'payment_method': pm_raw.upper() if pm_raw else '',
-        'status': 'DRAFT',
-        'total_before_tax': round(subtotal, 2),
-        'tax_amount': round(vat_amount, 2),
-        'discount_amount': round(discount_amount, 2),
-        'total_after_tax_discount': round(total_after, 2),
-        'branch': branch,
-        'branch_code': branch,
-    }
-    try:
-        s = Settings.query.first()
-    except Exception:
-        s = None
-    branch_name = BRANCH_LABELS.get(branch, branch)
-    dt_str = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
-    # Keep preview number generation as before, but with INV prefix to match final
-    order_no = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
-    # Persist this preview number so checkout reuses exactly the same value
-    try:
-        rec['preview_invoice_number'] = order_no
-        kv_set(f'draft:{branch}:{table}', rec)
-    except Exception:
-        pass
-    # Save an OrderInvoice record to track pre-payment prints
-    try:
-        from models import OrderInvoice
-        # Create table if missing (first run)
-        try:
-            OrderInvoice.__table__.create(bind=db.engine, checkfirst=True)
-        except Exception:
-            pass
-
-        # Avoid duplicates if user reopens/refreshes preview
-        existing = OrderInvoice.query.filter_by(invoice_no=order_no).first()
-        if not existing:
-            # Build items JSON with name, qty, unit, line_total
-            items_json = []
-            try:
-                for it in raw_items:
-                    name = it.get('name') or ''
-                    qty = float(it.get('qty') or it.get('quantity') or 1)
-                    price = it.get('price')
-                    if (not price):
-                        meal_id = it.get('meal_id') or it.get('id')
-                        if meal_id:
-                            m = MenuItem.query.get(int(meal_id))
-                            price = float(getattr(m, 'price', 0) or 0)
-                    unit = float(price or 0)
-                    line_total = unit * qty
-                    items_json.append({'name': name, 'qty': qty, 'unit': unit, 'line_total': line_total})
-            except Exception:
-                # Fallback from items_ctx if needed
-                for r in items_ctx:
-                    q = float(r.get('quantity') or 1)
-                    t = float(r.get('total_price') or 0)
-                    u = (t / q) if q else 0
-                    items_json.append({'name': r.get('product_name') or '-', 'qty': q, 'unit': u, 'line_total': t})
-
-            order = OrderInvoice(
-                branch=branch,
-                invoice_no=order_no,
-                customer=((rec.get('customer') or {}).get('name') or None),
-                items=items_json,
-                subtotal=float(subtotal),
-                discount=float(discount_amount),
-                vat=float(vat_amount),
-                total=float(total_after),
-                payment_method='PENDING'
-            )
-            db.session.add(order)
-            db.session.commit()
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        current_app.logger.error('Failed to save order invoice (preview): %s', e)
-    # Generate ZATCA QR as base64 PNG and pass to template
-    qr_data_url = None
-    try:
-        from utils.qr import generate_zatca_qr_base64
-        b64 = generate_zatca_qr_base64(
-            getattr(s, 'company_name', 'Restaurant'),
-            getattr(s, 'tax_number', '123456789012345'),
-            get_saudi_now(),
-            float(total_after),
-            float(vat_amount)
-        )
-        if b64:
-            qr_data_url = 'data:image/png;base64,' + b64
-    except Exception:
-        qr_data_url = None
-
-    return render_template('print/receipt.html', inv=inv_ctx, items=items_ctx,
-                           settings=s, branch_name=branch_name, date_time=dt_str,
-                           display_invoice_number=order_no,
-                           qr_data_url=qr_data_url,
-                           paid=False)
-
-
-@main.route('/print/order-slip/<branch>/<int:table>', methods=['GET'], endpoint='print_order_slip')
-@login_required
-def print_order_slip(branch, table):
-    rec = kv_get(f'draft:{branch}:{table}', {}) or {}
-    raw_items = rec.get('items') or []
-    items_ctx = []
-    subtotal = 0.0
-    for it in raw_items:
-        meal_id = it.get('meal_id') or it.get('id')
-        qty = float(it.get('qty') or it.get('quantity') or 1)
-        name = it.get('name') or ''
-        price = it.get('price') or 0.0
-        if (not name) or ((not price) and meal_id):
-            m = MenuItem.query.get(int(meal_id))
-            if m:
-                name = name or m.name
-                price = price or float(m.price)
-        line = float(price or 0) * qty
-        subtotal += line
-        items_ctx.append({'product_name': name, 'quantity': qty, 'unit_price': float(price or 0), 'discount': 0.0, 'tax': 0.0, 'line_total': line})
-    tax_pct = float(rec.get('tax_pct') or 15)
-    discount_pct = float(rec.get('discount_pct') or 0)
-    vat_amount = subtotal * (tax_pct/100.0)
-    discount_amount = (subtotal + vat_amount) * (discount_pct/100.0)
-    total_after = subtotal + vat_amount - discount_amount
-    order_seq = None
-    today_str = get_saudi_now().date().isoformat()
-    rec_seq_date = (rec.get('order_seq_date') or '') if isinstance(rec, dict) else ''
-    try:
-        order_seq = rec.get('order_seq')
-    except Exception:
-        order_seq = None
-    if not order_seq or rec_seq_date != today_str:
-        key = f"order_seq:{today_str}"
-        cur = kv_get(key, 1) or 1
-        order_seq = int(cur)
-        kv_set(key, order_seq + 1)
-        rec['order_seq'] = order_seq
-        rec['order_seq_date'] = today_str
-        kv_set(f'draft:{branch}:{table}', rec)
-    branch_name = BRANCH_LABELS.get(branch, branch)
-    dt_str = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
-    try:
-        s = Settings.query.first()
-    except Exception:
-        s = None
-    cust = rec.get('customer') or {}
-    payment_method = (rec.get('payment_method') or '').strip()
-    return render_template('print/order_slip.html',
-                           order_number=order_seq,
-                           branch_code=branch,
-                           branch_name=branch_name,
-                           table_number=table,
-                           date_time=dt_str,
-                           items=items_ctx,
-                           subtotal=round(subtotal, 2),
-                           discount=round(discount_amount, 2),
-                           discount_pct=round(discount_pct, 2),
-                           vat=round(vat_amount, 2),
-                           tax_pct=round(tax_pct, 2),
-                           total=round(total_after, 2),
-                           customer_name=(cust.get('name') or ''),
-                           customer_phone=(cust.get('phone') or ''),
-                           payment_method=payment_method,
-                           settings=s)
-
-@main.route('/invoice/print/<invoice_id>', methods=['GET'], endpoint='invoice_print')
-@login_required
-def invoice_print(invoice_id):
-    """
-    New standalone invoice print page for issued invoices
-    This is a read-only print view that opens in a new window
-    """
-    # Find invoice by ID or invoice number
-    inv = None
-    try:
-        inv = SalesInvoice.query.get(int(invoice_id))
-    except Exception:
-        inv = SalesInvoice.query.filter_by(invoice_number=str(invoice_id)).first()
-    
-    if not inv:
-        return 'Invoice not found', 404
-    
-    st = (inv.status or '').lower()
-    if st not in ['issued', 'finalized', 'paid', 'unpaid', 'partial']:
-        return 'Invoice not issued yet', 403
-    
-    items = SalesInvoiceItem.query.filter_by(invoice_id=inv.id).all()
-    
-    # Prepare items context
-    items_ctx = []
-    for it in items:
-        line = float(it.price_before_tax or 0) * float(it.quantity or 0)
-        items_ctx.append({
-            'product_name': it.product_name or '',
-            'quantity': float(it.quantity or 0),
-            'total_price': line,
-        })
-
-    inv_ctx = {
-        'invoice_number': inv.invoice_number,
-        'table_number': inv.table_number,
-        'customer_name': inv.customer_name,
-        'customer_phone': inv.customer_phone,
-        'payment_method': inv.payment_method,
-        'status': inv.status.upper(),
-        'total_before_tax': float(inv.total_before_tax or 0.0),
-        'tax_amount': float(inv.tax_amount or 0.0),
-        'discount_amount': float(inv.discount_amount or 0.0),
-        'total_after_tax_discount': float(inv.total_after_tax_discount or 0.0),
-        'branch': getattr(inv, 'branch', None),
-        'branch_code': getattr(inv, 'branch', None),
-    }
-    
-    try:
-        s = Settings.query.first()
-    except Exception:
-        s = None
-        
-    branch_name = BRANCH_LABELS.get(getattr(inv, 'branch', None) or '', getattr(inv, 'branch', ''))
-    try:
-        if inv.created_at:
-            base_dt = inv.created_at
-            if getattr(base_dt, 'tzinfo', None):
-                dt_str = base_dt.astimezone(KSA_TZ).strftime('%Y-%m-%d %H:%M:%S')
-            else:
-                try:
-                    dt_str = base_dt.replace(tzinfo=_pytz.UTC).astimezone(KSA_TZ).strftime('%Y-%m-%d %H:%M:%S')
-                except Exception:
-                    dt_str = KSA_TZ.localize(base_dt).strftime('%Y-%m-%d %H:%M:%S')
-        else:
-            dt_str = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
-    except Exception:
-        dt_str = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
-    
-    # Prepare embedded logo as data URL for thermal printing
-    logo_data_url = None
-    try:
-        if s and getattr(s, 'receipt_show_logo', False) and (s.logo_url or '').strip():
-            url = s.logo_url.strip()
-            import base64, mimetypes, os
-            fpath = None
-            # Static folder
-            if url.startswith('/static/'):
-                rel = url.split('/static/', 1)[1]
-                fpath = os.path.join(current_app.static_folder, rel)
-            # Persistent uploads folder
-            elif url.startswith('/uploads/'):
-                upload_dir = os.getenv('UPLOAD_DIR') or os.path.join(current_app.static_folder, 'uploads')
-                rel = url.split('/uploads/', 1)[1]
-                fpath = os.path.join(upload_dir, rel)
-            if fpath and os.path.exists(fpath):
-                with open(fpath, 'rb') as f:
-                    b = f.read()
-                mime = mimetypes.guess_type(fpath)[0] or 'image/png'
-                logo_data_url = f'data:{mime};base64,' + base64.b64encode(b).decode('ascii')
-    except Exception:
-        logo_data_url = None
-    
-    # Generate ZATCA-compliant QR
-    qr_data_url = None
-    try:
-        from utils.qr import generate_zatca_qr_from_invoice
-        b64 = generate_zatca_qr_from_invoice(inv, s, None)
-        if b64:
-            qr_data_url = 'data:image/png;base64,' + b64
-    except Exception:
-        qr_data_url = None
-    
-    # Render standalone print template
-    return render_template('print/invoice_print.html', 
-                         inv=inv_ctx, 
-                         items=items_ctx,
-                         settings=s, 
-                         branch_name=branch_name, 
-                         date_time=dt_str,
-                         display_invoice_number=inv.invoice_number,
-                         qr_data_url=qr_data_url,
-                         logo_data_url=logo_data_url,
-                         paid=(inv.status in ['paid', 'finalized']))
-
-
-
-@main.route('/customers', methods=['GET', 'POST'], endpoint='customers')
-@login_required
-def customers():
-    if request.method == 'POST':
-        name = (request.form.get('name') or '').strip()
-        phone = (request.form.get('phone') or '').strip() or None
-        discount = request.form.get('discount_percent', type=float) or 0.0
-        if not name:
-            flash('Name is required', 'danger')
-        else:
-            try:
-                c = Customer(name=name, phone=phone, discount_percent=float(discount or 0))
-                db.session.add(c)
-                db.session.commit()
-                flash('Customer added', 'success')
-            except Exception as e:
-                db.session.rollback()
-                flash('Error adding customer', 'danger')
-        return redirect(url_for('main.customers'))
-    # GET
-    q = (request.args.get('q') or '').strip()
-    qry = Customer.query.filter_by(active=True)
-    if q:
-        like = f"%{q}%"
-        qry = qry.filter((Customer.name.ilike(like)) | (Customer.phone.ilike(like)))
-    customers = qry.order_by(Customer.name.asc()).all()
-    return render_template('customers.html', customers=customers, q=q)
-
-@main.route('/customers/<int:cid>/toggle', methods=['POST'], endpoint='customer_toggle')
-@login_required
-def customer_toggle(cid):
-    try:
-        c = db.session.get(Customer, cid)
-        if not c:
-            flash('Customer not found', 'warning')
-            return redirect(url_for('main.customers'))
-        c.active = not bool(getattr(c, 'active', True))
-        db.session.commit()
-        flash('Customer status updated', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error updating customer: {e}', 'danger')
-    return redirect(url_for('main.customers'))
-
-
-@main.route('/customers/<int:cid>/delete', methods=['POST'], endpoint='customer_delete')
-@login_required
-def customer_delete(cid):
-    # Try hard delete; if constrained, fall back to soft deactivate
-    try:
-        c = db.session.get(Customer, cid)
-        if not c:
-            flash('Customer not found', 'warning')
-        else:
-            try:
-                db.session.delete(c)
-                db.session.commit()
-                flash('Customer deleted', 'success')
-            except IntegrityError:
-                db.session.rollback()
-                c.active = False
-                db.session.commit()
-                flash('Customer has related records; deactivated instead', 'warning')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting customer: {e}', 'danger')
-    return redirect(url_for('main.customers'))
-
-
-# ---- Customers: POS-friendly search alias and AJAX create ----
-@main.route('/api/pos/<branch>/customers/search', methods=['GET'], endpoint='api_pos_customers_search')
-@login_required
-def api_pos_customers_search(branch):
-    q = (request.args.get('q') or '').strip()
-    if not q:
-        rows = Customer.query.filter_by(active=True).order_by(Customer.name.asc()).limit(10).all()
-    else:
-        like = f"%{q}%"
-        rows = Customer.query.filter(
-            Customer.active == True,
-            (Customer.name.ilike(like)) | (Customer.phone.ilike(like))
-        ).order_by(Customer.name.asc()).limit(20).all()
-    return jsonify([{
-        'id': c.id,
-        'name': c.name,
-        'phone': c.phone,
-        'discount_percent': float(c.discount_percent or 0)
-    } for c in rows])
-
-
-@main.route('/api/customers', methods=['POST'], endpoint='api_customers_create')
-@login_required
-@csrf.exempt
-def api_customers_create():
-    try:
-        if request.is_json:
-            data = request.get_json() or {}
-            name = (data.get('name') or '').strip()
-            phone = (data.get('phone') or '').strip() or None
-            discount = float((data.get('discount_percent') or 0) or 0)
-        else:
-            name = (request.form.get('name') or '').strip()
-            phone = (request.form.get('phone') or '').strip() or None
-            discount = request.form.get('discount_percent', type=float) or 0.0
-        if not name:
-            return jsonify({'ok': False, 'error': 'Name is required'}), 400
-        c = Customer(name=name, phone=phone, discount_percent=float(discount or 0))
-        db.session.add(c)
-        db.session.commit()
-        return jsonify({'ok': True, 'customer': {
-            'id': c.id, 'name': c.name, 'phone': c.phone,
-            'discount_percent': float(c.discount_percent or 0)
-        }})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
 @main.route('/salaries/accrual', methods=['POST'], endpoint='salaries_accrual')
 @login_required
 def salaries_accrual():
@@ -9022,8 +3340,8 @@ def salaries_accrual():
                 continue
             try:
                 from models import JournalEntry, JournalLine
-                exp_acc = _account(SHORT_TO_NUMERIC['SAL_EXP'][0], CHART_OF_ACCOUNTS['5310']['name'], CHART_OF_ACCOUNTS['5310']['type'])
-                liab_acc = _account(SHORT_TO_NUMERIC['PAYROLL_LIAB'][0], CHART_OF_ACCOUNTS['2130']['name'], CHART_OF_ACCOUNTS['2130']['type'])
+                exp_acc = _account(*SHORT_TO_NUMERIC['SAL_EXP'])
+                liab_acc = _account(*SHORT_TO_NUMERIC['PAYROLL_LIAB'])
                 je = JournalEntry(entry_number=f"JE-SALACC-{_emp_id}-{year}{month:02d}", date=get_saudi_now().date(), branch_code=None, description=f"Payroll accrual {_emp_id} {year}-{month}", status='posted', total_debit=amount, total_credit=amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), salary_id=s.id)
                 db.session.add(je); db.session.flush()
                 if exp_acc:
@@ -9047,216 +3365,6 @@ def salaries_accrual():
             pass
         return jsonify({'ok': False, 'error': str(e)}), 400
 
-
-@main.route('/suppliers', methods=['GET','POST'], endpoint='suppliers')
-@login_required
-def suppliers():
-    if request.method == 'POST':
-        try:
-            # Accept optional CR/IBAN even if model lacks fields; store in notes
-            cr = (request.form.get('cr_number') or '').strip() or None
-            iban = (request.form.get('iban') or '').strip() or None
-            notes_in = (request.form.get('notes') or '').strip() or None
-            notes_extra = []
-            if notes_in:
-                notes_extra.append(notes_in)
-            if cr:
-                notes_extra.append(f"CR: {cr}")
-            if iban:
-                notes_extra.append(f"IBAN: {iban}")
-            notes_text = ' | '.join(notes_extra) if notes_extra else None
-
-            s = Supplier(
-                name=(request.form.get('name') or '').strip(),
-                contact_person=request.form.get('contact_person') or None,
-                phone=request.form.get('phone') or None,
-                email=request.form.get('email') or None,
-                tax_number=request.form.get('tax_number') or None,
-                address=request.form.get('address') or None,
-                payment_method=(request.form.get('payment_method') or 'CASH').strip().upper(),
-                notes=notes_text,
-                active=True if str(request.form.get('active')).lower() in ['1','true','yes','on'] else False,
-            )
-            if not s.name:
-                raise ValueError('Name is required')
-            if ext_db is not None:
-                ext_db.session.add(s)
-                ext_db.session.commit()
-            else:
-                db.session.add(s)
-                db.session.commit()
-            flash('Supplier added', 'success')
-        except Exception as e:
-            if ext_db is not None:
-                ext_db.session.rollback()
-            else:
-                db.session.rollback()
-            flash(f'Could not add supplier: {e}', 'danger')
-        return redirect(url_for('main.suppliers'))
-    try:
-        q = (request.args.get('q') or '').strip()
-        query = Supplier.query
-        if q:
-            like = f"%{q}%"
-            query = query.filter(
-                (Supplier.name.ilike(like)) |
-                (Supplier.contact_person.ilike(like)) |
-                (Supplier.phone.ilike(like)) |
-                (Supplier.email.ilike(like)) |
-                (Supplier.tax_number.ilike(like)) |
-                (Supplier.address.ilike(like)) |
-                (Supplier.notes.ilike(like))
-            )
-        all_suppliers = query.order_by(Supplier.name.asc()).all()
-    except Exception:
-        all_suppliers = []
-    return render_template('suppliers.html', suppliers=all_suppliers)
-
-@main.route('/suppliers/list', methods=['GET'], endpoint='suppliers_list')
-@login_required
-def suppliers_list():
-    try:
-        q = (request.args.get('q') or '').strip()
-        query = Supplier.query
-        if q:
-            like = f"%{q}%"
-            query = query.filter(
-                (Supplier.name.ilike(like)) |
-                (Supplier.contact_person.ilike(like)) |
-                (Supplier.phone.ilike(like)) |
-                (Supplier.email.ilike(like)) |
-                (Supplier.tax_number.ilike(like)) |
-                (Supplier.address.ilike(like)) |
-                (Supplier.notes.ilike(like))
-            )
-        all_suppliers = query.order_by(Supplier.name.asc()).all()
-    except Exception:
-        all_suppliers = []
-    return render_template('suppliers_list.html', suppliers=all_suppliers)
-
-@main.route('/suppliers/<int:sid>/toggle', methods=['POST'], endpoint='supplier_toggle')
-@login_required
-def supplier_toggle(sid):
-    try:
-        s = Supplier.query.get(sid)
-        if not s:
-            flash('Supplier not found', 'warning')
-            return redirect(url_for('main.suppliers'))
-        s.active = not bool(getattr(s, 'active', True))
-        if ext_db is not None:
-            ext_db.session.commit()
-        else:
-            db.session.commit()
-        flash('Supplier status updated', 'success')
-    except Exception as e:
-        if ext_db is not None:
-            ext_db.session.rollback()
-        else:
-            db.session.rollback()
-        flash(f'Error updating supplier: {e}', 'danger')
-    return redirect(url_for('main.suppliers'))
-
-@main.route('/suppliers/export', methods=['GET'], endpoint='suppliers_export')
-@login_required
-def suppliers_export():
-    try:
-        q = (request.args.get('q') or '').strip()
-        query = Supplier.query
-        if q:
-            like = f"%{q}%"
-            query = query.filter(
-                (Supplier.name.ilike(like)) |
-                (Supplier.contact_person.ilike(like)) |
-                (Supplier.phone.ilike(like)) |
-                (Supplier.email.ilike(like)) |
-                (Supplier.tax_number.ilike(like)) |
-                (Supplier.address.ilike(like)) |
-                (Supplier.notes.ilike(like))
-            )
-        rows = query.order_by(Supplier.name.asc()).all()
-
-        def escape_csv(val: str) -> str:
-            if val is None:
-                return ''
-            s = str(val)
-            if any(c in s for c in [',','"','\n','\r']):
-                s = '"' + s.replace('"','""') + '"'
-            return s
-
-        parts = []
-        header = [
-            'Name','Contact Person','Phone','Email','Tax Number','CR Number','IBAN','Address','Notes','Active'
-        ]
-        parts.append(','.join(header))
-        for s in rows:
-            cr = getattr(s, 'cr_number', None)
-            iban = getattr(s, 'iban', None)
-            if (not cr or not iban) and (s.notes):
-                try:
-                    for part in (s.notes or '').split('|'):
-                        p = (part or '').strip()
-                        if (not cr) and p[:3] == 'CR:':
-                            cr = p[3:].strip()
-                        if (not iban) and p[:5] == 'IBAN:':
-                            iban = p[5:].strip()
-                except Exception:
-                    pass
-            row = [
-                escape_csv(s.name),
-                escape_csv(s.contact_person or ''),
-                escape_csv(s.phone or ''),
-                escape_csv(s.email or ''),
-                escape_csv(s.tax_number or ''),
-                escape_csv(cr or ''),
-                escape_csv(iban or ''),
-                escape_csv(s.address or ''),
-                escape_csv(s.notes or ''),
-                '1' if getattr(s, 'active', True) else '0'
-            ]
-            parts.append(','.join(row))
-        csv_data = '\n'.join(parts)
-        return current_app.response_class(csv_data, mimetype='text/csv; charset=utf-8', headers={
-            'Content-Disposition': 'attachment; filename="suppliers.csv"'
-        })
-    except Exception as e:
-        flash(f'Failed to export suppliers: {e}', 'danger')
-        return redirect(url_for('main.suppliers'))
-
-@main.route('/suppliers/<int:sid>/delete', methods=['POST'], endpoint='supplier_delete')
-@login_required
-def supplier_delete(sid):
-    # Try hard delete; if constrained, fall back to soft deactivate
-    try:
-        s = Supplier.query.get(sid)
-        if not s:
-            flash('Supplier not found', 'warning')
-        else:
-            try:
-                if ext_db is not None:
-                    ext_db.session.delete(s)
-                    ext_db.session.commit()
-                else:
-                    db.session.delete(s)
-                    db.session.commit()
-                flash('Supplier deleted', 'success')
-            except IntegrityError:
-                # Rollback then soft deactivate
-                if ext_db is not None:
-                    ext_db.session.rollback()
-                    s.active = False
-                    ext_db.session.commit()
-                else:
-                    db.session.rollback()
-                    s.active = False
-                    db.session.commit()
-                flash('Supplier has related records; deactivated instead', 'warning')
-    except Exception as e:
-        if ext_db is not None:
-            ext_db.session.rollback()
-        else:
-            db.session.rollback()
-        flash(f'Error deleting supplier: {e}', 'danger')
-    return redirect(url_for('main.suppliers'))
 
 @main.route('/menu', methods=['GET'], endpoint='menu')
 @login_required
@@ -9479,8 +3587,14 @@ def api_users_create():
         # uniqueness
         if User.query.filter_by(username=username).first():
             return jsonify({'ok': False, 'error': 'username_taken'}), 400
-        u = User(username=username)
+        email = (data.get('email') or '').strip() or None
+        if email and User.query.filter_by(email=email).first():
+            return jsonify({'ok': False, 'error': 'email_taken'}), 400
+        role = (data.get('role') or 'user').strip() or 'user'
+        u = User(username=username, email=email, role=role)
         u.set_password(password)
+        if hasattr(u, 'active'):
+            u.active = bool(active)
         db.session.add(u)
         db.session.flush()  # to get u.id before commit
         try:
@@ -9501,16 +3615,30 @@ def api_users_update(uid):
         if not u:
             return jsonify({'ok': False, 'error': 'not_found'}), 404
         data = request.get_json(silent=True) or {}
+        # Update email if provided
+        if 'email' in data:
+            em = (data.get('email') or '').strip() or None
+            if em and User.query.filter(User.email == em, User.id != uid).first():
+                return jsonify({'ok': False, 'error': 'email_taken'}), 400
+            u.email = em
+        # Update role if provided
+        if 'role' in data:
+            r = (data.get('role') or 'user').strip() or 'user'
+            if hasattr(u, 'role'):
+                u.role = r
         # Optional: allow password change
         pw = (data.get('password') or '').strip()
         if pw:
             u.set_password(pw)
-        # Active status persisted in AppKV to avoid schema change
+        # Active status: persist in AppKV and sync to model if column exists
         if 'active' in data:
+            active_val = bool(data.get('active'))
             try:
-                kv_set(f"user_active:{u.id}", {'active': bool(data.get('active'))})
+                kv_set(f"user_active:{u.id}", {'active': active_val})
             except Exception:
                 pass
+            if hasattr(u, 'active'):
+                u.active = active_val
         db.session.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -9624,7 +3752,7 @@ def settings():
         try:
             if not s:
                 s = Settings()
-                (ext_db.session.add(s) if ext_db is not None else db.session.add(s))
+                db.session.add(s)
 
             form_data = request.form if request.form else (request.get_json(silent=True) or {})
 
@@ -9792,13 +3920,18 @@ def settings():
             except Exception:
                 pass
 
-            (ext_db.session.commit() if ext_db is not None else db.session.commit())
+            db.session.commit()
+            try:
+                from utils.cache_helpers import invalidate_settings_cache
+                invalidate_settings_cache()
+            except Exception:
+                pass
             flash('Settings saved', 'success')
         except Exception as e:
-            (ext_db.session.rollback() if ext_db is not None else db.session.rollback())
-            flash(f'Could not save settings: {e}', 'danger')
+            db.session.rollback()
+            flash('Could not save settings: ' + str(e), 'danger')
         return redirect(url_for('main.settings'))
-    return render_template('settings.html', s=s)
+    return render_template('settings.html', s=s or Settings())
 
 @main.route('/table-settings', endpoint='table_settings')
 @login_required
@@ -9828,158 +3961,6 @@ def table_manager(branch_code):
     return render_template('table_manager.html', branch_code=branch_code, branch_label=branch_label)
 
 @csrf.exempt
-@main.route('/api/table-layout/<branch_code>', methods=['GET', 'POST'], endpoint='api_table_layout_fixed')
-@login_required
-def api_table_layout_fixed(branch_code):
-    """Table layout API that integrates with the actual POS table system"""
-    # Define branch labels
-    branch_labels = {
-        'china_town': 'CHINA TOWN',
-        'place_india': 'PALACE INDIA'
-    }
-    
-    # Check if branch exists
-    if branch_code not in branch_labels:
-        return jsonify({'error': 'Branch not found'}), 404
-    
-    if request.method == 'GET':
-        # Load layout from the actual table sections system
-        try:
-            from models import TableSection, TableSectionAssignment
-
-            def decode_name(name: str):
-                name = name or ''
-                visible = name
-                layout = ''
-                if '[rows:' in name and name.endswith(']'):
-                    try:
-                        before, bracket = name.rsplit('[rows:', 1)
-                        visible = before.rstrip()
-                        layout = bracket[:-1].strip()  # drop trailing ]
-                    except Exception:
-                        pass
-                return visible, layout
-
-            sections = TableSection.query.filter_by(branch_code=branch_code).order_by(TableSection.sort_order, TableSection.id).all()
-            assignments = TableSectionAssignment.query.filter_by(branch_code=branch_code).all()
-
-            # Convert to table manager format (preserve actual table numbers; do not synthesize placeholders)
-            layout_sections = []
-            for s in sections:
-                visible, layout = decode_name(s.name)
-                section_data = {
-                    'id': s.id,
-                    'name': visible,
-                    'rows': []
-                }
-
-                # Collect actual tables assigned to this section (preserve string numbers)
-                assigned = [a for a in assignments if a.section_id == s.id]
-                # Sort by natural order: numeric if possible, else lexicographic
-                def _key(a):
-                    try:
-                        return (0, int(str(a.table_number).strip()))
-                    except Exception:
-                        return (1, str(a.table_number) or '')
-                assigned.sort(key=_key)
-
-                # Map to table objects
-                tables = [{ 'id': f'table_{idx+1}', 'number': a.table_number, 'seats': 4 } for idx, a in enumerate(assigned)]
-
-                if layout:
-                    try:
-                        counts = [int(x.strip()) for x in layout.split(',') if x.strip()]
-                    except Exception:
-                        counts = []
-                    i = 0
-                    for cnt in counts:
-                        if cnt <= 0: continue
-                        row_tables = tables[i:i+cnt]
-                        section_data['rows'].append({ 'id': f'row_{len(section_data["rows"])+1}', 'tables': row_tables })
-                        i += cnt
-                    if i < len(tables):
-                        section_data['rows'].append({ 'id': f'row_{len(section_data["rows"])+1}', 'tables': tables[i:] })
-                else:
-                    # Single row with all assigned tables
-                    section_data['rows'].append({ 'id': 'row_1', 'tables': tables })
-
-                layout_sections.append(section_data)
-
-            return jsonify({'sections': layout_sections})
-        except Exception as e:
-            print(f"Error loading layout: {e}")
-            return jsonify({'sections': []})
-    
-    elif request.method == 'POST':
-        # Save layout to the actual table sections system
-        try:
-            from models import TableSection, TableSectionAssignment
-            
-            # Get the data from request
-            data = None
-            if request.is_json:
-                data = request.get_json()
-            else:
-                # Try to get raw data and parse it
-                raw_data = request.get_data(as_text=True)
-                if raw_data:
-                    import json
-                    data = json.loads(raw_data)
-            
-            if not data:
-                return jsonify({'error': 'No data provided'}), 400
-            
-            sections_data = data.get('sections', [])
-            
-            # Clear existing sections and assignments for this branch
-            TableSectionAssignment.query.filter_by(branch_code=branch_code).delete()
-            TableSection.query.filter_by(branch_code=branch_code).delete()
-            
-            # Create new sections and assignments
-            for section_idx, section in enumerate(sections_data):
-                section_name = section.get('name', '')
-                rows = section.get('rows', [])
-                
-                # Calculate layout string from rows
-                layout_parts = []
-                for row in rows:
-                    table_count = len(row.get('tables', []))
-                    if table_count > 0:
-                        layout_parts.append(str(table_count))
-                
-                layout_string = ','.join(layout_parts) if layout_parts else ''
-                encoded_name = f"{section_name} [rows:{layout_string}]" if layout_string else section_name
-                
-                # Create section
-                new_section = TableSection(
-                    branch_code=branch_code,
-                    name=encoded_name,
-                    sort_order=section.get('sort_order', section_idx)
-                )
-                db.session.add(new_section)
-                db.session.flush()  # Get the ID
-                
-                # Create assignments for tables
-                for row in rows:
-                    for table in row.get('tables', []):
-                        table_number = table.get('number')
-                        if table_number:
-                            assignment = TableSectionAssignment(
-                                branch_code=branch_code,
-                                table_number=str(table_number),
-                                section_id=new_section.id
-                            )
-                            db.session.add(assignment)
-            
-            db.session.commit()
-            return jsonify({'success': True, 'message': 'Layout saved successfully'})
-        except Exception as e:
-            db.session.rollback()
-            print(f"Error saving layout: {e}")
-            return jsonify({'error': f'Failed to save layout: {str(e)}'}), 500
-
-
-# Serve uploaded files from a persistent directory when UPLOAD_DIR is set
 @main.route('/uploads/<path:filename>', methods=['GET'], endpoint='serve_uploads')
 def serve_uploads(filename):
     try:
@@ -10472,28 +4453,28 @@ def income_statement():
     try:
         vat_out = float(db.session.query(func.coalesce(func.sum(LedgerEntry.credit - LedgerEntry.debit), 0))
             .join(Account, LedgerEntry.account_id == Account.id)
-            .filter(Account.code == '6020')
+            .filter(Account.code == '2141')
             .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
     except Exception:
         vat_out = 0.0
     try:
         vat_in = float(db.session.query(func.coalesce(func.sum(LedgerEntry.debit - LedgerEntry.credit), 0))
             .join(Account, LedgerEntry.account_id == Account.id)
-            .filter(Account.code.in_(['6010','1300']))
+            .filter(Account.code.in_(['1170']))
             .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
     except Exception:
         vat_in = 0.0
     try:
         rev_pi = float(db.session.query(func.coalesce(func.sum(LedgerEntry.credit - LedgerEntry.debit), 0))
             .join(Account, LedgerEntry.account_id == Account.id)
-            .filter(Account.code == '4010')
+            .filter(Account.code == '4112')
             .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
     except Exception:
         rev_pi = 0.0
     try:
         rev_ct = float(db.session.query(func.coalesce(func.sum(LedgerEntry.credit - LedgerEntry.debit), 0))
             .join(Account, LedgerEntry.account_id == Account.id)
-            .filter(Account.code == '4020')
+            .filter(Account.code == '4111')
             .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
     except Exception:
         rev_ct = 0.0
@@ -10680,8 +4661,8 @@ def balance_sheet():
      .group_by(Account.id) \
      .order_by(Account.type.asc(), Account.code.asc()).all()
 
-    ca_codes = {'1010','1020','1110','1210','1220','1310','1320'}
-    cl_codes = {'2010','2020','2030','2040','2050'}
+    ca_codes = {'1111','1112','1121','1122','1123','1131','1132','1141','1142','1151','1152','1161','1162','1170'}
+    cl_codes = {'2111','2121','2122','2131','2132','2133','2141','2142','2151','2152','2153'}
     current_assets = 0.0
     noncurrent_assets = 0.0
     current_liabilities = 0.0
@@ -10806,10 +4787,10 @@ def ledger_backfill():
     def pm_code(pm):
         p = (pm or 'CASH').strip().upper()
         if p in ('CASH',):
-            return '1040'
+            return '1111'
         if p in ('BANK','CARD','VISA','MASTERCARD','MADA','ONLINE','TRANSFER'):
-            return '1050'
-        return '1020'
+            return '1121'
+        return '1141'
 
     created = {'sales': 0, 'purchase': 0, 'expense': 0}
 
@@ -10824,11 +4805,11 @@ def ledger_backfill():
                 base = max(0.0, float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0))
                 vat = float(inv.tax_amount or 0.0)
                 cash_code = pm_code(inv.payment_method)
-                cash_acc = get_or_create(cash_code, 'Cash' if cash_code=='1040' else ('Bank' if cash_code=='1050' else 'Accounts Receivable'), 'ASSET')
-                rev_code = '4010' if (inv.branch or '').strip() == 'place_india' else ('4000' if (inv.branch or '').strip() == 'china_town' else '4010')
-                rev_name = 'مبيعات Place India' if rev_code=='4010' else 'مبيعات China Town'
+                cash_acc = get_or_create(cash_code, 'صندوق رئيسي' if cash_code=='1111' else ('بنك' if cash_code=='1121' else 'عملاء'), 'ASSET')
+                rev_code = '4111'
+                rev_name = 'مبيعات CHINA TOWN'
                 rev_acc = get_or_create(rev_code, rev_name, 'REVENUE')
-                vat_out_acc = get_or_create('2060', 'Output VAT – ضريبة المخرجات', 'LIABILITY')
+                vat_out_acc = get_or_create('2141', 'ضريبة القيمة المضافة – مستحقة', 'LIABILITY')
                 db.session.add(LedgerEntry(date=inv.date, account_id=cash_acc.id, debit=gross, credit=0, description=desc_key))
                 if base > 0:
                     db.session.add(LedgerEntry(date=inv.date, account_id=rev_acc.id, debit=0, credit=base, description=desc_key))
@@ -10849,9 +4830,9 @@ def ledger_backfill():
                 base = float(inv.total_before_tax or 0.0)
                 vat = float(inv.tax_amount or 0.0)
                 gross = float(inv.total_after_tax_discount or 0.0)
-                inv_acc = get_or_create('1200', 'Inventory', 'ASSET')
-                vat_in_acc = get_or_create('1300', 'VAT Input', 'ASSET')
-                ap_acc = get_or_create('2000', 'Accounts Payable', 'LIABILITY')
+                inv_acc = get_or_create('1161', 'مخزون بضائع', 'ASSET')
+                vat_in_acc = get_or_create('1170', 'ضريبة القيمة المضافة – مدخلات', 'ASSET')
+                ap_acc = get_or_create('2111', 'موردون', 'LIABILITY')
                 db.session.add(LedgerEntry(date=inv.date, account_id=inv_acc.id, debit=base, credit=0, description=desc_key))
                 if vat > 0:
                     db.session.add(LedgerEntry(date=inv.date, account_id=vat_in_acc.id, debit=vat, credit=0, description=f"VAT Input {inv.invoice_number}"))
@@ -10871,9 +4852,9 @@ def ledger_backfill():
                 base = max(0.0, float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0))
                 vat = float(inv.tax_amount or 0.0)
                 gross = float(inv.total_after_tax_discount or 0.0)
-                exp_acc = get_or_create('5070', 'مصروفات أخرى', 'EXPENSE')
-                vat_in_acc = get_or_create('1300', 'VAT Input', 'ASSET')
-                ap_acc = get_or_create('2000', 'Accounts Payable', 'LIABILITY')
+                exp_acc = get_or_create('5470', 'مصروفات متنوعة إدارية', 'EXPENSE')
+                vat_in_acc = get_or_create('1170', 'ضريبة القيمة المضافة – مدخلات', 'ASSET')
+                ap_acc = get_or_create('2111', 'موردون', 'LIABILITY')
                 if base > 0:
                     db.session.add(LedgerEntry(date=inv.date, account_id=exp_acc.id, debit=base, credit=0, description=desc_key))
                 if vat > 0:
@@ -10970,72 +4951,85 @@ def api_all_invoices():
         branch_f = (request.args.get('branch') or 'all').strip().lower()
         start_date = (request.args.get('start_date') or '').strip()
         end_date = (request.args.get('end_date') or '').strip()
+        type_f = (request.args.get('type') or 'all').strip().lower()
+        if type_f not in ('sales', 'purchases', 'all'):
+            type_f = 'all'
+        try:
+            limit = min(int(request.args.get('limit') or 2000), 5000)
+        except (TypeError, ValueError):
+            limit = 2000
+        try:
+            offset = max(0, int(request.args.get('offset') or 0))
+        except (TypeError, ValueError):
+            offset = 0
         rows = []
         branch_totals = {}
         overall = {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0}
 
         # Join sales invoices with items for itemized view
         from models import SalesInvoice, SalesInvoiceItem, PurchaseInvoice, PurchaseInvoiceItem
-        
-        # معالجة فواتير المبيعات
-        q_sales = db.session.query(SalesInvoice, SalesInvoiceItem).join(SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id)
-        if payment_method and payment_method != 'all':
-            q_sales = q_sales.filter(func.lower(SalesInvoice.payment_method) == payment_method)
-        if branch_f and branch_f != 'all':
-            q_sales = q_sales.filter(func.lower(SalesInvoice.branch) == branch_f)
-        # Optional date range (use created_at if available else date)
-        if start_date:
-            try:
-                if hasattr(SalesInvoice, 'created_at'):
-                    q_sales = q_sales.filter(func.date(SalesInvoice.created_at) >= start_date)
-                elif hasattr(SalesInvoice, 'date'):
-                    q_sales = q_sales.filter(SalesInvoice.date >= start_date)
-            except Exception:
-                pass
-        if end_date:
-            try:
-                if hasattr(SalesInvoice, 'created_at'):
-                    q_sales = q_sales.filter(func.date(SalesInvoice.created_at) <= end_date)
-                elif hasattr(SalesInvoice, 'date'):
-                    q_sales = q_sales.filter(SalesInvoice.date <= end_date)
-            except Exception:
-                pass
-        if hasattr(SalesInvoice, 'created_at'):
-            q_sales = q_sales.order_by(SalesInvoice.created_at.desc())
-        elif hasattr(SalesInvoice, 'date'):
-            q_sales = q_sales.order_by(SalesInvoice.date.desc())
 
-        # معالجة فواتير المشتريات
-        q_purchases = db.session.query(PurchaseInvoice, PurchaseInvoiceItem).join(PurchaseInvoiceItem, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id)
-        if payment_method and payment_method != 'all':
-            q_purchases = q_purchases.filter(func.lower(PurchaseInvoice.payment_method) == payment_method)
-        if branch_f and branch_f != 'all':
-            q_purchases = q_purchases.filter(func.lower(PurchaseInvoice.branch) == branch_f)
-        # Optional date range (use created_at if available else date)
-        if start_date:
-            try:
-                if hasattr(PurchaseInvoice, 'created_at'):
-                    q_purchases = q_purchases.filter(func.date(PurchaseInvoice.created_at) >= start_date)
-                elif hasattr(PurchaseInvoice, 'date'):
-                    q_purchases = q_purchases.filter(PurchaseInvoice.date >= start_date)
-            except Exception:
-                pass
-        if end_date:
-            try:
-                if hasattr(PurchaseInvoice, 'created_at'):
-                    q_purchases = q_purchases.filter(func.date(PurchaseInvoice.created_at) <= end_date)
-                elif hasattr(PurchaseInvoice, 'date'):
-                    q_purchases = q_purchases.filter(PurchaseInvoice.date <= end_date)
-            except Exception:
-                pass
-        if hasattr(PurchaseInvoice, 'created_at'):
-            q_purchases = q_purchases.order_by(PurchaseInvoice.created_at.desc())
-        elif hasattr(PurchaseInvoice, 'date'):
-            q_purchases = q_purchases.order_by(PurchaseInvoice.date.desc())
+        # معالجة فواتير المبيعات (فقط عند type=sales أو all)
+        if type_f in ('sales', 'all'):
+            q_sales = db.session.query(SalesInvoice, SalesInvoiceItem).join(SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id)
+            if payment_method and payment_method != 'all':
+                q_sales = q_sales.filter(func.lower(SalesInvoice.payment_method) == payment_method)
+            if branch_f and branch_f != 'all':
+                q_sales = q_sales.filter(func.lower(SalesInvoice.branch) == branch_f)
+            if start_date:
+                try:
+                    if hasattr(SalesInvoice, 'created_at'):
+                        q_sales = q_sales.filter(func.date(SalesInvoice.created_at) >= start_date)
+                    elif hasattr(SalesInvoice, 'date'):
+                        q_sales = q_sales.filter(SalesInvoice.date >= start_date)
+                except Exception:
+                    pass
+            if end_date:
+                try:
+                    if hasattr(SalesInvoice, 'created_at'):
+                        q_sales = q_sales.filter(func.date(SalesInvoice.created_at) <= end_date)
+                    elif hasattr(SalesInvoice, 'date'):
+                        q_sales = q_sales.filter(SalesInvoice.date <= end_date)
+                except Exception:
+                    pass
+            if hasattr(SalesInvoice, 'created_at'):
+                q_sales = q_sales.order_by(SalesInvoice.created_at.desc())
+            elif hasattr(SalesInvoice, 'date'):
+                q_sales = q_sales.order_by(SalesInvoice.date.desc())
+            results_sales = q_sales.limit(limit).offset(offset).all()
+        else:
+            results_sales = []
 
-        # جمع النتائج
-        results_sales = q_sales.all()
-        results_purchases = q_purchases.all()
+        # معالجة فواتير المشتريات (فقط عند type=purchases أو all)
+        if type_f in ('purchases', 'all'):
+            q_purchases = db.session.query(PurchaseInvoice, PurchaseInvoiceItem).join(PurchaseInvoiceItem, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id)
+            if payment_method and payment_method != 'all':
+                q_purchases = q_purchases.filter(func.lower(PurchaseInvoice.payment_method) == payment_method)
+            if branch_f and branch_f != 'all':
+                q_purchases = q_purchases.filter(func.lower(PurchaseInvoice.branch) == branch_f)
+            if start_date:
+                try:
+                    if hasattr(PurchaseInvoice, 'created_at'):
+                        q_purchases = q_purchases.filter(func.date(PurchaseInvoice.created_at) >= start_date)
+                    elif hasattr(PurchaseInvoice, 'date'):
+                        q_purchases = q_purchases.filter(PurchaseInvoice.date >= start_date)
+                except Exception:
+                    pass
+            if end_date:
+                try:
+                    if hasattr(PurchaseInvoice, 'created_at'):
+                        q_purchases = q_purchases.filter(func.date(PurchaseInvoice.created_at) <= end_date)
+                    elif hasattr(PurchaseInvoice, 'date'):
+                        q_purchases = q_purchases.filter(PurchaseInvoice.date <= end_date)
+                except Exception:
+                    pass
+            if hasattr(PurchaseInvoice, 'created_at'):
+                q_purchases = q_purchases.order_by(PurchaseInvoice.created_at.desc())
+            elif hasattr(PurchaseInvoice, 'date'):
+                q_purchases = q_purchases.order_by(PurchaseInvoice.date.desc())
+            results_purchases = q_purchases.limit(limit).offset(offset).all()
+        else:
+            results_purchases = []
         
         # معالجة فواتير المبيعات
         # Aggregate invoice base for proportional head discount/VAT allocation
@@ -11127,75 +5121,19 @@ def api_all_invoices():
             bt['amount'] += amount; bt['discount'] += disc; bt['vat'] += vat; bt['total'] += total
             overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += total
 
-        return jsonify({'invoices': rows, 'branch_totals': branch_totals, 'overall_totals': overall})
+        has_more = (len(results_sales) == limit or len(results_purchases) == limit)
+        return jsonify({
+            'invoices': rows,
+            'branch_totals': branch_totals,
+            'overall_totals': overall,
+            'pagination': {'limit': limit, 'offset': offset, 'has_more': has_more}
+        })
     except Exception as e:
         try:
             current_app.logger.exception(f"/api/all-invoices failed: {e}")
         except Exception:
             pass
         return jsonify({'invoices': [], 'branch_totals': {}, 'overall_totals': {'amount':0,'discount':0,'vat':0,'total':0}, 'note': 'stub', 'error': str(e)}), 200
-
-
-@main.route('/api/reports/all-purchases', methods=['GET'], endpoint='api_reports_all_purchases')
-@login_required
-def api_reports_all_purchases():
-    try:
-        payment_method = (request.args.get('payment_method') or '').strip().lower()
-        rows = []
-        overall = {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0}
-        q = db.session.query(PurchaseInvoice, PurchaseInvoiceItem).join(
-            PurchaseInvoiceItem, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id
-        )
-        if payment_method and payment_method != 'all':
-            q = q.filter(func.lower(PurchaseInvoice.payment_method) == payment_method)
-        # ترتيب آمن
-        if hasattr(PurchaseInvoice, 'created_at'):
-            q = q.order_by(PurchaseInvoice.created_at.desc())
-        elif hasattr(PurchaseInvoice, 'date'):
-            q = q.order_by(PurchaseInvoice.date.desc())
-        q = q.limit(1000)
-
-        results = q.all()
-        # اجمع أساس البنود لكل فاتورة لتوزيع الخصم/الضريبة من رأس الفاتورة
-        inv_base = {}
-        for inv, it in results:
-            line_base = float(it.price_before_tax or 0.0) * float(it.quantity or 0.0)
-            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
-
-        for inv, it in results:
-            date_s = (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
-            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
-            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
-            # استخدم خصم وضريبة رأس الفاتورة إن توفّرا، وإلا ارجع لقيم البند
-            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-            inv_vat = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
-            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
-                disc = inv_disc * (amount / base_total)
-                vat = inv_vat * (amount / base_total)
-            else:
-                disc = float(it.discount or 0.0)
-                base = max(amount - disc, 0.0)
-                vat = float(it.tax or 0.0)
-            base_after_disc = max(amount - disc, 0.0)
-            total = float(getattr(inv, 'total_after_tax_discount', 0.0) or 0.0)
-            if total <= 0:
-                total = base_after_disc + vat
-            rows.append({
-                'date': date_s,
-                'invoice_number': inv.invoice_number,
-                'item_name': it.raw_material_name,
-                'quantity': float(it.quantity or 0.0),
-                'price': float(it.price_before_tax or 0.0),
-                'amount': amount,
-                'discount': round(disc, 2),
-                'vat': round(vat, 2),
-                'total': round(base_after_disc + vat, 2),
-                'payment_method': (inv.payment_method or '').upper(),
-            })
-            overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += (base_after_disc + vat)
-        return jsonify({'purchases': rows, 'overall_totals': overall})
-    except Exception:
-        return jsonify({'purchases': [], 'overall_totals': {'amount':0,'discount':0,'vat':0,'total':0}, 'note': 'stub'}), 200
 
 
 @main.route('/api/all-expenses', methods=['GET'], endpoint='api_all_expenses')
@@ -11241,892 +5179,6 @@ def api_all_expenses():
     except Exception:
         return jsonify({'expenses': [], 'overall_totals': {'amount':0}, 'note': 'stub'}), 200
 
-
-@main.route('/reports/print/all-invoices/sales', methods=['GET'], endpoint='reports_print_all_invoices_sales')
-@login_required
-def reports_print_all_invoices_sales():
-    # Reuse same data generation as api_all_invoices but render print template
-    payment_method = (request.args.get('payment_method') or 'all').strip().lower()
-    start_date = (request.args.get('start_date') or '').strip()
-    end_date = (request.args.get('end_date') or '').strip()
-    fmt = (request.args.get('format') or '').strip().lower()
-    rows = []
-    branch_totals = {}
-    overall = {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0}
-    try:
-        q = db.session.query(SalesInvoice, SalesInvoiceItem).join(
-            SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id
-        )
-        if payment_method and payment_method != 'all':
-            q = q.filter(func.lower(SalesInvoice.payment_method) == payment_method)
-        # Optional branch filter (sales only)
-        branch = (request.args.get('branch') or 'all').strip().lower()
-        if branch and branch != 'all':
-            q = q.filter(func.lower(SalesInvoice.branch) == branch)
-        # Optional date range filter
-        if start_date:
-            try:
-                if hasattr(SalesInvoice, 'created_at'):
-                    q = q.filter(func.date(SalesInvoice.created_at) >= start_date)
-                elif hasattr(SalesInvoice, 'date'):
-                    q = q.filter(SalesInvoice.date >= start_date)
-            except Exception:
-                pass
-        if end_date:
-            try:
-                if hasattr(SalesInvoice, 'created_at'):
-                    q = q.filter(func.date(SalesInvoice.created_at) <= end_date)
-                elif hasattr(SalesInvoice, 'date'):
-                    q = q.filter(SalesInvoice.date <= end_date)
-            except Exception:
-                pass
-        if hasattr(SalesInvoice, 'created_at'):
-            q = q.order_by(SalesInvoice.created_at.desc())
-        elif hasattr(SalesInvoice, 'date'):
-            q = q.order_by(SalesInvoice.date.desc())
-
-        results = q.all()
-        # اجمع أساس البنود لكل فاتورة لتوزيع الخصم/الضريبة من رأس الفاتورة
-        inv_base = {}
-        for inv, it in results:
-            line_base = float(it.price_before_tax or 0.0) * float(it.quantity or 0.0)
-            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
-
-        for inv, it in results:
-            branch = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
-            if getattr(inv, 'created_at', None):
-                date_s = inv.created_at.date().isoformat()
-            elif getattr(inv, 'date', None):
-                date_s = inv.date.isoformat()
-            else:
-                date_s = ''
-            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
-            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
-            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-            inv_vat  = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
-            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
-                disc = inv_disc * (amount / base_total)
-                vat  = inv_vat  * (amount / base_total)
-            else:
-                disc = float(getattr(it, 'discount', 0.0) or 0.0)
-                base = max(amount - disc, 0.0)
-                vat  = float(getattr(it, 'tax', 0.0) or 0.0)
-            base_after_disc = max(amount - disc, 0.0)
-            total = base_after_disc + vat
-            pm = (inv.payment_method or '').upper()
-            rows.append({
-                'branch': branch,
-                'date': date_s,
-                'invoice_number': inv.invoice_number,
-                'item_name': it.product_name,
-                'quantity': float(it.quantity or 0.0),
-                'amount': amount,
-                'discount': round(disc, 2),
-                'vat': round(vat, 2),
-                'total': round(total, 2),
-                'payment_method': pm,
-            })
-            bt = branch_totals.setdefault(branch, {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0})
-            bt['amount'] += amount; bt['discount'] += disc; bt['vat'] += vat; bt['total'] += total
-            overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += total
-    except Exception:
-        pass
-
-    # Settings for header
-    try:
-        settings = Settings.query.first()
-    except Exception:
-        settings = None
-
-    # Payment method totals
-    payment_totals = {}
-    for r in rows:
-        pm = (r.get('payment_method') or '').upper()
-        payment_totals[pm] = payment_totals.get(pm, 0.0) + float(r.get('total') or 0.0)
-
-    # Aggregate item totals (by quantity) for display
-    item_totals = {}
-    try:
-        for r in rows:
-            name = (r.get('item_name') or '').strip()
-            qty = float(r.get('quantity') or 0.0)
-            if name:
-                item_totals[name] = item_totals.get(name, 0.0) + qty
-    except Exception:
-        item_totals = {}
-
-    grouped_invoices = []
-    try:
-        inv_map = {}
-        for inv, it in results:
-            key = getattr(inv, 'invoice_number', None) or str(getattr(inv, 'id', ''))
-            if key not in inv_map:
-                if getattr(inv, 'created_at', None):
-                    date_s = inv.created_at.date().isoformat()
-                elif getattr(inv, 'date', None):
-                    date_s = inv.date.isoformat()
-                else:
-                    date_s = ''
-                branch = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
-                subtotal = float(inv_base.get(inv.id, 0.0) or 0.0)
-                disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-                vat = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
-                total = float(getattr(inv, 'total_after_tax_discount', 0.0) or (subtotal - disc + vat))
-                inv_map[key] = {
-                    'branch': branch,
-                    'date': date_s,
-                    'invoice_number': getattr(inv, 'invoice_number', key),
-                    'payment_method': (inv.payment_method or '').upper(),
-                    'subtotal': round(subtotal, 2),
-                    'discount': round(disc, 2),
-                    'vat': round(vat, 2),
-                    'total': round(total, 2),
-                    'items': []
-                }
-            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
-            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
-            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-            inv_vat  = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
-            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
-                disc_part = inv_disc * (amount / base_total)
-                vat_part  = inv_vat  * (amount / base_total)
-            else:
-                disc_part = float(getattr(it, 'discount', 0.0) or 0.0)
-                vat_part  = float(getattr(it, 'tax', 0.0) or 0.0)
-            line_total = max(amount - disc_part, 0.0) + vat_part
-            inv_map[key]['items'].append({
-                'item_name': it.product_name,
-                'quantity': float(it.quantity or 0.0),
-                'amount': round(amount, 2),
-                'discount': round(disc_part, 2),
-                'vat': round(vat_part, 2),
-                'total': round(line_total, 2),
-            })
-        grouped_invoices = list(inv_map.values())
-    except Exception:
-        grouped_invoices = []
-
-    meta = {
-        'title': 'Sales Invoices (All) — Print',
-        'payment_method': payment_method or 'all',
-        'branch': (branch or 'all'),
-        'start_date': request.args.get('start_date') or '',
-        'end_date': request.args.get('end_date') or '',
-        'generated_at': get_saudi_now().strftime('%Y-%m-%d %H:%M')
-    }
-    # Use unified print_report.html like purchases/expenses
-    columns = ['Branch','Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment']
-    data = []
-    for r in rows:
-        data.append({
-            'Branch': r.get('branch') or '',
-            'Date': r.get('date') or '',
-            'Invoice No.': r.get('invoice_number') or '',
-            'Item': r.get('item_name') or '',
-            'Qty': float(r.get('quantity') or 0.0),
-            'Amount': float(r.get('amount') or 0.0),
-            'Discount': float(r.get('discount') or 0.0),
-            'VAT': float(r.get('vat') or 0.0),
-            'Total': float(r.get('total') or 0.0),
-            'Payment': r.get('payment_method') or '',
-        })
-    totals = {
-        'Amount': float(overall.get('amount') or 0.0),
-        'Discount': float(overall.get('discount') or 0.0),
-        'VAT': float(overall.get('vat') or 0.0),
-        'Total': float(overall.get('total') or 0.0),
-    }
-    totals_columns = ['Amount','Discount','VAT','Total']
-    totals_colspan = len(columns) - len(totals_columns)
-    # CSV export
-    if fmt == 'csv':
-        try:
-            import io, csv
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(columns)
-            for r in data:
-                writer.writerow([r.get('Branch',''), r.get('Date',''), r.get('Invoice No.',''), r.get('Item',''),
-                                 r.get('Qty',0.0), r.get('Amount',0.0), r.get('Discount',0.0), r.get('VAT',0.0),
-                                 r.get('Total',0.0), r.get('Payment','')])
-            from flask import Response
-            return Response(output.getvalue(), mimetype='text/csv',
-                            headers={'Content-Disposition': 'attachment; filename="sales_invoices.csv"'})
-        except Exception:
-            pass
-
-    return render_template('print_report.html', report_title=meta['title'], settings=settings,
-                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
-                           payment_method=meta['payment_method'], branch=meta['branch'],
-                           columns=columns, data=data, totals=totals, totals_columns=totals_columns,
-                           totals_colspan=totals_colspan, payment_totals=payment_totals,
-                           item_totals=item_totals, grouped_invoices=grouped_invoices)
-
-
-@main.route('/reports/print/daily-sales', methods=['GET'], endpoint='reports_print_daily_sales')
-@login_required
-def reports_print_daily_sales():
-    pm = (request.args.get('payment_method') or 'all').strip().lower()
-    branch = (request.args.get('branch') or 'all').strip().lower()
-    fmt = (request.args.get('format') or '').strip().lower()
-    now = get_saudi_now()
-    from datetime import datetime as _dt, timedelta as _td
-    try:
-        from models import KSA_TZ
-        tz = KSA_TZ
-    except Exception:
-        tz = getattr(now, 'tzinfo', None)
-    anchor = now.date() if now.hour >= 11 else (now - _td(days=1)).date()
-    start_dt = tz.localize(_dt(anchor.year, anchor.month, anchor.day, 11, 0, 0)) if hasattr(tz, 'localize') else _dt(anchor.year, anchor.month, anchor.day, 11, 0, 0)
-    end_dt = start_dt + _td(hours=14)
-    rows = []
-    results = []
-    inv_base = {}
-    branch_totals = {}
-    overall = {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0}
-    try:
-        q = db.session.query(SalesInvoice, SalesInvoiceItem).join(
-            SalesInvoiceItem, SalesInvoiceItem.invoice_id == SalesInvoice.id
-        )
-        if pm and pm != 'all':
-            q = q.filter(func.lower(SalesInvoice.payment_method) == pm)
-        if branch and branch != 'all':
-            q = q.filter(func.lower(SalesInvoice.branch) == branch)
-        if hasattr(SalesInvoice, 'created_at'):
-            q = q.filter(SalesInvoice.created_at >= start_dt, SalesInvoice.created_at < end_dt)
-            q = q.order_by(SalesInvoice.created_at.asc())
-        else:
-            q = q.filter(SalesInvoice.date.in_([start_dt.date(), end_dt.date()]))
-            q = q.order_by(SalesInvoice.date.asc())
-        results = q.all()
-        for inv, it in results:
-            line_base = float(it.price_before_tax or 0.0) * float(it.quantity or 0.0)
-            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
-        for inv, it in results:
-            b = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
-            if getattr(inv, 'created_at', None):
-                try:
-                    base_dt = inv.created_at
-                    if getattr(base_dt, 'tzinfo', None):
-                        date_s = base_dt.astimezone(tz).strftime('%Y-%m-%d %H:%M')
-                    else:
-                        date_s = tz.localize(base_dt).strftime('%Y-%m-%d %H:%M')
-                except Exception:
-                    date_s = get_saudi_now().strftime('%Y-%m-%d %H:%M')
-            elif getattr(inv, 'date', None):
-                date_s = inv.date.isoformat()
-            else:
-                date_s = ''
-            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
-            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
-            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-            inv_vat  = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
-            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
-                disc = inv_disc * (amount / base_total)
-                vat  = inv_vat  * (amount / base_total)
-            else:
-                disc = float(getattr(it, 'discount', 0.0) or 0.0)
-                vat  = float(getattr(it, 'tax', 0.0) or 0.0)
-            base_after_disc = max(amount - disc, 0.0)
-            total = base_after_disc + vat
-            pmu = (inv.payment_method or '').upper()
-            rows.append({
-                'branch': b,
-                'date': date_s,
-                'invoice_number': inv.invoice_number,
-                'item_name': it.product_name,
-                'quantity': float(it.quantity or 0.0),
-                'amount': amount,
-                'discount': round(disc, 2),
-                'vat': round(vat, 2),
-                'total': round(total, 2),
-                'payment_method': pmu,
-            })
-            bt = branch_totals.setdefault(b, {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0})
-            bt['amount'] += amount; bt['discount'] += disc; bt['vat'] += vat; bt['total'] += total
-            overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += total
-    except Exception:
-        pass
-    try:
-        settings = Settings.query.first()
-    except Exception:
-        settings = None
-    payment_totals = {}
-    for r in rows:
-        pmu = (r.get('payment_method') or '').upper()
-        payment_totals[pmu] = payment_totals.get(pmu, 0.0) + float(r.get('total') or 0.0)
-    item_totals = {}
-    try:
-        for r in rows:
-            name = (r.get('item_name') or '').strip()
-            qty = float(r.get('quantity') or 0.0)
-            if name:
-                item_totals[name] = item_totals.get(name, 0.0) + qty
-    except Exception:
-        item_totals = {}
-    meta = {
-        'title': 'Daily Sales — Print',
-        'payment_method': pm or 'all',
-        'branch': branch or 'all',
-        'start_date': start_dt.strftime('%Y-%m-%d %H:%M'),
-        'end_date': end_dt.strftime('%Y-%m-%d %H:%M'),
-        'generated_at': get_saudi_now().strftime('%Y-%m-%d %H:%M')
-    }
-    inv_map = {}
-    try:
-        for inv, it in results:
-            key = getattr(inv, 'invoice_number', None) or str(getattr(inv, 'id', ''))
-            if key not in inv_map:
-                b = getattr(inv, 'branch', None) or getattr(inv, 'branch_code', None) or 'unknown'
-                if getattr(inv, 'created_at', None):
-                    try:
-                        base_dt = inv.created_at
-                        if getattr(base_dt, 'tzinfo', None):
-                            date_s = base_dt.astimezone(tz).strftime('%Y-%m-%d %H:%M')
-                        else:
-                            date_s = tz.localize(base_dt).strftime('%Y-%m-%d %H:%M')
-                    except Exception:
-                        date_s = get_saudi_now().strftime('%Y-%m-%d %H:%M')
-                elif getattr(inv, 'date', None):
-                    date_s = inv.date.isoformat()
-                else:
-                    date_s = ''
-                subtotal = float(inv_base.get(inv.id, 0.0) or 0.0)
-                disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-                vat = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
-                total = float(getattr(inv, 'total_after_tax_discount', 0.0) or (subtotal - disc + vat))
-                inv_map[key] = {
-                    'branch': b,
-                    'date': date_s,
-                    'invoice_number': getattr(inv, 'invoice_number', key),
-                    'payment_method': (inv.payment_method or '').upper(),
-                    'subtotal': round(subtotal, 2),
-                    'discount': round(disc, 2),
-                    'vat': round(vat, 2),
-                    'total': round(total, 2),
-                    'items': [],
-                    'item_count': 0
-                }
-            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
-            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
-            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-            inv_vat  = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
-            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
-                disc_part = inv_disc * (amount / base_total)
-                vat_part  = inv_vat  * (amount / base_total)
-            else:
-                disc_part = float(getattr(it, 'discount', 0.0) or 0.0)
-                vat_part  = float(getattr(it, 'tax', 0.0) or 0.0)
-            line_total = max(amount - disc_part, 0.0) + vat_part
-            inv_map[key]['items'].append({
-                'item_name': it.product_name,
-                'quantity': float(it.quantity or 0.0),
-                'amount': round(amount, 2),
-                'discount': round(disc_part, 2),
-                'vat': round(vat_part, 2),
-                'total': round(line_total, 2),
-            })
-            inv_map[key]['item_count'] = int(inv_map[key].get('item_count', 0)) + 1
-        grouped_invoices = list(inv_map.values())
-    except Exception:
-        grouped_invoices = []
-    if fmt == 'csv':
-        try:
-            import io, csv
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(['Branch','Date','Invoice No.','Items','Payment','Subtotal','Discount','VAT','Total'])
-            for inv in grouped_invoices:
-                writer.writerow([
-                    inv.get('branch',''),
-                    inv.get('date',''),
-                    inv.get('invoice_number',''),
-                    int(inv.get('item_count') or (len(inv.get('items') or []))),
-                    inv.get('payment_method',''),
-                    inv.get('subtotal',0.0),
-                    inv.get('discount',0.0),
-                    inv.get('vat',0.0),
-                    inv.get('total',0.0)
-                ])
-            from flask import Response
-            fname = f"daily_sales_{anchor.isoformat()}.csv"
-            return Response(output.getvalue(), mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename="{fname}"'})
-        except Exception:
-            pass
-    if fmt == 'pdf':
-        try:
-            import io
-            from reportlab.lib.pagesizes import A4
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.units import mm
-            buffer = io.BytesIO()
-            p = canvas.Canvas(buffer, pagesize=A4)
-            w, h = A4
-            y = h - 20*mm
-            p.setFont("Helvetica-Bold", 14)
-            p.drawString(20*mm, y, "Daily Sales Report")
-            y -= 8*mm
-            p.setFont("Helvetica", 10)
-            p.drawString(20*mm, y, f"Period: {meta['start_date']} → {meta['end_date']}")
-            y -= 6*mm
-            p.drawString(20*mm, y, f"Generated: {meta['generated_at']}")
-            y -= 10*mm
-            p.setFont("Helvetica-Bold", 9)
-            headers = ["Branch","Date","Invoice","Items","PM","Subtotal","Discount","VAT","Total"]
-            xs = [10*mm, 30*mm, 70*mm, 100*mm, 115*mm, 130*mm, 150*mm, 170*mm, 190*mm]
-            for i, hdr in enumerate(headers):
-                p.drawString(xs[i], y, hdr)
-            y -= 5*mm
-            p.setFont("Helvetica", 9)
-            for inv in grouped_invoices:
-                row = [
-                    str(inv.get('branch','')),
-                    str(inv.get('date','')),
-                    str(inv.get('invoice_number','')),
-                    str(int(inv.get('item_count') or (len(inv.get('items') or [])))) ,
-                    str(inv.get('payment_method','')),
-                    f"{inv.get('subtotal',0.0):.2f}",
-                    f"{inv.get('discount',0.0):.2f}",
-                    f"{inv.get('vat',0.0):.2f}",
-                    f"{inv.get('total',0.0):.2f}",
-                ]
-                if y < 20*mm:
-                    p.showPage(); y = h - 20*mm; p.setFont("Helvetica", 9)
-                for i, val in enumerate(row):
-                    p.drawString(xs[i], y, val)
-                y -= 5*mm
-            y -= 6*mm
-            p.setFont("Helvetica-Bold", 10)
-            p.drawString(130*mm, y, f"Totals: {overall['total']:.2f}")
-            p.showPage(); p.save()
-            pdf_bytes = buffer.getvalue()
-            from flask import Response
-            fname = f"daily_sales_{anchor.isoformat()}.pdf"
-            return Response(pdf_bytes, mimetype='application/pdf', headers={'Content-Disposition': f'attachment; filename="{fname}"'})
-        except Exception:
-            pass
-    return render_template('print_report.html', report_title=meta['title'], settings=settings,
-                           generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'), start_date=meta['start_date'], end_date=meta['end_date'],
-                           payment_method=meta['payment_method'], branch=meta['branch'],
-                           columns=['Branch','Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment'], data=rows,
-                           totals={'Amount': overall['amount'], 'Discount': overall['discount'], 'VAT': overall['vat'], 'Total': overall['total']},
-                           totals_columns=['Amount','Discount','VAT','Total'], totals_colspan=6,
-                           payment_totals=payment_totals, item_totals=item_totals,
-                           branch_totals=branch_totals, overall=overall,
-                           grouped_invoices=grouped_invoices, summary_mode=True)
-
-
-@main.route('/reports/print/all-invoices/purchases', methods=['GET'], endpoint='reports_print_all_invoices_purchases')
-@login_required
-def reports_print_all_invoices_purchases():
-    payment_method = (request.args.get('payment_method') or 'all').strip().lower()
-    start_date = (request.args.get('start_date') or '').strip()
-    end_date = (request.args.get('end_date') or '').strip()
-    branch = (request.args.get('branch') or 'all').strip().lower()
-    fmt = (request.args.get('format') or '').strip().lower()
-    rows = []
-    totals = {'Amount': 0.0, 'Discount': 0.0, 'VAT': 0.0, 'Total': 0.0}
-    payment_totals = {}
-    try:
-        q = db.session.query(PurchaseInvoice, PurchaseInvoiceItem).join(
-            PurchaseInvoiceItem, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id
-        )
-        if payment_method and payment_method != 'all':
-            q = q.filter(func.lower(PurchaseInvoice.payment_method) == payment_method)
-        # Date filtering if fields exist
-        if start_date:
-            try:
-                q = q.filter(PurchaseInvoice.date >= start_date)
-            except Exception:
-                pass
-        if end_date:
-            try:
-                q = q.filter(PurchaseInvoice.date <= end_date)
-            except Exception:
-                pass
-        if branch and branch != 'all' and hasattr(PurchaseInvoice, 'branch'):
-            q = q.filter(func.lower(PurchaseInvoice.branch) == branch)
-        if hasattr(PurchaseInvoice, 'created_at'):
-            q = q.order_by(PurchaseInvoice.created_at.desc())
-        elif hasattr(PurchaseInvoice, 'date'):
-            q = q.order_by(PurchaseInvoice.date.desc())
-        q = q.limit(2000)
-
-        results = q.all()
-        # Aggregate base per invoice for proportional discount/VAT allocation
-        inv_base = {}
-        for inv, it in results:
-            line_base = float(it.price_before_tax or 0.0) * float(it.quantity or 0.0)
-            inv_base[inv.id] = inv_base.get(inv.id, 0.0) + line_base
-
-        for inv, it in results:
-            d = (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')
-            amount = float((it.price_before_tax or 0.0) * (it.quantity or 0.0))
-            base_total = float(inv_base.get(inv.id, 0.0) or 0.0)
-            inv_disc = float(getattr(inv, 'discount_amount', 0.0) or 0.0)
-            inv_vat = float(getattr(inv, 'tax_amount', 0.0) or 0.0)
-            if base_total > 0 and (inv_disc > 0 or inv_vat > 0):
-                disc = inv_disc * (amount / base_total)
-                vat = inv_vat * (amount / base_total)
-            else:
-                disc = float(it.discount or 0.0)
-                base = max(amount - disc, 0.0)
-                vat = float(it.tax or 0.0)
-            base_after_disc = max(amount - disc, 0.0)
-            line_total = base_after_disc + vat
-            pm = (inv.payment_method or '').upper()
-            rows.append({
-                'Date': d,
-                'Invoice No.': inv.invoice_number,
-                'Item': it.raw_material_name,
-                'Qty': float(it.quantity or 0.0),
-                'Amount': amount,
-                'Discount': round(disc, 2),
-                'VAT': round(vat, 2),
-                'Total': round(line_total, 2),
-                'Payment': pm,
-            })
-            totals['Amount'] += amount; totals['Discount'] += disc; totals['VAT'] += vat; totals['Total'] += line_total
-            payment_totals[pm] = payment_totals.get(pm, 0.0) + line_total
-    except Exception:
-        pass
-
-    # Settings & meta
-    try:
-        settings = Settings.query.first()
-    except Exception:
-        settings = None
-    meta = {
-        'title': 'Purchase Invoices — Print',
-        'payment_method': payment_method or 'all',
-        'branch': branch or 'all',
-        'start_date': start_date,
-        'end_date': end_date,
-        'generated_at': get_saudi_now().strftime('%Y-%m-%d %H:%M')
-    }
-    columns = ['Date','Invoice No.','Item','Qty','Amount','Discount','VAT','Total','Payment']
-    # CSV export
-    if fmt == 'csv':
-        try:
-            import io, csv
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(columns)
-            for r in rows:
-                writer.writerow([r.get('Date',''), r.get('Invoice No.',''), r.get('Item',''), r.get('Qty',0.0),
-                                 r.get('Amount',0.0), r.get('Discount',0.0), r.get('VAT',0.0), r.get('Total',0.0),
-                                 r.get('Payment','')])
-            from flask import Response
-            return Response(output.getvalue(), mimetype='text/csv',
-                            headers={'Content-Disposition': 'attachment; filename="purchase_invoices.csv"'})
-        except Exception:
-            pass
-    return render_template('print_report.html', report_title=meta['title'], settings=settings,
-                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
-                           payment_method=meta['payment_method'], branch=meta['branch'],
-                           columns=columns, data=rows, totals=totals, totals_columns=['Amount','Discount','VAT','Total'],
-                           totals_colspan=4, payment_totals=payment_totals)
-
-
-@main.route('/reports/print/daily-items-summary', methods=['GET'], endpoint='reports_print_daily_items_summary')
-@login_required
-def reports_print_daily_items_summary():
-    """Print a daily summary of items (by quantity) for a given day.
-    By default, summarizes from Order Invoices (pre-payment) so printed orders show up.
-    Optional source param: source=orders (default) or source=sales.
-    """
-    from sqlalchemy import func
-    source = (request.args.get('source') or 'orders').strip().lower()
-    branch_f = (request.args.get('branch') or '').strip()
-
-    # Determine target date (YYYY-MM-DD) - defaults to today
-    date_str = (request.args.get('date') or '').strip()
-    from datetime import date as _date, datetime as _dt, time as _time
-    try:
-        target_date = _date.fromisoformat(date_str) if date_str else _date.today()
-    except Exception:
-        target_date = _date.today()
-
-    # Compute start/end of day (00:00:00 -> 23:59:59)
-    start_dt = _dt.combine(target_date, _time.min)
-    end_dt = _dt.combine(target_date, _time.max)
-
-    data = []
-    try:
-        if source == 'orders':
-            from models import OrderInvoice
-            # Fetch orders within day window and aggregate from JSON items
-            q = OrderInvoice.query.filter(
-                OrderInvoice.invoice_date >= start_dt,
-                OrderInvoice.invoice_date <= end_dt
-            )
-            if branch_f:
-                q = q.filter(OrderInvoice.branch == branch_f)
-            orders = q.limit(5000).all()
-
-            totals_map = {}
-            for o in orders:
-                try:
-                    for it in (o.items or []):
-                        name = (it.get('name') if isinstance(it, dict) else None) or '-'
-                        qty_val = it.get('qty') if isinstance(it, dict) else 0
-                        try:
-                            qty = float(qty_val or 0)
-                        except Exception:
-                            qty = 0.0
-                        totals_map[name] = totals_map.get(name, 0.0) + qty
-                except Exception:
-                    continue
-            data = [
-                {'Item': k, 'Total Qty': float(v)}
-                for k, v in sorted(totals_map.items(), key=lambda x: (-x[1], x[0]))
-            ]
-        else:
-            from models import SalesInvoice, SalesInvoiceItem
-            # Sales invoices use date (Date) column; filter by equality if Date only
-            q = db.session.query(
-                SalesInvoiceItem.product_name.label('item_name'),
-                func.coalesce(func.sum(SalesInvoiceItem.quantity), 0).label('total_qty')
-            ).join(SalesInvoice, SalesInvoiceItem.invoice_id == SalesInvoice.id)
-            q = q.filter(SalesInvoice.date == target_date)
-            if branch_f and hasattr(SalesInvoice, 'branch'):
-                q = q.filter(SalesInvoice.branch == branch_f)
-            if hasattr(SalesInvoice, 'status'):
-                q = q.filter(func.lower(SalesInvoice.status) == 'paid')
-            q = q.group_by(SalesInvoiceItem.product_name).order_by(func.sum(SalesInvoiceItem.quantity).desc())
-            rows = q.all()
-            data = [
-                {'Item': (r.item_name or '-'), 'Total Qty': float(r.total_qty or 0.0)} for r in rows
-            ]
-    except Exception:
-        data = []
-
-    # Settings & meta
-    try:
-        settings = Settings.query.first()
-    except Exception:
-        settings = None
-    meta_title = f"Daily Items Summary — {target_date.isoformat()} ({'orders' if source=='orders' else 'sales'})"
-    columns = ['Item', 'Total Qty']
-
-    return render_template(
-        'print_report.html',
-        report_title=meta_title,
-        settings=settings,
-        generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
-        start_date=target_date.isoformat(),
-        end_date=target_date.isoformat(),
-        payment_method=source,
-        branch=(branch_f or 'all'),
-        columns=columns,
-        data=data,
-        totals={},
-        totals_columns=[],
-        totals_colspan=len(columns)
-    )
-
-@main.route('/reports/print/all-invoices/expenses', methods=['GET'], endpoint='reports_print_all_invoices_expenses')
-@login_required
-def reports_print_all_invoices_expenses():
-    payment_method = (request.args.get('payment_method') or 'all').strip().lower()
-    start_date = (request.args.get('start_date') or '').strip()
-    end_date = (request.args.get('end_date') or '').strip()
-    branch = (request.args.get('branch') or 'all').strip().lower()
-    fmt = (request.args.get('format') or '').strip().lower()
-    rows = []
-    totals = {'Amount': 0.0}
-    payment_totals = {}
-    try:
-        q = ExpenseInvoice.query
-        if payment_method and payment_method != 'all':
-            q = q.filter(func.lower(ExpenseInvoice.payment_method) == payment_method)
-        if start_date:
-            try:
-                q = q.filter(ExpenseInvoice.date >= start_date)
-            except Exception:
-                pass
-        if end_date:
-            try:
-                q = q.filter(ExpenseInvoice.date <= end_date)
-            except Exception:
-                pass
-        if branch and branch != 'all' and hasattr(ExpenseInvoice, 'branch'):
-            q = q.filter(func.lower(ExpenseInvoice.branch) == branch)
-        q = q.order_by(ExpenseInvoice.created_at.desc()).limit(2000)
-        for exp in q.all():
-            d = (exp.date.strftime('%Y-%m-%d') if getattr(exp, 'date', None) else '')
-            pm = (exp.payment_method or '').upper()
-            # Print per item
-            try:
-                items = ExpenseInvoiceItem.query.filter_by(invoice_id=exp.id).all()
-            except Exception:
-                items = []
-            for it in items:
-                qty = float(getattr(it, 'quantity', 0.0) or 0.0)
-                price = float(getattr(it, 'price_before_tax', 0.0) or 0.0)
-                tax = float(getattr(it, 'tax', 0.0) or 0.0)
-                disc = float(getattr(it, 'discount', 0.0) or 0.0)
-                line_total = float(getattr(it, 'total_price', None) or (max(price*qty - disc, 0.0) + tax) or 0.0)
-                rows.append({
-                    'Date': d,
-                    'Expense No.': exp.invoice_number,
-                    'Description': getattr(it, 'description', '') or '',
-                    'Qty': qty,
-                    'Amount': price * qty,
-                    'Tax': tax,
-                    'Discount': disc,
-                    'Line Total': line_total,
-                    'Payment': pm,
-                })
-                totals['Amount'] += (price * qty)
-                totals['Tax'] = float(totals.get('Tax', 0.0) or 0.0) + tax
-                totals['Discount'] = float(totals.get('Discount', 0.0) or 0.0) + disc
-                totals['Line Total'] = float(totals.get('Line Total', 0.0) or 0.0) + line_total
-                payment_totals[pm] = payment_totals.get(pm, 0.0) + line_total
-    except Exception:
-        pass
-
-    try:
-        settings = Settings.query.first()
-    except Exception:
-        settings = None
-    meta = {
-        'title': 'Expenses — Print',
-        'payment_method': payment_method or 'all',
-        'branch': branch or 'all',
-        'start_date': start_date,
-        'end_date': end_date,
-        'generated_at': get_saudi_now().strftime('%Y-%m-%d %H:%M')
-    }
-    columns = ['Date','Expense No.','Description','Qty','Amount','Tax','Discount','Line Total','Payment']
-    totals_columns = ['Amount','Tax','Discount','Line Total']
-    totals_colspan = len(columns) - len(totals_columns)
-    # CSV export
-    if fmt == 'csv':
-        try:
-            import io, csv
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(columns)
-            for r in rows:
-                writer.writerow([r.get('Date',''), r.get('Expense No.',''), r.get('Description',''), r.get('Qty',0.0),
-                                 r.get('Amount',0.0), r.get('Tax',0.0), r.get('Discount',0.0), r.get('Line Total',0.0), r.get('Payment','')])
-            from flask import Response
-            return Response(output.getvalue(), mimetype='text/csv',
-                            headers={'Content-Disposition': 'attachment; filename="expense_invoices.csv"'})
-        except Exception:
-            pass
-
-    return render_template('print_report.html', report_title=meta['title'], settings=settings,
-                           generated_at=meta['generated_at'], start_date=meta['start_date'], end_date=meta['end_date'],
-                           payment_method=meta['payment_method'], branch=meta['branch'],
-                           columns=columns, data=rows, totals=totals, totals_columns=totals_columns,
-                           totals_colspan=totals_colspan, payment_totals=payment_totals)
-
-
-# ================= Salaries/Payroll Print Reports =================
-@main.route('/reports/print/payroll', methods=['GET'], endpoint='print_payroll')
-@login_required
-def print_payroll():
-    # Params
-    from datetime import date as _date
-    try:
-        y_from = int(request.args.get('year_from') or 0) or _date.today().year
-    except Exception:
-        y_from = _date.today().year
-    try:
-        m_from = int(request.args.get('month_from') or 0) or 1
-    except Exception:
-        m_from = 1
-    try:
-        y_to = int(request.args.get('year_to') or 0) or _date.today().year
-    except Exception:
-        y_to = _date.today().year
-    try:
-        m_to = int(request.args.get('month_to') or 0) or _date.today().month
-    except Exception:
-        m_to = _date.today().month
-    raw_codes = (request.args.get('employee_codes') or '').strip()
-    selected_codes = [c.strip() for c in raw_codes.split(',') if c.strip()] if raw_codes else []
-
-    # Models
-    try:
-        from models import Employee, EmployeeSalaryDefault, Salary, Payment
-    except Exception:
-        try:
-            from app.models import Employee, EmployeeSalaryDefault, Salary, Payment
-        except Exception:
-            Employee = None; Salary = None; Payment = None; EmployeeSalaryDefault = None
-
-    if not Employee or not Salary or not Payment:
-        flash('Payroll models not available', 'danger')
-        return redirect(url_for('main.dashboard'))
-
-    def iter_months(y1, m1, y2, m2):
-        y = int(y1); m = int(m1)
-        end_key = (int(y2) * 100 + int(m2))
-        while (y * 100 + m) <= end_key:
-            yield y, m
-            if m == 12:
-                y += 1; m = 1
-            else:
-                m += 1
-
-    # Resolve employees
-    emp_q = Employee.query
-    if selected_codes:
-        try:
-            emp_q = emp_q.filter(Employee.employee_code.in_(selected_codes))
-        except Exception:
-            pass
-    employees = emp_q.order_by(Employee.full_name.asc()).all()
-
-    # Helper: defaults
-    def get_defaults(emp_id):
-        try:
-            d = EmployeeSalaryDefault.query.filter_by(employee_id=emp_id).first()
-            if d:
-                return float(d.base_salary or 0.0), float(d.allowances or 0.0), float(d.deductions or 0.0)
-        except Exception:
-            pass
-        return 0.0, 0.0, 0.0
-
-    employees_ctx = []
-    grand = {'basic': 0.0, 'allowances': 0.0, 'deductions': 0.0, 'prev_due': 0.0, 'total': 0.0, 'paid': 0.0, 'remaining': 0.0}
-    for emp in employees:
-        basic_sum = allow_sum = ded_sum = prev_sum = total_sum = paid_sum = 0.0
-        months_rows = []
-        unpaid_count = 0
-        for (yy, mm) in iter_months(y_from, m_from, y_to, m_to):
-            s = Salary.query.filter_by(employee_id=emp.id, year=int(yy), month=int(mm)).first()
-            if not s:
-                b, a, d = get_defaults(emp.id)
-                prev = 0.0
-                tot = float(b + a - d + prev)
-                sal_id = None
-            else:
-                b = float(s.basic_salary or 0.0)
-                a = float(s.allowances or 0.0)
-                d = float(s.deductions or 0.0)
-                prev = float(s.previous_salary_due or 0.0)
-                tot = float(s.total_salary or (b + a - d + prev))
-                sal_id = int(s.id)
-            # Paid for this month
-            if sal_id:
-                paid = float(db.session.query(db.func.coalesce(db.func.sum(Payment.amount_paid), 0))
-                              .filter(Payment.invoice_type == 'salary', Payment.invoice_id == sal_id).scalar() or 0.0)
-            else:
-                paid = 0.0
-            remaining = max(tot - paid, 0.0)
-            status = 'paid' if remaining <= 0.01 and tot > 0 else ('partial' if paid > 0 else 'due')
-            if status != 'paid':
-                unpaid_count += 1
-            months_rows.append({
-                'year': yy, 'month': mm,
-                'basic': b, 'allowances': a, 'deductions': d,
-                'prev_due': prev, 'total': tot, 'paid': paid, 'remaining': remaining, 'status': status
-            })
-            basic_sum += b; allow_sum += a; ded_sum += d; prev_sum += prev; total_sum += tot; paid_sum += paid
 
 @main.route('/api/vat/categories-map', methods=['GET','POST'], endpoint='api_vat_categories_map')
 @login_required
@@ -12178,25 +5230,6 @@ def api_vat_categories_map():
                            close_after_print=False)
 
 
-@main.route('/reports/print/payroll/selected', methods=['POST'], endpoint='print_selected')
-@login_required
-def print_selected():
-    # Accept codes (employee_code) from text field, split by comma
-    raw = (request.form.get('employee_ids') or '').strip()
-    y_from = request.form.get('year_from') or request.args.get('year_from') or ''
-    m_from = request.form.get('month_from') or request.args.get('month_from') or ''
-    y_to = request.form.get('year_to') or request.args.get('year_to') or ''
-    m_to = request.form.get('month_to') or request.args.get('month_to') or ''
-    qs = {
-        'year_from': y_from or '',
-        'month_from': m_from or '',
-        'year_to': y_to or '',
-        'month_to': m_to or '',
-    }
-    if raw:
-        qs['employee_codes'] = ','.join([c.strip() for c in raw.split(',') if c.strip()])
-    # Redirect to GET printer with params to avoid resubmission issues
-    return redirect(url_for('main.print_payroll', **qs))
 def _archive_invoice_pdf(inv):
     import os, io
     try:
@@ -12604,9 +5637,9 @@ def _pm_account(pm):
     except Exception:
         _short = {}
     if p == 'CASH':
-        tgt = _short.get('CASH') or ('1110','Cash','ASSET')
+        tgt = _short.get('CASH') or ('1111','صندوق رئيسي','ASSET')
     else:
-        tgt = _short.get('BANK') or ('1120','Bank','ASSET')
+        tgt = _short.get('BANK') or ('1121','بنك الراجحي','ASSET')
     return _account(tgt[0], tgt[1], tgt[2])
 
 def _acc_override(name: str, default_code: str) -> str:
@@ -12641,49 +5674,70 @@ def _platform_group(name: str) -> str:
         return ''
 
 def _create_sale_journal(inv):
+    """قيد المبيعات: عميل نقدي = صندوق/بنك، عميل آجل أو منصة (keeta/hunger) = ذمم مدينة. الخصم يظهر في حساب 5540 خصم ممنوح للعملاء."""
     try:
-        from models import JournalEntry, JournalLine
-        base_amt = float(inv.total_before_tax or 0.0) - float(inv.discount_amount or 0.0)
+        from models import JournalEntry, JournalLine, Customer
+        subtotal = float(inv.total_before_tax or 0.0)
+        discount_amt = float(inv.discount_amount or 0.0)
+        base_amt = max(0.0, subtotal - discount_amt)
         tax_amt = float(inv.tax_amount or 0.0)
-        total_inc_tax = round(max(base_amt, 0.0) + max(tax_amt, 0.0), 2)
+        total_inc_tax = round(base_amt + tax_amt, 2)
         cust = (getattr(inv, 'customer_name', '') or '').strip().lower()
         grp = _platform_group(cust)
+        is_credit_customer = False
+        cust_obj = None
+        if getattr(inv, 'customer_id', None):
+            cust_obj = Customer.query.get(inv.customer_id)
+            if cust_obj:
+                is_credit_customer = bool(getattr(cust_obj, 'is_credit', False))
+        use_ar = is_credit_customer or (grp in ('keeta', 'hunger'))
         if grp == 'keeta':
-            rev_code = _acc_override('REV_KEETA', SHORT_TO_NUMERIC['REV_KEETA'][0])
+            rev_code = _acc_override('REV_KEETA', SHORT_TO_NUMERIC.get('REV_KEETA', ('4111',))[0])
         elif grp == 'hunger':
-            rev_code = _acc_override('REV_HUNGER', SHORT_TO_NUMERIC['REV_HUNGER'][0])
+            rev_code = _acc_override('REV_HUNGER', SHORT_TO_NUMERIC.get('REV_HUNGER', ('4111',))[0])
+        elif is_credit_customer or use_ar:
+            rev_code = '4112'
         else:
             if (getattr(inv, 'branch', '') or '') == 'place_india':
-                rev_code = _acc_override('REV_PI', SHORT_TO_NUMERIC['REV_PI'][0])
+                rev_code = _acc_override('REV_PI', SHORT_TO_NUMERIC.get('REV_PI', ('4111',))[0])
             elif (getattr(inv, 'branch', '') or '') == 'china_town':
-                rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
+                rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC.get('REV_CT', ('4111',))[0])
             else:
-                rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC['REV_CT'][0])
-        vat_out_code = SHORT_TO_NUMERIC.get('VAT_OUT', ('2060',))[0] if isinstance(SHORT_TO_NUMERIC.get('VAT_OUT'), tuple) else '2060'
-        paid = ((getattr(inv,'status','') or '').lower() == 'paid')
-        if paid:
-            ca = _pm_account(getattr(inv,'payment_method','CASH'))
-            je = JournalEntry(entry_number=f"JE-SAL-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=getattr(inv,'branch',None), description=f"Sales {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
-            db.session.add(je); db.session.flush()
-            if ca:
-                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ca.id, debit=total_inc_tax, credit=0.0, description=f"Receipt {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
-        else:
-            ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1020', {'code':'1020'}).get('code','1020'))
-            from models import Account
-            ar_acc = _account(ar_code, CHART_OF_ACCOUNTS.get(ar_code, {'name':'Accounts Receivable','type':'ASSET'}).get('name','Accounts Receivable'), CHART_OF_ACCOUNTS.get(ar_code, {'name':'Accounts Receivable','type':'ASSET'}).get('type','ASSET'))
-            je = JournalEntry(entry_number=f"JE-SAL-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=getattr(inv,'branch',None), description=f"Sales {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
-            db.session.add(je); db.session.flush()
+                rev_code = _acc_override('REV_CT', SHORT_TO_NUMERIC.get('REV_CT', ('4111',))[0])
+        vat_out_code = SHORT_TO_NUMERIC.get('VAT_OUT', ('2141',))[0] if isinstance(SHORT_TO_NUMERIC.get('VAT_OUT'), tuple) else '2141'
+        total_debit_credit = round(total_inc_tax + discount_amt, 2)
+        je = JournalEntry(entry_number=f"JE-SAL-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=getattr(inv,'branch',None), description=f"Sales {inv.invoice_number}", status='posted', total_debit=total_debit_credit, total_credit=total_debit_credit, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=inv.id, invoice_type='sales')
+        db.session.add(je); db.session.flush()
+        ln = 1
+        if use_ar:
+            if grp == 'keeta':
+                ar_code = _acc_override('AR_KEETA', (SHORT_TO_NUMERIC.get('AR_KEETA') or ('1141',))[0] if isinstance(SHORT_TO_NUMERIC.get('AR_KEETA'), (list, tuple)) else (SHORT_TO_NUMERIC.get('AR_KEETA') or '1141'))
+            elif grp == 'hunger':
+                ar_code = _acc_override('AR_HUNGER', (SHORT_TO_NUMERIC.get('AR_HUNGER') or ('1141',))[0] if isinstance(SHORT_TO_NUMERIC.get('AR_HUNGER'), (list, tuple)) else (SHORT_TO_NUMERIC.get('AR_HUNGER') or '1141'))
+            else:
+                ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1141', {'code':'1141'}).get('code','1141'))
+            ar_acc = _account(ar_code, CHART_OF_ACCOUNTS.get(ar_code, {'name':'عملاء','type':'ASSET'}).get('name','عملاء'), CHART_OF_ACCOUNTS.get(ar_code, {'name':'عملاء','type':'ASSET'}).get('type','ASSET'))
             if ar_acc:
-                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ar_acc.id, debit=total_inc_tax, credit=0.0, description=f"AR {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
-        from models import Account
-        rev_acc = _account(rev_code, CHART_OF_ACCOUNTS.get(rev_code, {'name':'Revenue','type':'REVENUE'}).get('name','Revenue'), 'REVENUE')
-        vat_acc = _account(vat_out_code, CHART_OF_ACCOUNTS.get(vat_out_code, {'name':'VAT Output','type':'LIABILITY'}).get('name','VAT Output'), 'LIABILITY')
-        ln = 2
-        if rev_acc and base_amt > 0:
-            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=rev_acc.id, debit=0.0, credit=base_amt, description=f"Revenue {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())));
+                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ar_acc.id, debit=total_inc_tax, credit=0.0, description=f"AR {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+                ln += 1
+        else:
+            ca = _pm_account(getattr(inv,'payment_method','CASH'))
+            if ca:
+                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ca.id, debit=total_inc_tax, credit=0.0, description=f"Receipt {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+                ln += 1
+        if discount_amt > 0:
+            disc_code = (SHORT_TO_NUMERIC.get('DISC_GRANTED') or ('5540',))[0] if isinstance(SHORT_TO_NUMERIC.get('DISC_GRANTED'), (list, tuple)) else (SHORT_TO_NUMERIC.get('DISC_GRANTED') or '5540')
+            disc_acc = _account(disc_code, CHART_OF_ACCOUNTS.get(disc_code, {'name':'خصم ممنوح للعملاء','type':'EXPENSE'}).get('name','خصم ممنوح للعملاء'), 'EXPENSE')
+            if disc_acc:
+                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=disc_acc.id, debit=round(discount_amt, 2), credit=0.0, description=f"خصم فاتورة {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+                ln += 1
+        rev_acc = _account(rev_code, CHART_OF_ACCOUNTS.get(rev_code, {'name':'مبيعات CHINA TOWN','type':'REVENUE'}).get('name','مبيعات CHINA TOWN'), 'REVENUE')
+        vat_acc = _account(vat_out_code, CHART_OF_ACCOUNTS.get(vat_out_code, {'name':'ضريبة القيمة المضافة – مستحقة','type':'LIABILITY'}).get('name','ضريبة القيمة المضافة – مستحقة'), 'LIABILITY')
+        if rev_acc and subtotal > 0:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=rev_acc.id, debit=0.0, credit=round(subtotal, 2), description=f"Revenue {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
             ln += 1
         if vat_acc and tax_amt > 0:
-            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=vat_acc.id, debit=0.0, credit=tax_amt, description=f"VAT Output {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=vat_acc.id, debit=0.0, credit=round(tax_amt, 2), description=f"VAT Output {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
         db.session.commit()
     except Exception:
         try:
@@ -12697,10 +5751,10 @@ def _create_purchase_journal(inv):
         total_before = float(inv.total_before_tax or 0.0)
         tax_amt = float(inv.tax_amount or 0.0)
         total_inc_tax = round(total_before + tax_amt, 2)
-        exp_acc = _account('1210', CHART_OF_ACCOUNTS.get('1210', {'name':'Inventory','type':'ASSET'}).get('name','Inventory'), CHART_OF_ACCOUNTS.get('1210', {'name':'Inventory','type':'ASSET'}).get('type','ASSET'))
-        vat_in_acc = _account('6200', CHART_OF_ACCOUNTS.get('6200', {'name':'VAT Input','type':'ASSET'}).get('name','VAT Input'), CHART_OF_ACCOUNTS.get('6200', {'name':'VAT Input','type':'ASSET'}).get('type','ASSET'))
-        ap_acc = _account('2110', CHART_OF_ACCOUNTS.get('2110', {'name':'Accounts Payable','type':'LIABILITY'}).get('name','Accounts Payable'), CHART_OF_ACCOUNTS.get('2110', {'name':'Accounts Payable','type':'LIABILITY'}).get('type','LIABILITY'))
-        je = JournalEntry(entry_number=f"JE-PUR-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=None, description=f"Purchase {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+        exp_acc = _account('1161', CHART_OF_ACCOUNTS.get('1161', {'name':'مخزون بضائع','type':'ASSET'}).get('name','مخزون بضائع'), CHART_OF_ACCOUNTS.get('1161', {'name':'مخزون بضائع','type':'ASSET'}).get('type','ASSET'))
+        vat_in_acc = _account('1170', CHART_OF_ACCOUNTS.get('1170', {'name':'ضريبة القيمة المضافة – مدخلات','type':'ASSET'}).get('name','ضريبة القيمة المضافة – مدخلات'), CHART_OF_ACCOUNTS.get('1170', {'name':'ضريبة القيمة المضافة – مدخلات','type':'ASSET'}).get('type','ASSET'))
+        ap_acc = _account('2111', CHART_OF_ACCOUNTS.get('2111', {'name':'موردون','type':'LIABILITY'}).get('name','موردون'), CHART_OF_ACCOUNTS.get('2111', {'name':'موردون','type':'LIABILITY'}).get('type','LIABILITY'))
+        je = JournalEntry(entry_number=f"JE-PUR-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=None, description=f"Purchase {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=inv.id, invoice_type='purchase')
         db.session.add(je); db.session.flush()
         ln = 1
         if exp_acc and total_before > 0:
@@ -12717,235 +5771,283 @@ def _create_purchase_journal(inv):
             pass
 
 def _create_expense_journal(inv):
+    """إنشاء قيد المصروف باستخدام الحساب المختار في الفاتورة (مثل 5230). يدعم liability_account_code للمنصات/الحكومة."""
     try:
         from models import JournalEntry, JournalLine
         total_before = float(inv.total_before_tax or 0.0)
         tax_amt = float(inv.tax_amount or 0.0)
         total_inc_tax = round(total_before + tax_amt, 2)
-        exp_acc = _account('5100', CHART_OF_ACCOUNTS.get('5100', {'name':'رسوم حكومية','type':'EXPENSE'}).get('name','Expense'), 'EXPENSE')
-        vat_in_acc = _account('6200', CHART_OF_ACCOUNTS.get('6200', {'name':'VAT Input','type':'ASSET'}).get('name','VAT Input'), 'ASSET')
-        ap_acc = _account('2110', CHART_OF_ACCOUNTS.get('2110', {'name':'Accounts Payable','type':'LIABILITY'}).get('name','Accounts Payable'), 'LIABILITY')
-        je = JournalEntry(entry_number=f"JE-EXP-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=None, description=f"Expense {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+        vat_in_acc = _account('1170', CHART_OF_ACCOUNTS.get('1170', {'name':'ضريبة القيمة المضافة – مدخلات','type':'ASSET'}).get('name','VAT مدخلات'), 'ASSET')
+        liability_code = (getattr(inv, 'liability_account_code', None) or '').strip() or '2111'
+        ap_info = CHART_OF_ACCOUNTS.get(liability_code, {'name': 'ذمم دائنة', 'type': 'LIABILITY'})
+        ap_acc = _account(liability_code, ap_info.get('name', 'ذمم دائنة'), 'LIABILITY')
+        je = JournalEntry(entry_number=f"JE-EXP-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=None, description=f"Expense {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=inv.id, invoice_type='expense')
         db.session.add(je); db.session.flush()
         ln = 1
-        if exp_acc and total_before > 0:
-            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=exp_acc.id, debit=total_before, credit=0.0, description="Expense", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
+        # تجميع المصروفات حسب الحساب من عناصر الفاتورة
+        acc_totals = {}
+        items = getattr(inv, 'items', []) or []
+        for it in items:
+            amt = float((it.quantity or 0) * (it.price_before_tax or 0) - (it.discount or 0))
+            if amt <= 0:
+                continue
+            code = (getattr(it, 'account_code', '') or '').strip()
+            if not code:
+                sel = _expense_account_for(getattr(it, 'description', '') or '')
+                code = (sel[0] if sel else '5410')
+            if code not in acc_totals:
+                acc_totals[code] = 0.0
+            acc_totals[code] += amt
+        if not acc_totals and total_before > 0:
+            acc_totals['5410'] = total_before
+        for code, amt in acc_totals.items():
+            if amt <= 0:
+                continue
+            sel = _expense_account_by_code(code) if code else None
+            if not sel:
+                sel = _expense_account_for('')
+            exp_code, exp_name, exp_type = sel
+            acc_type = exp_type if exp_type in ('EXPENSE', 'COGS') else 'EXPENSE'
+            exp_acc = _account(exp_code, CHART_OF_ACCOUNTS.get(exp_code, {'name': exp_name}).get('name', exp_name), acc_type)
+            if exp_acc:
+                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=exp_acc.id, debit=round(amt, 2), credit=0.0, description="Expense", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+                ln += 1
         if vat_in_acc and tax_amt > 0:
             db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=vat_in_acc.id, debit=tax_amt, credit=0.0, description="VAT Input", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
         if ap_acc:
-            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ap_acc.id, debit=0.0, credit=total_inc_tax, description="Accounts Payable", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ap_acc.id, debit=0.0, credit=total_inc_tax, description="Accounts Payable" if liability_code == '2111' else "Platform/Gov Payable", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
         db.session.commit()
     except Exception:
         try:
             db.session.rollback()
         except Exception:
             pass
+        raise
+
+def _create_receipt_journal(date_val, amount, inv_num, ar_code, payment_method, invoice_id=None):
+    """قيد تحصيل من عميل: مدين صندوق/بنك، دائن ذمم مدينة."""
+    try:
+        from models import JournalEntry, JournalLine
+        amt = float(amount or 0)
+        if amt <= 0:
+            return
+        ca = _pm_account(payment_method)
+        ar_acc = _account(ar_code, CHART_OF_ACCOUNTS.get(ar_code, {'name':'عملاء','type':'ASSET'}).get('name','عملاء'), 'ASSET')
+        if not ca or not ar_acc:
+            return
+        base_en = f"JE-REC-{inv_num}"
+        en = base_en
+        suffix = 1
+        while JournalEntry.query.filter_by(entry_number=en).first():
+            en = f"{base_en}-{suffix}"
+            suffix += 1
+        je = JournalEntry(entry_number=en, date=date_val, branch_code=None, description=f"Receipt {inv_num}", status='posted', total_debit=amt, total_credit=amt, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=invoice_id, invoice_type='sales_payment')
+        db.session.add(je); db.session.flush()
+        db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ca.id, debit=amt, credit=0.0, description=f"Receipt {inv_num}", line_date=date_val))
+        db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ar_acc.id, debit=0.0, credit=amt, description=f"Clear AR {inv_num}", line_date=date_val))
+        db.session.commit()
+    except Exception:
+        try: db.session.rollback()
+        except Exception: pass
+
+def _create_supplier_payment_journal(date_val, amount, inv_num, payment_method, bank_fee=0):
+    """قيد دفعة لمورد: مدين موردون، دائن صندوق/بنك. يُنشئ أيضاً قيد رسوم بنكية إن وُجدت."""
+    try:
+        from models import JournalEntry, JournalLine
+        amt = float(amount or 0)
+        if amt <= 0:
+            return
+        ca = _pm_account(payment_method)
+        ap_acc = _account('2111', CHART_OF_ACCOUNTS.get('2111', {'name':'موردون','type':'LIABILITY'}).get('name','موردون'), 'LIABILITY')
+        if not ca or not ap_acc:
+            return
+        base_en = f"JE-PAY-PUR-{inv_num}"
+        en = base_en
+        suffix = 1
+        while JournalEntry.query.filter_by(entry_number=en).first():
+            en = f"{base_en}-{suffix}"
+            suffix += 1
+        je = JournalEntry(entry_number=en, date=date_val, branch_code=None, description=f"Payment Purchase {inv_num}", status='posted', total_debit=amt, total_credit=amt, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+        db.session.add(je); db.session.flush()
+        db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ap_acc.id, debit=amt, credit=0.0, description=f"Pay AP {inv_num}", line_date=date_val))
+        db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ca.id, debit=0.0, credit=amt, description=f"Payment {inv_num}", line_date=date_val))
+        db.session.commit()
+        fee = float(bank_fee or 0)
+        if fee > 0 and ca:
+            fee_acc = _account('5610', CHART_OF_ACCOUNTS.get('5610', {'name':'مصروفات بنكية','type':'EXPENSE'}).get('name','مصروفات بنكية'), 'EXPENSE')
+            if fee_acc:
+                fee_en = f"JE-BANKFEE-{inv_num}"
+                fee_suffix = 1
+                while JournalEntry.query.filter_by(entry_number=fee_en).first():
+                    fee_en = f"JE-BANKFEE-{inv_num}-{fee_suffix}"
+                    fee_suffix += 1
+                fee_je = JournalEntry(entry_number=fee_en, date=date_val, branch_code=None, description=f"Bank Fee {inv_num}", status='posted', total_debit=fee, total_credit=fee, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+                db.session.add(fee_je); db.session.flush()
+                db.session.add(JournalLine(journal_id=fee_je.id, line_no=1, account_id=fee_acc.id, debit=fee, credit=0.0, description=f"Bank Fee {inv_num}", line_date=date_val))
+                db.session.add(JournalLine(journal_id=fee_je.id, line_no=2, account_id=ca.id, debit=0.0, credit=fee, description=f"Bank Fee {inv_num}", line_date=date_val))
+                db.session.commit()
+    except Exception:
+        try: db.session.rollback()
+        except Exception: pass
+
+def _create_supplier_direct_payment_journal(date_val, amount, ref_text, payment_method):
+    """قيد دفعة مباشرة لمورد (بدون فاتورة): مدين موردون، دائن صندوق/بنك."""
+    try:
+        from models import JournalEntry, JournalLine
+        amt = float(amount or 0)
+        if amt <= 0:
+            return
+        ca = _pm_account(payment_method)
+        ap_acc = _account('2111', CHART_OF_ACCOUNTS.get('2111', {'name':'موردون','type':'LIABILITY'}).get('name','موردون'), 'LIABILITY')
+        if not ca or not ap_acc:
+            return
+        safe_ref = (ref_text or 'SUP')[:30].replace(' ', '_')
+        base_en = f"JE-PAY-SUP-{safe_ref}"
+        en = base_en
+        suffix = 1
+        while JournalEntry.query.filter_by(entry_number=en).first():
+            en = f"{base_en}-{suffix}"
+            suffix += 1
+        je = JournalEntry(entry_number=en, date=date_val, branch_code=None, description=ref_text[:255] if ref_text else 'Supplier payment', status='posted', total_debit=amt, total_credit=amt, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+        db.session.add(je); db.session.flush()
+        db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ap_acc.id, debit=amt, credit=0.0, description=ref_text[:500] if ref_text else 'Pay AP', line_date=date_val))
+        db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ca.id, debit=0.0, credit=amt, description='Payment', line_date=date_val))
+        db.session.commit()
+    except Exception:
+        try: db.session.rollback()
+        except Exception: pass
+
+def _create_expense_payment_journal(date_val, amount, inv_num, payment_method, liability_account_code=None):
+    """قيد دفعة مصروف: مدين موردون (أو ذمم دائنة منصة)، دائن صندوق/بنك."""
+    try:
+        from models import JournalEntry, JournalLine
+        amt = float(amount or 0)
+        if amt <= 0:
+            return
+        ca = _pm_account(payment_method)
+        ap_code = (liability_account_code or '').strip() or '2111'
+        ap_info = CHART_OF_ACCOUNTS.get(ap_code, {'name': 'ذمم دائنة', 'type': 'LIABILITY'})
+        ap_acc = _account(ap_code, ap_info.get('name', 'موردون'), 'LIABILITY')
+        if not ca or not ap_acc:
+            return
+        base_en = f"JE-PAY-EXP-{inv_num}"
+        en = base_en
+        suffix = 1
+        while JournalEntry.query.filter_by(entry_number=en).first():
+            en = f"{base_en}-{suffix}"
+            suffix += 1
+        je = JournalEntry(entry_number=en, date=date_val, branch_code=None, description=f"Payment Expense {inv_num}", status='posted', total_debit=amt, total_credit=amt, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=None, invoice_type='expense_payment')
+        db.session.add(je); db.session.flush()
+        db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ap_acc.id, debit=amt, credit=0.0, description=f"Pay AP {inv_num}", line_date=date_val))
+        db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ca.id, debit=0.0, credit=amt, description=f"Payment {inv_num}", line_date=date_val))
+        db.session.commit()
+    except Exception:
+        try: db.session.rollback()
+        except Exception: pass
 
 def _post_ledger(date_val, acc_code, acc_name, acc_type, debit_amt, credit_amt, ref_text):
-    try:
-        mc, mn, mt = _resolve_account(acc_code, acc_name, acc_type)
-    except Exception:
-        mc, mn, mt = acc_code, acc_name, acc_type
-    a = _account(mc, mn, mt)
-    if not a:
-        return
-    try:
-        le = LedgerEntry(account_id=a.id, date=date_val, description=ref_text, debit=float(debit_amt or 0.0), credit=float(credit_amt or 0.0))
-        db.session.add(le)
-        db.session.flush()
-    except Exception:
-        db.session.rollback()
+    """Deprecated: لا يُنشئ قيداً – استخدم دوال القيود المخصصة. موجود للتوافق فقط."""
+    pass
 
 def _expense_account_by_code(code):
-    c = (code or '').strip().upper()
-    table = {
-        'RENT': ('RENT','Rent','EXPENSE'),
-        'MAINT': ('MAINT','Maintenance','EXPENSE'),
-        'UTIL': ('UTIL','Utilities','EXPENSE'),
-        'LOG': ('LOG','Logistics','EXPENSE'),
-        'MKT': ('MKT','Marketing','EXPENSE'),
-        'TEL': ('TEL','Telecom & Internet','EXPENSE'),
-        'STAT': ('STAT','Stationery','EXPENSE'),
-        'CLEAN': ('CLEAN','Cleaning','EXPENSE'),
-        'GOV': ('GOV','Government Payments','EXPENSE'),
-        'EXP': ('EXP','Operating Expenses','EXPENSE'),
+    """تُرجع حساب مصروف من الشجرة الجديدة بناءً على الكود."""
+    c = (code or '').strip()
+    # إذا كان الكود رقمي (من الشجرة الجديدة)، استخدمه مباشرة
+    if c.isdigit() and len(c) == 4:
+        if c in CHART_OF_ACCOUNTS:
+            info = CHART_OF_ACCOUNTS[c]
+            atype = info.get('type')
+            if atype in ('EXPENSE', 'COGS'):
+                return (c, info.get('name', c), atype)
+    # خريطة الاختصارات القديمة إلى الحسابات الجديدة (من get_short_to_numeric)
+    old_to_new_map = {
+        'RENT': '5270',      # مصروف إيجار
+        'MAINT': '5240',     # مصروف صيانة
+        'UTIL': '5210',      # مصروف كهرباء
+        'LOG': '5260',       # مصروف نقل وتوصيل
+        'MKT': '5510',       # دعاية وإعلان
+        'TEL': '5230',       # مصروف اتصالات وإنترنت
+        'STAT': '5420',      # قرطاسية ومكتبية
+        'CLEAN': '5250',     # مصروف نظافة
+        'GOV': '5410',       # مصروفات حكومية ورسوم
+        'EXP': '5470',       # مصروفات متنوعة إدارية
     }
-    return table.get(c)
+    if c in old_to_new_map:
+        new_code = old_to_new_map[c]
+        if new_code in CHART_OF_ACCOUNTS:
+            info = CHART_OF_ACCOUNTS[new_code]
+            return (new_code, info.get('name', new_code), 'EXPENSE')
+    # افتراضي: مصروفات متنوعة إدارية
+    default_code = '5470'
+    if default_code in CHART_OF_ACCOUNTS:
+        info = CHART_OF_ACCOUNTS[default_code]
+        return (default_code, info.get('name', default_code), 'EXPENSE')
+    return (default_code, 'مصروفات متنوعة إدارية', 'EXPENSE')
 
 def _expense_account_for(desc):
+    """تُرجع حساب مصروف من الشجرة الجديدة بناءً على الوصف."""
     s = (desc or '').strip().lower()
+    # خريطة الكلمات المفتاحية إلى الحسابات الجديدة
     mapping = [
-        (('rent','ايجار','إيجار'), ('RENT','Rent','EXPENSE')),
-        (('maintenance','صيانة'), ('MAINT','Maintenance','EXPENSE')),
-        (('electric','كهرب','كهرباء','water','ماء','utilities','فاتورة'), ('UTIL','Utilities','EXPENSE')),
-        (('delivery','نقل','شحن','logistics','لوجست'), ('LOG','Logistics','EXPENSE')),
-        (('marketing','تسويق','اعلان','إعلان','دعاية'), ('MKT','Marketing','EXPENSE')),
-        (('internet','انترنت','شبكة','اتصالات','هاتف','phone'), ('TEL','Telecom & Internet','EXPENSE')),
-        (('stationery','قرطاس','قرطاسية','مطبوعات'), ('STAT','Stationery','EXPENSE')),
-        (('clean','نظافة'), ('CLEAN','Cleaning','EXPENSE')),
+        (('rent','ايجار','إيجار'), '5270'),  # مصروف إيجار
+        (('maintenance','صيانة'), '5240'),    # مصروف صيانة
+        (('electric','كهرب','كهرباء'), '5210'),  # مصروف كهرباء
+        (('water','ماء'), '5220'),            # مصروف ماء
+        (('utilities','فاتورة'), '5210'),     # مصروف كهرباء
+        (('delivery','نقل','شحن','logistics','لوجست'), '5260'),  # مصروف نقل وتوصيل
+        (('marketing','تسويق','اعلان','إعلان','دعاية'), '5510'),  # دعاية وإعلان
+        (('internet','انترنت','شبكة','اتصالات','هاتف','phone','telecom'), '5230'),  # اتصالات وإنترنت
+        (('stationery','قرطاس','قرطاسية','مطبوعات'), '5420'),  # قرطاسية ومكتبية
+        (('clean','نظافة'), '5250'),          # مصروف نظافة
+        (('government','حكوم','حكومي','gosi','قوى','muqeem'), '5410'),  # مصروفات حكومية ورسوم
+        (('salary','راتب','رواتب','wages','أجور'), '5310'),  # رواتب وأجور
+        (('allowance','بدل','بدلات'), '5320'),  # بدلات
+        (('bank','بنك','banking','عمولة'), '5610'),  # مصروفات بنكية
+        (('fine','غرامة','غرامات'), '5460'),  # غرامات ومخالفات
     ]
-    for kws, acc in mapping:
+    for kws, code in mapping:
         for kw in kws:
             if kw in s:
-                return acc
-    return ('EXP','Operating Expenses','EXPENSE')
+                if code in CHART_OF_ACCOUNTS:
+                    info = CHART_OF_ACCOUNTS[code]
+                    return (code, info.get('name', code), 'EXPENSE')
+    # افتراضي: مصروفات متنوعة إدارية
+    default_code = '5470'
+    if default_code in CHART_OF_ACCOUNTS:
+        info = CHART_OF_ACCOUNTS[default_code]
+        return (default_code, info.get('name', default_code), 'EXPENSE')
+    return (default_code, 'مصروفات متنوعة إدارية', 'EXPENSE')
 
-# ---- Chart of Accounts (Clean Restaurant Chart 2025) ----
-CHART_OF_ACCOUNTS = {
-    # 1. ASSETS – الأصول
-    '1000': {'name': 'الأصول / ASSETS', 'type': 'ASSET'},
-    '1010': {'name': 'النقدية / Cash', 'type': 'ASSET'},
-    '1011': {'name': 'صندوق رئيسي / Main Cash', 'type': 'ASSET'},
-    '1012': {'name': 'درج كاش نقاط البيع / POS Cash Drawer', 'type': 'ASSET'},
-    '1013': {'name': 'البنك – حساب رئيسي / Bank Main', 'type': 'ASSET'},
-    '1014': {'name': 'بنك – حساب إضافي / Bank Additional', 'type': 'ASSET'},
-    '1020': {'name': 'المدينون / Accounts Receivable', 'type': 'ASSET'},
-    '1021': {'name': 'عملاء المطعم / Restaurant Customers', 'type': 'ASSET'},
-    '1022': {'name': 'العملاء الإلكترونيين / Online Customers', 'type': 'ASSET'},
-    '1130': {'name': 'حسابات التحصيل – Keeta', 'type': 'ASSET'},
-    '1140': {'name': 'حسابات التحصيل – HungerStation', 'type': 'ASSET'},
-    '1070': {'name': 'مخزون مواد غذائية', 'type': 'ASSET'},
-    '1210': {'name': 'مخزون – مواد وأدوات تشغيل', 'type': 'ASSET'},
-    '1025': {'name': 'مخزون – مستلزمات أخرى', 'type': 'ASSET'},
-    '1031': {'name': 'مواد غذائية / Food Supplies', 'type': 'ASSET'},
-    '1032': {'name': 'مشروبات / Beverages', 'type': 'ASSET'},
-    '1033': {'name': 'مستلزمات أخرى / Other Supplies', 'type': 'ASSET'},
-    '1034': {'name': 'مواد وأدوات تشغيل / Operating Supplies', 'type': 'ASSET'},
-    # removed legacy 1220; use 1080 per official chart
-    '1030': {'name': 'سلف الموظفين المستحقة', 'type': 'ASSET'},
-    '1040': {'name': 'مصروفات مدفوعة مسبقاً / Prepaid Expenses', 'type': 'ASSET'},
-    '1041': {'name': 'إيجار مدفوع مقدماً / Prepaid Rent', 'type': 'ASSET'},
-    '1042': {'name': 'تأمين مدفوع مقدماً / Prepaid Insurance', 'type': 'ASSET'},
-    # removed 1090 (use 1040/1041/1042)
-    '1310': {'name': 'إيجار مدفوع مقدماً', 'type': 'ASSET'},
-    '1320': {'name': 'تأمين مدفوع مقدماً', 'type': 'ASSET'},
-    '1060': {'name': 'أصول ثابتة / Fixed Assets', 'type': 'ASSET'},
-    '1051': {'name': 'معدات وتجهيزات المطعم / Equipment', 'type': 'ASSET'},
-    '1052': {'name': 'أثاث وديكور / Furniture', 'type': 'ASSET'},
-    '1053': {'name': 'أجهزة كمبيوتر وبرمجيات / Computers & Software', 'type': 'ASSET'},
-    '1054': {'name': 'قيمة شراء من المالك السابق / Previous Owner Purchase', 'type': 'ASSET'},
-    '1510': {'name': 'معدات وتجهيزات المطعم', 'type': 'ASSET'},
-    '1520': {'name': 'أثاث وديكور', 'type': 'ASSET'},
-    '1530': {'name': 'أجهزة كمبيوتر وبرمجيات', 'type': 'ASSET'},
-    '1540': {'name': 'قيمة شراء المطعم من المالك السابق', 'type': 'ASSET'},
-    '1080': {'name': 'هدر مواد – مراقب', 'type': 'ASSET'},
+# ---- شجرة الحسابات المعتمدة (من data.coa_new_tree) ----
+def _coa_build():
+    try:
+        from data.coa_new_tree import build_coa_dict, get_short_to_numeric
+        coa = build_coa_dict()
+        short = get_short_to_numeric(coa)
+        return coa, short
+    except Exception:
+        return {}, {}
 
-    # 2. LIABILITIES – الالتزامات
-    '2000': {'name': 'الالتزامات العامة', 'type': 'LIABILITY'},
-    '2020': {'name': 'التزامات أخرى', 'type': 'LIABILITY'},
-    '2010': {'name': 'الموردون', 'type': 'LIABILITY'},
-    '2110': {'name': 'الموردون – عام', 'type': 'LIABILITY'},
-    '2030': {'name': 'الرواتب المستحقة', 'type': 'LIABILITY'},
-    '2130': {'name': 'رواتب مستحقة', 'type': 'LIABILITY'},
-    '2040': {'name': 'سلف الموظفين', 'type': 'LIABILITY'},
-    '2023': {'name': 'VAT المستحق / VAT Payable', 'type': 'LIABILITY'},
-    '2024': {'name': 'ضريبة المخرجات / Output VAT', 'type': 'LIABILITY'},
-    '2050': {'name': 'VAT المستحق', 'type': 'LIABILITY'},
-    '2120': {'name': 'ضريبة القيمة المضافة مستحقة', 'type': 'LIABILITY'},
-    '2200': {'name': 'الالتزامات طويلة الأجل', 'type': 'LIABILITY'},
-
-    # 3. EQUITY – حقوق الملكية
-    '3000': {'name': 'حقوق الملكية', 'type': 'EQUITY'},
-    '3010': {'name': 'رأس المال عند التأسيس', 'type': 'EQUITY'},
-    '3100': {'name': 'رأس المال', 'type': 'EQUITY'},
-    '3020': {'name': 'المسحوبات الشخصية', 'type': 'EQUITY'},
-    '3200': {'name': 'الأرباح/الخسائر المحتجزة', 'type': 'EQUITY'},
-    '3030': {'name': 'صافي الربح/الخسارة', 'type': 'EQUITY'},
-
-    # 4. REVENUE – الإيرادات
-    '4000': {'name': 'الإيرادات / REVENUE', 'type': 'REVENUE'},
-    '4010': {'name': 'مبيعات – فروع رئيسية / Branch Sales', 'type': 'REVENUE'},
-    '4011': {'name': 'China Town', 'type': 'REVENUE'},
-    '4012': {'name': 'Place India', 'type': 'REVENUE'},
-    '4013': {'name': 'Keeta Online', 'type': 'REVENUE'},
-    '4014': {'name': 'HungerStation Online', 'type': 'REVENUE'},
-    '4020': {'name': 'مبيعات – فروع فرعية / Branch Sub-Sales', 'type': 'REVENUE'},
-    '4021': {'name': 'China Town', 'type': 'REVENUE'},
-    '4022': {'name': 'Place India', 'type': 'REVENUE'},
-    '4023': {'name': 'Keeta', 'type': 'REVENUE'},
-    '4030': {'name': 'عمولات بنكية مستلمة / Bank Commissions Received', 'type': 'REVENUE'},
-    '4040': {'name': 'عمولات بنكية مستلمة / Bank Commissions (مكرر – تم دمجه)', 'type': 'REVENUE'},
-    '4140': {'name': 'خصومات على المبيعات / Sales Discounts', 'type': 'REVENUE'},
-
-    # 5. COGS – تكلفة البضاعة المباعة
-    '5000': {'name': 'Food Direct Cost / تكلفة المواد الغذائية المباشرة', 'type': 'COGS'},
-    '5005': {'name': 'تكلفة المواد الغذائية المباشرة', 'type': 'COGS'},
-
-    # 6. EXPENSES – المصروفات التشغيلية
-    '5010': {'name': 'رواتب وأجور الموظفين', 'type': 'EXPENSE'},
-    # remove 5300; use 5310/5320/5330
-    '5310': {'name': 'مصروف رواتب', 'type': 'EXPENSE'},
-    '5320': {'name': 'سلف موظفين (مصروف)', 'type': 'EXPENSE'},
-    '5330': {'name': 'تسوية سلف رواتب', 'type': 'EXPENSE'},
-    '5020': {'name': 'كهرباء وماء وصيانة', 'type': 'EXPENSE'},
-    '5150': {'name': 'صيانة عامة', 'type': 'EXPENSE'},
-    '5030': {'name': 'إيجار', 'type': 'EXPENSE'},
-    '5040': {'name': 'ديزل', 'type': 'EXPENSE'},
-    '5050': {'name': 'إنترنت', 'type': 'EXPENSE'},
-    '5060': {'name': 'أدوات مكتبية', 'type': 'EXPENSE'},
-    '5070': {'name': 'مواد تنظيف', 'type': 'EXPENSE'},
-    '5080': {'name': 'غسيل ملابس', 'type': 'EXPENSE'},
-    '5090': {'name': 'عمولات بنكية', 'type': 'EXPENSE'},
-    '5100': {'name': 'رسوم حكومية', 'type': 'EXPENSE'},
-    '5110': {'name': 'تسويق', 'type': 'EXPENSE'},
-    '5120': {'name': 'مصاريف حكومية', 'type': 'EXPENSE'},
-    '5130': {'name': 'مصروفات أخرى', 'type': 'EXPENSE'},
-    '5140': {'name': 'مصروفات غير تشغيلية', 'type': 'EXPENSE'},
-    # remove duplicate legacy 5160..5200 per official chart
-
-    # 7. TAX – الضرائب
-    '6000': {'name': 'تسوية ضريبة المدخلات والمخرجات', 'type': 'TAX'},
-    '6300': {'name': 'تسوية ضريبة القيمة المضافة / VAT Settlement', 'type': 'TAX'},
-    '1100': {'name': 'ضريبة مدخلات (قديم) / Input VAT (Legacy)', 'type': 'ASSET'},
-    '6200': {'name': 'ضريبة المدخلات / Input VAT', 'type': 'ASSET'}
-}
-
-SHORT_TO_NUMERIC = {
-    'CASH': ('1011', CHART_OF_ACCOUNTS['1011']['name'], CHART_OF_ACCOUNTS['1011']['type']),
-    'BANK': ('1013', CHART_OF_ACCOUNTS['1013']['name'], CHART_OF_ACCOUNTS['1013']['type']),
-    'AP': ('2010', CHART_OF_ACCOUNTS['2010']['name'], CHART_OF_ACCOUNTS['2010']['type']),
-    'AR_KEETA': ('1130', CHART_OF_ACCOUNTS['1130']['name'], CHART_OF_ACCOUNTS['1130']['type']),
-    'AR_HUNGER': ('1140', CHART_OF_ACCOUNTS['1140']['name'], CHART_OF_ACCOUNTS['1140']['type']),
-    'VAT_IN': ('6200', CHART_OF_ACCOUNTS['6200']['name'], CHART_OF_ACCOUNTS['6200']['type']),
-    'VAT_OUT': ('2024', CHART_OF_ACCOUNTS['2024']['name'], CHART_OF_ACCOUNTS['2024']['type']),
-    'VAT_SETTLE': ('6300', CHART_OF_ACCOUNTS['6300']['name'], CHART_OF_ACCOUNTS['6300']['type']),
-    'REV_CT': ('4011', CHART_OF_ACCOUNTS['4011']['name'], CHART_OF_ACCOUNTS['4011']['type']),
-    'REV_PI': ('4012', CHART_OF_ACCOUNTS['4012']['name'], CHART_OF_ACCOUNTS['4012']['type']),
-    'REV_KEETA': ('4013', CHART_OF_ACCOUNTS['4013']['name'], CHART_OF_ACCOUNTS['4013']['type']),
-    'REV_HUNGER': ('4014', CHART_OF_ACCOUNTS['4014']['name'], CHART_OF_ACCOUNTS['4014']['type']),
-    'DISC_SALES': ('4140', CHART_OF_ACCOUNTS['4140']['name'], CHART_OF_ACCOUNTS['4140']['type']),
-    'EXP_OP': ('5120', CHART_OF_ACCOUNTS['5120']['name'], CHART_OF_ACCOUNTS['5120']['type']),
-    'RENT': ('5030', CHART_OF_ACCOUNTS['5030']['name'], CHART_OF_ACCOUNTS['5030']['type']),
-    'ELEC': ('5020', CHART_OF_ACCOUNTS['5020']['name'], CHART_OF_ACCOUNTS['5020']['type']),
-    'DIESEL': ('5040', CHART_OF_ACCOUNTS['5040']['name'], CHART_OF_ACCOUNTS['5040']['type']),
-    'NET': ('5050', CHART_OF_ACCOUNTS['5050']['name'], CHART_OF_ACCOUNTS['5050']['type']),
-    'MAINT': ('5150', CHART_OF_ACCOUNTS['5150']['name'], CHART_OF_ACCOUNTS['5150']['type']),
-    'STATIONERY': ('5060', CHART_OF_ACCOUNTS['5060']['name'], CHART_OF_ACCOUNTS['5060']['type']),
-    'CLEAN': ('5070', CHART_OF_ACCOUNTS['5070']['name'], CHART_OF_ACCOUNTS['5070']['type']),
-    'LAUNDRY': ('5080', CHART_OF_ACCOUNTS['5080']['name'], CHART_OF_ACCOUNTS['5080']['type']),
-    'BANK_COMM': ('5090', CHART_OF_ACCOUNTS['5090']['name'], CHART_OF_ACCOUNTS['5090']['type']),
-    'GOV': ('5100', CHART_OF_ACCOUNTS['5100']['name'], CHART_OF_ACCOUNTS['5100']['type']),
-    'SAL_ALL': ('5310', CHART_OF_ACCOUNTS['5310']['name'], CHART_OF_ACCOUNTS['5310']['type']),
-    'SAL_EXP': ('5310', CHART_OF_ACCOUNTS['5310']['name'], CHART_OF_ACCOUNTS['5310']['type']),
-    'EMP_ADV_EXP': ('5320', CHART_OF_ACCOUNTS['5320']['name'], CHART_OF_ACCOUNTS['5320']['type']),
-    'SAL_DED': ('5330', CHART_OF_ACCOUNTS['5330']['name'], CHART_OF_ACCOUNTS['5330']['type']),
-    'EXP_NONOP': ('5140', CHART_OF_ACCOUNTS['5140']['name'], CHART_OF_ACCOUNTS['5140']['type']),
-    'PAYROLL': ('2030', CHART_OF_ACCOUNTS['2030']['name'], CHART_OF_ACCOUNTS['2030']['type']),
-    'PAYROLL_LIAB': ('2130', CHART_OF_ACCOUNTS['2130']['name'], CHART_OF_ACCOUNTS['2130']['type']),
-    'EMP_ADV': ('1030', CHART_OF_ACCOUNTS['1030']['name'], CHART_OF_ACCOUNTS['1030']['type']),
-    'COGS': ('5000', CHART_OF_ACCOUNTS['5000']['name'], CHART_OF_ACCOUNTS['5000']['type']),
-}
+_CHART, _SHORT = _coa_build()
+CHART_OF_ACCOUNTS = _CHART
+SHORT_TO_NUMERIC = _SHORT
 
 def refresh_chart_from_db():
+    """تحديث CHART_OF_ACCOUNTS من قاعدة البيانات - فقط الحسابات من الشجرة الجديدة."""
     try:
         from models import Account
-        rows = Account.query.order_by(Account.code.asc()).all()
-        CHART_OF_ACCOUNTS.clear()
-        for a in rows:
-            CHART_OF_ACCOUNTS[str(a.code).strip()] = {
-                'name': (getattr(a,'name', '') or ''),
-                'type': (getattr(a,'type','') or '').strip().upper()
-            }
+        from data.coa_new_tree import build_coa_dict
+        # الحصول على الحسابات الجديدة فقط
+        new_coa = build_coa_dict()
+        new_codes = set(new_coa.keys())
+        
+        # تحديث CHART_OF_ACCOUNTS من قاعدة البيانات للحسابات الجديدة فقط
+        for a in Account.query.filter(Account.code.in_(new_codes)).order_by(Account.code.asc()).all():
+            code = str(a.code or '').strip()
+            if code in CHART_OF_ACCOUNTS:
+                # تحديث البيانات من DB
+                CHART_OF_ACCOUNTS[code]['name'] = (getattr(a, 'name', '') or CHART_OF_ACCOUNTS[code].get('name', ''))
+                CHART_OF_ACCOUNTS[code]['type'] = (getattr(a, 'type', '') or CHART_OF_ACCOUNTS[code].get('type', 'EXPENSE')).strip().upper()
     except Exception:
         try:
             from extensions import db as _db
@@ -12965,9 +6067,13 @@ def _resolve_account(code: str, name: str, kind: str):
     return c, name, (kind or '').strip().upper()
 
 def seed_chart_of_accounts():
+    """زرع شجرة الحسابات الجديدة فقط في قاعدة البيانات."""
     try:
-        for cc, info in CHART_OF_ACCOUNTS.items():
-            _account(cc, info['name'], info['type'])
+        from data.coa_new_tree import build_coa_dict
+        # استخدام الشجرة الجديدة فقط
+        new_coa = build_coa_dict()
+        for cc, info in new_coa.items():
+            _account(cc, info.get('name', ''), info.get('type', 'EXPENSE'))
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -13261,7 +6367,7 @@ def api_kpi_inventory_snapshot():
     try:
         from models import Account, JournalLine
         from sqlalchemy import func
-        codes = ['1210', '1025', '1070']
+        codes = ['1161', '1162']
         out = {}
         for code in codes:
             acc = Account.query.filter(Account.code == code).first()
@@ -13342,7 +6448,6 @@ def advances_page():
 @main.route('/api/advances/list', methods=['GET'], endpoint='api_advances_list')
 @login_required
 def api_advances_list():
-    return ('', 404)
     try:
         from datetime import date as _date
         from datetime import datetime as _dt
@@ -13452,7 +6557,6 @@ def api_advances_list():
 @main.route('/api/advances/metrics', methods=['GET'], endpoint='api_advances_metrics')
 @login_required
 def api_advances_metrics():
-    return ('', 404)
     try:
         from models import JournalLine, JournalEntry, Employee
         adv_code = SHORT_TO_NUMERIC['EMP_ADV'][0]
@@ -13491,7 +6595,6 @@ def api_advances_metrics():
 @main.route('/api/advances/pay', methods=['POST'], endpoint='api_advances_pay')
 @login_required
 def api_advances_pay():
-    return ('', 404)
     try:
         emp_id = request.form.get('employee_id', type=int)
         amount = request.form.get('amount', type=float) or 0.0
@@ -13504,8 +6607,14 @@ def api_advances_pay():
         try:
             from models import JournalEntry, JournalLine
             cash_acc = _pm_account(method)
-            emp_adv_acc = _account(SHORT_TO_NUMERIC['EMP_ADV'][0], CHART_OF_ACCOUNTS['1030']['name'], CHART_OF_ACCOUNTS['1030']['type'])
-            je = JournalEntry(entry_number=f"JE-ADVPAY-{emp_id}-{int(amount)}", date=dval, branch_code=None, description=f"Advance repayment {emp_id}", status='posted', total_debit=amount, total_credit=amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
+            emp_adv_acc = _account(*SHORT_TO_NUMERIC['EMP_ADV'])
+            base_en = f"JE-ADVPAY-{emp_id}-{dval.strftime('%Y%m%d')}"
+            en = base_en
+            suffix = 1
+            while JournalEntry.query.filter_by(entry_number=en).first():
+                en = f"{base_en}-{suffix}"
+                suffix += 1
+            je = JournalEntry(entry_number=en, date=dval, branch_code=None, description=f"Advance repayment {emp_id}", status='posted', total_debit=amount, total_credit=amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
             db.session.add(je); db.session.flush()
             if cash_acc:
                 db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=cash_acc.id, debit=amount, credit=0.0, description='Advance repayment cash/bank', line_date=dval, employee_id=emp_id))
@@ -13529,7 +6638,6 @@ def api_advances_pay():
 @main.route('/api/employees', methods=['GET'], endpoint='api_employees')
 @login_required
 def api_employees():
-    return ('', 404)
     try:
         rows = Employee.query.order_by(Employee.full_name.asc()).all()
         data = []
@@ -13545,19 +6653,53 @@ def api_employees():
                 'last_salary': 0.0,
                 'advance': 0.0,
             })
-        if not data:
-            data = [
-                {"id":1, "name":"RIDOY", "department":"شيف", "basic":800.00, "last_salary":1727.00, "advance":0},
-                {"id":2, "name":"SAIFUL ISLAM", "department":"شيف", "basic":800.00, "last_salary":1832.00, "advance":0}
-            ]
         return jsonify({'ok': True, 'employees': data})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+def _ensure_salary_records_from_hire_date(emp_id, base_salary, allowances=0.0, deductions=0.0, hire_date=None):
+    """إنشاء مسيرات رواتب من تاريخ التعيين حتى الشهر الحالي — مصدر حقيقة موحد لقسم المسيرات والسداد."""
+    if not hire_date:
+        return 0
+    from models import Salary
+    now = get_saudi_now()
+    cur_y, cur_m = int(now.year), int(now.month)
+    sy, sm = int(hire_date.year), int(hire_date.month)
+    if (sy > cur_y) or (sy == cur_y and sm > cur_m):
+        return 0
+    base = float(base_salary or 0)
+    allow = float(allowances or 0)
+    ded = float(deductions or 0)
+    created = 0
+    yy, mm = sy, sm
+    guard = 0
+    while (yy < cur_y) or (yy == cur_y and mm <= cur_m):
+        if Salary.query.filter_by(employee_id=emp_id, year=yy, month=mm).first():
+            mm += 1
+            if mm > 12:
+                mm = 1
+                yy += 1
+            guard += 1
+            if guard > 240:
+                break
+            continue
+        total = max(0.0, base + allow - ded)
+        sal = Salary(employee_id=emp_id, year=yy, month=mm, basic_salary=base, allowances=allow,
+                     deductions=ded, previous_salary_due=0.0, total_salary=total, status='due')
+        db.session.add(sal)
+        created += 1
+        mm += 1
+        if mm > 12:
+            mm = 1
+            yy += 1
+        guard += 1
+        if guard > 240:
+            break
+    return created
+
 @main.route('/api/employees', methods=['POST'], endpoint='api_employees_create')
 @login_required
 def api_employees_create():
-    return ('', 404)
     try:
         if not user_can('employees','add'):
             return jsonify({'ok': False, 'error': 'forbidden'}), 403
@@ -13583,8 +6725,11 @@ def api_employees_create():
             hd = None
         emp = Employee(full_name=full_name, national_id=national_id, department=department, position=position, phone=phone, email=email, hire_date=hd, status='active', active=True)
         try:
-            db.session.add(emp); db.session.flush()
+            db.session.add(emp)
+            db.session.flush()
             db.session.add(EmployeeSalaryDefault(employee_id=int(emp.id), base_salary=base_salary, allowances=0.0, deductions=0.0))
+            db.session.flush()
+            _ensure_salary_records_from_hire_date(int(emp.id), base_salary, 0.0, 0.0, hd)
             db.session.commit()
             try:
                 from app.models import AppKV
@@ -13603,7 +6748,6 @@ def api_employees_create():
 @main.route('/api/employees/<int:eid>', methods=['PUT'], endpoint='api_employees_update')
 @login_required
 def api_employees_update(eid: int):
-    return ('', 404)
     try:
         if not user_can('employees','edit'):
             return jsonify({'ok': False, 'error': 'forbidden'}), 403
@@ -13855,72 +6999,296 @@ def api_payroll_templates():
 @main.route('/api/payroll-run', methods=['POST'], endpoint='api_payroll_run')
 @login_required
 def api_payroll_run():
+    """حفظ المسير مع إنشاء قيد استحقاق (مدين: مصروف رواتب، دائن: رواتب مستحقة). rows = [{ employee_id, selected, salary }]."""
     try:
         import json as _json
         month = request.form.get('month') or request.form.get('pay_month') or get_saudi_now().strftime('%Y-%m')
         y, m = month.split('-'); year = int(y); mon = int(m)
-        employees_json = request.form.get('rows')
-        if employees_json:
-            rows = _json.loads(employees_json)
-        else:
-            rows = []
-            for e in Employee.query.order_by(Employee.full_name.asc()).all():
-                rows.append({'id': int(e.id), 'name': e.full_name, 'department': e.department or '', 'basic': float(getattr(getattr(e,'salary_default',None),'base_salary',0) or 0), 'extra': 0.0, 'day_off': 0.0, 'bonus': 0.0, 'ot': 0.0, 'others': 0.0, 'vac_eid': 0.0, 'deduct': 0.0})
-        exp_code = (request.form.get('exp_code') or SHORT_TO_NUMERIC.get('SAL_EXP', ('5310',))[0])
-        liab_code = (request.form.get('liab_code') or SHORT_TO_NUMERIC.get('PAYROLL_LIAB', ('2130',))[0])
-        tpl_id = (request.form.get('template_id') or 'default')
-        preview_only = (request.form.get('preview') or '').strip().lower() in ('1','true','yes')
-        journal = []
-        total_sum = 0.0
+        employees_json = request.form.get('rows') or '[]'
+        rows = _json.loads(employees_json) if isinstance(employees_json, str) else (employees_json or [])
+        selected_ids = set()
         details = []
         for r in rows:
-            b = float(r.get('basic') or 0)
-            ex = float(r.get('extra') or 0)
-            doff = float(r.get('day_off') or 0)
-            bon = float(r.get('bonus') or 0)
-            otv = float(r.get('ot') or 0)
-            oth = float(r.get('others') or 0)
-            ve = float(r.get('vac_eid') or 0)
-            ded = float(r.get('deduct') or 0)
-            total = round(b + ex + bon + otv + oth + ve - doff - ded, 2)
-            total_sum += total
-            details.append({'employee_id': r.get('id'), 'employee_name': r.get('name'), 'department': r.get('department'), 'net': total})
-            if not preview_only:
-                s = Salary.query.filter_by(employee_id=int(r.get('id')), year=year, month=mon).first()
-                if not s:
-                    s = Salary(employee_id=int(r.get('id')), year=year, month=mon, basic_salary=b, allowances=ex+bon+otv+oth+ve, deductions=doff+ded, previous_salary_due=0.0, total_salary=total, status='due')
-                    db.session.add(s)
-                else:
-                    s.basic_salary = b
-                    s.allowances = ex+bon+otv+oth+ve
-                    s.deductions = doff+ded
-                    s.previous_salary_due = 0.0
-                    s.total_salary = total
-                db.session.flush()
-        rounding = round(total_sum, 2) - total_sum
-        journal.append({'account': exp_code, 'name': CHART_OF_ACCOUNTS.get(exp_code, {}).get('name', 'مصروف رواتب'), 'debit': round(total_sum, 2), 'credit': 0.0})
-        journal.append({'account': liab_code, 'name': CHART_OF_ACCOUNTS.get(liab_code, {}).get('name', 'رواتب مستحقة'), 'debit': 0.0, 'credit': round(total_sum, 2)})
-        if not preview_only:
+            sel = r.get('selected') in (True, 1, '1', 'true', 'yes')
+            if not sel:
+                continue
+            eid = r.get('employee_id') or r.get('id')
             try:
-                from models import JournalEntry, JournalLine
-                je = JournalEntry(entry_number=f"JE-PR-{year}{mon:02d}", date=get_saudi_now().date(), branch_code=None, description=f"Payroll run {year}-{mon}", status='posted', total_debit=round(total_sum,2), total_credit=round(total_sum,2), created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
-                db.session.add(je); db.session.flush()
-                exp_acc = _account(exp_code, CHART_OF_ACCOUNTS.get(exp_code,{}).get('name','مصروف رواتب'), CHART_OF_ACCOUNTS.get(exp_code,{}).get('type','EXPENSE'))
-                liab_acc = _account(liab_code, CHART_OF_ACCOUNTS.get(liab_code,{}).get('name','رواتب مستحقة'), CHART_OF_ACCOUNTS.get(liab_code,{}).get('type','LIABILITY'))
-                if exp_acc:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=round(total_sum,2), credit=0.0, description='Payroll expense', line_date=get_saudi_now().date()))
-                if liab_acc:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=liab_acc.id, debit=0.0, credit=round(total_sum,2), description='Payroll liability', line_date=get_saudi_now().date()))
-                db.session.commit()
-            except Exception:
+                eid = int(eid)
+            except (TypeError, ValueError):
+                continue
+            basic = float(r.get('basic') or 0)
+            extra = float(r.get('extra') or 0)
+            absence = float(r.get('absence') or 0)
+            incentive = float(r.get('incentive') or 0)
+            allow = float(r.get('allowances') or 0)
+            ded = float(r.get('deductions') or 0)
+            sal = float(r.get('salary') or r.get('total') or 0)
+            if sal == 0 and (basic or extra or allow or incentive or absence or ded):
+                sal = basic + extra - absence + incentive + allow - ded
+            selected_ids.add(eid)
+            details.append({'employee_id': eid, 'basic': basic, 'extra': extra, 'absence': absence, 'incentive': incentive, 'allowances': allow, 'deductions': ded, 'salary': round(max(0, sal), 2)})
+        if not selected_ids:
+            return jsonify({'ok': False, 'error': 'select_at_least_one'}), 400
+        for d in details:
+            eid = int(d['employee_id'])
+            basic = round(float(d.get('basic') or 0), 2)
+            extra = round(float(d.get('extra') or 0), 2)
+            absence = round(float(d.get('absence') or 0), 2)
+            incentive = round(float(d.get('incentive') or 0), 2)
+            allow = round(float(d.get('allowances') or 0), 2)
+            ded = round(float(d.get('deductions') or 0), 2)
+            sal = round(float(d.get('salary') or 0), 2)
+            if sal <= 0:
+                sal = max(0, basic + extra - absence + incentive + allow - ded)
+            s = Salary.query.filter_by(employee_id=eid, year=year, month=mon).first()
+            if not s:
+                s = Salary(employee_id=eid, year=year, month=mon, basic_salary=basic, extra=extra, absence=absence, incentive=incentive, allowances=allow, deductions=ded, previous_salary_due=0.0, total_salary=sal, status='due')
+                db.session.add(s)
+            else:
+                s.basic_salary = basic
+                s.extra = extra
+                s.absence = absence
+                s.incentive = incentive
+                s.allowances = allow
+                s.deductions = ded
+                s.previous_salary_due = 0.0
+                s.total_salary = sal
+            db.session.flush()
+        all_per = Salary.query.filter_by(year=year, month=mon).all()
+        for s in all_per:
+            if (s.employee_id or 0) in selected_ids:
+                continue
+            paid = db.session.query(Payment).filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).first()
+            if not paid:
+                db.session.delete(s)
+        ok_acc, acc_data, acc_entry = _create_payroll_accrual_je(year, mon)
+        if not ok_acc and acc_data != 'already_posted':
+            try:
                 db.session.rollback()
-        return jsonify({'ok': True, 'template_id': tpl_id, 'month': {'year': year, 'month': mon}, 'details': details, 'journal_preview': journal, 'rounding_diff': round(rounding, 2), 'posted': (not preview_only)})
+            except Exception:
+                pass
+            return jsonify({'ok': False, 'error': acc_data or 'accrual_failed'}), 400
+        db.session.commit()
+        out = {'ok': True, 'month': {'year': year, 'month': mon}, 'details': details}
+        if acc_entry:
+            out['entry_number'] = acc_entry
+        return jsonify(out)
     except Exception as e:
         try:
             db.session.rollback()
         except Exception:
             pass
         return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@main.route('/api/payroll/ensure-records', methods=['POST'], endpoint='api_payroll_ensure_records')
+@login_required
+def api_payroll_ensure_records():
+    """إنشاء مسيرات رواتب ناقصة للموظفين من تاريخ التعيين حتى الشهر الحالي، ثم إنشاء قيد استحقاق (JE-PR) لكل شهر له مسيرات لضمان صحة المحاسبة."""
+    try:
+        from models import Employee, EmployeeSalaryDefault
+        defaults = {int(d.employee_id): d for d in EmployeeSalaryDefault.query.all()}
+        total_created = 0
+        for emp in Employee.query.all():
+            if not getattr(emp, 'hire_date', None):
+                continue
+            d = defaults.get(int(emp.id))
+            base = float(getattr(d, 'base_salary', 0) or 0) if d else 0.0
+            allow = float(getattr(d, 'allowances', 0) or 0) if d else 0.0
+            ded = float(getattr(d, 'deductions', 0) or 0) if d else 0.0
+            n = _ensure_salary_records_from_hire_date(int(emp.id), base, allow, ded, emp.hire_date)
+            total_created += n
+        db.session.commit()
+        # إنشاء قيد استحقاق (مدين: مصروف رواتب، دائن: رواتب مستحقة) لكل شهر له مسيرات ولا يملك قيداً بعد
+        months_with_salary = db.session.query(Salary.year, Salary.month).distinct().all()
+        accruals_created = 0
+        for (y, m) in months_with_salary:
+            ok, _, _ = _create_payroll_accrual_je(y, m)
+            if ok:
+                accruals_created += 1
+        db.session.commit()
+        msg = f'تم إنشاء {total_created} مسير رواتب'
+        if accruals_created:
+            msg += f' و{accruals_created} قيد استحقاق'
+        return jsonify({'ok': True, 'created': total_created, 'accruals_created': accruals_created, 'message': msg})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+def _create_payroll_accrual_je(year, month):
+    """إنشاء قيد استحقاق رواتب (مدين: مصروف رواتب، دائن: رواتب مستحقة) لشهر معيّن.
+    يُرجع: (True, total, entry_number) عند النجاح، أو (False, error_code, None) عند الخطأ، أو (False, 'already_posted', None) إذا كان القيد موجوداً."""
+    y, m = int(year), int(month)
+    kv_key = f'payroll_accrual_{y}_{m}'
+    if kv_get(kv_key) is not None:
+        return (False, 'already_posted', None)
+    if JournalEntry.query.filter_by(entry_number=f"JE-PR-{y}{m:02d}", status='posted').first():
+        return (False, 'already_posted', None)
+    total = float(db.session.query(func.coalesce(func.sum(Salary.total_salary), 0)).filter(Salary.year == y, Salary.month == m).scalar() or 0)
+    total = round(total, 2)
+    if total <= 0:
+        return (False, 'no_salaries_or_zero_total', None)
+    exp_code = SHORT_TO_NUMERIC.get('SAL_EXP', ('5310',))[0]
+    liab_code = SHORT_TO_NUMERIC.get('PAYROLL_LIAB', ('2121',))[0]
+    je = JournalEntry(entry_number=f"JE-PR-{y}{m:02d}", date=get_saudi_now().date(), branch_code=None, description=f"مسير رواتب {y}-{m:02d}", status='posted', total_debit=total, total_credit=total, created_by=getattr(current_user, 'id', None), posted_by=getattr(current_user, 'id', None))
+    db.session.add(je)
+    db.session.flush()
+    exp_acc = _account(exp_code, CHART_OF_ACCOUNTS.get(exp_code, {}).get('name', 'مصروف رواتب'), CHART_OF_ACCOUNTS.get(exp_code, {}).get('type', 'EXPENSE'))
+    liab_acc = _account(liab_code, CHART_OF_ACCOUNTS.get(liab_code, {}).get('name', 'رواتب مستحقة'), CHART_OF_ACCOUNTS.get(liab_code, {}).get('type', 'LIABILITY'))
+    if exp_acc:
+        db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total, credit=0.0, description=f"مسير رواتب {y}-{m:02d}", line_date=get_saudi_now().date()))
+    if liab_acc:
+        db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=liab_acc.id, debit=0.0, credit=total, description=f"مسير رواتب {y}-{m:02d}", line_date=get_saudi_now().date()))
+    kv_set(kv_key, int(je.id))
+    return (True, total, je.entry_number)
+
+
+@main.route('/api/payroll-post', methods=['POST'], endpoint='api_payroll_post')
+@login_required
+def api_payroll_post():
+    """ترحيل المسير: إنشاء قيد استحقاق (مصروف رواتب / رواتب مستحقة) لفترة الشهر."""
+    try:
+        year = request.form.get('year') or request.args.get('year')
+        month = request.form.get('month') or request.args.get('month')
+        if not year or not month:
+            y, m = get_saudi_now().year, get_saudi_now().month
+        else:
+            try:
+                y = int(year)
+                m = int(month)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'error': 'invalid_year_month'}), 400
+        ok, data, entry_number = _create_payroll_accrual_je(y, m)
+        if not ok:
+            if data == 'already_posted':
+                return jsonify({'ok': True, 'already_posted': True, 'message': 'مسير مرحّل مسبقاً'})
+            return jsonify({'ok': False, 'error': data}), 400
+        db.session.commit()
+        return jsonify({'ok': True, 'entry_number': entry_number, 'total': data})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@main.route('/api/employee-unpaid-months', methods=['GET'], endpoint='api_employee_unpaid_months')
+@login_required
+def api_employee_unpaid_months():
+    """قائمة أشهر المسيرات غير المدفوعة (أو المدفوعة جزئياً) لموظف معين — لاستخدامها في السداد الفردي.
+    فلترة: من/إلى (شهر واحد = من==إلى، عدة أشهر = من..إلى)."""
+    try:
+        emp_id = request.args.get('employee_id', type=int)
+        if not emp_id:
+            return jsonify({'ok': False, 'error': 'employee_id_required'}), 400
+        if not Employee.query.get(emp_id):
+            return jsonify({'ok': False, 'error': 'employee_not_found'}), 404
+        from_year = request.args.get('from_year', type=int)
+        from_month = request.args.get('from_month', type=int)
+        to_year = request.args.get('to_year', type=int)
+        to_month = request.args.get('to_month', type=int)
+        rows = Salary.query.filter_by(employee_id=emp_id).order_by(Salary.year.desc(), Salary.month.desc()).all()
+        out = []
+        def _month_key(y, m):
+            return int(y or 0) * 12 + int(m or 1)
+
+        for s in rows:
+            paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                .filter(Payment.invoice_type == 'salary', Payment.invoice_id == s.id).scalar() or 0)
+            total = float(s.total_salary or 0)
+            remaining = max(0.0, total - paid)
+            if remaining < 1e-6:
+                continue
+            y, m = int(s.year or 0), int(s.month or 1)
+            if from_year is not None and from_month is not None:
+                if _month_key(y, m) < _month_key(from_year, from_month):
+                    continue
+            if to_year is not None and to_month is not None:
+                if _month_key(y, m) > _month_key(to_year, to_month):
+                    continue
+            out.append({
+                'year': int(s.year or 0),
+                'month': int(s.month or 0),
+                'label': f'{s.year}-{s.month:02d}',
+                'label_ar': f'{int(s.month):02d}/{s.year}',
+                'total': round(total, 2),
+                'paid': round(paid, 2),
+                'remaining': round(remaining, 2),
+                'salary_id': int(s.id),
+            })
+        return jsonify({'ok': True, 'months': out})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@main.route('/api/employee-pay-months', methods=['POST'], endpoint='api_employee_pay_months')
+@login_required
+def api_employee_pay_months():
+    """سداد فردي لعدة أشهر لموظف واحد: دفع المتبقي بالكامل لكل شهر محدد (شهر = مسير)."""
+    try:
+        data = request.get_json(force=True, silent=True) or request.form
+        emp_id = data.get('employee_id')
+        try:
+            emp_id = int(emp_id)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'error': 'employee_id_required'}), 400
+        months = data.get('months') or []
+        if not isinstance(months, list) or not months:
+            return jsonify({'ok': False, 'error': 'months_required'}), 400
+        method = (data.get('payment_method') or 'cash').strip().lower()
+        date_s = (data.get('date') or get_saudi_now().strftime('%Y-%m-%d')).strip()
+        try:
+            pay_dt = _dt.strptime(date_s, '%Y-%m-%d').date()
+        except Exception:
+            pay_dt = get_saudi_now().date()
+        emp = Employee.query.get(emp_id)
+        if not emp:
+            return jsonify({'ok': False, 'error': 'employee_not_found'}), 404
+        pay_liab = _account(*SHORT_TO_NUMERIC.get('PAYROLL_LIAB', ('2121', 'رواتب مستحقة', 'LIABILITY')))
+        cash_acc = _pm_account(method)
+        created = 0
+        for m in months:
+            y, mo = m.get('year'), m.get('month')
+            try:
+                y, mo = int(y), int(mo)
+            except (TypeError, ValueError):
+                continue
+            row = Salary.query.filter_by(employee_id=emp_id, year=y, month=mo).first()
+            if not row:
+                continue
+            paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
+                .filter(Payment.invoice_type == 'salary', Payment.invoice_id == row.id).scalar() or 0)
+            total = float(row.total_salary or 0)
+            remaining = max(0.0, total - paid)
+            if remaining < 1e-6:
+                continue
+            p = Payment(invoice_id=row.id, invoice_type='salary', amount_paid=round(remaining, 2), payment_date=pay_dt, payment_method=method)
+            db.session.add(p)
+            db.session.flush()
+            je = JournalEntry(entry_number=f"JE-SALPAY-{row.id}", date=pay_dt, branch_code=None, description=f"Salary payment {y}-{mo:02d} EMP {emp_id}", status='posted', total_debit=round(remaining, 2), total_credit=round(remaining, 2), created_by=getattr(current_user, 'id', None), posted_by=getattr(current_user, 'id', None), salary_id=row.id)
+            db.session.add(je)
+            db.session.flush()
+            if pay_liab:
+                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=pay_liab.id, debit=round(remaining, 2), credit=0.0, description=f'سداد راتب {y}-{mo:02d}', line_date=pay_dt, employee_id=emp_id))
+            if cash_acc:
+                db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=round(remaining, 2), description='صندوق/بنك', line_date=pay_dt, employee_id=emp_id))
+            row.status = 'paid'
+            created += 1
+        db.session.commit()
+        return jsonify({'ok': True, 'paid_months': created})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
 
 @main.route('/api/advances', methods=['POST'], endpoint='api_advances')
 @login_required
@@ -13937,7 +7305,7 @@ def api_advances():
         try:
             from models import JournalEntry, JournalLine
             cash_acc = _pm_account(method)
-            emp_adv_acc = _account(SHORT_TO_NUMERIC['EMP_ADV'][0], CHART_OF_ACCOUNTS['1030']['name'], CHART_OF_ACCOUNTS['1030']['type'])
+            emp_adv_acc = _account(*SHORT_TO_NUMERIC['EMP_ADV'])
             je = JournalEntry(entry_number=f"JE-ADV-{emp_id}-{int(amount)}", date=dval, branch_code=None, description=f"Employee advance {emp_id}", status='posted', total_debit=amount, total_credit=amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
             db.session.add(je); db.session.flush()
             if emp_adv_acc:
@@ -13962,7 +7330,6 @@ def api_advances():
 @main.route('/api/employee-ledger', methods=['GET'], endpoint='api_employee_ledger')
 @login_required
 def api_employee_ledger():
-    return ('', 404)
     try:
         emp_id = request.args.get('emp_id', type=int)
         if not emp_id:
@@ -14193,18 +7560,28 @@ def api_chart_list():
         overrides = kv_get('chart_overrides', {}) or {}
         extra = kv_get('chart_accounts', []) or []
         out = []
-        for code, info in CHART_OF_ACCOUNTS.items():
-            parent_guess = ''
-            if code in ('1000','2000','3000','4000','5000','6000'): parent_guess=''
-            else:
+        coa = CHART_OF_ACCOUNTS
+        if not coa:
+            try:
+                from data.coa_new_tree import build_coa_dict
+                coa = build_coa_dict()
+            except Exception as e:
+                try:
+                    current_app.logger.warning("api_chart_list: coa_new_tree fallback failed: %s", e)
+                except Exception:
+                    pass
+        for code, info in (coa or {}).items():
+            # استخدام parent_account_code من الشجرة الجديدة إن وُجد، وإلا استخدام parent_guess كاحتياطي
+            parent_code = info.get('parent_account_code') or ''
+            if not parent_code and code not in ('1000','2000','3000','4000','5000','0006'):
                 t = (info.get('type') or '').upper()
-                parent_guess = {'ASSET':'1000','LIABILITY':'2000','EQUITY':'3000','REVENUE':'4000','EXPENSE':'5000','TAX':'6000','COGS':'5000'}.get(t,'')
+                parent_code = {'ASSET':'1000','LIABILITY':'2000','EQUITY':'3000','REVENUE':'4000','EXPENSE':'5000','TAX':'0006','COGS':'5000'}.get(t,'')
             out.append({
                 'code': code,
                 'name': info.get('name'),
                 'type': info.get('type'),
                 'enabled': bool((overrides.get(code) or {}).get('enabled', True)),
-                'parent': parent_guess,
+                'parent': parent_code,
                 'balance': 0.0,
                 'notes': ''
             })
@@ -14231,7 +7608,7 @@ def api_chart_list():
                     'name': a.name,
                     'type': (a.type or 'EXPENSE'),
                     'enabled': True,
-                    'parent': ({'ASSET':'1000','LIABILITY':'2000','EQUITY':'3000','REVENUE':'4000','EXPENSE':'5000','TAX':'6000','COGS':'5000'}).get((a.type or '').upper(), ''),
+                    'parent': ({'ASSET':'1000','LIABILITY':'2000','EQUITY':'3000','REVENUE':'4000','EXPENSE':'5000','TAX':'0006','COGS':'5000'}).get((a.type or '').upper(), ''),
                     'balance': 0.0,
                     'notes': ''
                 })
@@ -14300,7 +7677,7 @@ def api_chart_opening_balance():
             acc = Account(code=code, name=info.get('name'), type=info.get('type'))
             db.session.add(acc); db.session.flush()
         # Ensure offset account (Owners’ Equity) exists
-        off_code = '3000'
+        off_code = '3110'
         off = Account.query.filter(Account.code == off_code).first()
         if not off:
             info = CHART_OF_ACCOUNTS.get(off_code, {'name':'حقوق الملكية','type':'EQUITY'})
@@ -14349,7 +7726,7 @@ def api_vat_net():
         q_out = db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0)).\
             join(Account, JournalLine.account_id == Account.id).\
             join(JournalEntry, JournalLine.journal_id == JournalEntry.id).\
-            filter(Account.code == '2060', JournalLine.line_date.between(sd, ed))
+            filter(Account.code == '2141', JournalLine.line_date.between(sd, ed))
         q_in = db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0)).\
             join(Account, JournalLine.account_id == Account.id).\
             join(JournalEntry, JournalLine.journal_id == JournalEntry.id).\
@@ -14361,38 +7738,6 @@ def api_vat_net():
         vat_in = float(q_in.scalar() or 0.0)
         net = round(vat_out - vat_in, 2)
         return jsonify({'ok': True, 'start_date': sd.isoformat(), 'end_date': ed.isoformat(), 'branch': branch or 'all', 'out': vat_out, 'in': vat_in, 'net': net})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@main.route('/api/sales/cash_total', methods=['GET'], endpoint='api_sales_cash_total')
-@login_required
-def api_sales_cash_total():
-    try:
-        start_arg = (request.args.get('start_date') or '').strip()
-        end_arg = (request.args.get('end_date') or '').strip()
-        branch = (request.args.get('branch') or '').strip()
-        from datetime import datetime as _dt
-        today = get_saudi_now().date()
-        if start_arg and end_arg:
-            try:
-                sd = _dt.strptime(start_arg, '%Y-%m-%d').date()
-                ed = _dt.strptime(end_arg, '%Y-%m-%d').date()
-            except Exception:
-                sd = today.replace(day=1)
-                ed = today
-        else:
-            sd = today.replace(day=1)
-            ed = today
-        from models import Payment, SalesInvoice
-        q = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).\
-            join(SalesInvoice, Payment.invoice_id == SalesInvoice.id).\
-            filter(Payment.invoice_type == 'sales', Payment.payment_method == 'CASH')
-        # Payment.payment_date may be nullable; fallback to SalesInvoice.date
-        q = q.filter(or_(Payment.payment_date.between(sd, ed), SalesInvoice.date.between(sd, ed)))
-        if branch in ('china_town','place_india'):
-            q = q.filter(SalesInvoice.branch == branch)
-        amt = float(q.scalar() or 0.0)
-        return jsonify({'ok': True, 'start_date': sd.isoformat(), 'end_date': ed.isoformat(), 'branch': branch or 'all', 'amount': round(amt, 2)})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -14422,30 +7767,15 @@ def api_expense_proof():
             inv_date = _dt.strptime(date_str, '%Y-%m-%d').date() if date_str else get_saudi_now().date()
         except Exception:
             inv_date = get_saudi_now().date()
-        inv_no = f"EXP-{int(get_saudi_now().timestamp())}"
-        tax_amt = round(amount * 0.15, 2) if (apply_vat and scenario in ('maintenance','services','service','prepaid_rent','rent')) else 0.0
-        total_final = round(amount + tax_amt, 2)
-        inv = ExpenseInvoice(
-            invoice_number=inv_no,
-            date=inv_date,
-            payment_method=pm.upper(),
-            total_before_tax=amount,
-            tax_amount=tax_amt,
-            discount_amount=0.0,
-            total_after_tax_discount=total_final,
-            status='paid',
-            user_id=getattr(current_user,'id',None)
-        )
-        db.session.add(inv); db.session.flush()
         purchase_category = (data.get('purchase_category') or '').strip()
         purchase_item = (data.get('purchase_item') or '').strip()
         desc = {
-            'salaries':'Salaries Payment / سداد رواتب',
-            'vat':'VAT Settlement / سداد ضريبة القيمة المضافة',
-            'purchase_no_vat':'Operating Purchases (No VAT) / مشتريات تشغيل بدون ضريبة',
-            'maintenance':'Maintenance & Services / صيانة وخدمات',
-            'prepaid_rent':'Prepaid Rent / إيجار مقدم',
-            'cash_deposit':'Bank Cash Deposit / إيداع نقدي بالبنك'
+            'salaries': 'Salaries Payment / سداد رواتب',
+            'vat': 'VAT Settlement / سداد ضريبة القيمة المضافة',
+            'purchase_no_vat': 'Operating Purchases (No VAT) / مشتريات تشغيل بدون ضريبة',
+            'maintenance': 'Maintenance & Services / صيانة وخدمات',
+            'prepaid_rent': 'Prepaid Rent / إيجار مقدم',
+            'cash_deposit': 'Bank Cash Deposit / إيداع نقدي بالبنك',
         }.get(scenario, 'Expense / مصروف')
         if scenario == 'purchase_no_vat':
             extra = []
@@ -14455,59 +7785,143 @@ def api_expense_proof():
                 extra.append(purchase_item)
             if extra:
                 desc = f"{desc} — " + "; ".join(extra)
-        item = ExpenseInvoiceItem(invoice_id=inv.id, description=desc, quantity=1, price_before_tax=amount, tax=tax_amt, discount=0.0, total_price=total_final)
-        db.session.add(item); db.session.flush()
-        je = JournalEntry(entry_number=f"JE-EXP-{inv_no}", date=inv_date, branch_code=branch, description=desc, status='posted', total_debit=total_final, total_credit=total_final, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
-        db.session.add(je); db.session.flush()
+
         def acc(code, name, typ):
             return _account(code, name, typ)
         cash_acc = _pm_account(pm)
-        if scenario == 'salaries':
-            a = acc('5310', CHART_OF_ACCOUNTS['5310']['name'], 'EXPENSE')
-            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
-            if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
-        elif scenario == 'vat':
-            a = acc('2050', CHART_OF_ACCOUNTS['2050']['name'], 'LIABILITY')
-            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
-            if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
-        elif scenario == 'purchase_no_vat':
-            a = acc('1210', CHART_OF_ACCOUNTS['1210']['name'], 'ASSET')
-            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
-            if pm == 'creditor':
-                ar = acc('2110', CHART_OF_ACCOUNTS['2110']['name'], 'LIABILITY')
-                if ar: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ar.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+
+        # عمليات قيد فقط (لا فاتورة): سداد رواتب، سداد VAT، إيداع نقدي
+        ops_je_only = scenario in ('salaries', 'vat', 'cash_deposit')
+        if ops_je_only:
+            ts = int(get_saudi_now().timestamp())
+            total = round(amount + (bank_fee if scenario == 'cash_deposit' else 0.0), 2)
+            je = JournalEntry(
+                entry_number=f"JE-OPS-{ts}",
+                date=inv_date,
+                branch_code=branch,
+                description=desc,
+                status='posted',
+                total_debit=total,
+                total_credit=total,
+                created_by=getattr(current_user, 'id', None),
+                posted_by=getattr(current_user, 'id', None),
+            )
+            db.session.add(je)
+            db.session.flush()
+            if scenario == 'salaries':
+                a = acc('5310', CHART_OF_ACCOUNTS.get('5310', {}).get('name', 'رواتب وأجور'), 'EXPENSE')
+                if a:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+                if cash_acc:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+            elif scenario == 'vat':
+                a = acc('2141', CHART_OF_ACCOUNTS.get('2141', {'name': 'ضريبة القيمة المضافة – مستحقة', 'type': 'LIABILITY'}).get('name', 'ضريبة القيمة المضافة – مستحقة'), 'LIABILITY')
+                if a:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+                if cash_acc:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
             else:
-                if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+                assert scenario == 'cash_deposit'
+                b = acc('1121', CHART_OF_ACCOUNTS.get('1121', {}).get('name', 'بنك'), 'ASSET')
+                c = acc('1111', CHART_OF_ACCOUNTS.get('1111', {}).get('name', 'صندوق رئيسي'), 'ASSET')
+                ln = 1
+                if b:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=b.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+                    ln += 1
+                if c:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=c.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+                    ln += 1
+                if bank_fee > 0 and b:
+                    f = acc('5610', CHART_OF_ACCOUNTS.get('5610', {}).get('name', 'مصروفات بنكية'), 'EXPENSE')
+                    if f:
+                        db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=f.id, debit=bank_fee, credit=0.0, description=desc, line_date=inv_date))
+                        ln += 1
+                    db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=b.id, debit=0.0, credit=bank_fee, description=desc, line_date=inv_date))
+            db.session.commit()
+            return jsonify({'ok': True, 'journal_only': True, 'entry_number': je.entry_number})
+
+        # مصروفات (فاتورة + قيد): مشتريات تشغيل، صيانة، إيجار مقدم، وغيرها
+        tax_amt = round(amount * 0.15, 2) if (apply_vat and scenario in ('maintenance', 'services', 'service', 'prepaid_rent', 'rent')) else 0.0
+        total_final = round(amount + tax_amt, 2)
+        inv_no = f"EXP-{int(get_saudi_now().timestamp())}"
+        inv = ExpenseInvoice(
+            invoice_number=inv_no,
+            date=inv_date,
+            payment_method=pm.upper(),
+            total_before_tax=amount,
+            tax_amount=tax_amt,
+            discount_amount=0.0,
+            total_after_tax_discount=total_final,
+            status='paid',
+            user_id=getattr(current_user, 'id', None),
+        )
+        db.session.add(inv)
+        db.session.flush()
+        item = ExpenseInvoiceItem(
+            invoice_id=inv.id,
+            description=desc,
+            quantity=1,
+            price_before_tax=amount,
+            tax=tax_amt,
+            discount=0.0,
+            total_price=total_final,
+        )
+        db.session.add(item)
+        db.session.flush()
+        je = JournalEntry(
+            entry_number=f"JE-EXP-{inv_no}",
+            date=inv_date,
+            branch_code=branch,
+            description=desc,
+            status='posted',
+            total_debit=total_final,
+            total_credit=total_final,
+            created_by=getattr(current_user, 'id', None),
+            posted_by=getattr(current_user, 'id', None),
+        )
+        db.session.add(je)
+        db.session.flush()
+        if scenario == 'purchase_no_vat':
+            a = acc('1161', CHART_OF_ACCOUNTS.get('1161', {}).get('name', 'مخزون بضائع'), 'ASSET')
+            if a:
+                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+            if pm == 'creditor':
+                ar = acc('2111', CHART_OF_ACCOUNTS.get('2111', {}).get('name', 'موردون'), 'LIABILITY')
+                if ar:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ar.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+            else:
+                if cash_acc:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
         elif scenario == 'maintenance':
-            a = acc('5150', CHART_OF_ACCOUNTS['5150']['name'], 'EXPENSE')
             ln = 1
-            if a: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date)); ln += 1
+            a = acc('5240', CHART_OF_ACCOUNTS.get('5240', {}).get('name', 'مصروف صيانة'), 'EXPENSE')
+            if a:
+                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+                ln += 1
             if apply_vat:
-                v = acc('1100', CHART_OF_ACCOUNTS['1100']['name'], 'ASSET')
-                if v and tax_amt>0: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=v.id, debit=tax_amt, credit=0.0, description=desc, line_date=inv_date)); ln += 1
+                v = acc('1170', CHART_OF_ACCOUNTS.get('1170', {}).get('name', 'ضريبة القيمة المضافة – مدخلات'), 'ASSET')
+                if v and tax_amt > 0:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=v.id, debit=tax_amt, credit=0.0, description=desc, line_date=inv_date))
+                    ln += 1
             if pm == 'creditor':
-                ar = acc('2110', CHART_OF_ACCOUNTS['2110']['name'], 'LIABILITY')
-                if ar: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ar.id, debit=0.0, credit=total_final, description=desc, line_date=inv_date))
+                ar = acc('2111', CHART_OF_ACCOUNTS.get('2111', {}).get('name', 'موردون'), 'LIABILITY')
+                if ar:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ar.id, debit=0.0, credit=total_final, description=desc, line_date=inv_date))
             else:
-                if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=cash_acc.id, debit=0.0, credit=total_final, description=desc, line_date=inv_date))
+                if cash_acc:
+                    db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=cash_acc.id, debit=0.0, credit=total_final, description=desc, line_date=inv_date))
         elif scenario == 'prepaid_rent':
-            a = acc('1310', CHART_OF_ACCOUNTS['1310']['name'], 'ASSET')
-            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
-            if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
-        elif scenario == 'cash_deposit':
-            b = acc('1050', CHART_OF_ACCOUNTS['1050']['name'], 'ASSET')
-            c = acc('1040', CHART_OF_ACCOUNTS['1040']['name'], 'ASSET')
-            ln = 1
-            if b: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=b.id, debit=amount, credit=0.0, description=desc, line_date=inv_date)); ln += 1
-            if c: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=c.id, debit=0.0, credit=amount, description=desc, line_date=inv_date)); ln += 1
-            if bank_fee>0 and b:
-                f = acc('5090', CHART_OF_ACCOUNTS['5090']['name'], 'EXPENSE')
-                if f: db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=f.id, debit=bank_fee, credit=0.0, description=desc, line_date=inv_date)); ln += 1
-                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=b.id, debit=0.0, credit=bank_fee, description=desc, line_date=inv_date)); ln += 1
+            a = acc('1142', CHART_OF_ACCOUNTS.get('1142', {}).get('name', 'ذمم مدينة أخرى'), 'ASSET')
+            if a:
+                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+            if cash_acc:
+                db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
         else:
-            a = acc('5100', CHART_OF_ACCOUNTS['5100']['name'], 'EXPENSE')
-            if a: db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
-            if cash_acc: db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
+            a = acc('5410', CHART_OF_ACCOUNTS.get('5410', {}).get('name', 'مصروفات حكومية ورسوم'), 'EXPENSE')
+            if a:
+                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=a.id, debit=amount, credit=0.0, description=desc, line_date=inv_date))
+            if cash_acc:
+                db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description=desc, line_date=inv_date))
         db.session.commit()
         return jsonify({'ok': True, 'invoice_number': inv_no})
     except Exception as e:
@@ -14791,7 +8205,7 @@ def api_ledger_create():
         dval = _dt.strptime(date_s, '%Y-%m-%d').date()
         cash_acc = _pm_account(method)
         if typ == 'advance':
-            emp_adv_acc = _account(SHORT_TO_NUMERIC['EMP_ADV'][0], CHART_OF_ACCOUNTS['1030']['name'], CHART_OF_ACCOUNTS['1030']['type'])
+            emp_adv_acc = _account(*SHORT_TO_NUMERIC['EMP_ADV'])
             je = JournalEntry(entry_number=f"JE-LED-ADV-{emp_id}-{int(amount)}", date=dval, branch_code=None, description=desc, status='posted', total_debit=amount, total_credit=amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
             db.session.add(je); db.session.flush()
             if emp_adv_acc:
@@ -14799,7 +8213,7 @@ def api_ledger_create():
             if cash_acc:
                 db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cash_acc.id, debit=0.0, credit=amount, description='Cash/Bank', line_date=dval, employee_id=emp_id))
         elif typ == 'deduction':
-            ded_acc = _account(SHORT_TO_NUMERIC['SAL_DED'][0], CHART_OF_ACCOUNTS['5330']['name'], CHART_OF_ACCOUNTS['5330']['type'])
+            ded_acc = _account(SHORT_TO_NUMERIC['SAL_DED'][0], CHART_OF_ACCOUNTS.get('5310', {'name':'رواتب وأجور','type':'EXPENSE'}).get('name','رواتب وأجور'), CHART_OF_ACCOUNTS.get('5310', {'name':'رواتب وأجور','type':'EXPENSE'}).get('type','EXPENSE'))
             je = JournalEntry(entry_number=f"JE-LED-DED-{emp_id}-{int(amount)}", date=dval, branch_code=None, description=desc, status='posted', total_debit=amount, total_credit=amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None))
             db.session.add(je); db.session.flush()
             if cash_acc:
@@ -14824,101 +8238,6 @@ def api_ledger_delete(jeid: int):
         db.session.rollback(); return jsonify({'ok': False, 'error': str(e)}), 400
 
 
-@main.route('/api/sales/pay', methods=['POST'], endpoint='api_sales_pay')
-@login_required
-def api_sales_pay():
-    try:
-        from models import SalesInvoice, Payment
-        from sqlalchemy import func
-        payload = request.get_json(silent=True) or {}
-        invoice_id = request.form.get('invoice_id') or payload.get('invoice_id')
-        amount = request.form.get('amount') or payload.get('amount')
-        method = (request.form.get('payment_method') or payload.get('payment_method') or 'CASH').strip().upper()
-        try:
-            inv_id = int(invoice_id)
-            amt = float(amount or 0)
-        except Exception:
-            return jsonify({'ok': False, 'error': 'invalid_parameters'}), 400
-        if amt <= 0:
-            return jsonify({'ok': False, 'error': 'amount_must_be_positive'}), 400
-        inv = SalesInvoice.query.get(inv_id)
-        if not inv:
-            return jsonify({'ok': False, 'error': 'invoice_not_found'}), 404
-        total = float(getattr(inv, 'total_after_tax_discount', 0.0) or 0.0)
-        paid_before = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-                           .filter(Payment.invoice_type == 'sales', Payment.invoice_id == inv.id)
-                           .scalar() or 0.0)
-        remaining = max(total - paid_before, 0.0)
-        pay_amount = amt if amt < remaining else remaining
-        if pay_amount <= 0:
-            try:
-                inv.status = 'paid'
-                db.session.commit()
-            except Exception:
-                try: db.session.rollback()
-                except Exception: pass
-            return jsonify({'ok': True, 'paid': paid_before, 'remaining': 0.0, 'status': getattr(inv,'status','paid')})
-        try:
-            db.session.add(Payment(invoice_id=inv.id, invoice_type='sales', amount_paid=pay_amount, payment_method=method, payment_date=get_saudi_now()))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            return jsonify({'ok': False, 'error': 'db_error'}), 500
-        paid_after = paid_before + pay_amount
-        try:
-            if paid_after >= total and total > 0:
-                inv.status = 'paid'
-            elif paid_after > 0:
-                inv.status = 'partial'
-            else:
-                inv.status = 'unpaid'
-            db.session.commit()
-        except Exception:
-            try: db.session.rollback()
-            except Exception: pass
-        try:
-            cash_acc = _pm_account(method)
-            _post_ledger(inv.date, 'AR', 'Accounts Receivable', 'asset', 0.0, pay_amount, f'PAY SALE {inv.invoice_number}')
-            if cash_acc:
-                _post_ledger(inv.date, cash_acc.code, cash_acc.name, 'asset', pay_amount, 0.0, f'PAY SALE {inv.invoice_number}')
-        except Exception:
-            pass
-        try:
-            # Create Journal Entry for the receipt
-            from models import JournalEntry, JournalLine
-            # Determine AR account by platform group
-            grp = _platform_group(getattr(inv, 'customer_name', '') or '')
-            ar_code = '1130' if grp == 'keeta' else ('1140' if grp == 'hunger' else '1020')
-            ar_acc = _account(ar_code, CHART_OF_ACCOUNTS.get(ar_code, {'name':'Accounts Receivable','type':'ASSET'}).get('name','Accounts Receivable'), 'ASSET')
-            ca = _pm_account(method)
-            # Unique entry number
-            base_en = f"JE-PAY-SAL-{inv.invoice_number}"
-            en = base_en
-            i = 2
-            from sqlalchemy import func
-            while JournalEntry.query.filter(func.lower(JournalEntry.entry_number) == en.lower()).first():
-                en = f"{base_en}-{i}"
-                i += 1
-            je = JournalEntry(entry_number=en, date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=getattr(inv,'branch',None), description=f"PAY SALE {inv.invoice_number}", status='posted', total_debit=pay_amount, total_credit=pay_amount, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=int(inv.id), invoice_type='sales_payment')
-            db.session.add(je); db.session.flush()
-            ln = 1
-            if ca:
-                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ca.id, debit=pay_amount, credit=0.0, description=f"Receipt {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
-            if ar_acc:
-                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ar_acc.id, debit=0.0, credit=pay_amount, description=f"Clear AR {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
-            db.session.commit()
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-        return jsonify({'ok': True, 'invoice_id': inv.id, 'paid': paid_after, 'remaining': max(total - paid_after, 0.0), 'status': getattr(inv,'status','paid')})
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return jsonify({'ok': False, 'error': str(e)}), 500
 @main.route('/api/employee/settings2', methods=['GET', 'POST'], endpoint='api_employee_settings2')
 @login_required
 def api_employee_settings():

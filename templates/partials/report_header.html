@@ -1,0 +1,19 @@
+{# Unified report header: company name, tax number, settings — supports get_locale() #}
+{% set company_display = (company_name or '') | trim %}
+{% if not company_display or company_display == 'Company' %}
+  {% set company_display = _('Restaurant') %}
+{% endif %}
+<div class="report-header-unified border-bottom pb-3 mb-3 report-print-header" style="border-color: #e5e7eb !important;">
+  <div class="d-flex flex-wrap align-items-center gap-3">
+    {% if show_logo and logo_url %}
+    <img src="{{ logo_url }}" alt="logo" class="report-header-logo" style="height: 52px; max-width: 160px; object-fit: contain;" />
+    {% endif %}
+    <div>
+      <h2 class="report-header-company mb-1" style="font-size: 1.25rem; font-weight: 700; color: #1f2937; margin: 0;">{{ company_display }}</h2>
+      {% if tax_number %}<div class="report-header-tax small text-muted">{{ _('Tax number') }}: {{ tax_number }}</div>{% endif %}
+      {% if address %}<div class="report-header-address small text-muted">{{ address }}</div>{% endif %}
+      {% if phone %}<div class="report-header-phone small text-muted">{{ _('Phone') }}: {{ phone }}</div>{% endif %}
+      {% if email %}<div class="report-header-email small text-muted">{{ _('Email') }}: {{ email }}</div>{% endif %}
+    </div>
+  </div>
+</div>

@@ -1,35 +1,43 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Menu / المنيو') }}{% endblock %}
-{% block content %}
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">📖 {{ _('Menu / المنيو') }}</h3>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">🏠 {{ _('Dashboard / لوحة التحكم') }}</a>
 {% set back_url = url_for('main.dashboard') %}
-
+{% block title %}{{ _('Menu') }}{% endblock %}
+{% block content %}
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-book"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Menu') }}</h1>
+      <span class="ops-subtitle">{{ _('Manage categories and menu items') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('meals') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-utensils me-1"></i>{{ _('Products & Cost') }}</a>
+    </div>
   </div>
 
-  <div class="card mb-3"><div class="card-body">
-    <form method="POST" class="row g-2 align-items-end" action="{{ url_for('main.menu') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <div class="col-md-6">
-        <label class="form-label">{{ _('Category Name / اسم القسم') }}</label>
-        <input name="name" class="form-control" required>
-      </div>
-      <div class="col-md-2">
-        <button class="btn btn-success w-100">{{ _('Add Category / إضافة قسم') }}</button>
-      </div>
-      <div class="col-md-4">
-        <a class="btn btn-outline-secondary w-100" href="{{ url_for('meals') }}">{{ _('Go to Products & Cost / شاشة المنتجات والتكاليف') }}</a>
-      </div>
-    </form>
-  </div></div>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Add Category') }}</div>
+    <div class="ops-form-body">
+      <form method="POST" class="row g-3 align-items-end" action="{{ url_for('main.menu') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="col-md-6">
+          <label class="form-label">{{ _('Category Name') }}</label>
+          <input name="name" class="form-control" required>
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-primary w-100"><i class="fa-solid fa-plus me-1"></i>{{ _('Add Category') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-  <div class="card"><div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-striped">
-        <thead><tr>
-          <th>#</th><th>{{ _('Name / الاسم') }}</th><th>{{ _('Status / الحالة') }}</th><th>{{ _('Actions / الإجراءات') }}</th>
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('Categories') }}</div>
+    <div class="ops-form-body">
+      <div class="screen-table-wrap">
+        <table class="table screen-table">
+          <thead><tr>
+          <th>#</th><th>{{ _('Name') }}</th><th>{{ _('Status') }}</th><th>{{ _('Actions') }}</th>
         </tr></thead>
         <tbody>
           {% for c in categories %}
@@ -38,10 +46,10 @@
             <td>{{ c.name }}</td>
             <td><span class="badge bg-{{ 'success' if c.active else 'secondary' }}">{{ _('Active') if c.active else _('Inactive') }}</span></td>
             <td>
-              <a class="btn btn-sm btn-outline-secondary me-1" href="{{ url_for('menu', cat_id=c.id) }}">{{ _('Manage Items / إدارة الأصناف') }}</a>
-              <form method="post" action="{{ url_for('menu_toggle', cat_id=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Confirm toggle? / تأكيد التبديل؟') }}')">
+              <a class="btn btn-sm btn-outline-secondary me-1" href="{{ url_for('menu', cat_id=c.id) }}">{{ _('Manage Items') }}</a>
+              <form method="post" action="{{ url_for('menu_toggle', cat_id=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Confirm toggle?') }}')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-sm btn-outline-primary">{{ _('Toggle / تبديل') }}</button>
+                <button class="btn btn-sm btn-outline-primary">{{ _('Toggle') }}</button>
               </form>
             </td>
           </tr>
@@ -59,7 +67,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <input type="hidden" name="section_id" value="{{ selected_category.id }}"/>
                     <div class="col-md-6">
-                      <label class="form-label">{{ _('Meal / الوجبة') }}</label>
+                      <label class="form-label">{{ _('Meal') }}</label>
                       <select name="meal_id" class="form-select">
                         {% for m in meals %}
                         <option value="{{ m.id }}">{{ m.display_name }}</option>
@@ -67,7 +75,7 @@
                       </select>
                     </div>
                     <div class="col-md-2">
-                      <label class="form-label">{{ _('Price override / سعر مخصص') }}</label>
+                      <label class="form-label">{{ _('Price override') }}</label>
                       <input type="number" step="0.01" name="price_override" class="form-control" placeholder="{{ _('Optional') }}">
                     </div>
                     <div class="col-md-2">
@@ -75,7 +83,7 @@
                       <input type="number" name="display_order" class="form-control">
                     </div>
                     <div class="col-md-2">
-                      <button class="btn btn-success w-100">{{ _('Add Item / إضافة صنف') }}</button>
+                      <button class="btn btn-success w-100">{{ _('Add Item') }}</button>
                     </div>
                   </form>
 
@@ -100,14 +108,14 @@
                           </td>
                           <td></td>
                           <td class="text-nowrap">
-                            <form method="post" action="{{ url_for('menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Remove item? / حذف العنصر؟') }}')">
+                            <form method="post" action="{{ url_for('menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Remove item?') }}')">
                               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                               <button class="btn btn-outline-danger btn-sm">{{ _('Delete') }}</button>
                             </form>
                           </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="5" class="text-center">{{ _('No items / لا توجد عناصر') }}</td></tr>
+                        <tr><td colspan="5" class="text-center">{{ _('No items') }}</td></tr>
                         {% endfor %}
                       </tbody>
                     </table>
@@ -117,7 +125,7 @@
             {% endif %}
 
           {% else %}
-          <tr><td colspan="4" class="text-center">{{ _('No categories / لا توجد أقسام') }}</td></tr>
+          <tr><td colspan="4" class="text-center">{{ _('No categories') }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -134,7 +142,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <input type="hidden" name="section_id" value="{{ selected_category.id }}"/>
       <div class="col-md-6">
-        <label class="form-label">{{ _('Meal / الوجبة') }}</label>
+        <label class="form-label">{{ _('Meal') }}</label>
         <select name="meal_id" class="form-select">
           {% for m in meals %}
           <option value="{{ m.id }}">{{ m.display_name }}</option>
@@ -142,7 +150,7 @@
         </select>
       </div>
       <div class="col-md-2">
-        <label class="form-label">{{ _('Price override / سعر مخصص') }}</label>
+        <label class="form-label">{{ _('Price override') }}</label>
         <input type="number" step="0.01" name="price_override" class="form-control" placeholder="{{ _('Optional') }}">
       </div>
       <div class="col-md-2">
@@ -150,7 +158,7 @@
         <input type="number" name="display_order" class="form-control">
       </div>
       <div class="col-md-2">
-        <button class="btn btn-success w-100">{{ _('Add Item / إضافة صنف') }}</button>
+        <button class="btn btn-success w-100">{{ _('Add Item') }}</button>
       </div>
     </form>
 
@@ -175,23 +183,20 @@
             </td>
             <td></td>
             <td class="text-nowrap">
-              <form method="post" action="{{ url_for('menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Remove item? / حذف العنصر؟') }}')">
+              <form method="post" action="{{ url_for('menu_item_delete', item_id=it.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Remove item?') }}')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button class="btn btn-outline-danger">{{ _('Delete') }}</button>
               </form>
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center">{{ _('No items / لا توجد عناصر') }}</td></tr>
+          <tr><td colspan="5" class="text-center">{{ _('No items') }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div></div>
   {% endif %}
-      </table>
-    </div>
-  </div></div>
 </div>
 {% endblock %}
 

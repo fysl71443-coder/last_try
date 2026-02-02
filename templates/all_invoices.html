@@ -1,93 +1,91 @@
 {% extends 'base.html' %}
-{% block title %}All Invoices{% endblock %}
+{% set back_url = url_for('main.dashboard') %}
+{% block title %}{{ _('All Invoices') }}{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <h3 class="mb-3">All Invoices</h3>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-file-invoice"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('All Invoices') }}</h1>
+      <span class="ops-subtitle">{{ _('View all invoices by branch') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+    </div>
+  </div>
 
-  <div class="table-responsive">
-    <table class="table table-bordered table-striped table-hover align-middle">
-      <thead>
-        <tr>
-          <th>Branch</th>
-          <th>Date</th>
-          <th>Invoice No.</th>
-          <th class="text-end">Amount</th>
-          <th class="text-end">Discount</th>
-          <th class="text-end">Tax</th>
-          <th class="text-end">Total</th>
-          <th>Payment</th>
-        </tr>
-      </thead>
-      <tbody id="allinv-body"></tbody>
-      <tfoot id="allinv-summary"></tfoot>
-    </table>
+  <div class="ops-body ops-body-no-sidebar">
+    <main class="ops-main">
+      <div class="ops-form-card mt-0">
+        <div class="ops-form-head">{{ _('Invoices list') }}</div>
+        <div class="ops-form-body p-0">
+          <div class="table-responsive screen-table-wrap">
+            <table class="table table-hover align-middle screen-table mb-0">
+              <thead>
+                <tr>
+                  <th>{{ _('Branch') }}</th>
+                  <th>{{ _('Date') }}</th>
+                  <th>{{ _('Invoice No.') }}</th>
+                  <th class="text-end">{{ _('Amount') }}</th>
+                  <th class="text-end">{{ _('Discount') }}</th>
+                  <th class="text-end">{{ _('Tax') }}</th>
+                  <th class="text-end">{{ _('Total') }}</th>
+                  <th>{{ _('Payment') }}</th>
+                </tr>
+              </thead>
+              <tbody id="allinv-body"></tbody>
+              <tfoot id="allinv-summary"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
   </div>
 </div>
 
 <script>
 (function(){
   function n2(x){ try{return Number(x||0).toFixed(2);}catch(e){return '0.00';} }
-  const currency = (window.settings && window.settings.currency) || 'SAR';
+  var currency = (window.settings && window.settings.currency) || 'SAR';
   fetch('/api/all-invoices', {credentials:'same-origin'})
-    .then(r=>r.json())
-    .then(data=>{
-      const body = document.getElementById('allinv-body');
-      const tfoot = document.getElementById('allinv-summary');
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var body = document.getElementById('allinv-body');
+      var tfoot = document.getElementById('allinv-summary');
       if(!body||!tfoot) return;
       body.innerHTML=''; tfoot.innerHTML='';
 
-      const rows = (data.invoices||[]).slice().sort((a,b)=> (a.branch||'').localeCompare(b.branch||'') || (b.date||'').localeCompare(a.date||''));
-      let currentBranch = null;
-      rows.forEach(r=>{
+      var rows = (data.invoices||[]).slice().sort(function(a,b){ return (a.branch||'').localeCompare(b.branch||'') || (b.date||'').localeCompare(a.date||''); });
+      var currentBranch = null;
+      rows.forEach(function(r){
         if(r.branch !== currentBranch){
           currentBranch = r.branch;
-          const hdr = document.createElement('tr');
+          var hdr = document.createElement('tr');
           hdr.className = 'table-info fw-bold';
-          hdr.innerHTML = `<td colspan="8">Branch: ${currentBranch||''}</td>`;
+          hdr.innerHTML = '<td colspan="8">' + (currentBranch ? ('Branch: ' + currentBranch) : '') + '</td>';
           body.appendChild(hdr);
         }
-        const tr = document.createElement('tr');
-        const amt = Number(r.amount || 0);
-        tr.innerHTML = `
-          <td>${r.branch||''}</td>
-          <td>${r.date||''}</td>
-          <td>${r.invoice_number||''}</td>
-          <td class="text-end">${n2(amt)} ${currency}</td>
-          <td class="text-end">${n2(r.discount)} ${currency}</td>
-          <td class="text-end">${n2(r.vat)} ${currency}</td>
-          <td class="text-end">${n2(r.total)} ${currency}</td>
-          <td>${r.payment_method||''}</td>`;
+        var tr = document.createElement('tr');
+        var amt = Number(r.amount || 0);
+        tr.innerHTML = '<td>'+(r.branch||'')+'</td><td>'+(r.date||'')+'</td><td>'+(r.invoice_number||'')+'</td><td class="text-end">'+n2(amt)+' '+currency+'</td><td class="text-end">'+n2(r.discount)+' '+currency+'</td><td class="text-end">'+n2(r.vat)+' '+currency+'</td><td class="text-end">'+n2(r.total)+' '+currency+'</td><td>'+(r.payment_method||'')+'</td>';
         body.appendChild(tr);
       });
 
-      const btot = data.branch_totals||{};
-      Object.keys(btot).sort().forEach(b=>{
-        const t = btot[b]||{amount:0,discount:0,vat:0,total:0};
-        const bAmount = Number(t.amount || 0);
-        const tr = document.createElement('tr'); tr.className = 'table-warning fw-bold';
-        tr.innerHTML = `
-          <td colspan="3" class="text-end">Branch Totals (${b}):</td>
-          <td class="text-end">${n2(bAmount)} ${currency}</td>
-          <td class="text-end">${n2(t.discount)} ${currency}</td>
-          <td class="text-end">${n2(t.vat)} ${currency}</td>
-          <td class="text-end">${n2(t.total)} ${currency}</td>
-          <td></td>`;
+      var btot = data.branch_totals||{};
+      Object.keys(btot).sort().forEach(function(b){
+        var t = btot[b]||{amount:0,discount:0,vat:0,total:0};
+        var bAmount = Number(t.amount || 0);
+        var tr = document.createElement('tr'); tr.className = 'table-warning fw-bold';
+        tr.innerHTML = '<td colspan="3" class="text-end">Branch Totals ('+b+'):</td><td class="text-end">'+n2(bAmount)+' '+currency+'</td><td class="text-end">'+n2(t.discount)+' '+currency+'</td><td class="text-end">'+n2(t.vat)+' '+currency+'</td><td class="text-end">'+n2(t.total)+' '+currency+'</td><td></td>';
         tfoot.appendChild(tr);
       });
-      const overall = data.overall_totals || {amount:0,discount:0,vat:0,total:0};
-      const oAmount = Number(overall.amount || 0);
-      const tro = document.createElement('tr'); tro.className = 'table-secondary fw-bold';
-      tro.innerHTML = `
-        <td colspan="3" class="text-end">Overall Totals:</td>
-        <td class="text-end">${n2(oAmount)} ${currency}</td>
-        <td class="text-end">${n2(overall.discount)} ${currency}</td>
-        <td class="text-end">${n2(overall.vat)} ${currency}</td>
-        <td class="text-end">${n2(overall.total)} ${currency}</td>
-        <td></td>`;
+      var overall = data.overall_totals || {amount:0,discount:0,vat:0,total:0};
+      var oAmount = Number(overall.amount || 0);
+      var tro = document.createElement('tr'); tro.className = 'table-secondary fw-bold';
+      tro.innerHTML = '<td colspan="3" class="text-end">Overall Totals:</td><td class="text-end">'+n2(oAmount)+' '+currency+'</td><td class="text-end">'+n2(overall.discount)+' '+currency+'</td><td class="text-end">'+n2(overall.vat)+' '+currency+'</td><td class="text-end">'+n2(overall.total)+' '+currency+'</td><td></td>';
       tfoot.appendChild(tro);
     })
-    .catch(err=> console.error('Failed to load all invoices', err));
+    .catch(function(err){ console.error('Failed to load all invoices', err); });
 })();
 </script>
 {% endblock %}
-

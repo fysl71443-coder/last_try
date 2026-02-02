@@ -30,17 +30,17 @@ def compile_translations():
                 with open(mo_file, 'wb') as f:
                     write_mo(f, catalog)
                     
-                print(f"✅ Compiled {lang} -> {mo_file}")
+                print(f"OK Compiled {lang} -> {mo_file}")
                 
             except ImportError:
                 # Fallback: create empty .mo file
                 with open(mo_file, 'wb') as f:
                     # Minimal .mo file header
                     f.write(b'\xde\x12\x04\x95\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
-                print(f"⚠️  Created minimal {lang} -> {mo_file}")
+                print(f"WARN Created minimal {lang} -> {mo_file}")
                 
         else:
-            print(f"❌ {po_file} not found")
+            print(f"NOT FOUND {po_file}")
 
 if __name__ == '__main__':
     compile_translations()

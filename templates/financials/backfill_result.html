@@ -1,12 +1,28 @@
 {% extends "base.html" %}
+{% block title %}{{ _('Backfill Result') }}{% endblock %}
 {% block content %}
-<div class="container mt-3">
-  <h4>{{ _('Backfill Result / نتيجة الترحيل') }}</h4>
-  <p>{{ _('Created journal entries') }}: <strong>{{ created }}</strong></p>
-  <p>{{ _('Period') }}: {{ start_date }} → {{ end_date }}</p>
-  <div class="mt-2">
-    <a class="btn btn-outline-primary" href="{{ url_for('financials.accounts', start_date=start_date, end_date=end_date) }}">{{ _('View Accounts / عرض الحسابات') }}</a>
-    <a class="btn btn-outline-secondary" href="{{ url_for('financials.backfill_journals') }}">{{ _('Back') }}</a>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-check-double"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Backfill Result') }}</h1>
+      <span class="ops-subtitle">{{ _('Journal entries created for the selected period') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+    </div>
+  </div>
+
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Summary') }}</div>
+    <div class="ops-form-body">
+      <p class="mb-2">{{ _('Created journal entries') }}: <strong>{{ created }}</strong></p>
+      <p class="mb-0">{{ _('Period') }}: {{ start_date }} → {{ end_date }}</p>
+      <div class="mt-3 d-flex gap-2">
+        <a class="btn btn-primary" href="{{ url_for('financials.accounts', start_date=start_date, end_date=end_date) }}"><i class="fa-solid fa-book me-1"></i>{{ _('View Accounts') }}</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('financials.backfill_journals') }}"><i class="fa-solid fa-arrow-left me-1"></i>{{ _('Back') }}</a>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

@@ -1,213 +1,321 @@
 {% extends 'base.html' %}
-{% block title %}قائمة الدخل{% endblock %}
+{% block title %}{{ _('Income Statement') }}{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-2">
-    <h3 class="mb-0">قائمة الدخل / Income Statement</h3>
-    <div class="d-flex gap-2">
-      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="history.back()">رجوع / Back</button>
-      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('financials.balance_sheet') }}">المركز المالي / Balance Sheet</a>
-      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('financials.trial_balance') }}">ميزان المراجعة / Trial Balance</a>
-      <a target="_blank" class="btn btn-outline-secondary btn-sm" href="/financials/print/income_statement?period={{ data.period }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}&branch={{ data.branch or 'all' }}">طباعة / Print</a>
-      <a target="_blank" class="btn btn-outline-success btn-sm" href="/financials/export/income_statement?period={{ data.period }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}">تصدير CSV</a>
+<style>
+  .is-summary-cards { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: flex-end; margin-bottom: 1.5rem; }
+  .is-card { min-width: 160px; padding: 1rem 1.25rem; border-radius: 8px; border: 1px solid rgba(0,0,0,.08); }
+  .is-card .val { font-size: 1.25rem; font-weight: 700; }
+  .is-card .lbl { font-size: 0.8rem; opacity: .9; margin-top: 0.25rem; }
+  .is-card--rev { background: #e8f4fd; border-color: #0d6efd; color: #0a58ca; }
+  .is-card--cogs { background: #fff3e6; border-color: #fd7e14; color: #c26100; }
+  .is-card--gross { background: #e8f5e9; border-color: #198754; color: #0f5132; }
+  .is-card--net { background: #e8f5e9; border-color: #198754; color: #0f5132; }
+  .is-card--net.is-loss { background: #ffebee; border-color: #dc3545; color: #b02a37; }
+  .is-vertical-pl { max-width: 640px; }
+  .is-pl-section { margin-bottom: 1rem; }
+  .is-pl-head { font-weight: 600; margin-bottom: 0.5rem; color: #333; }
+  .is-pl-table { width: 100%; border-collapse: collapse; }
+  .is-pl-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #eee; }
+  .is-pl-table td:first-child { text-align: right; }
+  .is-pl-table td:last-child { text-align: left; width: 140px; font-weight: 600; direction: ltr; }
+  .is-pl-table tr.subtotal td { border-bottom: 1px solid #ccc; font-weight: 600; }
+  .is-pl-table tr.total-row td { border-top: 2px solid #333; font-weight: 700; padding-top: 0.5rem; }
+  .is-pl-toggle { cursor: pointer; user-select: none; }
+  .is-pl-toggle .fa { margin-right: 0.35rem; transition: transform .2s; }
+  .is-pl-toggle.collapsed .fa-chevron-down { transform: rotate(-90deg); }
+  .is-detail-row { display: table-row; }
+  .is-detail-row.collapsed { display: none; }
+  .is-filter-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 1.25rem; }
+  .is-filter-bar label { font-size: 0.85rem; margin-bottom: 0.25rem; }
+  .is-filter-bar .form-select, .is-filter-bar .form-control { width: auto; min-width: 120px; }
+  .is-analysis { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #dee2e6; }
+  .is-analysis .card { margin-bottom: 1rem; }
+  .is-rev { color: #0d6efd; }
+  .is-exp { color: #6c757d; }
+  .is-profit { color: #198754; }
+  .is-loss { color: #dc3545; }
+  @media print {
+    .no-print { display: none !important; }
+    body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .is-card, .is-card * { color: #000 !important; border-color: #333 !important; }
+    .is-pl-table td, .is-pl-table th { border-color: #333 !important; }
+  }
+</style>
+
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-chart-line"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Income Statement') }}</h1>
+      <span class="ops-subtitle">{{ _('Executive summary and P&L') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('financials.balance_sheet') }}"><i class="fa-solid fa-building-columns me-1"></i>{{ _('Balance sheet') }}</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('financials.trial_balance') }}"><i class="fa-solid fa-scale-balanced me-1"></i>{{ _('Trial balance') }}</a>
+      <a target="_blank" class="btn btn-sm btn-outline-secondary" href="{{ url_for('financials.print_income_statement', period=data.period, start_date=data.start_date, end_date=data.end_date, branch=data.branch or 'all') }}"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+      <a target="_blank" class="btn btn-sm btn-outline-secondary" href="{{ url_for('financials.export_income_statement', period=data.period, start_date=data.start_date, end_date=data.end_date) }}"><i class="fa-solid fa-file-csv me-1"></i>CSV</a>
     </div>
   </div>
 
-  <form method="get" class="row g-2 align-items-end mb-3">
-    <div class="col-auto">
-      <label class="form-label">الفترة</label>
-      <select name="period" class="form-select">
-        <option value="today" {% if data.period=='today' %}selected{% endif %}>اليوم</option>
-        <option value="this_week" {% if data.period=='this_week' %}selected{% endif %}>هذا الأسبوع</option>
-        <option value="this_month" {% if data.period=='this_month' %}selected{% endif %}>هذا الشهر</option>
-        <option value="this_year" {% if data.period=='this_year' %}selected{% endif %}>هذه السنة</option>
-        <option value="custom" {% if data.period=='custom' %}selected{% endif %}>مخصص</option>
-      </select>
+  <!-- 1️⃣ فلتر مبسط: الفترة، الفرع، عرض تفصيلي -->
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Period & view') }}</div>
+    <div class="ops-form-body">
+      <form method="get" class="is-filter-bar">
+        <input type="hidden" name="detail" value="{{ '1' if data.detail else '0' }}" id="is-detail-inp">
+        <div>
+          <label class="d-block">{{ _('Period') }}</label>
+          <select name="period" class="form-select">
+            <option value="today" {% if data.period=='today' %}selected{% endif %}>{{ _('Today') }}</option>
+            <option value="this_week" {% if data.period=='this_week' %}selected{% endif %}>{{ _('This week') }}</option>
+            <option value="this_month" {% if data.period=='this_month' %}selected{% endif %}>{{ _('This month') }}</option>
+            <option value="this_year" {% if data.period=='this_year' %}selected{% endif %}>{{ _('This year') }}</option>
+            <option value="custom" {% if data.period=='custom' %}selected{% endif %}>{{ _('Custom') }}</option>
+          </select>
+        </div>
+        <div id="is-custom-dates" style="display:{% if data.period != 'custom' %}none{% else %}flex{% endif %}; flex-direction: column;">
+          <label class="d-block">{{ _('From – To') }}</label>
+          <div class="d-flex gap-1 align-items-center">
+            <input type="date" name="start_date" class="form-control" value="{{ data.start_date if data.period=='custom' else '' }}">
+            <input type="date" name="end_date" class="form-control" value="{{ data.end_date if data.period=='custom' else '' }}">
+          </div>
+        </div>
+        <div>
+          <label class="d-block">{{ _('Branch') }}</label>
+          <select name="branch" class="form-select">
+            <option value="all" {% if (data.branch or 'all')=='all' %}selected{% endif %}>{{ _('All') }}</option>
+            <option value="place_india" {% if data.branch=='place_india' %}selected{% endif %}>Place India</option>
+            <option value="china_town" {% if data.branch=='china_town' %}selected{% endif %}>China Town</option>
+          </select>
+        </div>
+        <div class="d-flex align-items-end">
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-eye me-1"></i>عرض</button>
+        </div>
+        <div class="d-flex align-items-center gap-2 ms-2">
+          <label class="mb-0 d-flex align-items-center gap-1">
+            <input type="checkbox" id="is-detail-cb" {% if data.detail %}checked{% endif %}> عرض تفصيلي
+          </label>
+        </div>
+      </form>
     </div>
-    <div class="col-auto">
-      <label class="form-label">من تاريخ</label>
-      <input type="date" name="start_date" class="form-control" value="{{ data.start_date if data.period=='custom' else '' }}" {{ '' if data.period=='custom' else 'disabled' }}>
-    </div>
-    <div class="col-auto">
-      <label class="form-label">إلى تاريخ</label>
-      <input type="date" name="end_date" class="form-control" value="{{ data.end_date if data.period=='custom' else '' }}" {{ '' if data.period=='custom' else 'disabled' }}>
-    </div>
-    <div class="col-auto">
-      <label class="form-label">الفرع</label>
-      <select name="branch" class="form-select">
-        <option value="all" {% if (data.branch or 'all')=='all' %}selected{% endif %}>الكل</option>
-        <option value="place_india" {% if data.branch=='place_india' %}selected{% endif %}>Place India</option>
-        <option value="china_town" {% if data.branch=='china_town' %}selected{% endif %}>China Town</option>
-      </select>
-    </div>
-
-    <div class="col-auto">
-      <button class="btn btn-primary">عرض</button>
-    </div>
-
-  <div class="d-flex gap-2 mb-3"></div>
-
-  </form>
-
-  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-    <span class="badge bg-light text-dark border">الفترة: {{ data.period }}</span>
-    <span class="badge bg-light text-dark border">من: {{ data.start_date }}</span>
-    <span class="badge bg-light text-dark border">إلى: {{ data.end_date }}</span>
   </div>
 
-  {% set _all_zero = ( (data.revenue or 0)==0 and (data.cogs or 0)==0 and (data.operating_expenses or 0)==0 and (data.other_income or 0)==0 and (data.other_expenses or 0)==0 and (data.tax or 0)==0 ) %}
+  {% set _all_zero = ( (data.revenue or 0)==0 and (data.cogs or 0)==0 and (data.operating_expenses or 0)==0 and (data.other_income or 0)==0 and (data.other_expenses or 0)==0 ) %}
   {% if _all_zero %}
-  <div class="alert alert-warning">لا توجد بيانات ضمن الفترة المحددة.</div>
+  <div class="alert alert-warning">{{ _('No data for the selected period.') }}</div>
   {% endif %}
 
-  <div class="row g-3">
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">الإيرادات / Revenue</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.revenue) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">تكلفة المبيعات / COGS</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.cogs) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">الربح الإجمالي / Gross Profit</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.gross_profit) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">المصاريف التشغيلية / Operating Expenses</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.operating_expenses) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">الربح التشغيلي / Operating Profit</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.operating_profit) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">دخل آخر / Other Income</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.other_income) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">مصروفات أخرى / Other Expenses</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.other_expenses) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">الربح قبل الضريبة / Profit Before Tax</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.net_profit_before_tax) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">صافي ضريبة القيمة المضافة / VAT Net</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format((data.vat_net or 0)) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">ضريبة قيمة مضافة مستحقة / VAT Payable</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(((data.vat_net or 0) if (data.vat_net or 0) > 0 else 0)) }}</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm p-3 h-100"><div class="text-muted small">الربح بعد الضريبة / Profit After Tax</div><div class="fs-4 fw-bold text-end">{{ '%.2f'|format(data.net_profit_after_tax) }}</div></div></div>
-  </div>
-
-    <div class="card mt-3">
-      <div class="card-header fw-semibold">ملخص المبيعات حسب الفرع / Branch Sales Summary</div>
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table table-sm">
-            <thead>
-              <tr>
-                <th>الفرع / Branch</th>
-                <th class="text-end">المبيعات الإجمالية / Gross Sales</th>
-                <th class="text-end">الخصم الإجمالي / Total Discount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for br, agg in (data.branch_totals or {}).items() %}
-              <tr>
-                {% set code = '4011' if br=='china_town' else ('4012' if br=='place_india' else None) %}
-                <td>{% if br=='china_town' %}China Town{% elif br=='place_india' %}Place India{% else %}{{ br }}{% endif %}</td>
-                <td class="text-end">{% if code %}<a href="{{ url_for('financials.account_statement') }}?code={{ code }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(agg.gross or 0) }}</a>{% else %}{{ '%.2f'|format(agg.gross or 0) }}{% endif %}</td>
-                <td class="text-end"><a href="{{ url_for('financials.account_statement') }}?code=4140&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(agg.discount or 0) }}</a></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  <!-- 2️⃣ ملخص تنفيذي: 4 بطاقات فقط -->
+  <div class="is-summary-cards" dir="rtl">
+    <div class="is-card is-card--rev">
+      <div class="val">{{ '%.2f'|format(data.revenue or 0) }}</div>
+      <div class="lbl">{{ _('Total revenue') }}</div>
     </div>
-
-    {% for br, chans in (data.branch_channels or {}).items() %}
-    <div class="card mt-3">
-      <div class="card-header fw-semibold">تفصيل فرع: {% if br=='china_town' %}China Town{% elif br=='place_india' %}Place India{% else %}{{ br }}{% endif %}</div>
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table table-sm">
-            <thead>
-              <tr>
-                <th>القناة / Channel</th>
-                <th class="text-end">المبيعات الإجمالية / Gross</th>
-                <th class="text-end">الخصم / Discount</th>
-                <th class="text-end">العدد / Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for ch, agg in chans.items() %}
-              <tr>
-                {% set ch_code = '4013' if ch=='keeta' else ('4014' if ch=='hunger' else ( '4011' if br=='china_town' else ('4012' if br=='place_india' else None))) %}
-                <td>{% if ch=='keeta' %}Keeta Online{% elif ch=='hunger' %}Hunger Online{% elif ch=='offline' %}Offline{% else %}{{ ch }}{% endif %}</td>
-                <td class="text-end">{% if ch_code %}<a href="{{ url_for('financials.account_statement') }}?code={{ ch_code }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(agg.gross or 0) }}</a>{% else %}{{ '%.2f'|format(agg.gross or 0) }}{% endif %}</td>
-                <td class="text-end"><a href="{{ url_for('financials.account_statement') }}?code=4140&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(agg.discount or 0) }}</a></td>
-                <td class="text-end">{{ agg.count or 0 }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <div class="is-card is-card--cogs">
+      <div class="val">{{ '%.2f'|format(data.cogs or 0) }}</div>
+      <div class="lbl">{{ _('Cost of sales') }}</div>
     </div>
-    {% endfor %}
-
-  <div class="row g-3 mt-3">
-    <div class="col-md-6">
-      <div class="card h-100">
-        <div class="card-header fw-semibold">ضريبة القيمة المضافة / VAT</div>
-        <div class="card-body">
-          <div class="d-flex justify-content-between"><span>مدخلات / Input</span><span class="fw-bold">{{ '%.2f'|format(data.vat_in or 0) }}</span></div>
-          <div class="d-flex justify-content-between"><span>مخرجات / Output</span><span class="fw-bold">{{ '%.2f'|format(data.vat_out or 0) }}</span></div>
-        </div>
-      </div>
+    <div class="is-card is-card--gross">
+      <div class="val">{{ '%.2f'|format(data.gross_profit or 0) }}</div>
+      <div class="lbl">{{ _('Gross profit') }}</div>
     </div>
-    <div class="col-md-6">
-      <div class="card h-100">
-        <div class="card-header fw-semibold">تفصيل تكلفة المبيعات / COGS Breakdown</div>
-        <div class="card-body">
-          <div class="d-flex justify-content-between"><span>مخزون بداية الفترة / Opening Inventory</span><span class="fw-bold">{{ '%.2f'|format((data.cogs_breakdown.opening if data.cogs_breakdown else 0) or 0) }}</span></div>
-          <div class="d-flex justify-content-between"><span>مشتريات الفترة / Purchases</span><span class="fw-bold">{{ '%.2f'|format((data.cogs_breakdown.purchases if data.cogs_breakdown else 0) or 0) }}</span></div>
-          <div class="d-flex justify-content-between"><span>مخزون نهاية الفترة / Closing Inventory</span><span class="fw-bold">{{ '%.2f'|format((data.cogs_breakdown.closing if data.cogs_breakdown else 0) or 0) }}</span></div>
-          <div class="d-flex justify-content-between"><span>هدر المواد / Waste</span><span class="fw-bold">{{ '%.2f'|format((data.cogs_breakdown.waste if data.cogs_breakdown else 0) or 0) }}</span></div>
-          <hr>
-          <div class="d-flex justify-content-between"><span>المُحتسب / Computed</span><span class="fw-bold">{{ '%.2f'|format((data.cogs_breakdown.computed if data.cogs_breakdown else 0) or 0) }}</span></div>
-          <div class="d-flex justify-content-between"><span>من القيود / Journal COGS</span><span class="fw-bold">{{ '%.2f'|format((data.cogs_breakdown.journal if data.cogs_breakdown else 0) or 0) }}</span></div>
-          <div class="d-flex justify-content-between"><span>المعتمد / Used</span><span class="fw-bold">{{ (data.cogs_breakdown.used if data.cogs_breakdown else '-') }}</span></div>
-        </div>
-      </div>
+    <div class="is-card is-card--net {% if (data.net_profit_after_tax or 0) < 0 %}is-loss{% endif %}">
+      <div class="val">{{ '%.2f'|format(data.net_profit_after_tax or 0) }}</div>
+      <div class="lbl">{{ _('Net profit') }}</div>
     </div>
   </div>
 
-  <div class="row g-3 mt-3">
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold">تفصيل حسب النوع / Totals by Type</div>
-        <div class="card-body">
+  <!-- 3️⃣ الجسم: قائمة دخل عمودية P&L -->
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('Income Statement') }} ({{ _('Period') }}: {{ data.start_date }} → {{ data.end_date }})</div>
+    <div class="ops-form-body is-vertical-pl">
+      <table class="is-pl-table" dir="rtl">
+        <tbody>
+          <tr><td colspan="2" class="is-pl-head is-rev"><i class="fa-solid fa-arrow-trend-up me-1"></i>{{ _('Revenue') }}</td></tr>
+          <tr class="is-pl-toggle" data-target="is-detail-rev">
+            <td><i class="fa-solid fa-chevron-down fa-fw"></i> {{ _('Total revenue') }}</td>
+            <td>{{ '%.2f'|format(data.revenue or 0) }}</td>
+          </tr>
+          <tr class="is-detail-row" id="is-detail-rev">
+            <td colspan="2" style="padding-right: 1.5rem;">
+              {% for code, name, amt in (data.rev_detail or []) %}
+              {% if amt != 0 %}<div class="d-flex justify-content-between py-1"><span>{{ name or code }}</span><span>{{ '%.2f'|format(amt) }}</span></div>{% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+
+          <tr><td colspan="2" class="is-pl-head is-exp pt-2"><i class="fa-solid fa-box me-1"></i>(−) تكلفة المبيعات</td></tr>
+          <tr class="is-pl-toggle" data-target="is-detail-cogs">
+            <td><i class="fa-solid fa-chevron-down fa-fw"></i> إجمالي تكلفة المبيعات</td>
+            <td>{{ '%.2f'|format(data.cogs or 0) }}</td>
+          </tr>
+          <tr class="is-detail-row" id="is-detail-cogs">
+            <td colspan="2" style="padding-right: 1.5rem;">
+              {% for code, name, amt in (data.cogs_lines or []) %}
+              {% if amt != 0 %}<div class="d-flex justify-content-between py-1"><span>{{ name or code }}</span><span>{{ '%.2f'|format(amt) }}</span></div>{% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+
+          <tr class="total-row"><td>= {{ _('Gross profit') }}</td><td class="is-profit">{{ '%.2f'|format(data.gross_profit or 0) }}</td></tr>
+
+          <tr><td colspan="2" class="is-pl-head is-exp pt-2"><i class="fa-solid fa-sack-dollar me-1"></i>(−) {{ _('Operating expenses') }}</td></tr>
+          <tr class="is-pl-toggle" data-target="is-detail-opex">
+            <td><i class="fa-solid fa-chevron-down fa-fw"></i> {{ _('Total operating expenses') }}</td>
+            <td>{{ '%.2f'|format(data.operating_expenses or 0) }}</td>
+          </tr>
+          <tr class="is-detail-row" id="is-detail-opex">
+            <td colspan="2" style="padding-right: 1.5rem;">
+              {% for code, name, amt in (data.opex_lines or []) %}
+              {% if amt != 0 %}<div class="d-flex justify-content-between py-1"><span>{{ name or code }}</span><span>{{ '%.2f'|format(amt) }}</span></div>{% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+
+          <tr class="total-row"><td>= الربح التشغيلي</td><td class="is-profit">{{ '%.2f'|format(data.operating_profit or 0) }}</td></tr>
+
+          <tr><td colspan="2" class="is-pl-head pt-2"><i class="fa-solid fa-circle-plus me-1"></i>(+/−) إيرادات ومصروفات أخرى</td></tr>
+          <tr class="is-pl-toggle" data-target="is-detail-other">
+            <td><i class="fa-solid fa-chevron-down fa-fw"></i> إيرادات أخرى</td>
+            <td class="is-profit">{{ '%.2f'|format(data.other_income or 0) }}</td>
+          </tr>
+          <tr><td>مصروفات أخرى</td><td class="is-exp">{{ '%.2f'|format(data.other_expenses or 0) }}</td></tr>
+          <tr class="is-detail-row" id="is-detail-other">
+            <td colspan="2" style="padding-right: 1.5rem;">
+              {% for code, name, amt in (data.other_rev_lines or []) %}
+              {% if amt != 0 %}<div class="d-flex justify-content-between py-1"><span>{{ name or code }} (إيراد)</span><span>{{ '%.2f'|format(amt) }}</span></div>{% endif %}
+              {% endfor %}
+              {% for code, name, amt in (data.other_exp_lines or []) %}
+              {% if amt != 0 %}<div class="d-flex justify-content-between py-1"><span>{{ name or code }} (مصروف)</span><span>{{ '%.2f'|format(amt) }}</span></div>{% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+
+          <tr class="total-row"><td>= {{ _('Net profit') }}</td><td class="{% if (data.net_profit_after_tax or 0) >= 0 %}is-profit{% else %}is-loss{% endif %}">{{ '%.2f'|format(data.net_profit_after_tax or 0) }}</td></tr>
+        </tbody>
+      </table>
+
+      <p class="small text-muted mt-2 mb-0">{{ _('VAT is not part of income statement; see analytical details below.') }}</p>
+    </div>
+  </div>
+
+  <!-- 4️⃣ تفاصيل تحليلية (أسفل الصفحة) -->
+  <div class="is-analysis">
+    <h6 class="mb-3">{{ _('Analytical details') }}</h6>
+
+    <div class="card">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span>{{ _('VAT') }}</span>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-vat">{{ _('Expand') }}</button>
+      </div>
+      <div class="collapse show" id="collapse-vat">
+        <div class="card-body py-2">
+          <div class="d-flex justify-content-between"><span>{{ _('Input VAT') }}</span><span class="fw-bold">{{ '%.2f'|format(data.vat_in or 0) }}</span></div>
+          <div class="d-flex justify-content-between"><span>{{ _('Output VAT') }}</span><span class="fw-bold">{{ '%.2f'|format(data.vat_out or 0) }}</span></div>
+          <div class="d-flex justify-content-between pt-1"><span>{{ _('Net VAT') }}</span><span class="fw-bold">{{ '%.2f'|format(data.vat_net or 0) }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span>{{ _('COGS Breakdown') }}</span>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-cogs">{{ _('Expand') }}</button>
+      </div>
+      <div class="collapse" id="collapse-cogs">
+        <div class="card-body py-2">
+          {% set cb = data.cogs_breakdown or {} %}
+          <div class="d-flex justify-content-between"><span>{{ _('Opening stock') }}</span><span>{{ '%.2f'|format(cb.get('opening') or 0) }}</span></div>
+          <div class="d-flex justify-content-between"><span>{{ _('Period purchases') }}</span><span>{{ '%.2f'|format(cb.get('purchases') or 0) }}</span></div>
+          <div class="d-flex justify-content-between"><span>{{ _('Closing stock') }}</span><span>{{ '%.2f'|format(cb.get('closing') or 0) }}</span></div>
+          <div class="d-flex justify-content-between"><span>{{ _('Material waste') }}</span><span>{{ '%.2f'|format(cb.get('waste') or 0) }}</span></div>
+          <hr class="my-2">
+          <div class="d-flex justify-content-between"><span>{{ _('Computed') }}</span><span class="fw-bold">{{ '%.2f'|format(cb.get('computed') or 0) }}</span></div>
+          <div class="d-flex justify-content-between"><span>{{ _('From journals') }}</span><span>{{ '%.2f'|format(cb.get('journal') or 0) }}</span></div>
+          <div class="d-flex justify-content-between"><span>{{ _('Used') }}</span><span>{{ cb.get('used') or '-' }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span>{{ _('Sales by Branch') }}</span>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-sales">{{ _('Expand') }}</button>
+      </div>
+      <div class="collapse" id="collapse-sales">
+        <div class="card-body py-2">
           <div class="table-responsive">
-            <table class="table table-sm align-middle">
+            <table class="table table-sm table-hover mb-0">
               <thead>
                 <tr>
-                  <th>النوع / Type</th>
-                  <th class="text-end">المبلغ / Amount</th>
+                  <th>الفرع</th>
+                  <th class="text-end">إجمالي المبيعات</th>
+                  <th class="text-end">الخصم</th>
                 </tr>
               </thead>
               <tbody>
-                {% for t, amt in data.type_totals.items() %}
+                {% for br, agg in (data.branch_totals or {}).items() %}
                 <tr>
-                  <td>{{ t }}</td>
-                  <td class="text-end">{{ '%.2f'|format(amt or 0) }}</td>
+                  <td>{% if br=='china_town' %}China Town{% elif br=='place_india' %}Place India{% else %}{{ br }}{% endif %}</td>
+                  <td class="text-end">{{ '%.2f'|format(agg.gross or 0) }}</td>
+                  <td class="text-end">{{ '%.2f'|format(agg.discount or 0) }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
+          {% for br, chans in (data.branch_channels or {}).items() %}
+          <div class="mt-2 small">
+            <strong>{% if br=='china_town' %}China Town{% elif br=='place_india' %}Place India{% else %}{{ br }}{% endif %}</strong>
+            <ul class="mb-0 ps-3">
+              {% for ch, a in chans.items() %}
+              <li>{% if ch=='keeta' %}Keeta{% elif ch=='hunger' %}Hunger{% else %}Offline{% endif %}: {{ '%.2f'|format(a.gross or 0) }} ({{ a.count or 0 }})</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endfor %}
         </div>
       </div>
     </div>
   </div>
 
-  <div class="mt-3 small text-muted">الفترة: {{ data.start_date }} إلى {{ data.end_date }}</div>
+  <div class="mt-3 small text-muted">الفترة: {{ data.start_date }} → {{ data.end_date }}{% if data.branch and data.branch != 'all' %} | الفرع: {{ data.branch }}{% endif %}</div>
 </div>
-{% endblock %}
-{% block scripts %}
+
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  var periodSel = document.querySelector('select[name="period"]');
-  var startInput = document.querySelector('input[name="start_date"]');
-  var endInput = document.querySelector('input[name="end_date"]');
-  function sync(){
-    var v = (periodSel && periodSel.value)||'';
-    if(v !== 'custom'){
-      if(startInput){ startInput.value=''; startInput.setAttribute('disabled','disabled'); }
-      if(endInput){ endInput.value=''; endInput.setAttribute('disabled','disabled'); }
-    }else{
-      if(startInput){ startInput.removeAttribute('disabled'); }
-      if(endInput){ endInput.removeAttribute('disabled'); }
-    }
+  var period = document.querySelector('select[name="period"]');
+  var customDates = document.getElementById('is-custom-dates');
+  var start = document.querySelector('input[name="start_date"]');
+  var end = document.querySelector('input[name="end_date"]');
+  function syncPeriod(){
+    var isCustom = (period && period.value === 'custom');
+    if (customDates) customDates.style.display = isCustom ? 'flex' : 'none';
+    if (start) { start.disabled = !isCustom; if (!isCustom) start.value = ''; }
+    if (end) { end.disabled = !isCustom; if (!isCustom) end.value = ''; }
   }
-  if(periodSel){ periodSel.addEventListener('change', sync); }
-  sync();
+  if (period) period.addEventListener('change', syncPeriod);
+  syncPeriod();
+
+  var detailCb = document.getElementById('is-detail-cb');
+  var detailInp = document.getElementById('is-detail-inp');
+  if (detailCb && detailInp) {
+    detailCb.addEventListener('change', function(){ detailInp.value = detailCb.checked ? '1' : '0'; });
+  }
+
+  var detail = {{ 'true' if data.detail else 'false' }};
+  var toggles = document.querySelectorAll('.is-pl-toggle[data-target]');
+  toggles.forEach(function(t){
+    var id = t.getAttribute('data-target');
+    var row = id ? document.getElementById(id) : null;
+    if (!row) return;
+    if (!detail) { row.classList.add('collapsed'); t.classList.add('collapsed'); }
+    t.addEventListener('click', function(){
+      row.classList.toggle('collapsed');
+      t.classList.toggle('collapsed');
+    });
+  });
 });
 </script>
 {% endblock %}

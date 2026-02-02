@@ -1,0 +1,244 @@
+/* numex.css – شاشة تسجيل الدخول (تصميم Misbah) */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Tajawal', 'Arial', sans-serif;
+}
+
+body, html {
+  height: 100%;
+  overflow: hidden;
+}
+
+.background {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, #1e3c72, #2a5298);
+  position: relative;
+}
+
+#snowCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.snowman {
+  position: absolute;
+  bottom: 0;
+  right: 50px;
+  height: 300px;
+  z-index: 2;
+  object-fit: contain;
+  object-position: bottom right;
+}
+
+@media (max-width: 768px) {
+  .snowman {
+    height: 160px;
+    right: 20px;
+  }
+}
+
+.login-container {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 100%;
+  max-width: 680px;
+  padding: 0 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .login-container {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    padding: 0 16px;
+    max-width: 100%;
+  }
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 40px;
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
+  width: 100%;
+  max-width: 640px;
+  transition: all 0.3s ease;
+}
+
+.login-card h2 {
+  text-align: center;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.login-card .company {
+  text-align: center;
+  color: rgba(255,255,255,0.9);
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.login-card .subtitle {
+  text-align: center;
+  color: rgba(255,255,255,0.75);
+  font-size: 0.85rem;
+  margin-bottom: 24px;
+}
+
+.input-group {
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.input-group label {
+  display: block;
+  color: #fff;
+  margin-bottom: 5px;
+  transition: color 0.3s;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  outline: none;
+  transition: box-shadow 0.3s, outline 0.3s;
+  font-size: 1rem;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background-color: #4fc3f7;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s, box-shadow 0.3s;
+  margin-top: 8px;
+}
+
+.login-card:hover,
+.input-group input:focus,
+.login-btn:hover {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+}
+
+.input-group input:hover {
+  outline: 2px solid rgba(79, 195, 247, 0.5);
+}
+
+.input-group input:focus {
+  outline: 2px solid #4fc3f7;
+}
+
+.login-btn:hover {
+  background-color: #29b6f6;
+}
+
+/* تذكرني، OTP، روابط */
+.login-extra {
+  margin-bottom: 16px;
+}
+
+.login-extra .form-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-extra .form-check-input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #4fc3f7;
+}
+
+.login-extra .form-check-label {
+  color: rgba(255,255,255,0.9);
+  font-size: 0.9rem;
+}
+
+.login-links {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.login-links a {
+  color: #90caf9;
+  text-decoration: none;
+  margin: 0 6px;
+}
+
+.login-links a:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* تنبيهات Flask */
+.alert {
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.alert-danger {
+  background: rgba(244, 67, 54, 0.25);
+  color: #fff;
+  border: 1px solid rgba(244, 67, 54, 0.5);
+}
+
+.alert-warning {
+  background: rgba(255, 193, 7, 0.25);
+  color: #fff;
+  border: 1px solid rgba(255, 193, 7, 0.5);
+}
+
+.alert-success {
+  background: rgba(76, 175, 80, 0.25);
+  color: #fff;
+  border: 1px solid rgba(76, 175, 80, 0.5);
+}
+
+/* مبدل اللغة */
+.lang-switch {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+}
+
+.lang-switch a {
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background 0.3s;
+}
+
+.lang-switch a:hover {
+  background: rgba(255,255,255,0.35);
+  color: #fff;
+}

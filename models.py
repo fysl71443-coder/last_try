@@ -80,6 +80,7 @@ class SalesInvoice(db.Model):
     status = db.Column(db.String(20), default='unpaid')  # paid, partial, unpaid
     created_at = db.Column(db.DateTime, default=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    journal_entry_id = db.Column(db.Integer, nullable=True)  # from Node.js accounting service
 
     items = db.relationship('SalesInvoiceItem', backref='invoice', lazy=True)
 
@@ -99,10 +100,9 @@ class SalesInvoice(db.Model):
                     return 'keeta'
                 return 'offline'
             ch = _channel(cust)
-            rev_code = '4012' if branch=='place_india' else '4011'
-            if ch == 'keeta': rev_code = '4013'
-            if ch == 'hunger': rev_code = '4014'
-            cash_code = '1013' if (str(self.payment_method or '').strip().upper() in ('BANK','TRANSFER','CARD','VISA','MASTERCARD')) else '1011'
+            rev_code = '4111'
+            if ch in ('keeta', 'hunger'): rev_code = '4120'
+            cash_code = '1121' if (str(self.payment_method or '').strip().upper() in ('BANK','TRANSFER','CARD','VISA','MASTERCARD')) else '1111'
             total_before = float(self.total_before_tax or 0)
             discount_amt = float(self.discount_amount or 0)
             tax_amt = float(self.tax_amount or 0)
@@ -112,7 +112,7 @@ class SalesInvoice(db.Model):
             if net_rev > 0:
                 rows.append({'account_code': rev_code, 'debit': 0.0, 'credit': net_rev, 'description': f'Revenue {self.invoice_number}', 'ref_type': 'sales', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
             if tax_amt > 0:
-                rows.append({'account_code': '2024', 'debit': 0.0, 'credit': tax_amt, 'description': f'VAT Output {self.invoice_number}', 'ref_type': 'sales', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+                rows.append({'account_code': '2141', 'debit': 0.0, 'credit': tax_amt, 'description': f'VAT Output {self.invoice_number}', 'ref_type': 'sales', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
         except Exception:
             pass
         return rows
@@ -286,10 +286,10 @@ class PurchaseInvoice(db.Model):
             tax_amt = float(self.tax_amount or 0)
             total_inc_tax = round(total_before + tax_amt, 2)
             # Inventory or expense depending on production flag (not stored here) — default inventory 1210
-            rows.append({'account_code': '1210', 'debit': (total_before if total_before>0 else 0.0), 'credit': 0.0, 'description': 'Purchase', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            rows.append({'account_code': '1161', 'debit': (total_before if total_before>0 else 0.0), 'credit': 0.0, 'description': 'Purchase', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
             if tax_amt > 0:
-                rows.append({'account_code': '6200', 'debit': tax_amt, 'credit': 0.0, 'description': 'VAT Input', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
-            rows.append({'account_code': '2110', 'debit': 0.0, 'credit': total_inc_tax, 'description': 'Accounts Payable', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+                rows.append({'account_code': '1170', 'debit': tax_amt, 'credit': 0.0, 'description': 'VAT Input', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            rows.append({'account_code': '2111', 'debit': 0.0, 'credit': total_inc_tax, 'description': 'Accounts Payable', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
         except Exception:
             pass
         return rows
@@ -323,6 +323,7 @@ class ExpenseInvoice(db.Model):
     discount_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     total_after_tax_discount = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(db.String(20), default='paid')  # paid, pending
+    liability_account_code = db.Column(db.String(20), nullable=True)  # for platform/gov payables (2113,2114,2115,2116,2134,2131)
     created_at = db.Column(db.DateTime, default=get_saudi_now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
@@ -352,27 +353,27 @@ class ExpenseInvoice(db.Model):
                         pass
                     s = (txt or '').strip().lower()
                     if ('رواتب' in s) or ('اجور' in s) or ('أجور' in s) or ('salary' in s) or ('payroll' in s):
-                        return '5010'
+                        return '5310'
                     if ('رسوم' in s and 'حكومية' in s) or ('government' in s):
-                        return '5100'
+                        return '5410'
                     if ('ادوات' in s and 'مكتبية' in s) or ('office' in s):
-                        return '5060'
+                        return '5420'
                     if ('تنظيف' in s) or ('clean' in s):
-                        return '5070'
+                        return '5250'
                     if ('عمولات' in s) or ('bank fee' in s) or ('commission' in s):
-                        return '5090'
+                        return '5610'
                 except Exception:
                     pass
-                return '5100'
+                return '5410'
             rows.append({'account_code': _exp_code(self), 'debit': (total_before if total_before>0 else 0.0), 'credit': 0.0, 'description': 'Expense', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
             if tax_amt > 0:
-                rows.append({'account_code': '6200', 'debit': tax_amt, 'credit': 0.0, 'description': 'VAT Input', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
-            rows.append({'account_code': '2110', 'debit': 0.0, 'credit': total_inc_tax, 'description': 'Accounts Payable', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+                rows.append({'account_code': '1170', 'debit': tax_amt, 'credit': 0.0, 'description': 'VAT Input', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+            rows.append({'account_code': '2111', 'debit': 0.0, 'credit': total_inc_tax, 'description': 'Accounts Payable', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
             try:
                 pm = (self.payment_method or '').strip().upper()
-                cash_code = '1013' if pm in ('BANK','TRANSFER','CARD','VISA','MASTERCARD') else '1011'
+                cash_code = '1121' if pm in ('BANK','TRANSFER','CARD','VISA','MASTERCARD') else '1111'
                 # immediate payment: clear AP and credit cash/bank
-                rows.append({'account_code': '2110', 'debit': total_inc_tax, 'credit': 0.0, 'description': 'Pay AP', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
+                rows.append({'account_code': '2111', 'debit': total_inc_tax, 'credit': 0.0, 'description': 'Pay AP', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
                 rows.append({'account_code': cash_code, 'debit': 0.0, 'credit': total_inc_tax, 'description': 'Cash/Bank', 'ref_type': 'expense', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
             except Exception:
                 pass
@@ -385,6 +386,7 @@ class ExpenseInvoiceItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey('expense_invoices.id'), nullable=False)
     description = db.Column(db.String(500), nullable=False)  # Description of the expense item
+    account_code = db.Column(db.String(20), nullable=True)   # حساب المصروف المختار (مثل 5230)
     quantity = db.Column(db.Numeric(12, 2), nullable=False)
     price_before_tax = db.Column(db.Numeric(12, 2), nullable=False)  # Price per unit
     tax = db.Column(db.Numeric(12, 2), nullable=False, default=0)
@@ -494,8 +496,11 @@ class Salary(db.Model):
     year = db.Column(db.Integer, nullable=False)
     month = db.Column(db.Integer, nullable=False)
     basic_salary = db.Column(db.Numeric(12, 2), nullable=False)
-    allowances = db.Column(db.Numeric(12, 2), default=0)
-    deductions = db.Column(db.Numeric(12, 2), default=0)
+    extra = db.Column(db.Numeric(12, 2), default=0)  # إضافي
+    absence = db.Column(db.Numeric(12, 2), default=0)  # غياب (خصم)
+    incentive = db.Column(db.Numeric(12, 2), default=0)  # حافز
+    allowances = db.Column(db.Numeric(12, 2), default=0)  # بدلات
+    deductions = db.Column(db.Numeric(12, 2), default=0)  # استقطاعات
     previous_salary_due = db.Column(db.Numeric(12, 2), default=0)  # رواتب من شهور سابقة
     total_salary = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(db.String(20), default='due')  # paid/due/partial
@@ -504,8 +509,8 @@ class Salary(db.Model):
         rows = []
         try:
             total = float(self.total_salary or 0)
-            rows.append({'account_code': '5010', 'debit': total, 'credit': 0.0, 'description': 'Payroll expense', 'ref_type': 'salary', 'ref_id': int(self.id), 'date': str(get_saudi_now().date())})
-            rows.append({'account_code': '2130', 'debit': 0.0, 'credit': total, 'description': 'Salaries payable', 'ref_type': 'salary', 'ref_id': int(self.id), 'date': str(get_saudi_now().date())})
+            rows.append({'account_code': '5310', 'debit': total, 'credit': 0.0, 'description': 'Payroll expense', 'ref_type': 'salary', 'ref_id': int(self.id), 'date': str(get_saudi_now().date())})
+            rows.append({'account_code': '2121', 'debit': 0.0, 'credit': total, 'description': 'Salaries payable', 'ref_type': 'salary', 'ref_id': int(self.id), 'date': str(get_saudi_now().date())})
         except Exception:
             pass
         return rows
@@ -716,13 +721,22 @@ class Supplier(db.Model):
 
 
 class Customer(db.Model):
+    """عميل: نقدي (cash) = يدفع فوراً، آجل (credit) = يُنشأ له ذمة مدينة"""
     __tablename__ = 'customers'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     phone = db.Column(db.String(50), nullable=True)
-    discount_percent = db.Column(db.Numeric(5, 2), default=0)
+    customer_type = db.Column(db.String(20), default='cash')  # cash=نقدي | credit=آجل
+    discount_percent = db.Column(db.Numeric(5, 2), default=0)  # للعملاء النقديين المسجلين
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_saudi_now)
+
+    @property
+    def is_cash(self):
+        return (getattr(self, 'customer_type', '') or 'cash').lower() in ('cash', 'نقدي', '')
+    @property
+    def is_credit(self):
+        return (getattr(self, 'customer_type', '') or '').lower() in ('credit', 'آجل')
 
     def __repr__(self):
         return f'<Customer {self.name}>'
@@ -836,6 +850,9 @@ class Account(db.Model):
     code = db.Column(db.String(20), unique=True, nullable=False, index=True)
     name = db.Column(db.String(200), nullable=False)
     type = db.Column(db.String(30), nullable=False)  # ASSET, LIABILITY, EQUITY, REVENUE, COGS, EXPENSE, OTHER_INCOME, OTHER_EXPENSE, TAX
+    parent_account_code = db.Column(db.String(20), nullable=True, index=True)  # للحسابات الفرعية المُنشأة من الشاشة
+    name_ar = db.Column(db.String(200), nullable=True)
+    name_en = db.Column(db.String(200), nullable=True)
 
     def __repr__(self):
         return f'<Account {self.code} {self.name}>'
@@ -885,7 +902,7 @@ class JournalLine(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     journal_id = db.Column(db.Integer, db.ForeignKey('journal_entries.id'), nullable=False, index=True)
     line_no = db.Column(db.Integer, nullable=False)
-    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=False, index=True)
     debit = db.Column(db.Numeric(12, 2), default=0)
     credit = db.Column(db.Numeric(12, 2), default=0)
     cost_center = db.Column(db.String(100), nullable=True)

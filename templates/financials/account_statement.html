@@ -1,52 +1,94 @@
 {% extends "base.html" %}
+{% block head %}
+<style>
+  @media print {
+    .no-print { display: none !important; }
+    body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .ops-header-bar { display: none !important; }
+    .ops-form-card { border: 1px solid #333 !important; }
+    table th, table td { border-color: #333 !important; }
+    table thead th { background: #e8e8e8 !important; color: #000 !important; }
+    .text-muted { color: #000 !important; }
+  }
+</style>
+{% endblock %}
 {% block content %}
-<div class="container mt-3">
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-file-lines"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Account Statement') }}</h1>
+      <span class="ops-subtitle">{% if acc %}{{ acc.code }} — {{ acc.name }}{% else %}{{ _('View running balance by period') }}{% endif %}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('financials.accounts_hub') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-book me-1"></i>{{ _('Accounts Hub') }}</a>
+      {% if acc %}<button type="button" class="btn btn-sm btn-primary no-print" onclick="window.print()"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</button>{% endif %}
+    </div>
+  </div>
+
   {% if acc %}
-  <h4>{{ _('Account Statement / كشف حساب') }} — {{ acc.code }} — {{ acc.name }}</h4>
-  <form class="row g-3 mb-3" method="get">
-    <input type="hidden" name="code" value="{{ acc.code }}">
-    <div class="col-md-3">
-      <label class="form-label">{{ _('Start Date / تاريخ البداية') }}</label>
-      <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('Period') }}</div>
+    <div class="ops-form-body">
+      <form class="row g-3 align-items-end" method="get">
+        <input type="hidden" name="code" value="{{ acc.code }}">
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Start Date') }}</label>
+          <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('End Date') }}</label>
+          <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+        </div>
+        <div class="col-md-3">
+          <button class="btn btn-primary" type="submit"><i class="fa-solid fa-filter me-1"></i>{{ _('Filter') }}</button>
+        </div>
+      </form>
+      <p class="mb-0 mt-2 text-muted small">{{ _('Opening Balance') }}: <strong>{{ '%.2f' % opening_balance }}</strong></p>
     </div>
-    <div class="col-md-3">
-      <label class="form-label">{{ _('End Date / تاريخ النهاية') }}</label>
-      <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+  </div>
+
+  <div class="screen-section">
+    <div class="screen-section-title">{{ _('Statement lines') }}</div>
+    <div class="screen-section-body">
+    <div class="screen-table-wrap">
+      <table class="table screen-table">
+        <thead>
+          <tr>
+            <th>{{ _('Date') }}</th>
+            <th>{{ _('Entry') }}</th>
+            <th>{{ _('Description') }}</th>
+            <th class="text-end">{{ _('Debit') }}</th>
+            <th class="text-end">{{ _('Credit') }}</th>
+            <th class="text-end">{{ _('Running Balance') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set running = (opening_balance|float) %}
+          {% for ln, entry_number, desc in entries %}
+          {% set change = ((ln.debit - ln.credit) if acc.type != 'LIABILITY' else (ln.credit - ln.debit))|float %}
+          {% set running = running + change %}
+          <tr>
+            <td>{{ ln.line_date }}</td>
+            <td>{{ entry_number }}</td>
+            <td>{{ desc }}</td>
+            <td class="text-end">{{ '%.2f' % (ln.debit or 0) }}</td>
+            <td class="text-end">{{ '%.2f' % (ln.credit or 0) }}</td>
+            <td class="text-end">{{ '%.2f' % running }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <div class="col-md-3 d-flex align-items-end">
-      <button class="btn btn-primary" type="submit">{{ _('Filter / تصفية') }}</button>
     </div>
-  </form>
-  <div class="mb-2">{{ _('Opening Balance / رصيد افتتاحي') }}: <strong>{{ '%.2f' % opening_balance }}</strong></div>
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>{{ _('Date') }}</th>
-        <th>{{ _('Entry') }}</th>
-        <th>{{ _('Description') }}</th>
-        <th class="text-end">{{ _('Debit') }}</th>
-        <th class="text-end">{{ _('Credit') }}</th>
-        <th class="text-end">{{ _('Running Balance') }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% set running = opening_balance %}
-      {% for ln, entry_number, desc in entries %}
-      {% set change = (ln.debit - ln.credit) if acc.type != 'LIABILITY' else (ln.credit - ln.debit) %}
-      {% set running = running + change %}
-      <tr>
-        <td>{{ ln.line_date }}</td>
-        <td>{{ entry_number }}</td>
-        <td>{{ desc }}</td>
-        <td class="text-end">{{ '%.2f' % (ln.debit or 0) }}</td>
-        <td class="text-end">{{ '%.2f' % (ln.credit or 0) }}</td>
-        <td class="text-end">{{ '%.2f' % running }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  </div>
   {% else %}
-  <div class="alert alert-danger">{{ _('Account not found / الحساب غير موجود') }}</div>
+  <div class="ops-form-card">
+    <div class="ops-form-body">
+      <div class="alert alert-danger mb-0"><i class="fa-solid fa-circle-exclamation me-2"></i>{{ _('Account not found') }}</div>
+    </div>
+  </div>
   {% endif %}
 </div>
 {% endblock %}

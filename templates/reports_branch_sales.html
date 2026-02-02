@@ -1,47 +1,59 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Branch Sales by Day / مبيعات الفرع حسب اليوم') }}{% endblock %}
+{% block title %}{{ _('Branch Sales by Day') }}{% endblock %}
 {% block content %}
-<div class="container py-3">
-  <div class="section-header mb-3">
-    <h4 class="mb-0">{{ _('Branch Sales by Day / مبيعات الفرع حسب اليوم') }}</h4>
-    <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary" href="{{ url_for('reports_branch_sales_print', year=year, month=month, branch=branch) }}">🖨️ {{ _('Print') }}</a>
-      <a class="btn btn-outline-primary" href="{{ url_for('dashboard') }}">🏠 {{ _('Dashboard') }}</a>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-chart-column"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Branch Sales by Day') }}</h1>
+      <span class="ops-subtitle">{{ _('View daily sales by branch and month') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('reports.reports') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-chart-line me-1"></i>{{ _('Reports') }}</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('reports.reports_branch_sales_print', year=year, month=month, branch=branch) }}" target="_blank"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
     </div>
   </div>
 
-  <form method="get" class="row g-2 align-items-end mb-3">
-    <div class="col-auto">
-      <label class="form-label form-label-sm">{{ _('Year') }}</label>
-      <input type="number" name="year" class="form-control form-control-sm" value="{{ year }}"/>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Filters') }}</div>
+    <div class="ops-form-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label">{{ _('Year') }}</label>
+          <input type="number" name="year" class="form-control" value="{{ year }}"/>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">{{ _('Month') }}</label>
+          <input type="number" name="month" class="form-control" value="{{ month }}" min="1" max="12"/>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">{{ _('Branch') }}</label>
+          <select name="branch" class="form-select">
+            <option value="all" {{ 'selected' if branch=='all' }}>{{ _('All') }}</option>
+            <option value="place_india" {{ 'selected' if branch=='place_india' }}>{{ _('Place India') }}</option>
+            <option value="china_town" {{ 'selected' if branch=='china_town' }}>{{ _('China Town') }}</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-primary" type="submit"><i class="fa-solid fa-filter me-1"></i>{{ _('Apply') }}</button>
+        </div>
+      </form>
     </div>
-    <div class="col-auto">
-      <label class="form-label form-label-sm">{{ _('Month') }}</label>
-      <input type="number" name="month" class="form-control form-control-sm" value="{{ month }}" min="1" max="12"/>
-    </div>
-    <div class="col-auto">
-      <label class="form-label form-label-sm">{{ _('Branch') }}</label>
-      <select name="branch" class="form-select form-select-sm">
-        <option value="all" {{ 'selected' if branch=='all' }}>{{ _('All') }}</option>
-        <option value="place_india" {{ 'selected' if branch=='place_india' }}>{{ _('Place India') }}</option>
-        <option value="china_town" {{ 'selected' if branch=='china_town' }}>{{ _('China Town') }}</option>
-      </select>
-    </div>
-    <div class="col-auto">
-      <button class="btn btn-sm btn-primary">{{ _('Apply / تطبيق') }}</button>
-    </div>
-  </form>
+  </div>
 
-  <div class="card p-3">
-    <div class="table-responsive">
-      <table class="table table-sm align-middle">
-        <thead>
-          <tr>
-            <th>{{ _('Date / التاريخ') }}</th>
-            <th class="text-end">{{ _('Invoices / الفواتير') }}</th>
-            <th class="text-end">{{ _('Total / الإجمالي') }}</th>
-            <th class="text-end">{{ _('Average / المتوسط') }}</th>
-            <th>{{ _('Payment Methods / طرق الدفع') }}</th>
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('Daily totals') }}</div>
+    <div class="ops-form-body">
+      <div class="screen-table-wrap">
+        <table class="table screen-table table-sm align-middle">
+          <thead>
+            <tr>
+            <th>{{ _('Date') }}</th>
+            <th class="text-end">{{ _('Invoices') }}</th>
+            <th class="text-end">{{ _('Total') }}</th>
+            <th class="text-end">{{ _('Average') }}</th>
+            <th>{{ _('Payment Methods') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -75,6 +87,7 @@
           </tr>
         </tfoot>
       </table>
+    </div>
     </div>
   </div>
 </div>

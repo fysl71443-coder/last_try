@@ -1,114 +1,549 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Customers / العملاء') }}{% endblock %}
+{% block title %}{{ _('Customers') }}{% endblock %}
 {% block content %}
-<div class="container py-3">
-  <div class="section-header">
-    <h3>{{ _('Customers / العملاء') }}</h3>
-    <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary" href="#">{{ _('Export CSV / تصدير CSV') }}</a>
+<div class="container py-4 ops-layout hub-wrap customers-hub">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-users"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Customers') }}</h1>
+      <span class="ops-subtitle">{{ _('Manage customers and contacts') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2 align-items-center">
+      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('customers.customers_receivables_statements') }}" data-partial-links>
+        <i class="fa-solid fa-file-invoice-dollar me-1"></i>{{ _('Receivables & Statements') }}
+      </a>
+      <button type="button" class="btn btn-primary btn-sm" data-panel="panel-add" id="btn-goto-add">
+        <i class="fa-solid fa-plus me-1"></i>{{ _('New Customer') }}
+      </button>
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('main.dashboard') }}" data-partial-links>
+        <i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}
+      </a>
     </div>
   </div>
 
-  <div class="card mb-3"><div class="card-body">
-    <form method="get" class="row g-2 align-items-end">
-      <div class="col-md-6">
-        <label class="form-label">{{ _('Search by name or phone / البحث بالاسم أو الهاتف') }}</label>
-        <input class="form-control" name="q" value="{{ q or '' }}" placeholder="{{ _('Type to filter...') }}">
-      </div>
-      <div class="col-md-2">
-        <button class="btn btn-outline-primary w-100">{{ _('Filter / تصفية') }}</button>
-      </div>
-    </form>
-  </div></div>
-
-  <div class="card mb-3"><div class="card-body">
-    <form method="post" class="row g-2 align-items-end">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('Name / الاسم') }}</label>
-        <input name="name" class="form-control" required>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">{{ _('Phone / الهاتف') }}</label>
-        <input name="phone" class="form-control">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">{{ _('Discount %% / الخصم %%') }}</label>
-        <input name="discount_percent" type="number" step="0.01" value="0" class="form-control">
-      </div>
-      <div class="col-md-2">
-        <button class="btn btn-success w-100">{{ _('Add / إضافة') }}</button>
-      </div>
-    </form>
-    <hr>
-    <div class="row g-2 align-items-end">
-      <div class="col-md-6">
-        <form method="POST" action="#" enctype="multipart/form-data" class="row g-2 align-items-end">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-          <div class="col-12">
-            <label class="form-label">CSV (name,phone,discount_percent)</label>
-            <input type="file" name="file" accept=".csv" class="form-control" required>
-          </div>
-          <div class="col-12">
-            <button class="btn btn-outline-primary w-100">{{ _('Import CSV / استيراد CSV') }}</button>
-          </div>
-        </form>
-      </div>
-      <div class="col-md-3">
-        <form method="POST" action="#">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-          <button class="btn btn-outline-secondary w-100">{{ _('Import Excel / استيراد Excel') }}</button>
-        </form>
-      </div>
-      <div class="col-md-3">
-        <form method="POST" action="#">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-          <button class="btn btn-outline-secondary w-100">{{ _('Import PDF / استيراد PDF') }}</button>
-        </form>
+  <!-- KPI Cards: white background, colored text -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="kpi-card kpi-card--white kpi-card--text-blue">
+        <div class="kpi-value">{{ total_customers or 0 }}</div>
+        <div class="kpi-label">{{ _('Total Customers') }}</div>
       </div>
     </div>
-  </div></div>
-
-  <div class="card"><div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>{{ _('Name / الاسم') }}</th>
-            <th>{{ _('Phone / الهاتف') }}</th>
-            <th class="text-end">{{ _('Discount %% / الخصم %%') }}</th>
-            <th>{{ _('Status / الحالة') }}</th>
-            <th class="text-end" style="width:260px;">{{ _('Actions / إجراءات') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for c in customers %}
-          <tr>
-            <td>{{ c.name }}</td>
-            <td>{{ c.phone or '-' }}</td>
-            <td class="text-end">{{ '%.2f'| format(c.discount_percent or 0) }}</td>
-            <td>
-              {% if c.active %}<span class="badge bg-success">{{ _('Active / نشط') }}</span>{% else %}<span class="badge bg-secondary">{{ _('Inactive / غير نشط') }}</span>{% endif %}
-            </td>
-            <td class="text-end">
-              <a class="btn btn-sm btn-outline-primary" href="#">{{ _('Edit / تعديل') }}</a>
-              <form method="post" action="{{ url_for('main.customer_toggle', cid=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Confirm toggle status? / تأكيد تغيير الحالة؟') }}')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-sm btn-outline-secondary">{{ _('Toggle / تبديل') }}</button>
-              </form>
-              <form method="post" action="{{ url_for('main.customer_delete', cid=c.id) }}" class="d-inline" onsubmit="return confirm('{{ _('Delete this customer? / حذف هذا العميل؟') }}')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-sm btn-outline-danger">{{ _('Delete / حذف') }}</button>
-              </form>
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="5" class="text-center text-muted">{{ _('No customers yet / لا يوجد عملاء بعد') }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="col-md-3">
+      <div class="kpi-card kpi-card--white kpi-card--text-green">
+        <div class="kpi-value">{{ active_customers or 0 }}</div>
+        <div class="kpi-label">{{ _('Active') }}</div>
+      </div>
     </div>
-  </div></div>
+    <div class="col-md-3">
+      <div class="kpi-card kpi-card--white kpi-card--text-orange">
+        <div class="kpi-value">{{ (total_customers or 0) - (active_customers or 0) }}</div>
+        <div class="kpi-label">{{ _('Inactive') }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="kpi-card kpi-card--white kpi-card--text-purple">
+        <div class="kpi-value">{{ pagination.total if pagination else 0 }}</div>
+        <div class="kpi-label">{{ _('Showing') }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ops-tabs-wrap">
+    <div class="ops-tabs" role="tablist">
+      <button type="button" class="ops-tab active" data-panel="panel-list">
+        <i class="fa-solid fa-list me-1"></i>{{ _('List') }}
+      </button>
+      <button type="button" class="ops-tab" data-panel="panel-add">
+        <i class="fa-solid fa-plus me-1"></i>{{ _('Add') }}
+      </button>
+    </div>
+  </div>
+
+  <div class="ops-body ops-body-no-sidebar">
+    <main class="ops-main">
+      <!-- List Panel -->
+      <div id="panel-list" class="ops-panel" data-panel>
+        <div class="ops-form-card">
+          <div class="ops-form-head">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+              <div>
+                <h3 class="mb-0">{{ _('Customers List') }}</h3>
+                <small class="text-muted">{{ _('Manage and search customers') }}</small>
+              </div>
+              <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-outline-primary btn-sm" onclick="exportCustomers()">
+                  <i class="fa-solid fa-download me-1"></i>{{ _('Export') }}
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Filters and Search -->
+          <div class="ops-form-body border-bottom">
+            <form method="get" class="row g-3 align-items-end">
+              <input type="hidden" name="page" value="1">
+              <input type="hidden" name="sort" value="{{ sort_by }}">
+              <input type="hidden" name="order" value="{{ sort_order }}">
+              
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">{{ _('Search') }}</label>
+                <div class="input-group">
+                  <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+                  <input type="text" name="q" value="{{ q or '' }}" class="form-control" 
+                         placeholder="{{ _('Search by name or phone') }}">
+                </div>
+              </div>
+              
+              <div class="col-md-2">
+                <label class="form-label small fw-semibold">{{ _('Type') }}</label>
+                <select name="type" class="form-select">
+                  <option value="all" {% if type_filter == 'all' %}selected{% endif %}>{{ _('All') }}</option>
+                  <option value="cash" {% if type_filter == 'cash' %}selected{% endif %}>{{ _('Cash') }}</option>
+                  <option value="credit" {% if type_filter == 'credit' %}selected{% endif %}>{{ _('Credit') }}</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-semibold">{{ _('Status') }}</label>
+                <select name="status" class="form-select">
+                  <option value="all" {% if status_filter == 'all' %}selected{% endif %}>{{ _('All') }}</option>
+                  <option value="active" {% if status_filter == 'active' %}selected{% endif %}>{{ _('Active') }}</option>
+                  <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>{{ _('Inactive') }}</option>
+                </select>
+              </div>
+              
+              <div class="col-md-2">
+                <label class="form-label small fw-semibold">{{ _('Per Page') }}</label>
+                <select name="per_page" class="form-select">
+                  <option value="25" {% if request.args.get('per_page', '50') == '25' %}selected{% endif %}>25</option>
+                  <option value="50" {% if request.args.get('per_page', '50') == '50' %}selected{% endif %}>50</option>
+                  <option value="100" {% if request.args.get('per_page', '50') == '100' %}selected{% endif %}>100</option>
+                  <option value="200" {% if request.args.get('per_page', '50') == '200' %}selected{% endif %}>200</option>
+                </select>
+              </div>
+              
+              <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">
+                  <i class="fa-solid fa-filter me-1"></i>{{ _('Apply Filters') }}
+                </button>
+              </div>
+            </form>
+            
+            {% if q or status_filter != 'all' or type_filter != 'all' %}
+            <div class="mt-2">
+              <a href="{{ url_for('customers.customers') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fa-solid fa-times me-1"></i>{{ _('Clear Filters') }}
+              </a>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Cards Grid -->
+          <div class="ops-form-body p-3">
+            <div class="customers-cards-container" style="max-height: calc(100vh - 450px); overflow-y: auto; overflow-x: hidden;">
+              {% if customers %}
+                <div class="row g-3">
+                  {% for c in customers %}
+                  <div class="col-md-6 col-lg-4 col-xl-3">
+                    <div class="customer-card card h-100 shadow-sm border-0" onclick="showCustomerDetails({{ c.id }})" style="cursor: pointer; transition: all 0.3s;">
+                      <div class="card-body bg-white">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                          <div class="flex-grow-1">
+                            <h5 class="card-title mb-1 fw-bold customer-card-name">{{ c.name }}</h5>
+                          </div>
+                          <div class="d-flex gap-1 flex-wrap">
+                            <span class="badge {% if (c.customer_type or 'cash') == 'credit' %}badge-type-credit{% else %}badge-type-cash{% endif %}">
+                              {% if (c.customer_type or 'cash') == 'credit' %}{{ _('Credit') }}{% else %}{{ _('Cash') }}{% endif %}
+                            </span>
+                            <span class="badge badge-status-{% if c.active %}active{% else %}inactive{% endif %}">
+                              {% if c.active %}{{ _('Active') }}{% else %}{{ _('Inactive') }}{% endif %}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div class="customer-info">
+                          {% if c.phone %}
+                          <div class="mb-2">
+                            <i class="fa-solid fa-phone me-2 customer-icon-phone"></i>
+                            <a href="tel:{{ c.phone }}" class="customer-link-phone text-decoration-none" onclick="event.stopPropagation();">{{ c.phone }}</a>
+                          </div>
+                          {% else %}
+                          <div class="mb-2 text-muted">
+                            <i class="fa-solid fa-phone text-muted me-2"></i>
+                            <span>-</span>
+                          </div>
+                          {% endif %}
+                          
+                          <div class="mb-2">
+                            <i class="fa-solid fa-percent me-2 customer-icon-discount"></i>
+                            <span class="small customer-label-muted">{{ _('Discount') }}: 
+                              <strong class="customer-value-discount">
+                                {{ '%.2f'|format(c.discount_percent or 0) }}%
+                              </strong>
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div class="mt-3 pt-3 border-top">
+                          <div class="btn-group w-100" role="group" onclick="event.stopPropagation();">
+                            {% if (c.customer_type or 'cash') == 'credit' %}
+                            <a href="{{ url_for('customers.customer_statement', cid=c.id) }}" class="btn btn-sm btn-outline-info" title="{{ _('Statement') }}">
+                              <i class="fa-solid fa-file-invoice"></i>
+                            </a>
+                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editCustomer({{ c.id }})" title="{{ _('Edit') }}">
+                              <i class="fa-solid fa-edit"></i>
+                            </button>
+                            <form method="post" action="{{ url_for('customers.customer_toggle', cid=c.id) }}" class="d-inline" 
+                                  onsubmit="return confirm('{{ _('Confirm toggle status?') }}')">
+                              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                              <button type="submit" class="btn btn-sm btn-outline-warning" title="{{ _('Toggle Status') }}">
+                                <i class="fa-solid fa-toggle-{% if c.active %}on{% else %}off{% endif %}"></i>
+                              </button>
+                            </form>
+                            <form method="post" action="{{ url_for('customers.customer_delete', cid=c.id) }}" class="d-inline" 
+                                  onsubmit="return confirm('{{ _('Delete this customer?') }}')">
+                              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                              <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ _('Delete') }}">
+                                <i class="fa-solid fa-trash"></i>
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="text-center py-5">
+                  <i class="fa-solid fa-users-slash fa-3x text-muted mb-3 d-block"></i>
+                  <div class="text-muted">{{ _('No customers found') }}</div>
+                  {% if q %}
+                  <small class="text-muted">{{ _('Try different search terms') }}</small>
+                  {% endif %}
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- Pagination -->
+            {% if pagination and pagination.pages > 1 %}
+            <div class="ops-form-body border-top mt-3">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="text-muted small">
+                  {{ _('Showing') }} {{ ((pagination.page - 1) * pagination.per_page) + 1 }} 
+                  {{ _('to') }} {{ pagination.page * pagination.per_page if pagination.page * pagination.per_page < pagination.total else pagination.total }} 
+                  {{ _('of') }} {{ pagination.total }} {{ _('customers') }}
+                </div>
+                <nav>
+                  <ul class="pagination pagination-sm mb-0">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                      <a class="page-link" href="?page={{ pagination.prev_num }}&q={{ q or '' }}&status={{ status_filter }}&sort={{ sort_by }}&order={{ sort_order }}&per_page={{ request.args.get('per_page', '50') }}">
+                        <i class="fa-solid fa-chevron-left"></i>
+                      </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                      <span class="page-link"><i class="fa-solid fa-chevron-left"></i></span>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                      {% if page_num %}
+                        {% if page_num == pagination.page %}
+                        <li class="page-item active">
+                          <span class="page-link">{{ page_num }}</span>
+                        </li>
+                        {% else %}
+                        <li class="page-item">
+                          <a class="page-link" href="?page={{ page_num }}&q={{ q or '' }}&status={{ status_filter }}&sort={{ sort_by }}&order={{ sort_order }}&per_page={{ request.args.get('per_page', '50') }}">{{ page_num }}</a>
+                        </li>
+                        {% endif %}
+                      {% else %}
+                        <li class="page-item disabled">
+                          <span class="page-link">…</span>
+                        </li>
+                      {% endif %}
+                    {% endfor %}
+                    
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                      <a class="page-link" href="?page={{ pagination.next_num }}&q={{ q or '' }}&status={{ status_filter }}&sort={{ sort_by }}&order={{ sort_order }}&per_page={{ request.args.get('per_page', '50') }}">
+                        <i class="fa-solid fa-chevron-right"></i>
+                      </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                      <span class="page-link"><i class="fa-solid fa-chevron-right"></i></span>
+                    </li>
+                    {% endif %}
+                  </ul>
+                </nav>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Add Panel -->
+      <div id="panel-add" class="ops-panel d-none" data-panel>
+        <div class="ops-form-card">
+          <div class="ops-form-head">
+            <h3 class="mb-0">{{ _('Add Customer') }}</h3>
+            <small class="text-muted">{{ _('Create a new customer record') }}</small>
+          </div>
+          <div class="ops-form-body">
+            <form method="post" class="row g-3">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">{{ _('Name') }} <span class="text-danger">*</span></label>
+                <input name="name" class="form-control" required placeholder="{{ _('Customer name') }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">{{ _('Phone') }}</label>
+                <input name="phone" type="tel" class="form-control" placeholder="{{ _('Phone number') }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label fw-semibold">{{ _('Type') }}</label>
+                <select name="customer_type" class="form-select">
+                  <option value="cash">{{ _('Cash') }}</option>
+                  <option value="credit">{{ _('Credit') }}</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label fw-semibold">{{ _('Discount %%') }}</label>
+                <input name="discount_percent" type="number" step="0.01" min="0" max="100" value="0" 
+                       class="form-control" placeholder="0.00">
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary">
+                  <i class="fa-solid fa-save me-1"></i>{{ _('Add Customer') }}
+                </button>
+                <button type="reset" class="btn btn-outline-secondary">
+                  <i class="fa-solid fa-undo me-1"></i>{{ _('Reset') }}
+                </button>
+              </div>
+            </form>
+            
+            <hr class="my-4">
+            
+            <div class="row g-3">
+              <div class="col-12">
+                <h5 class="mb-3">{{ _('Bulk Import') }}</h5>
+              </div>
+              <div class="col-md-6">
+                <form method="POST" action="#" enctype="multipart/form-data">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <div class="mb-3">
+                    <label class="form-label fw-semibold">{{ _('Import CSV') }}</label>
+                    <input type="file" name="file" accept=".csv" class="form-control" required>
+                    <small class="text-muted">{{ _('Format: name, phone, discount_percent') }}</small>
+                  </div>
+                  <button type="submit" class="btn btn-outline-primary">
+                    <i class="fa-solid fa-file-csv me-1"></i>{{ _('Import CSV') }}
+                  </button>
+                </form>
+              </div>
+              <div class="col-md-6">
+                <form method="POST" action="#">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <div class="mb-3">
+                    <label class="form-label fw-semibold">{{ _('Import Excel') }}</label>
+                    <input type="file" name="file" accept=".xlsx,.xls" class="form-control">
+                    <small class="text-muted">{{ _('Excel file with customer data') }}</small>
+                  </div>
+                  <button type="submit" class="btn btn-outline-secondary">
+                    <i class="fa-solid fa-file-excel me-1"></i>{{ _('Import Excel') }}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 </div>
-{% endblock %}
 
+<!-- Customer Details Modal -->
+<div class="modal fade" id="customerModal" tabindex="-1" aria-labelledby="customerModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="customerModalLabel">{{ _('Customer Details') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="customerModalBody">
+        <!-- Content will be loaded here -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Close') }}</button>
+        <a id="customerEditBtn" href="#" class="btn btn-primary">
+          <i class="fa-solid fa-edit me-1"></i>{{ _('Edit') }}
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const customersData = {
+  {% for c in customers %}
+  {{ c.id }}: {
+    id: {{ c.id }},
+    name: {{ c.name|tojson }},
+    phone: {{ (c.phone or '')|tojson }},
+    discount_percent: {{ c.discount_percent or 0 }},
+    active: {{ 'true' if c.active else 'false' }},
+    edit_url: '/customers/{{ c.id }}/edit'
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+};
+
+function showCustomerDetails(id) {
+  const customer = customersData[id];
+  if (!customer) return;
+  
+  const modalBody = document.getElementById('customerModalBody');
+  const editBtn = document.getElementById('customerEditBtn');
+  
+  editBtn.href = customer.edit_url;
+  
+  modalBody.innerHTML = `
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-user me-2 text-primary"></i>{{ _('Name') }}</label>
+          <div class="detail-value">${customer.name}</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-phone me-2 text-success"></i>{{ _('Phone') }}</label>
+          <div class="detail-value">
+            ${customer.phone ? `<a href="tel:${customer.phone}" class="text-decoration-none">${customer.phone}</a>` : '-'}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-percent me-2 text-info"></i>{{ _('Discount %%') }}</label>
+          <div class="detail-value">
+            <span class="badge ${customer.discount_percent > 0 ? 'bg-success' : 'bg-secondary'} fs-6">
+              ${customer.discount_percent.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="detail-item">
+          <label class="detail-label"><i class="fa-solid fa-toggle-${customer.active ? 'on' : 'off'} me-2 text-${customer.active ? 'success' : 'secondary'}"></i>{{ _('Status') }}</label>
+          <div class="detail-value">
+            <span class="badge ${customer.active ? 'bg-success' : 'bg-secondary'}">
+              ${customer.active ? '{{ _("Active") }}' : '{{ _("Inactive") }}'}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  const modal = new bootstrap.Modal(document.getElementById('customerModal'));
+  modal.show();
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  function goPanel(id){
+    document.querySelectorAll('.ops-tabs-wrap .ops-tab[data-panel]').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelectorAll('.ops-panel[data-panel]').forEach(function(p){ p.classList.add('d-none'); });
+    var t = document.querySelector('.ops-tab[data-panel="'+id+'"]');
+    var p = document.getElementById(id);
+    if (t) t.classList.add('active');
+    if (p) p.classList.remove('d-none');
+  }
+  document.querySelectorAll('.ops-tabs-wrap .ops-tab[data-panel]').forEach(function(btn){
+    btn.addEventListener('click', function(){ goPanel(this.getAttribute('data-panel')); });
+  });
+  document.getElementById('btn-goto-add')?.addEventListener('click', function(){ goPanel('panel-add'); });
+});
+
+function editCustomer(id) {
+  window.location.href = '/customers/' + id + '/edit';
+}
+
+function exportCustomers() {
+  const params = new URLSearchParams(window.location.search);
+  params.set('export', 'csv');
+  window.location.href = '{{ url_for("customers.customers") }}?' + params.toString();
+}
+</script>
+
+<style>
+/* Customers hub: white cards, colored text */
+.customers-hub .kpi-card--white {
+  background: #fff !important;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #cbd5e0;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.customers-hub .kpi-card--white .kpi-label { color: #64748b !important; font-weight: 600; }
+.customers-hub .kpi-card--text-blue .kpi-value { color: #1565c0 !important; }
+.customers-hub .kpi-card--text-blue { border-left-color: #1565c0; }
+.customers-hub .kpi-card--text-green .kpi-value { color: #15803d !important; }
+.customers-hub .kpi-card--text-green { border-left-color: #15803d; }
+.customers-hub .kpi-card--text-orange .kpi-value { color: #c2410c !important; }
+.customers-hub .kpi-card--text-orange { border-left-color: #c2410c; }
+.customers-hub .kpi-card--text-purple .kpi-value { color: #6b21a8 !important; }
+.customers-hub .kpi-card--text-purple { border-left-color: #6b21a8; }
+
+.customers-cards-container {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+.customers-cards-container::-webkit-scrollbar { width: 8px; }
+.customers-cards-container::-webkit-scrollbar-track { background: #f7fafc; border-radius: 4px; }
+.customers-cards-container::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 4px; }
+.customers-cards-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+.customer-card {
+  background: #fff !important;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border-left: 4px solid #1565c0;
+  transition: all 0.25s ease;
+}
+.customer-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(21, 101, 192, 0.12) !important;
+  border-left-color: #0d47a1;
+}
+.customer-card-name { color: #0d47a1 !important; font-size: 1.05rem; }
+.customer-icon-phone { color: #0d9488; }
+.customer-link-phone { color: #0f766e; font-weight: 500; }
+.customer-link-phone:hover { color: #0d47a1; }
+.customer-icon-discount { color: #c2410c; }
+.customer-label-muted { color: #64748b; }
+.customer-value-discount { color: #15803d; }
+.badge-type-credit { background: #e0f2fe; color: #0369a1; }
+.badge-type-cash { background: #fef3c7; color: #b45309; }
+.badge-status-active { background: #dcfce7; color: #15803d; }
+.badge-status-inactive { background: #f1f5f9; color: #64748b; }
+
+.customer-info { font-size: 0.9rem; }
+.customer-info i { width: 20px; text-align: center; }
+
+.detail-item { margin-bottom: 1.5rem; }
+.detail-label {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+.detail-value { font-size: 1rem; color: #1e293b; word-break: break-word; }
+</style>
+{% endblock %}

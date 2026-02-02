@@ -22,6 +22,10 @@ except Exception:
             except Exception:
                 pass
 from flask_wtf.csrf import CSRFProtect
+try:
+    from flask_caching import Cache
+except Exception:
+    Cache = None
 
 # Initialize extensions with eventlet-compatible session options
 db = SQLAlchemy(session_options={
@@ -34,6 +38,7 @@ migrate = Migrate()
 login_manager = LoginManager()
 babel = Babel()
 csrf = CSRFProtect()
+cache = Cache() if Cache else None
 
 # SocketIO will be initialized conditionally when needed
 socketio = None

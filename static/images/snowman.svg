@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 200" width="120" height="200">
+  <defs>
+    <linearGradient id="snow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fcff"/>
+      <stop offset="100%" stop-color="#e8f4fc"/>
+    </linearGradient>
+    <linearGradient id="hat" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2c3e50"/>
+      <stop offset="100%" stop-color="#1a252f"/>
+    </linearGradient>
+    <linearGradient id="scarf" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#c0392b"/>
+      <stop offset="100%" stop-color="#e74c3c"/>
+    </linearGradient>
+  </defs>
+  <!-- base -->
+  <ellipse cx="60" cy="175" rx="35" ry="12" fill="url(#snow)"/>
+  <circle cx="60" cy="155" r="28" fill="url(#snow)"/>
+  <!-- middle -->
+  <circle cx="60" cy="105" r="22" fill="url(#snow)"/>
+  <!-- head -->
+  <circle cx="60" cy="58" r="16" fill="url(#snow)"/>
+  <!-- hat -->
+  <rect x="44" y="20" width="32" height="25" rx="2" fill="url(#hat)"/>
+  <rect x="50" y="8" width="20" height="14" fill="url(#hat)"/>
+  <circle cx="60" cy="8" r="4" fill="#f1c40f"/>
+  <!-- scarf -->
+  <path d="M38 75 Q60 85 82 75 L82 95 Q60 88 38 95 Z" fill="url(#scarf)"/>
+  <!-- eyes -->
+  <circle cx="54" cy="55" r="3" fill="#2c3e50"/>
+  <circle cx="66" cy="55" r="3" fill="#2c3e50"/>
+  <!-- carrot nose -->
+  <path d="M68 58 L88 60 L68 62 Z" fill="#e67e22"/>
+  <!-- smile -->
+  <path d="M52 65 Q60 72 68 65" stroke="#2c3e50" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- buttons -->
+  <circle cx="60" cy="95" r="3" fill="#2c3e50"/>
+  <circle cx="60" cy="108" r="3" fill="#2c3e50"/>
+  <circle cx="60" cy="121" r="3" fill="#2c3e50"/>
+  <!-- arms -->
+  <path d="M38 100 L18 95" stroke="#8b4513" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M82 100 L102 95" stroke="#8b4513" stroke-width="4" fill="none" stroke-linecap="round"/>
+</svg>

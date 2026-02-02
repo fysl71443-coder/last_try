@@ -1,0 +1,146 @@
+# مراجعة شاملة للنظام ونتائج الاختبارات
+## Comprehensive System Review and Test Results
+
+تاريخ المراجعة: 2026-01-31
+
+---
+
+## ١. ملخص تنفيذي
+
+تمت مراجعة النظام من حيث:
+- **تشغيل الاختبارات الآلية** (E2E smoke و pytest)
+- **التدفق المحاسبي** من المعاملات إلى قيود اليومية ثم التقارير المالية
+- **التغطية والفجوات** واقتراحات التحسين
+
+---
+
+## ٢. الاختبارات المُنفَّذة ونتائجها
+
+### ٢.١ E2E Smoke (`tools/e2e_smoke.py`)
+
+**طريقة التشغيل:** `python tools/e2e_smoke.py`
+
+**النتيجة:** ✅ **جميع الفحوصات نجحت (All checks passed)**
+
+| المجموعة | المحتوى |
+|----------|---------|
+| **Login** | GET/POST `/login` |
+| **الصفحات الرئيسية** | `/`, `/dashboard`, `/invoices`, `/sales`, `/customers`, `/suppliers`, `/expenses`, `/purchases`, `/payments`, `/reports`, `/settings`, `/employees`, `/menu`, `/users`, `/vat`, `/chart-of-accounts`, `/financials/accounts_hub`, `/financials/operations`, `/journal`, `/pos/place_india`, `/pos/china_town`, `/orders`, `/table-settings` |
+| **التقارير والطباعة** | `/reports/sales`, `/reports/expenses`, `/reports/purchases`, `/reports/print/salaries_detailed`, `/vat/print`, `/financials/print/income_statement`, `/financials/print/trial_balance`, `/financials/print/balance_sheet`, `/journal/print/all`, `/reports/print/all-invoices/sales|purchases|expenses` |
+| **APIs (JSON)** | `/api/chart/list`, `/financials/api/trial_balance_json`, `/financials/api/accounts/list`, `/journal/api/journals`, `/financials/api/list_customers`, `/financials/api/list_suppliers`, `/financials/api/list_employees`, `/financials/api/unpaid_payroll_runs`, `/financials/api/account_ledger_json` |
+| **POST (عمليات)** | قيد يومية يدوي (`/journal/api/transactions/post`), إيداع بنكي سريع (`/financials/api/quick-txn`), تنظيف مكررات (dry_run), إضافة مصروف نوعي (`POST /expenses`) |
+
+**POST /expenses و CSRF:** هذا ليس خللاً — عميل الاختبار لا يرسل توكن CSRF، والنظام يتصرف بشكل صحيح برفض الطلب غير الموثوق (400). **الإجراء المعتمد:** اختبار يدوي واحد فقط بعد كل نشر (لا حاجة لـ Selenium حالياً).
+
+### ٢.٢ Pytest (`tests/`)
+
+**طريقة التشغيل:**  
+`python -m pytest tests/ -v --ignore=tests/test_accounting_integration.py`  
+(استبعاد اختبار التكامل مع خدمة Node.js لأنه يتطلب ACCOUNTING_API و ACCOUNTING_KEY)
+
+**النتيجة:** ✅ **7 اختبارات نجحت**
+
+| الاختبار | الوصف |
+|----------|--------|
+| `test_core_routes` | الصفحات الأساسية (الرئيسية، المبيعات، POS، القائمة، العملاء، الفواتير، VAT، التقارير) |
+| `test_purchase_and_payment_flow` | إنشاء فاتورة مشتريات ثم تسجيل دفعة جزئية ثم التحقق من صفحة المدفوعات |
+| `test_employee_salary_payment_flow` | تدفق دفع راتب موظف |
+| **`test_payroll_run_creates_accrual_journal`** | مسير الرواتب ينشئ قيد استحقاق (JE-PR) ويُرجع `entry_number`، والتحقق من وجود القيد في DB |
+| **`test_expense_creates_journal`** | حفظ مصروف (نوعي) ينشئ قيد مصروف (JE-EXP) مرتبط بالفاتورة |
+| **`test_settlement_pay_liability_creates_journal`** | سداد استحقاق رواتب من العمليات ينشئ قيد تسوية (JE-QTX) ويُرجع `entry_number` |
+| **`test_quick_txn_bank_deposit_creates_journal`** | عملية إيداع بنكي سريعة تنشئ قيداً وتُرجع `entry_number` |
+
+### ٢.٣ اختبارات استحقاق وتسوية حقيقية (`tests/test_real_accrual_settlement.py`)
+
+**طريقة التشغيل:** `python -m pytest tests/test_real_accrual_settlement.py -v`
+
+**الهدف:** التحقق من أن إنشاء الاستحقاقات (من الموظفين والمصروفات) وسدادها من شاشة العمليات يُنشئ القيود فعلياً ولا يُرجع نجاحاً بدون قيد.
+
+| الاختبار | ما يتحقق منه |
+|----------|---------------|
+| **مسير الرواتب** | POST `/api/payroll-run` → 200، `ok: true`، `entry_number` (مثل JE-PR-202602)، وجود قيد في `journal_entries` بنفس الرقم ومبلغ مدين/دائن = إجمالي الرواتب |
+| **مصروف** | POST `/expenses` (نوعي، غير مدفوع) → حفظ ناجح، وجود قيد `JE-EXP-{invoice_number}` في DB |
+| **سداد استحقاق رواتب** | POST `/financials/api/quick-txn` (نوع `pay_liability`، شهر مسير موجود) → 200، `entry_number`، وجود قيد تسوية في DB |
+| **إيداع بنكي** | POST `/financials/api/quick-txn` (نوع `bank_deposit`) → 200، `entry_number` |
+
+### ٢.٤ اختبارات التكامل المحاسبي (`tests/test_accounting_integration.py`)
+
+تُشغَّل فقط عند ضبط **ACCOUNTING_API** و **ACCOUNTING_KEY** (خدمة Node.js للمحاسبة). في بيئة بدون هذه المتغيرات يتم **تخطي** جميع اختبارات هذا الملف (skip). لا تؤثر على نتيجة المراجعة الحالية لأن التطبيق يعتمد على قيود اليومية المحلية (Flask + SQLite/PostgreSQL) كمصدر للحقيقة.
+
+---
+
+## ٣. التدفق المحاسبي (من المعاملات إلى التقارير)
+
+### ٣.١ مصدر الحقيقة
+
+- **قيود اليومية:** جدولان `journal_entries` و `journal_lines` (مع `Account` وربط بالحسابات).
+- **التقارير المالية** (ميزان المراجعة، قائمة الدخل، الميزانية العمومية، كشف الحساب) تُبنى من **JournalLine + JournalEntry** (القيود المرحَّلة فقط `status='posted'`).
+
+### ٣.٢ إنشاء القيود حسب نوع المعاملة
+
+| المعاملة | الدالة/المسار | وصف القيد |
+|----------|----------------|-----------|
+| **مبيعات** | `_create_sale_journal(inv)` في `app/routes.py` | مدين: صندوق/بنك أو ذمم مدينة؛ دائن: مبيعات، ضريبة مبيعات |
+| **مشتريات** | `_create_purchase_journal(inv)` في `app/routes.py` | مدين: مخزون/مصروف، ضريبة مدخلات؛ دائن: موردون |
+| **مصروفات** | `_create_expense_journal(inv)` في `app/routes.py`، تُستدعى من `routes/expenses.py` | مدين: مصروف (حسب نوع المصروف)، ضريبة إن وُجدت؛ دائن: صندوق/بنك أو ذمم دائنة (مورد/منصة/حكومة حسب `liability_account_code`) |
+| **سداد مبيعات** | `_create_receipt_journal(...)` | مدين: صندوق/بنك؛ دائن: ذمم مدينة |
+| **سداد مشتريات/مصروفات** | `_create_supplier_payment_journal` / `_create_expense_payment_journal` | مدين: ذمم دائنة؛ دائن: صندوق/بنك |
+| **رواتب (استحقاق)** | قيود من `app/routes.py` (رواتب) | مدين: مصروف رواتب؛ دائن: ذمم رواتب |
+| **دفع رواتب** | قيود من `app/routes.py` (دفع رواتب) | مدين: ذمم رواتب؛ دائن: صندوق/بنك |
+| **عمليات سريعة (حسابات)** | `POST /financials/api/quick-txn` | إيداع/سحب/تحويل حسب النوع |
+| **قيد يدوي** | `POST /journal/api/transactions/post` | مدين/دائن حسب المدخلات |
+
+### ٣.٣ التقارير المالية وربطها بالقيود
+
+| التقرير | المصدر في الكود | الاعتماد على القيود |
+|---------|-----------------|---------------------|
+| **ميزان المراجعة** | `routes/financials.py`: `api_trial_balance_json`, `trial_balance`, `print_trial_balance` | تجميع `JournalLine` (حتى تاريخ معين، مرحّل فقط) حسب `Account.code` مع دعم الشجرة من `coa_new_tree` |
+| **قائمة الدخل** | `income_statement`, `print_income_statement` | إيرادات ومصروفات من `_jl_sum_codes` (مجموع مدين/دائن من JournalLine حسب رموز الحسابات)، مع دعم الفرع والربع/الشهر |
+| **الميزانية العمومية** | `balance_sheet`, `print_balance_sheet` | أرصدة من `JournalLine` حتى تاريخ معين، تصنيف أصول/التزامات/حقوق ملكية |
+| **كشف الحساب** | `api_account_ledger_json` | حركات من `JournalLine` + `JournalEntry` للحساب وتاريخ البداية/النهاية، مع رصيد افتتاحي وإغلاقي |
+
+الخلاصة: **التدفق المحاسبي متسق** — أي معاملة تُسجَّل في قيود اليومية تظهر في ميزان المراجعة وكشف الحساب وقائمة الدخل/الميزانية حسب نوع الحساب والتواريخ.
+
+---
+
+## ٤. فجوات وتوصيات
+
+### ٤.١ تغطية الاختبارات
+
+- **POST /expenses:** السلوك صحيح (رفض طلبات بدون CSRF). الإجراء: **اختبار يدوي واحد بعد كل نشر** — لا حاجة لـ Selenium حالياً.
+- **واجهة المستخدم (UI):** الاختبارات الحالية تركز على المسارات وواجهات JSON؛ كافٍ للمرحلة الحالية.
+
+### ٤.٢ اختبارات محاسبية أعمق (Nice to have)
+
+ليست إلزامية، لكنها ستجعل النظام bulletproof — اقتراحات مستقبلية:
+
+| الاختبار | الهدف |
+|----------|--------|
+| **Σ مدين = Σ دائن** | التحقق من أن كل القيود المرحّلة متوازنة (مجموع المدين = مجموع الدائن لكل قيد). |
+| **صافي قائمة الدخل = التغيّر في حقوق الملكية** | التحقق من تطابق صافي الربح (قائمة الدخل) مع التغيّر في حقوق الملكية في الميزانية خلال نفس الفترة. |
+
+### ٤.٣ الهجرة والتشغيل
+
+- **تطبيق الهجرات:** في بيئة التطوير/الإنتاج تأكد من تشغيل `flask db upgrade` لتفعيل الأعمدة الجديدة (مثل `parent_account_code`, `name_ar`, `name_en` في `accounts` و `liability_account_code` في `expense_invoices`) لدعم الحسابات الفرعية والمصروفات الموجهة حسب النوع.
+- **النشر على Render مع PostgreSQL:** راجع `docs/DEPLOY_RENDER_POSTGRES_WITHOUT_DATA_LOSS.md` لتفاصيل النشر دون فقدان البيانات.
+
+### ٤.٤ توثيق إضافي
+
+- خريطة النظام: `docs/SYSTEM_MAP.md`
+- التصميم: `docs/DESIGN_SYSTEM.md`
+- دليل النشر: `docs/DEPLOY_RENDER_POSTGRES_WITHOUT_DATA_LOSS.md`
+
+---
+
+## ٥. الخلاصة
+
+| البند | الحالة |
+|-------|--------|
+| صفحات النظام والمسارات الرئيسية | ✅ تعمل (مغطاة بـ E2E smoke و pytest) |
+| تقارير المبيعات/المصروفات/المشتريات والطباعة | ✅ تعمل |
+| واجهات الحسابات (ميزان مراجعة، قائمة دخل، ميزانية، كشف حساب) | ✅ تعمل وتعتمد على قيود اليومية |
+| التدفق المحاسبي (معاملات → قيود → تقارير) | ✅ متسق ومُحقَّق في الكود |
+| اختبار حفظ مصروف نوعي (POST /expenses) | اختبار يدوي واحد بعد كل نشر (السلوك صحيح؛ لا Selenium) |
+| اختبارات التكامل مع خدمة Node.js محاسبة | تُتخطى عند عدم ضبط ACCOUNTING_API/ACCOUNTING_KEY |
+
+النظام جاهز للاستخدام من حيث التدفق المحاسبي حتى التقارير؛ يُوصى بتطبيق الهجرات في بيئة العمل و**اختبار يدوي واحد بعد كل نشر** (إضافة مصروف من واجهة المصروفات).

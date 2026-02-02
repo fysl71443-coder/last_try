@@ -1,23 +1,38 @@
 {% extends 'base.html' %}
-{% block title %}All Expenses{% endblock %}
+{% block title %}{{ _('All Expenses') }}{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <h3 class="mb-3">All Expenses</h3>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-receipt"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('All Expenses') }}</h1>
+      <span class="ops-subtitle">{{ _('View and export all expense records') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('expenses.expenses') }}" class="btn btn-sm btn-outline-primary" data-full-reload><i class="fa-solid fa-list me-1"></i>{{ _('Expenses') }}</a>
+    </div>
+  </div>
 
-  <div class="table-responsive">
-    <table class="table table-bordered table-striped table-hover align-middle">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Expense No.</th>
-          <th>Description</th>
-          <th>Amount</th>
-          <th>Payment Method</th>
-        </tr>
-      </thead>
-      <tbody id="expense-body"></tbody>
-      <tfoot id="expense-summary"></tfoot>
-    </table>
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Expense list') }}</div>
+    <div class="ops-form-body">
+      <div class="screen-table-wrap">
+        <table class="table screen-table">
+          <thead>
+            <tr>
+              <th>{{ _('Date') }}</th>
+              <th>{{ _('Expense No.') }}</th>
+              <th>{{ _('Description') }}</th>
+              <th>{{ _('Amount') }}</th>
+              <th>{{ _('Payment Method') }}</th>
+            </tr>
+          </thead>
+          <tbody id="expense-body"></tbody>
+          <tfoot id="expense-summary"></tfoot>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -27,30 +42,21 @@
   fetch("/api/all-expenses", {credentials:'same-origin'})
     .then(r=>r.json())
     .then(data=>{
-      const body = document.getElementById('expense-body');
-      const tfoot = document.getElementById('expense-summary');
+      var body = document.getElementById('expense-body');
+      var tfoot = document.getElementById('expense-summary');
       if(!body||!tfoot) return;
       body.innerHTML=''; tfoot.innerHTML='';
-      (data.expenses||[]).forEach(row=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${row.date||''}</td>
-          <td>${row.expense_number||''}</td>
-          <td>${row.item||''}</td>
-          <td>${fmt(row.amount)}</td>
-          <td>${row.payment_method||''}</td>`;
+      (data.expenses||[]).forEach(function(row){
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>'+(row.date||'')+'</td><td>'+(row.expense_number||'')+'</td><td>'+(row.item||'')+'</td><td>'+fmt(row.amount)+'</td><td>'+(row.payment_method||'')+'</td>';
         body.appendChild(tr);
       });
-      const totals = data.overall_totals || {amount:0};
-      const trTotal = document.createElement('tr'); trTotal.className='table-secondary fw-bold';
-      trTotal.innerHTML = `
-        <td colspan="3" class="text-end">Total Expenses:</td>
-        <td>${fmt(totals.amount)}</td>
-        <td></td>`;
+      var totals = data.overall_totals || {amount:0};
+      var trTotal = document.createElement('tr'); trTotal.className='table-secondary fw-bold';
+      trTotal.innerHTML = '<td colspan="3" class="text-end">Total Expenses:</td><td>'+fmt(totals.amount)+'</td><td></td>';
       tfoot.appendChild(trTotal);
     })
-    .catch(err=>{ console.error('Failed to load expenses', err); });
+    .catch(function(err){ console.error('Failed to load expenses', err); });
 })();
 </script>
 {% endblock %}
-

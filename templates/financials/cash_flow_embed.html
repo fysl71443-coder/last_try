@@ -1,0 +1,43 @@
+{% extends 'financials/base_statement_embed.html' %}
+{% block title %}{{ _('Cash flow') }}{% endblock %}
+{% block content %}
+<div class="stmt-header">
+  <h2 class="stmt-title">{{ _('Cash flow') }}</h2>
+  <div class="stmt-meta">{{ _('Period') }}: {{ data.start_date }} → {{ data.end_date }}</div>
+</div>
+<div class="stmt-cards">
+  <div class="stmt-card" style="background:#e8f5e9; border-color:#198754;">
+    <div class="val">{{ '%.2f'|format(data.inflow or 0) }}</div>
+    <div class="lbl">{{ _('Inflow') }} SAR</div>
+  </div>
+  <div class="stmt-card" style="background:#ffebee; border-color:#dc3545;">
+    <div class="val">{{ '%.2f'|format(data.outflow or 0) }}</div>
+    <div class="lbl">{{ _('Outflow') }} SAR</div>
+  </div>
+  <div class="stmt-card {% if (data.net or 0) >= 0 %}stmt-profit{% else %}stmt-loss{% endif %}" style="{% if (data.net or 0) >= 0 %}background:#e8f5e9; border-color:#198754;{% else %}background:#ffebee; border-color:#dc3545;{% endif %}">
+    <div class="val">{{ '%.2f'|format(data.net or 0) }}</div>
+    <div class="lbl">{{ _('Net') }} SAR</div>
+  </div>
+</div>
+<div class="stmt-panel">
+  <div class="stmt-panel-head">{{ _('Cash movements') }}</div>
+  <div class="p-2">
+    <table class="stmt-table table table-sm">
+      <thead><tr><th>{{ _('Account') }}</th><th>{{ _('Date') }}</th><th>{{ _('Debit') }}</th><th>{{ _('Credit') }}</th></tr></thead>
+      <tbody>
+        {% for r in (data.rows or []) %}
+        <tr>
+          <td>{{ r.code }} – {{ r.name }}</td>
+          <td>{{ r.date }}</td>
+          <td class="stmt-num">{{ '%.2f'|format(r.debit or 0) }}</td>
+          <td class="stmt-num">{{ '%.2f'|format(r.credit or 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if not (data.rows or []) %}
+    <div class="p-3 text-center text-muted">{{ _('No movements in this period.') }}</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

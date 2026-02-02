@@ -1,20 +1,37 @@
 {% extends "base.html" %}
+{% block title %}{{ _('Backfill Journals') }}{% endblock %}
 {% block content %}
-<div class="container mt-3">
-  <h4>{{ _('Backfill Journals / ترحيل القيود للفترة') }}</h4>
-  <form method="post" class="row g-3">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-3">
-      <label class="form-label">{{ _('Start Date') }}</label>
-      <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-rotate"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Backfill Journals') }}</h1>
+      <span class="ops-subtitle">{{ _('Run backfill for journal entries in the selected period') }}</span>
     </div>
-    <div class="col-md-3">
-      <label class="form-label">{{ _('End Date') }}</label>
-      <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+    <div class="ops-actions">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('financials.accounts_hub') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-book me-1"></i>{{ _('Accounts') }}</a>
     </div>
-    <div class="col-md-3 d-flex align-items-end">
-      <button class="btn btn-danger" type="submit">{{ _('Run Backfill / تنفيذ الترحيل') }}</button>
+  </div>
+
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Period') }}</div>
+    <div class="ops-form-body">
+      <form method="post" class="row g-3 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-3">
+          <label class="form-label">{{ _('Start Date') }}</label>
+          <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ _('End Date') }}</label>
+          <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+        </div>
+        <div class="col-md-3">
+          <button class="btn btn-danger" type="submit"><i class="fa-solid fa-play me-1"></i>{{ _('Run Backfill') }}</button>
+        </div>
+      </form>
     </div>
-  </form>
+  </div>
 </div>
 {% endblock %}

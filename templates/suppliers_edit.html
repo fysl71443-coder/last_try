@@ -1,60 +1,73 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Edit Supplier / تعديل المورد') }}{% endblock %}
+{% block title %}{{ _('Edit Supplier') }}{% endblock %}
 {% block content %}
-<div class="container py-3">
-  <h3>{{ _('Edit Supplier / تعديل المورد') }}</h3>
-  <div class="card"><div class="card-body">
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-truck"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Edit Supplier') }}</h1>
+      <span class="ops-subtitle">{{ _('Update supplier details') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('suppliers.suppliers') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-arrow-left me-1"></i>{{ _('Back') }}</a>
+    </div>
+  </div>
+
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Supplier details') }}</div>
+    <div class="ops-form-body">
     <form method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div class="row g-3">
         <div class="col-md-6">
-          <label class="form-label">{{ _('Name / الاسم') }}</label>
+          <label class="form-label">{{ _('Name') }}</label>
           <input name="name" class="form-control" value="{{ s.name }}" required>
         </div>
         <div class="col-md-6">
-          <label class="form-label">{{ _('Contact Person / شخص التواصل') }}</label>
+          <label class="form-label">{{ _('Contact Person') }}</label>
           <input name="contact_person" class="form-control" value="{{ s.contact_person or '' }}">
         </div>
         <div class="col-md-4">
-          <label class="form-label">{{ _('Phone / الهاتف') }}</label>
+          <label class="form-label">{{ _('Phone') }}</label>
           <input name="phone" class="form-control" value="{{ s.phone or '' }}">
         </div>
         <div class="col-md-4">
-          <label class="form-label">{{ _('Email / البريد الإلكتروني') }}</label>
+          <label class="form-label">{{ _('Email') }}</label>
           <input name="email" type="email" class="form-control" value="{{ s.email or '' }}">
         </div>
         <div class="col-md-4">
-          <label class="form-label">{{ _('Tax Number / الرقم الضريبي') }}</label>
+          <label class="form-label">{{ _('Tax Number') }}</label>
           <input name="tax_number" class="form-control" value="{{ s.tax_number or '' }}">
         </div>
         <div class="col-md-4">
-          <label class="form-label">{{ _('CR Number / رقم السجل التجاري') }}</label>
+          <label class="form-label">{{ _('CR Number') }}</label>
           <input name="cr_number" class="form-control" value="{{ s.cr_number | default('') }}">
         </div>
         <div class="col-md-4">
-          <label class="form-label">{{ _('IBAN / رقم الآيبان') }}</label>
+          <label class="form-label">{{ _('IBAN') }}</label>
           <input name="iban" class="form-control" value="{{ s.iban | default('') }}">
         </div>
 
         <div class="col-md-12">
-          <label class="form-label">{{ _('Address / العنوان') }}</label>
+          <label class="form-label">{{ _('Address') }}</label>
           <input name="address" class="form-control" value="{{ s.address or '' }}">
         </div>
         <div class="col-md-12">
-          <label class="form-label">{{ _('Notes / ملاحظات') }}</label>
+          <label class="form-label">{{ _('Notes') }}</label>
           <input name="notes" class="form-control" value="{{ s.notes or '' }}">
         </div>
         <div class="col-md-3 form-check mt-2">
           <input type="checkbox" name="active" id="active" class="form-check-input" {% if s.active %}checked{% endif %}>
-          <label for="active" class="form-check-label">{{ _('Active / نشط') }}</label>
+          <label for="active" class="form-check-label">{{ _('Active') }}</label>
         </div>
         <div class="col-12">
-          <button class="btn btn-primary">{{ _('Save / حفظ') }}</button>
-          <a class="btn btn-secondary" href="{{ url_for('suppliers') }}">{{ _('Back / رجوع') }}</a>
+          <button class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>{{ _('Save') }}</button>
+          <a class="btn btn-outline-secondary ms-2" href="{{ url_for('suppliers.suppliers') }}">{{ _('Back') }}</a>
         </div>
       </div>
     </form>
-  </div></div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 

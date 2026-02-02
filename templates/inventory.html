@@ -1,90 +1,57 @@
 {% extends 'base.html' %}
 {% set back_url = url_for('main.dashboard') %}
 
-{% block title %}{{ _('Inventory & Cost Management / المخزون وإدارة التكاليف') }}{% endblock %}
+{% block title %}{{ _('Inventory & Cost Management') }}{% endblock %}
 {% block content %}
 
-<style>
-body {
-  background: #f4f6f9;
-}
-.inventory-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
-.stats-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  text-align: center;
-  margin-bottom: 1rem;
-}
-.action-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
-  padding: 2rem;
-  text-align: center;
-  transition: all 0.2s ease-in-out;
-  height: 100%;
-}
-.action-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0px 6px 14px rgba(0,0,0,0.1);
-}
-.action-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  color: #2a5298;
-}
-.cost-highlight {
-  font-weight: bold;
-  color: #2e7d32;
-}
-.price-highlight {
-  font-weight: bold;
-  color: #1976d2;
-}
-</style>
+<style>.cost-highlight{ font-weight:700; color:var(--ops-blue,#1565c0); } .price-highlight{ font-weight:700; color:var(--ops-blue-dark,#0d47a1); }</style>
 
-<div class="container py-4">
-    <!-- شريط التنقل السريع -->
-    <div class="section-header mb-3">
-        <h3 class="mb-0">📦 {{ _('Inventory & Cost Management / المخزون وإدارة التكاليف') }}</h3>
-        <div class="d-flex flex-wrap gap-2">
-            <a href="{{ url_for('main.purchases') }}" class="btn btn-outline-warning">
-                🛒 {{ _('Purchases / المشتريات') }}
-            </a>
-            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info">
-                💰 {{ _('Sales / المبيعات') }}
-            </a>
-            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
-                🏠 {{ _('Dashboard / لوحة التحكم') }}
-            </a>
+<div class="container py-4 ops-layout hub-wrap">
+    <div class="ops-header-bar">
+        <span class="ops-icon"><i class="fa-solid fa-boxes-stacked"></i></span>
+        <div>
+            <h1 class="ops-title mb-0">{{ _('Inventory & Cost Management') }}</h1>
+            <span class="ops-subtitle">{{ _('Purchases ledger and cost overview') }}</span>
+        </div>
+        <div class="ops-actions d-flex flex-wrap gap-2">
+            <a href="{{ url_for('purchases.purchases') }}" class="btn btn-sm">🛒 {{ _('Purchases') }}</a>
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
         </div>
     </div>
 
-    <div class="inventory-card">
-        <h5 class="mb-3">{{ _('Purchases Ledger / سجل المشتريات') }}</h5>
-        <div class="table-responsive">
-            <table class="table table-striped table-bordered align-middle">
-                <thead class="table-light">
+    <div class="ops-tabs-wrap">
+        <div class="ops-tabs" role="tablist">
+            <button type="button" class="ops-tab active" data-panel="panel-ledger">{{ _('Movements') }}</button>
+            <button type="button" class="ops-tab" data-panel="panel-reports">{{ _('Reports') }}</button>
+        </div>
+    </div>
+
+    <div class="ops-body ops-body-no-sidebar">
+        <main class="ops-main">
+            <div id="panel-ledger" class="ops-panel" data-panel>
+    <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Purchases Ledger') }}</div>
+        <div class="ops-form-body">
+        <form method="get" action="{{ url_for('inventory.inventory') }}" class="row g-3 align-items-end mb-3">
+          <div class="col-auto"><label class="form-label">{{ _('From date') }}</label><input type="date" name="start_date" class="form-control" value="{{ start_ledger_val or '' }}"></div>
+          <div class="col-auto"><label class="form-label">{{ _('To date') }}</label><input type="date" name="end_date" class="form-control" value="{{ end_ledger_val or '' }}"></div>
+          <div class="col-auto"><button type="submit" class="btn btn-primary"><i class="fa-solid fa-filter me-1"></i>{{ _('Apply') }}</button></div>
+        </form>
+        <div class="table-responsive screen-table-wrap">
+            <table class="table table-hover align-middle screen-table mb-0">
+                <thead>
                     <tr>
                         <th>#</th>
-                        <th>{{ _('Date / التاريخ') }}</th>
-                        <th>{{ _('Invoice No / رقم الفاتورة') }}</th>
-                        <th>{{ _('Supplier / المورد') }}</th>
-                        <th>{{ _('Payment / الدفع') }}</th>
-                        <th>{{ _('Status / الحالة') }}</th>
-                        <th class="text-end">{{ _('Subtotal / المجموع الفرعي') }}</th>
-                        <th class="text-end">{{ _('VAT / الضريبة') }}</th>
-                        <th class="text-end">{{ _('Discount / الخصم') }}</th>
-                        <th class="text-end">{{ _('Final Total / الإجمالي') }}</th>
-                        <th>{{ _('Items / العناصر') }}</th>
+                        <th>{{ _('Date') }}</th>
+                        <th>{{ _('Invoice No') }}</th>
+                        <th>{{ _('Supplier') }}</th>
+                        <th>{{ _('Payment') }}</th>
+                        <th>{{ _('Status') }}</th>
+                        <th class="text-end">{{ _('Subtotal') }}</th>
+                        <th class="text-end">{{ _('VAT') }}</th>
+                        <th class="text-end">{{ _('Discount') }}</th>
+                        <th class="text-end">{{ _('Final Total') }}</th>
+                        <th>{{ _('Items') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -97,11 +64,11 @@ body {
                         <td><span class="badge bg-light text-dark">{{ p.payment_method }}</span></td>
                         <td>
                             {% if (p.status or '').lower() == 'paid' %}
-                            <span class="badge bg-success">{{ _('Paid / مدفوع') }}</span>
+                            <span class="badge bg-success">{{ _('Paid') }}</span>
                             {% elif (p.status or '').lower() == 'partial' %}
-                            <span class="badge bg-warning">{{ _('Partial / جزئي') }}</span>
+                            <span class="badge bg-warning">{{ _('Partial') }}</span>
                             {% elif (p.status or '').lower() == 'unpaid' %}
-                            <span class="badge bg-danger">{{ _('Unpaid / غير مدفوع') }}</span>
+                            <span class="badge bg-danger">{{ _('Unpaid') }}</span>
                             {% else %}
                             <span class="badge bg-secondary">{{ p.status or '-' }}</span>
                             {% endif %}
@@ -111,21 +78,21 @@ body {
                         <td class="text-end">﷼{{ '%.2f'|format(p.discount_amount or 0) }}</td>
                         <td class="text-end">﷼{{ '%.2f'|format(p.total_after_tax_discount or 0) }}</td>
                         <td>
-                            <button type="button" class="btn btn-sm btn-outline-primary" data-toggle-items="{{ p.id }}">{{ _('Show Items / عرض العناصر') }}</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-toggle-items="{{ p.id }}">{{ _('Show Items') }}</button>
                         </td>
                     </tr>
                     <tr class="d-none" data-items-row="{{ p.id }}">
                         <td colspan="11">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-bordered mb-0">
-                                    <thead class="table-light">
+                            <div class="table-responsive screen-table-wrap">
+                                <table class="table table-sm table-bordered mb-0 screen-table">
+                                    <thead>
                                         <tr>
-                                            <th>{{ _('Item / الصنف') }}</th>
-                                            <th class="text-end">{{ _('Unit Price / سعر الوحدة') }}</th>
-                                            <th class="text-end">{{ _('Quantity / الكمية') }}</th>
-                                            <th class="text-end">{{ _('Discount / الخصم') }}</th>
-                                            <th class="text-end">{{ _('Tax / الضريبة') }}</th>
-                                            <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+                                            <th>{{ _('Item') }}</th>
+                                            <th class="text-end">{{ _('Unit Price') }}</th>
+                                            <th class="text-end">{{ _('Quantity') }}</th>
+                                            <th class="text-end">{{ _('Discount') }}</th>
+                                            <th class="text-end">{{ _('Tax') }}</th>
+                                            <th class="text-end">{{ _('Total') }}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -148,8 +115,11 @@ body {
                 </tbody>
             </table>
         </div>
+        </div>
     </div>
+            </div>
 
+            <div id="panel-reports" class="ops-panel d-none" data-panel>
     <style>
     :root{ --intel-muted:#5c6773; --intel-ok:#28a745; --intel-warn:#ffc107; --intel-danger:#dc3545 }
     .intel-grid{ display:grid; gap:12px; grid-template-columns:repeat(5, minmax(160px, 1fr)) }
@@ -162,34 +132,34 @@ body {
     .bar .val{ flex:1; background:linear-gradient(90deg,#0d6efd,#6610f2); height:10px; border-radius:6px; position:relative }
     .spark{ display:flex; align-items:flex-end; gap:3px; height:42px }
     .spark .pt{ width:12px; background:#0d6efd; border-radius:3px }
-    .risk.low{ color:var(--intel-danger); font-weight:700 }
-    .risk.excess{ color:#6610f2; font-weight:700 }
-    .risk.ok{ color:var(--intel-ok); font-weight:700 }
+    .risk.low{ background:rgba(243,156,18,.08); color:#b45309; font-weight:600; padding:.2rem .5rem; border-radius:6px }
+    .risk.ok{ color:var(--ops-blue-dark,#0d47a1) }
+    .risk.excess{ background:rgba(102,16,242,.06); color:#5a32a3; font-weight:600; padding:.2rem .5rem; border-radius:6px }
     @media (max-width:1024px){ .intel-grid{ grid-template-columns:repeat(2,1fr) } }
     </style>
 
     <div class="intel-sec">
-      <h5 class="mb-3">{{ _('KPI Overview / المؤشرات الرئيسية') }}</h5>
+      <h5 class="mb-3">{{ _('KPI Overview') }}</h5>
       <div class="intel-grid">
-        <div class="intel-card"><div>📦</div><div><div class="intel-label">{{ _('Total Inventory Cost / إجمالي تكلفة المخزون') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.total_inventory_cost or 0) }}</div></div></div>
-        <div class="intel-card"><div>🧾</div><div><div class="intel-label">{{ _('Ingredient Purchases (This Month) / مشتريات هذا الشهر') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.total_purchases_month or 0) }}</div></div></div>
-        <div class="intel-card"><div>🍽</div><div><div class="intel-label">{{ _('Meals Sold (This Month) / الوجبات المباعة') }}</div><div class="intel-num">{{ '{:,.0f}'.format(kpi.total_meals_sold_month or 0) }}</div></div></div>
-        <div class="intel-card"><div>💰</div><div><div class="intel-label">{{ _('Estimated Meal Cost / تكلفة الإنتاج التقديرية') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.estimated_total_meal_cost or 0) }}</div></div></div>
-        <div class="intel-card"><div>📊</div><div><div class="intel-label">{{ _('Total Profit / إجمالي الربح') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.total_profit_generated or 0) }}</div></div></div>
+        <div class="intel-card"><div><i class="fa-solid fa-boxes-stacked"></i></div><div><div class="intel-label">{{ _('Total Inventory Cost') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.total_inventory_cost or 0) }}</div></div></div>
+        <div class="intel-card"><div><i class="fa-solid fa-receipt"></i></div><div><div class="intel-label">{{ _('Ingredient Purchases (This Month)') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.total_purchases_month or 0) }}</div></div></div>
+        <div class="intel-card"><div><i class="fa-solid fa-utensils"></i></div><div><div class="intel-label">{{ _('Meals Sold (This Month)') }}</div><div class="intel-num">{{ '{:,.0f}'.format(kpi.total_meals_sold_month or 0) }}</div></div></div>
+        <div class="intel-card"><div><i class="fa-solid fa-coins"></i></div><div><div class="intel-label">{{ _('Estimated Meal Cost') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.estimated_total_meal_cost or 0) }}</div></div></div>
+        <div class="intel-card"><div><i class="fa-solid fa-chart-line"></i></div><div><div class="intel-label">{{ _('Total Profit') }}</div><div class="intel-num">{{ '{:,.2f}'.format(kpi.total_profit_generated or 0) }}</div></div></div>
       </div>
     </div>
 
     <div class="intel-sec">
-      <h5 class="mb-2">{{ _('Purchases Summary / ملخص المشتريات') }}</h5>
-      <div class="table-responsive">
-        <table class="table table-sm">
-          <thead class="table-light">
+      <h5 class="mb-2">{{ _('Purchases Summary') }}</h5>
+      <div class="table-responsive screen-table-wrap">
+        <table class="table table-sm table-hover screen-table">
+          <thead>
             <tr>
-              <th>{{ _('Date / التاريخ') }}</th>
-              <th>{{ _('Invoice No / رقم الفاتورة') }}</th>
-              <th>{{ _('Supplier / المورد') }}</th>
-              <th>{{ _('Payment / الدفع') }}</th>
-              <th>{{ _('Status / الحالة') }}</th>
+              <th>{{ _('Date') }}</th>
+              <th>{{ _('Invoice No') }}</th>
+              <th>{{ _('Supplier') }}</th>
+              <th>{{ _('Payment') }}</th>
+              <th>{{ _('Status') }}</th>
               <th class="text-end">{{ _('Subtotal') }}</th>
               <th class="text-end">{{ _('VAT') }}</th>
               <th class="text-end">{{ _('Discount') }}</th>
@@ -217,7 +187,7 @@ body {
       </div>
       <div class="row mt-3">
         <div class="col-md-6">
-          <h6 class="mb-2">{{ _('Top Purchased Ingredients / أكثر المكونات شراءً') }}</h6>
+          <h6 class="mb-2">{{ _('Top Purchased Ingredients') }}</h6>
           <div class="bar-chart">
             {% for b in top_ingredients %}
               <div class="bar">
@@ -230,7 +200,7 @@ body {
           </div>
         </div>
         <div class="col-md-6">
-          <h6 class="mb-2">{{ _('Purchase Trend / اتجاه المشتريات') }}</h6>
+          <h6 class="mb-2">{{ _('Purchase Trend') }}</h6>
           <div class="spark">
             {% for p in purchase_trend %}
             {% set h = (p.total / (trend_max_total or 1)) * 38 %}
@@ -242,43 +212,43 @@ body {
     </div>
 
     <div class="intel-sec">
-      <h5 class="mb-2">{{ _('Meal Cost & Sales Analysis / تحليل تكلفة الوجبات والمبيعات') }}</h5>
+      <h5 class="mb-2">{{ _('Meal Cost & Sales Analysis') }}</h5>
       <div class="mb-2 d-flex flex-wrap gap-2 align-items-end">
         <div>
-          <label class="form-label">{{ _('Start Date / تاريخ البداية') }}</label>
+          <label class="form-label">{{ _('Start Date') }}</label>
           <input id="salesStart" type="date" class="form-control" value="{{ start_date_val or '' }}">
         </div>
         <div>
-          <label class="form-label">{{ _('End Date / تاريخ النهاية') }}</label>
+          <label class="form-label">{{ _('End Date') }}</label>
           <input id="salesEnd" type="date" class="form-control" value="{{ end_date_val or '' }}">
         </div>
         <div>
-          <label class="form-label">{{ _('Branch / الفرع') }}</label>
+          <label class="form-label">{{ _('Branch') }}</label>
           <select id="salesBranch" class="form-select" style="min-width:180px;">
-            <option value="">{{ _('All / الكل') }}</option>
+            <option value="">{{ _('All') }}</option>
             {% for code, name in (branches or {}).items() %}
             <option value="{{ code }}" {% if selected_branch == code %}selected{% endif %}>{{ name }}</option>
             {% endfor %}
           </select>
         </div>
         <div>
-          <button id="applySalesFilter" class="btn btn-outline-primary">{{ _('Apply / تطبيق') }}</button>
+          <button id="applySalesFilter" class="btn btn-outline-primary">{{ _('Apply') }}</button>
         </div>
       </div>
       {% if outdated_meals and outdated_meals|length > 0 %}
-        <div class="alert alert-warning">⚠ {{ _('Meals using ingredients with outdated cost data / وجبات تحتوي مكونات بسعر قديم') }}: {{ outdated_meals|join(', ') }}</div>
+        <div class="alert alert-warning"><i class="fa-solid fa-triangle-exclamation me-2"></i>{{ _('Meals using ingredients with outdated cost data') }}: {{ outdated_meals|join(', ') }}</div>
       {% endif %}
-      <div class="table-responsive">
-        <table class="table table-sm">
-          <thead class="table-light">
+      <div class="table-responsive screen-table-wrap">
+        <table class="table table-sm table-hover screen-table">
+          <thead>
             <tr>
-              <th>{{ _('Meal / الوجبة') }}</th>
-              <th class="text-center">{{ _('Sales Count / عدد المبيعات') }}</th>
-              <th class="text-end">{{ _('Consumption Cost / تكلفة الاستهلاك') }}</th>
-              <th class="text-end">{{ _('Revenue / الإيراد') }}</th>
-              <th class="text-end">{{ _('Profit / الربح') }}</th>
+              <th>{{ _('Meal') }}</th>
+              <th class="text-center">{{ _('Sales Count') }}</th>
+              <th class="text-end">{{ _('Consumption Cost') }}</th>
+              <th class="text-end">{{ _('Revenue') }}</th>
+              <th class="text-end">{{ _('Profit') }}</th>
               <th class="text-end">Margin / الهامش</th>
-              <th>{{ _('Contribution / المساهمة') }}</th>
+              <th>{{ _('Contribution') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -295,20 +265,20 @@ body {
               <td class="text-end">{{ '{:,.1f}'.format(margin) }}%</td>
               <td class="d-flex align-items-center justify-content-between">
                 <span>{{ '{:,.1f}'.format(contrib) }}%</span>
-                <button type="button" class="btn btn-sm btn-outline-primary" data-toggle-meal="{{ m.meal_name }}">{{ _('Details / تفاصيل') }}</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-toggle-meal="{{ m.meal_name }}">{{ _('Details') }}</button>
               </td>
             </tr>
             <tr class="d-none" data-meal-row="{{ m.meal_name }}">
               <td colspan="7">
-                <div class="table-responsive">
-                  <table class="table table-sm table-bordered mb-0">
-                    <thead class="table-light">
+                <div class="table-responsive screen-table-wrap">
+                  <table class="table table-sm table-bordered mb-0 screen-table">
+                    <thead>
                       <tr>
-                        <th>{{ _('Invoice / الفاتورة') }}</th>
-                        <th>{{ _('Date / التاريخ') }}</th>
-                        <th class="text-end">{{ _('Qty / الكمية') }}</th>
-                        <th class="text-end">{{ _('Unit / الوحدة') }}</th>
-                        <th class="text-end">{{ _('Total / الإجمالي') }}</th>
+                        <th>{{ _('Invoice') }}</th>
+                        <th>{{ _('Date') }}</th>
+                        <th class="text-end">{{ _('Qty') }}</th>
+                        <th class="text-end">{{ _('Unit') }}</th>
+                        <th class="text-end">{{ _('Total') }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -322,7 +292,7 @@ body {
                       </tr>
                       {% endfor %}
                       {% if not (sold_details_map.get(m.meal_name) or []) %}
-                      <tr><td colspan="5" class="text-muted">{{ _('No details / لا توجد تفاصيل') }}</td></tr>
+                      <tr><td colspan="5" class="text-muted">{{ _('No details') }}</td></tr>
                       {% endif %}
                     </tbody>
                   </table>
@@ -336,17 +306,17 @@ body {
     </div>
 
     <div class="intel-sec">
-      <h5 class="mb-2">{{ _('Dynamic Stock Analysis / تحليل المخزون الديناميكي') }}</h5>
-      <div class="table-responsive">
-        <table class="table table-sm">
-          <thead class="table-light">
+      <h5 class="mb-2">{{ _('Dynamic Stock Analysis') }}</h5>
+      <div class="table-responsive screen-table-wrap">
+        <table class="table table-sm table-hover screen-table">
+          <thead>
             <tr>
-              <th>{{ _('Ingredient / المكون') }}</th>
-              <th class="text-end">{{ _('Opening Qty / الكمية الافتتاحية') }}</th>
-              <th class="text-end">{{ _('Purchases Qty / كمية المشتريات') }}</th>
-              <th class="text-end">{{ _('Estimated Usage / الاستهلاك التقديري') }}</th>
-              <th class="text-end">{{ _('Expected Stock / المخزون المتوقع') }}</th>
-              <th>{{ _('Risk / المخاطر') }}</th>
+              <th>{{ _('Ingredient') }}</th>
+              <th class="text-end">{{ _('Opening Qty') }}</th>
+              <th class="text-end">{{ _('Purchases Qty') }}</th>
+              <th class="text-end">{{ _('Estimated Usage') }}</th>
+              <th class="text-end">{{ _('Expected Stock') }}</th>
+              <th>{{ _('Risk') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -364,7 +334,22 @@ body {
         </table>
       </div>
     </div>
+            </div>
+        </main>
+    </div>
 </div>
+<script>
+document.querySelectorAll('.ops-tabs-wrap .ops-tab[data-panel]').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var id = this.getAttribute('data-panel');
+    document.querySelectorAll('.ops-tabs-wrap .ops-tab[data-panel]').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelectorAll('.ops-panel[data-panel]').forEach(function(p){ p.classList.add('d-none'); });
+    this.classList.add('active');
+    var p = document.getElementById(id);
+    if (p) p.classList.remove('d-none');
+  });
+});
+</script>
 <script>
 (function(){
   document.addEventListener('click', function(e){
@@ -373,8 +358,8 @@ body {
     var id = btn.getAttribute('data-toggle-items');
     var row = document.querySelector('tr[data-items-row="' + id + '"]');
     if(!row) return;
-    var showText = '{{ _('Show Items / عرض العناصر') }}';
-    var hideText = '{{ _('Hide Items / إخفاء العناصر') }}';
+    var showText = '{{ _('Show Items') }}';
+    var hideText = '{{ _('Hide Items') }}';
     if(row.classList.contains('d-none')){ row.classList.remove('d-none'); btn.textContent = hideText; }
     else { row.classList.add('d-none'); btn.textContent = showText; }
   });
@@ -384,8 +369,8 @@ body {
     var key = btn.getAttribute('data-toggle-meal');
     var row = document.querySelector('tr[data-meal-row="' + key + '"]');
     if(!row) return;
-    var showText = '{{ _('Details / تفاصيل') }}';
-    var hideText = '{{ _('Hide / إخفاء') }}';
+    var showText = '{{ _('Details') }}';
+    var hideText = '{{ _('Hide') }}';
     if(row.classList.contains('d-none')){ row.classList.remove('d-none'); btn.textContent = hideText; }
     else { row.classList.add('d-none'); btn.textContent = showText; }
   });

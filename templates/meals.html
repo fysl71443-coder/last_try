@@ -1,20 +1,11 @@
 {% extends 'base.html' %}
-{% if current_user.is_authenticated %}{% set back_url = url_for('main.inventory') %}{% else %}{% set back_url = '#' %}{% endif %}
+{% if current_user.is_authenticated %}{% set back_url = url_for('inventory.inventory') %}{% else %}{% set back_url = '#' %}{% endif %}
 
-{% block title %}{{ _('Meals Management / إدارة الوجبات') }}{% endblock %}
+{% block title %}{{ _('Meals Management') }}{% endblock %}
 {% block content %}
 
 <style>
-body {
-  background: #f4f6f9;
-}
-.meals-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
+body { background: var(--bg, #f8fafc); }
 .ingredient-row {
   border: 1px solid #e9ecef;
   border-radius: 8px;
@@ -51,35 +42,26 @@ body {
 }
 </style>
 
-<div class="container py-4">
-    <!-- شريط التنقل السريع -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <h3 class="mb-0">🍽️ {{ _('Meals Management / إدارة الوجبات') }}</h3>
-        </div>
-        <div class="col-md-6 text-end">
-            <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#importModal">
-                📥 {{ _('Import Meals / استيراد الوجبات') }}
-            </button>
-            <a href="{{ url_for('main.raw_materials') }}" class="btn btn-outline-success me-2">
-                🥘 {{ _('Raw Materials / المواد الخام') }}
-            </a>
-            <a href="{{ url_for('main.sales') }}" class="btn btn-outline-info me-2">
-                💰 {{ _('Sales / المبيعات') }}
-            </a>
-            <a href="{{ url_for('main.inventory') }}" class="btn btn-outline-warning me-2">
-                📦 {{ _('Inventory / المخزون') }}
-            </a>
-            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
-                🏠 {{ _('Dashboard / لوحة التحكم') }}
-            </a>
-        </div>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-utensils"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Meals Management') }}</h1>
+      <span class="ops-subtitle">{{ _('Manage meals, ingredients and cost') }}</span>
     </div>
+    <div class="ops-actions d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fa-solid fa-file-import me-1"></i>{{ _('Import Meals') }}</button>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('purchases.raw_materials') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-bowl-food me-1"></i>{{ _('Raw Materials') }}</a>
+      <a href="{{ url_for('inventory.inventory') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-boxes-stacked me-1"></i>{{ _('Inventory') }}</a>
+    </div>
+  </div>
 
-    <!-- نموذج إنشاء وجبة جديدة -->
-    <div class="meals-card">
-        <h5 class="mb-3">{{ _('Create New Meal / إنشاء وجبة جديدة') }}</h5>
-
+  <div class="ops-body ops-body-no-sidebar">
+    <main class="ops-main">
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Create New Meal') }}</div>
+    <div class="ops-form-body">
         {% if form %}
         <form method="POST" id="meal-form">
             {{ form.hidden_tag() }}
@@ -114,7 +96,7 @@ body {
             </div>
 
             <!-- مكونات الوجبة -->
-            <h6 class="mb-3">{{ _('Meal Ingredients / مكونات الوجبة') }}</h6>
+            <h6 class="mb-3">{{ _('Meal Ingredients') }}</h6>
             <div id="ingredients-container">
                 {% for ingredient_form in form.ingredients %}
                 <div class="ingredient-row">
@@ -128,7 +110,7 @@ body {
                             {{ ingredient_form.quantity(class_='form-control', step='0.0001') }}
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">{{ _('Cost / التكلفة') }}</label>
+                            <label class="form-label">{{ _('Cost') }}</label>
                             <div class="cost-display ingredient-cost">$0.0000</div>
                         </div>
                         <div class="col-md-1 d-flex align-items-end">
@@ -142,15 +124,15 @@ body {
             <!-- ملخص التكاليف -->
             <div class="row mb-3">
                 <div class="col-md-4">
-                    <label class="form-label">{{ _('Total Cost / إجمالي التكلفة') }}</label>
+                    <label class="form-label">{{ _('Total Cost') }}</label>
                     <div class="cost-display" id="total-cost">$0.00</div>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">{{ _('Profit Margin / هامش الربح') }}</label>
+                    <label class="form-label">{{ _('Profit Margin') }}</label>
                     <div class="profit-margin" id="profit-amount">$0.00</div>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">{{ _('Selling Price / سعر البيع') }}</label>
+                    <label class="form-label">{{ _('Selling Price') }}</label>
                     <div class="selling-price" id="selling-price">$0.00</div>
                 </div>
             </div>
@@ -158,7 +140,7 @@ body {
             <div class="row">
                 <div class="col-md-6">
                     <button type="button" class="btn btn-secondary" id="add-ingredient">
-                        ➕ {{ _('Add Ingredient / إضافة مكون') }}
+                        ➕ {{ _('Add Ingredient') }}
                     </button>
                 </div>
                 <div class="col-md-6 text-end">
@@ -172,23 +154,23 @@ body {
         </div>
         {% endif %}
     </div>
+  </div>
 
-    <!-- قائمة الوجبات الموجودة -->
-    {% if meals %}
-    <div class="meals-card">
-        <h5 class="mb-3">{{ _('Existing Meals / الوجبات الموجودة') }}</h5>
-
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead class="table-dark">
+  {% if meals %}
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('Existing Meals') }}</div>
+    <div class="ops-form-body p-0">
+      <div class="table-responsive screen-table-wrap">
+            <table class="table table-hover screen-table mb-0">
+                <thead>
                     <tr>
-                        <th>{{ _('Meal Name / اسم الوجبة') }}</th>
-                        <th>{{ _('Category / الفئة') }}</th>
-                        <th>{{ _('Total Cost / إجمالي التكلفة') }}</th>
-                        <th>{{ _('Profit Margin / هامش الربح') }}</th>
-                        <th>{{ _('Selling Price / سعر البيع') }}</th>
-                        <th>{{ _('Ingredients / المكونات') }}</th>
-                        <th>{{ _('Actions / الإجراءات') }}</th>
+                        <th>{{ _('Meal Name') }}</th>
+                        <th>{{ _('Category') }}</th>
+                        <th>{{ _('Total Cost') }}</th>
+                        <th>{{ _('Profit Margin') }}</th>
+                        <th>{{ _('Selling Price') }}</th>
+                        <th>{{ _('Ingredients') }}</th>
+                        <th>{{ _('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -200,14 +182,14 @@ body {
                         <td>{{ "%.1f"|format(meal.profit_margin_percent) }}%</td>
                         <td class="selling-price"><strong>${{ "%.2f"|format(meal.selling_price) }}</strong></td>
                         <td>
-                            <small>{{ meal.ingredients|length }} {{ _('ingredients / مكونات') }}</small>
+                            <small>{{ meal.ingredients|length }} {{ _('ingredients') }}</small>
                         </td>
                         <td>
                             <button class="btn btn-sm btn-info me-1" onclick="viewMeal({{ meal.id }})">
-                                👁 {{ _('View / عرض') }}
+                                👁 {{ _('View') }}
                             </button>
                             <button class="btn btn-sm btn-danger" onclick="deleteMeal({{ meal.id }}, '{{ meal.display_name }}')">
-                                🗑️ {{ _('Delete / حذف') }}
+                                🗑️ {{ _('Delete') }}
                             </button>
                         </td>
                     </tr>
@@ -216,7 +198,10 @@ body {
             </table>
         </div>
     </div>
-    {% endif %}
+  </div>
+  {% endif %}
+    </main>
+  </div>
 </div>
 
 <!-- SocketIO and JavaScript -->
@@ -286,18 +271,18 @@ body {
         newIngredient.innerHTML = `
             <div class="row">
                 <div class="col-md-6">
-                    <label class="form-label">{{ _('Ingredient / المكون') }}</label>
+                    <label class="form-label">{{ _('Ingredient') }}</label>
                     <select class="form-select" name="ingredients-${ingredientIndex}-raw_material_id">
-                        <option value="0">{{ _('Select Ingredient / اختر المكون') }}</option>
+                        <option value="0">{{ _('Select Ingredient') }}</option>
                         ${materials.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">{{ _('Quantity / الكمية') }}</label>
+                    <label class="form-label">{{ _('Quantity') }}</label>
                     <input class="form-control" name="ingredients-${ingredientIndex}-quantity" step="0.0001" type="number">
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">{{ _('Cost / التكلفة') }}</label>
+                    <label class="form-label">{{ _('Cost') }}</label>
                     <div class="cost-display ingredient-cost">$0.0000</div>
                 </div>
                 <div class="col-md-1 d-flex align-items-end">
@@ -399,26 +384,26 @@ body {
 <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="post" action="{{ url_for('main.meals_import') }}" enctype="multipart/form-data">
+            <form method="post" action="{{ url_for('purchases.meals_import') }}" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="modal-header">
-                    <h5 class="modal-title">{{ _('Import Meals / استيراد الوجبات') }}</h5>
+                    <h5 class="modal-title">{{ _('Import Meals') }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">{{ _('Select File / اختر الملف') }}</label>
+                        <label class="form-label">{{ _('Select File') }}</label>
                         <input type="file" name="file" class="form-control" accept=".xlsx,.xls,.csv" required>
-                        <div class="form-text">{{ _('Supported formats: Excel (.xlsx, .xls), CSV / الصيغ المدعومة: إكسل، CSV') }}</div>
+                        <div class="form-text">{{ _('Supported formats: Excel (.xlsx, .xls), CSV') }}</div>
                     </div>
                     <div class="alert alert-info">
-                        <strong>{{ _('Required columns / الأعمدة المطلوبة') }}:</strong><br>
-                        {{ _('Name, Name (Arabic), Selling Price / الاسم، الاسم بالعربية، سعر البيع') }}
+                        <strong>{{ _('Required columns') }}:</strong><br>
+                        {{ _('Name, Name (Arabic), Selling Price') }}
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel / إلغاء') }}</button>
-                    <button type="submit" class="btn btn-success">{{ _('Import / استيراد') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel') }}</button>
+                    <button type="submit" class="btn btn-success">{{ _('Import') }}</button>
                 </div>
             </form>
         </div>

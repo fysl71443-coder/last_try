@@ -1,77 +1,104 @@
 {% extends 'base.html' %}
-{% block title %}ضريبة القيمة المضافة{% endblock %}
+{% block title %}{{ _('VAT') }}{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <h3>ضريبة القيمة المضافة (VAT)</h3>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-percent"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('VAT') }}</h1>
+      <span class="ops-subtitle">{{ _('Period & view') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('vat.vat_return') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-percent me-1"></i>{{ _('VAT Return') }}</a>
+    </div>
+  </div>
 
-  <form method="get" class="row g-2 align-items-end mb-3">
+  <div class="ops-form-card mt-0">
+    <div class="ops-form-head">{{ _('Period & view') }}</div>
+    <div class="ops-form-body">
+  <form method="get" class="row g-3 align-items-end mb-0">
     <div class="col-auto">
-      <label>نوع الفترة</label>
+      <label>{{ _('Period type') }}</label>
       <select name="period" class="form-select" id="periodSelect">
-        <option value="quarterly" {% if (data.period or 'quarterly')=='quarterly' %}selected{% endif %}>ربع سنوي</option>
-        <option value="monthly" {% if data.period=='monthly' %}selected{% endif %}>شهري</option>
+        <option value="quarterly" {% if (data.period or 'quarterly')=='quarterly' %}selected{% endif %}>{{ _('Quarterly') }}</option>
+        <option value="monthly" {% if data.period=='monthly' %}selected{% endif %}>{{ _('Monthly') }}</option>
       </select>
     </div>
     <div class="col-auto">
-      <label>السنة</label>
+      <label>{{ _('Year') }}</label>
       <input type="number" name="year" class="form-control" value="{{ data.year }}">
     </div>
     <div class="col-auto">
       <div id="quarterGroup">
-        <label>الربع</label>
+        <label>{{ _('Quarter') }}</label>
         <select name="quarter" class="form-select">
-          <option value="1" {% if data.quarter==1 %}selected{% endif %}>الربع 1 (يناير - مارس)</option>
-          <option value="2" {% if data.quarter==2 %}selected{% endif %}>الربع 2 (أبريل - يونيو)</option>
-          <option value="3" {% if data.quarter==3 %}selected{% endif %}>الربع 3 (يوليو - سبتمبر)</option>
-          <option value="4" {% if data.quarter==4 %}selected{% endif %}>الربع 4 (أكتوبر - ديسمبر)</option>
+          <option value="1" {% if data.quarter==1 %}selected{% endif %}>{{ _('Q1 (Jan–Mar)') }}</option>
+          <option value="2" {% if data.quarter==2 %}selected{% endif %}>{{ _('Q2 (Apr–Jun)') }}</option>
+          <option value="3" {% if data.quarter==3 %}selected{% endif %}>{{ _('Q3 (Jul–Sep)') }}</option>
+          <option value="4" {% if data.quarter==4 %}selected{% endif %}>{{ _('Q4 (Oct–Dec)') }}</option>
         </select>
       </div>
       <div id="monthGroup" style="display:none">
-        <label>الشهر</label>
+        <label>{{ _('Month') }}</label>
         <input type="month" name="month" class="form-control" value="">
       </div>
     </div>
     <div class="col-auto">
-      <label>الفرع</label>
+      <label>{{ _('Branch') }}</label>
       <select name="branch" class="form-select">
-        <option value="all" {% if (data.branch or 'all')=='all' %}selected{% endif %}>الكل</option>
+        <option value="all" {% if (data.branch or 'all')=='all' %}selected{% endif %}>{{ _('All') }}</option>
         <option value="place_india" {% if data.branch=='place_india' %}selected{% endif %}>Place India</option>
         <option value="china_town" {% if data.branch=='china_town' %}selected{% endif %}>China Town</option>
       </select>
     </div>
     <div class="col-auto">
-      <button class="btn btn-primary">عرض</button>
+      <button type="submit" class="btn btn-primary"><i class="fa-solid fa-eye me-1"></i>{{ _('Show') }}</button>
     </div>
     <div class="col-auto">
-      <a id="printLink" href="#" class="btn btn-success" target="_blank">طباعة</a>
-      <a id="csvLink" href="#" class="btn btn-outline-success" target="_blank">تصدير CSV</a>
+      <a id="printLink" href="#" class="btn btn-outline-secondary btn-sm" target="_blank"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+      <a id="csvLink" href="#" class="btn btn-outline-secondary btn-sm" target="_blank"><i class="fa-solid fa-file-csv me-1"></i>CSV</a>
     </div>
   </form>
+    </div>
+  </div>
 
-  <div class="row g-3">
+  <div class="row g-3 mb-3">
     <div class="col-12">
       <div class="card p-3 d-flex justify-content-between align-items-center">
         <div>
-          <div class="fw-bold">{{ data.company_name or 'Company' }}</div>
+          <div class="fw-bold">{{ data.company_name or _('Company') }}</div>
           <div class="text-muted small">VAT: {{ data.tax_number or '-' }}</div>
         </div>
         <div class="text-end small">
-          <div>Period: {{ data.start_date }} → {{ data.end_date }}</div>
+          <div>{{ _('Period') }}: {{ data.start_date }} → {{ data.end_date }}</div>
         </div>
       </div>
     </div>
+  </div>
 
-    <div class="col-12">
-      <div class="card p-3">
-        <h6 class="mb-2">Sales</h6>
+  <div class="ops-tabs-wrap">
+    <div class="ops-tabs" role="tablist">
+      <button type="button" class="ops-tab active" data-panel="panel-output">{{ _('Outputs (Sales)') }}</button>
+      <button type="button" class="ops-tab" data-panel="panel-input">{{ _('Inputs (Purchases & Expenses)') }}</button>
+      <button type="button" class="ops-tab" data-panel="panel-declaration">{{ _('Declaration & Summary') }}</button>
+    </div>
+  </div>
+
+  <div class="ops-body ops-body-no-sidebar">
+    <main class="ops-main">
+      <div id="panel-output" class="ops-panel" data-panel>
+        <div class="ops-form-card">
+          <div class="ops-form-head">{{ _('Outputs (Sales)') }}</div>
+          <div class="ops-form-body p-0">
         <div class="table-responsive">
-          <table class="table table-bordered table-sm align-middle">
-            <thead class="table-light">
+          <table class="table table-bordered table-sm align-middle mb-0">
+            <thead>
               <tr>
-                <th>Type</th>
-                <th class="text-end">Amount (excl. VAT)</th>
-                <th class="text-end">VAT</th>
-                <th class="text-end">Total (incl. VAT)</th>
+                <th>{{ _('Type') }}</th>
+                <th class="text-end">{{ _('Amount (excl. VAT)') }}</th>
+                <th class="text-end">{{ _('VAT') }}</th>
+                <th class="text-end">{{ _('Total (incl. VAT)') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -80,19 +107,119 @@
               {% set s_std_vat = (data.output_vat or 0)|float %}
               {% set s_std_total = s_std_base + s_std_vat %}
               <tr>
-                <td>Standard Rated (15%)</td>
+                <td>{{ _('Standard Rated (15%%)') }}</td>
                 <td class="text-end">{{ '%.2f'|format(s_std_base) }}</td>
                 <td class="text-end">{{ '%.2f'|format(s_std_vat) }}</td>
                 <td class="text-end">{{ '%.2f'|format(s_std_total) }}</td>
               </tr>
               <tr>
-                <td>Zero Rated</td>
+                <td>{{ _('Zero Rated') }}</td>
                 <td class="text-end">{{ '%.2f'|format((data.sales_zero_base or 0)|float) }}</td>
                 <td class="text-end">0.00</td>
                 <td class="text-end">{{ '%.2f'|format((data.sales_zero_base or 0)|float) }}</td>
               </tr>
               <tr>
-                <td>Exempt</td>
+                <td>{{ _('Exempt') }}</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_exempt_base or 0)|float) }}</td>
+                <td class="text-end">-</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_exempt_base or 0)|float) }}</td>
+              </tr>
+              <tr>
+                <td>Exports</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_exports_base or 0)|float) }}</td>
+                <td class="text-end">0.00</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_exports_base or 0)|float) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-input" class="ops-panel d-none" data-panel>
+        <div class="ops-form-card">
+          <div class="ops-form-head">{{ _('Inputs (Purchases & Expenses)') }}</div>
+          <div class="ops-form-body p-0">
+        <div class="table-responsive">
+          <table class="table table-bordered table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>{{ _('Type') }}</th>
+                <th class="text-end">{{ _('Amount (excl. VAT)') }}</th>
+                <th class="text-end">{{ _('VAT') }}</th>
+                <th class="text-end">{{ _('Total (incl. VAT)') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set p_deduct_base = (data.purchases_deductible_base or 0)|float %}
+              {% set p_non_base = (data.purchases_non_deductible_base or 0)|float %}
+              {% set e_deduct_base = (data.expenses_deductible_base or 0)|float %}
+              {% set e_deduct_vat = (data.expenses_deductible_vat or 0)|float %}
+              {% set e_non_base = (data.expenses_non_deductible_base or 0)|float %}
+              {% set p_deduct_vat = (data.purchases_deductible_vat or 0)|float %}
+              <tr>
+                <td>{{ _('Deductible Purchases') }}</td>
+                <td class="text-end">{{ '%.2f'|format(p_deduct_base) }}</td>
+                <td class="text-end">{{ '%.2f'|format(p_deduct_vat) }}</td>
+                <td class="text-end">{{ '%.2f'|format(p_deduct_base + p_deduct_vat) }}</td>
+              </tr>
+              <tr>
+                <td>{{ _('Deductible Expenses') }}</td>
+                <td class="text-end">{{ '%.2f'|format(e_deduct_base) }}</td>
+                <td class="text-end">{{ '%.2f'|format(e_deduct_vat) }}</td>
+                <td class="text-end">{{ '%.2f'|format(e_deduct_base + e_deduct_vat) }}</td>
+              </tr>
+              <tr>
+                <td>{{ _('Non-deductible Purchases') }}</td>
+                <td class="text-end">{{ '%.2f'|format(p_non_base) }}</td>
+                <td class="text-end">-</td>
+                <td class="text-end">{{ '%.2f'|format(p_non_base) }}</td>
+              </tr>
+              <tr>
+                <td>{{ _('Non-deductible Expenses') }}</td>
+                <td class="text-end">{{ '%.2f'|format(e_non_base) }}</td>
+                <td class="text-end">-</td>
+                <td class="text-end">{{ '%.2f'|format(e_non_base) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-declaration" class="ops-panel d-none" data-panel>
+  <div class="row g-3">
+        <div class="table-responsive">
+          <table class="table table-bordered table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>{{ _('Type') }}</th>
+                <th class="text-end">{{ _('Amount (excl. VAT)') }}</th>
+                <th class="text-end">{{ _('VAT') }}</th>
+                <th class="text-end">{{ _('Total (incl. VAT)') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set rate = (data.vat_rate or 0)|float %}
+              {% set s_std_base = (data.sales_standard_base or 0)|float %}
+              {% set s_std_vat = (data.output_vat or 0)|float %}
+              {% set s_std_total = s_std_base + s_std_vat %}
+              <tr>
+                <td>{{ _('Standard Rated (15%%)') }}</td>
+                <td class="text-end">{{ '%.2f'|format(s_std_base) }}</td>
+                <td class="text-end">{{ '%.2f'|format(s_std_vat) }}</td>
+                <td class="text-end">{{ '%.2f'|format(s_std_total) }}</td>
+              </tr>
+              <tr>
+                <td>{{ _('Zero Rated') }}</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_zero_base or 0)|float) }}</td>
+                <td class="text-end">0.00</td>
+                <td class="text-end">{{ '%.2f'|format((data.sales_zero_base or 0)|float) }}</td>
+              </tr>
+              <tr>
+                <td>{{ _('Exempt') }}</td>
                 <td class="text-end">{{ '%.2f'|format((data.sales_exempt_base or 0)|float) }}</td>
                 <td class="text-end">-</td>
                 <td class="text-end">{{ '%.2f'|format((data.sales_exempt_base or 0)|float) }}</td>
@@ -111,15 +238,15 @@
 
     <div class="col-12">
       <div class="card p-3">
-        <h6 class="mb-2">Purchases & Expenses</h6>
+        <h6 class="mb-2">{{ _('Purchases & Expenses') }}</h6>
         <div class="table-responsive">
           <table class="table table-bordered table-sm align-middle">
             <thead class="table-light">
               <tr>
-                <th>Type</th>
-                <th class="text-end">Amount (excl. VAT)</th>
-                <th class="text-end">VAT</th>
-                <th class="text-end">Total (incl. VAT)</th>
+                <th>{{ _('Type') }}</th>
+                <th class="text-end">{{ _('Amount (excl. VAT)') }}</th>
+                <th class="text-end">{{ _('VAT') }}</th>
+                <th class="text-end">{{ _('Total (incl. VAT)') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -130,25 +257,25 @@
               {% set e_non_base = (data.expenses_non_deductible_base or 0)|float %}
               {% set p_deduct_vat = (data.purchases_deductible_vat or 0)|float %}
               <tr>
-                <td>Deductible Purchases</td>
+                <td>{{ _('Deductible Purchases') }}</td>
                 <td class="text-end">{{ '%.2f'|format(p_deduct_base) }}</td>
                 <td class="text-end">{{ '%.2f'|format(p_deduct_vat) }}</td>
                 <td class="text-end">{{ '%.2f'|format(p_deduct_base + p_deduct_vat) }}</td>
               </tr>
               <tr>
-                <td>Deductible Expenses</td>
+                <td>{{ _('Deductible Expenses') }}</td>
                 <td class="text-end">{{ '%.2f'|format(e_deduct_base) }}</td>
                 <td class="text-end">{{ '%.2f'|format(e_deduct_vat) }}</td>
                 <td class="text-end">{{ '%.2f'|format(e_deduct_base + e_deduct_vat) }}</td>
               </tr>
               <tr>
-                <td>Non-deductible Purchases</td>
+                <td>{{ _('Non-deductible Purchases') }}</td>
                 <td class="text-end">{{ '%.2f'|format(p_non_base) }}</td>
                 <td class="text-end">-</td>
                 <td class="text-end">{{ '%.2f'|format(p_non_base) }}</td>
               </tr>
               <tr>
-                <td>Non-deductible Expenses</td>
+                <td>{{ _('Non-deductible Expenses') }}</td>
                 <td class="text-end">{{ '%.2f'|format(e_non_base) }}</td>
                 <td class="text-end">-</td>
                 <td class="text-end">{{ '%.2f'|format(e_non_base) }}</td>
@@ -156,12 +283,13 @@
             </tbody>
           </table>
         </div>
+          </div>
+        </div>
       </div>
-    </div>
 
   <div class="col-12">
     <div class="card p-3">
-      <h6 class="mb-2">Summary</h6>
+      <h6 class="mb-2">{{ _('Summary') }}</h6>
       {% set out_v = (data.output_vat or 0)|float %}
       {% set in_v  = (data.input_vat or 0)|float %}
       {% set net_v = (out_v - in_v)|float %}
@@ -170,12 +298,12 @@
           <div class="border rounded p-2">Output VAT: <strong><a href="{{ url_for('financials.account_statement') }}?code=2024&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(out_v) }}</a></strong></div>
         </div>
         <div class="col-md-4">
-          <div class="border rounded p-2">Input VAT: <strong><a href="{{ url_for('financials.account_statement') }}?code=6200&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(in_v) }}</a></strong></div>
+          <div class="border rounded p-2">Input VAT: <strong><a href="{{ url_for('financials.account_statement') }}?code=1170&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ '%.2f'|format(in_v) }}</a></strong></div>
         </div>
         <div class="col-md-4">
           <div class="border rounded p-2">
             Net VAT Payable: <strong>{{ '%.2f'|format(net_v) }}</strong>
-            {% if net_v < 0 %}<span class="badge bg-info ms-2">رصيد مسترد</span>{% endif %}
+            {% if net_v < 0 %}<span class="badge bg-info ms-2">{{ _('Refund balance') }}</span>{% endif %}
           </div>
         </div>
       </div>
@@ -183,7 +311,7 @@
   </div>
   <div class="col-12">
     <div class="card p-3">
-      <h6 class="mb-2">Reconciliation / المصالحة</h6>
+      <h6 class="mb-2">{{ _('Reconciliation') }}</h6>
       {% set j_out = (data.journal_vat_out or 0)|float %}
       {% set j_in  = (data.journal_vat_in or 0)|float %}
       {% set j_net = (data.journal_vat_net or 0)|float %}
@@ -201,20 +329,35 @@
         <div class="d-flex justify-content-between"><span>Diff Net VAT</span><span class="fw-bold {% if diff_net|abs > 0.01 %}text-danger{% else %}text-success{% endif %}">{{ '%.2f'|format(diff_net) }}</span></div>
       </div>
       <div class="mt-3">
-        <label class="form-label">Notes</label>
-        <textarea class="form-control" rows="3" placeholder="أدخل ملاحظات — لا تغيير للأرقام"></textarea>
+        <label class="form-label">{{ _('Notes') }}</label>
+        <textarea class="form-control" rows="3" placeholder="{{ _('Enter notes — do not change numbers') }}"></textarea>
       </div>
     </div>
   </div>
   </div>
+      </div>
+    </main>
+  </div>
 
   <div class="mt-4">
-    <small>الفترة: {{ data.start_date }} إلى {{ data.end_date }}</small>
+    <small>{{ _('Period') }}: {{ data.start_date }} {{ _('to') }} {{ data.end_date }}</small>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script>
+document.querySelectorAll('.ops-tabs-wrap .ops-tab[data-panel]').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var id = this.getAttribute('data-panel');
+    document.querySelectorAll('.ops-tabs-wrap .ops-tab[data-panel]').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelectorAll('.ops-panel[data-panel]').forEach(function(p){ p.classList.add('d-none'); });
+    this.classList.add('active');
+    var p = document.getElementById(id);
+    if (p) p.classList.remove('d-none');
+  });
+});
+</script>
 <script>
 (function(){
   const sel = document.getElementById('periodSelect');

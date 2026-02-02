@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="{{ get_locale() or 'ar' }}" dir="{{ 'rtl' if (get_locale() or 'ar') == 'ar' else 'ltr' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ _('Payroll Statement') }} — {{ company_name }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4; margin: 12mm; }
+    body { font-family: 'Cairo', 'Tajawal', sans-serif; color: #1f2937; }
+    @media print {
+      .no-print { display: none !important; }
+      body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .table-ps th, .table-ps td { border-color: #333 !important; }
+      .table-ps thead th { background: #f0f0f0 !important; color: #000 !important; }
+      tr { page-break-inside: avoid; }
+    }
+    .ps-header { border-bottom: 2px solid #333; padding-bottom: 0.75rem; margin-bottom: 1rem; }
+    .ps-title { font-size: 1.25rem; font-weight: 700; margin: 0; }
+    .ps-meta { font-size: 0.9rem; color: #666; margin-top: 0.25rem; }
+    .ps-emp { margin-bottom: 1.5rem; }
+    .ps-emp-name { font-weight: 700; font-size: 1rem; margin-bottom: 0.5rem; padding: 0.35rem 0.5rem; background: #f5f5f5; border-radius: 6px; }
+    .table-ps { font-size: 0.9rem; width: 100%; border-collapse: collapse; }
+    .table-ps th, .table-ps td { padding: 0.4rem 0.5rem; border: 1px solid #ddd; text-align: right; }
+    .table-ps th { background: #e9ecef; font-weight: 600; }
+    .table-ps .mono { font-variant-numeric: tabular-nums; }
+    .st-paid { color: #0d6efd; }
+    .st-partial { color: #fd7e14; }
+    .st-due { color: #dc3545; }
+    .st-credit { color: #198754; }
+  </style>
+</head>
+<body class="p-4">
+
+  <div class="ps-header">
+    {% include 'partials/report_header.html' %}
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mt-2">
+      <div>
+        <h2 class="ps-title mb-1">{{ _('Payroll Statement') }}</h2>
+        <div class="ps-meta">{{ _('Period') }}: {{ period_label }} · {{ generated_at }}</div>
+      </div>
+      <div class="no-print">
+        <form method="get" action="{{ url_for('reports.print_payroll') }}" id="ps-filter-form" class="border rounded p-3 mb-2 bg-light">
+          <div class="row g-2 align-items-end flex-wrap">
+            <div class="col-auto">
+              <label class="form-label mb-0 small fw-bold">{{ _('Period') }}</label>
+              <div class="d-flex gap-2 align-items-center flex-wrap">
+                <div class="d-flex align-items-center gap-1">
+                  <input type="radio" name="period_mode" id="ps-mode-single" value="single" checked>
+                  <label for="ps-mode-single" class="mb-0 small">{{ _('Single month') }}</label>
+                </div>
+                <input type="month" name="month" id="ps-month" class="form-control form-control-sm" value="{{ '%04d-%02d'|format(year_from|default(year), month_from|default(month)) }}" style="width:10rem;">
+                <div class="d-flex align-items-center gap-1">
+                  <input type="radio" name="period_mode" id="ps-mode-range" value="range">
+                  <label for="ps-mode-range" class="mb-0 small">{{ _('From – To') }}</label>
+                </div>
+                <input type="month" name="month_from" id="ps-month-from" class="form-control form-control-sm d-none" value="{{ '%04d-%02d'|format(year_from|default(year), month_from|default(month)) }}" style="width:10rem;" placeholder="{{ _('From') }}">
+                <span class="d-none" id="ps-range-sep">–</span>
+                <input type="month" name="month_to" id="ps-month-to" class="form-control form-control-sm d-none" value="{{ '%04d-%02d'|format(year_to|default(year), month_to|default(month)) }}" style="width:10rem;" placeholder="{{ _('To') }}">
+              </div>
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0 small fw-bold">{{ _('Employees') }}</label>
+              <div class="d-flex gap-1 align-items-start">
+                <select name="employee_ids" id="ps-employees" class="form-select form-select-sm" multiple size="4" style="min-width:200px;">
+                  {% for e in (all_employees or []) %}
+                  <option value="{{ e.id }}" {{ 'selected' if e.id in (selected_employee_ids or []) else '' }}>{{ e.full_name }}{% if e.department %} ({{ e.department }}){% endif %}</option>
+                  {% endfor %}
+                </select>
+                <div class="d-flex flex-column gap-1">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="ps-emp-all" title="{{ _('Select all') }}">{{ _('All') }}</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="ps-emp-clear" title="{{ _('Clear selection') }}">{{ _('Clear') }}</button>
+                </div>
+              </div>
+              <small class="text-muted">{{ _('Leave empty = All. Select one or more employees.') }}</small>
+            </div>
+            <div class="col-auto">
+              <button type="submit" class="btn btn-sm btn-outline-primary">{{ _('Update') }}</button>
+              <a href="{{ url_for('reports.reports') }}" class="btn btn-sm btn-outline-secondary">{{ _('Back to reports') }}</a>
+              <button type="button" id="btn-print-payroll" class="btn btn-sm btn-primary"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# جدول واحد رسمي: اسم الموظف، أساسي، إضافي، غياب، حافز، بدلات، استقطاعات، إجمالي، القسم، التوقيع #}
+  {% if payroll_table_rows %}
+  <div class="table-responsive mb-4">
+    <table class="table-ps">
+      <thead>
+        <tr>
+          <th>{{ _('Employee name') }}</th>
+          <th class="text-end mono">{{ _('Basic') }}</th>
+          <th class="text-end mono">{{ _('Extra') }}</th>
+          <th class="text-end mono">{{ _('Absence') }}</th>
+          <th class="text-end mono">{{ _('Incentive') }}</th>
+          <th class="text-end mono">{{ _('Allowances') }}</th>
+          <th class="text-end mono">{{ _('Deductions') }}</th>
+          <th class="text-end mono">{{ _('Total') }}</th>
+          <th>{{ _('Department') }}</th>
+          <th>{{ _('Signature') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in payroll_table_rows %}
+        <tr>
+          <td>{{ row.name or '—' }}</td>
+          <td class="mono">{{ '{:,.2f}'.format(row.basic or 0) }}</td>
+          <td class="mono">{{ '{:,.2f}'.format(row.extra or 0) }}</td>
+          <td class="mono">{{ '{:,.2f}'.format(row.absence or 0) }}</td>
+          <td class="mono">{{ '{:,.2f}'.format(row.incentive or 0) }}</td>
+          <td class="mono">{{ '{:,.2f}'.format(row.allowances or 0) }}</td>
+          <td class="mono">{{ '{:,.2f}'.format(row.deductions or 0) }}</td>
+          <td class="mono">{{ '{:,.2f}'.format(row.total or 0) }}</td>
+          <td>{{ row.department or '—' }}</td>
+          <td></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% for emp in employees %}
+  <div class="ps-emp no-print">
+    <div class="ps-emp-name">{{ emp.name or '—' }}</div>
+    <div class="table-responsive">
+      <table class="table-ps">
+        <thead>
+          <tr>
+            <th>{{ _('Month') }}</th>
+            <th>{{ _('Basic') }}</th>
+            <th>{{ _('Extra') }}</th>
+            <th>{{ _('Absence') }}</th>
+            <th>{{ _('Incentive') }}</th>
+            <th>{{ _('Allowances') }}</th>
+            <th>{{ _('Deductions') }}</th>
+            <th>{{ _('Previous due') }}</th>
+            <th>{{ _('Total') }}</th>
+            <th>{{ _('Paid') }}</th>
+            <th>{{ _('Remaining') }}</th>
+            <th>{{ _('Status') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in (emp.salaries or []) %}
+          <tr>
+            <td>{% if row.year and row.month %}{{ row.year }}-{{ '%02d'|format(row.month) }}{% else %}—{% endif %}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.basic or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.extra or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.absence or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.incentive or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.allowances or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.deductions or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.prev_due or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.total or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.paid_amount or row.paid or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(row.remaining_amount or row.remaining or 0) }}</td>
+            <td>
+              {% if row.status == 'paid' %}<span class="st-paid">{{ _('Paid') }}</span>
+              {% elif row.status == 'partial' %}<span class="st-partial">{{ _('Partial') }}</span>
+              {% elif row.status == 'due' %}<span class="st-due">{{ _('Due') }}</span>
+              {% elif row.status == 'credit' %}<span class="st-credit">{{ _('Credit') }}</span>
+              {% else %}{{ row.status }}{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not (emp.salaries or []) %}
+          <tr><td colspan="12" class="text-center text-muted">{{ _('No data') }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if not employees and not payroll_table_rows %}
+  <p class="text-muted">{{ _('No employees or payroll data for the selected period.') }}</p>
+  {% endif %}
+
+  <script>
+    (function() {
+      var btn = document.getElementById('btn-print-payroll');
+      if (btn) btn.addEventListener('click', function() { window.print(); });
+
+      function psTogglePeriod() {
+        var single = document.getElementById('ps-mode-single');
+        var monthEl = document.getElementById('ps-month');
+        var monthFrom = document.getElementById('ps-month-from');
+        var monthTo = document.getElementById('ps-month-to');
+        var sep = document.getElementById('ps-range-sep');
+        if (!single || !monthEl) return;
+        var isSingle = single.checked;
+        monthEl.classList.toggle('d-none', !isSingle);
+        monthEl.disabled = !isSingle;
+        if (monthFrom) { monthFrom.classList.toggle('d-none', isSingle); monthFrom.disabled = isSingle; }
+        if (monthTo) { monthTo.classList.toggle('d-none', isSingle); monthTo.disabled = isSingle; }
+        if (sep) sep.classList.toggle('d-none', isSingle);
+      }
+      document.getElementById('ps-mode-single') && document.getElementById('ps-mode-single').addEventListener('change', psTogglePeriod);
+      document.getElementById('ps-mode-range') && document.getElementById('ps-mode-range').addEventListener('change', psTogglePeriod);
+      psTogglePeriod();
+
+      document.getElementById('ps-emp-all') && document.getElementById('ps-emp-all').addEventListener('click', function() {
+        var sel = document.getElementById('ps-employees');
+        if (sel) { for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = true; }
+      });
+      document.getElementById('ps-emp-clear') && document.getElementById('ps-emp-clear').addEventListener('click', function() {
+        var sel = document.getElementById('ps-employees');
+        if (sel) { for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = false; }
+      });
+
+      document.getElementById('ps-filter-form') && document.getElementById('ps-filter-form').addEventListener('submit', function() {
+        var single = document.getElementById('ps-mode-single');
+        if (single && single.checked) {
+          var mFrom = document.getElementById('ps-month-from');
+          var mTo = document.getElementById('ps-month-to');
+          if (mFrom) mFrom.removeAttribute('name');
+          if (mTo) mTo.removeAttribute('name');
+        } else {
+          var month = document.getElementById('ps-month');
+          if (month) month.removeAttribute('name');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

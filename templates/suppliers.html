@@ -1,75 +1,58 @@
 {% extends 'base.html' %}
-{% block title %}{{ _('Suppliers / الموردون') }}{% endblock %}
+{% block title %}{{ _('Suppliers') }}{% endblock %}
 {% block content %}
-<div class="container py-3" style="font-size: 1rem;">
-  <div class="section-header d-flex justify-content-between align-items-center">
-    <h3 class="mb-0">{{ _('Suppliers / الموردون') }}</h3>
-    <form class="d-flex gap-2" method="get" action="{{ url_for('main.suppliers_list') }}">
-      <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" placeholder="{{ _('Search... / بحث...') }}" style="min-width: 220px;">
-      <a class="btn btn-outline-secondary" href="{{ url_for('main.suppliers_export', q=request.args.get('q')) }}">{{ _('Export CSV / تصدير CSV') }}</a>
-      <a class="btn btn-outline-secondary" href="{{ url_for('main.suppliers_list') }}">{{ _('Suppliers List / قائمة الموردين') }}</a>
-      <a class="btn btn-outline-secondary" href="{{ url_for('main.purchases') }}">{{ _('Go to Purchases / الذهاب إلى المشتريات') }}</a>
-      <button class="btn btn-primary">{{ _('Search / بحث') }}</button>
-    </form>
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-truck"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Suppliers') }}</h1>
+      <span class="ops-subtitle">{{ _('Manage suppliers and procurement') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2 align-items-center" data-partial-links>
+      <form class="d-flex gap-1" method="get" action="{{ url_for('suppliers.suppliers_list') }}">
+        <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control form-control-sm" placeholder="{{ _('Search') }}" style="min-width:160px">
+        <button type="submit" class="btn btn-sm"><i class="fa-solid fa-search"></i></button>
+      </form>
+      <a class="btn btn-sm" href="{{ url_for('suppliers.suppliers_export', q=request.args.get('q')) }}"><i class="fa-solid fa-file-csv me-1"></i>{{ _('Export CSV') }}</a>
+      <a class="btn btn-sm" href="{{ url_for('suppliers.suppliers_list') }}"><i class="fa-solid fa-list me-1"></i>{{ _('List') }}</a>
+      <a class="btn btn-sm" href="{{ url_for('purchases.purchases') }}"><i class="fa-solid fa-cart-shopping me-1"></i>{{ _('Purchases') }}</a>
+      <a class="btn btn-sm" href="{{ url_for('main.dashboard') }}"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+    </div>
   </div>
 
-  <div class="card mb-3"><div class="card-body">
-    <form method="post" action="{{ url_for('main.suppliers') }}" class="row g-2 align-items-end">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('Name / الاسم') }}</label>
-        <input name="name" class="form-control" required>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('Contact Person / شخص التواصل') }}</label>
-        <input name="contact_person" class="form-control">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('Phone / الهاتف') }}</label>
-        <input name="phone" class="form-control">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('Email / البريد الإلكتروني') }}</label>
-        <input name="email" type="email" class="form-control">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('Tax Number / الرقم الضريبي') }}</label>
-        <input name="tax_number" class="form-control">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('CR Number / رقم السجل التجاري') }}</label>
-        <input name="cr_number" class="form-control">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('IBAN / رقم الآيبان') }}</label>
-        <input name="iban" class="form-control">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('Address / العنوان') }}</label>
-        <input name="address" class="form-control">
-      </div>
-      <div class="col-md-8">
-        <label class="form-label">{{ _('Notes / ملاحظات') }}</label>
-        <input name="notes" class="form-control">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">{{ _('Payment Method / طريقة الدفع') }}</label>
-        <select name="payment_method" class="form-select">
-          <option value="CASH">CASH</option>
-          <option value="BANK">BANK</option>
-        </select>
-      </div>
-      <div class="col-md-2 form-check mt-4">
-        <input type="checkbox" name="active" id="active" class="form-check-input" checked>
-        <label for="active" class="form-check-label">{{ _('Active / نشط') }}</label>
-      </div>
-      <div class="col-md-2">
-        <button class="btn btn-success w-100">{{ _('Add / إضافة') }}</button>
-      </div>
-    </form>
-  </div></div>
+  <div class="ops-tabs-wrap">
+    <div class="ops-tabs" role="tablist">
+      <a href="{{ url_for('suppliers.suppliers') }}" class="ops-tab active">{{ _('Add') }}</a>
+      <a href="{{ url_for('suppliers.suppliers_list') }}" class="ops-tab">{{ _('List') }}</a>
+      <a href="{{ url_for('suppliers.suppliers_payments_statements') }}" class="ops-tab">{{ _('Payments & Statements') }}</a>
+    </div>
+  </div>
 
-  
+  <div class="ops-body ops-body-no-sidebar">
+    <main class="ops-main">
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Add supplier') }}</div>
+        <div class="ops-form-body">
+          <form method="post" action="{{ url_for('suppliers.suppliers') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="screen-form-grid mb-3">
+              <div class="screen-form-group"><label class="form-label">{{ _('Name') }}</label><input name="name" class="form-control" required></div>
+              <div class="screen-form-group"><label class="form-label">{{ _('Contact Person') }}</label><input name="contact_person" class="form-control"></div>
+              <div class="screen-form-group"><label class="form-label">{{ _('Phone') }}</label><input name="phone" class="form-control"></div>
+              <div class="screen-form-group"><label class="form-label">{{ _('Email') }}</label><input name="email" type="email" class="form-control"></div>
+              <div class="screen-form-group"><label class="form-label">{{ _('Tax Number') }}</label><input name="tax_number" class="form-control"></div>
+              <div class="screen-form-group"><label class="form-label">{{ _('CR Number') }}</label><input name="cr_number" class="form-control"></div>
+              <div class="screen-form-group"><label class="form-label">{{ _('IBAN') }}</label><input name="iban" class="form-control"></div>
+              <div class="screen-form-group"><label class="form-label">{{ _('Address') }}</label><input name="address" class="form-control"></div>
+              <div class="screen-form-group" style="grid-column: 1 / -1;"><label class="form-label">{{ _('Notes') }}</label><input name="notes" class="form-control"></div>
+              <div class="screen-form-group"><label class="form-label">{{ _('Payment Method') }}</label><select name="payment_method" class="form-select"><option value="CASH">CASH</option><option value="BANK">BANK</option></select></div>
+              <div class="screen-form-group d-flex align-items-center"><div class="form-check"><input type="checkbox" name="active" id="active" class="form-check-input" checked><label for="active" class="form-check-label">{{ _('Active') }}</label></div></div>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>{{ _('Add') }}</button>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
 </div>
 {% endblock %}
-

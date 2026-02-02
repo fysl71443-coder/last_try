@@ -1,441 +1,140 @@
-<!doctype html>
-<html lang="ar" dir="ltr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reports / التقارير</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --primary:#004D40; --secondary:#F9A825; --bg:#F8F9FA; --success:#27AE60;
-    --danger:#E74C3C; --text:#212529; --muted:#6c757d; --link:#0d6efd;
-  }
-  html,body{ background:var(--bg); color:var(--text); font-family:'Tajawal', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial; font-size:15px; }
-  h1,h2,h3,h4{ font-weight:700; color:var(--secondary); }
-  body[dir="rtl"] { text-align: right; }
-  input.form-control, select.form-select, textarea.form-control{ background:#fff; color:#212529; border-color:#ced4da; }
-  body.dark input.form-control, body.dark select.form-select, body.dark textarea.form-control{ background:#1E1E1E; color:#ECECEC; border-color:#3a3a3a; }
-  .navbar{ background:#fff !important; border-bottom:1px solid #eee; }
-  .navbar .navbar-brand{ color:var(--primary); font-weight:700; }
-  .btn{ border-radius:8px; font-weight:600; padding:10px 16px; transition: all .2s ease-in-out; }
-  .btn:hover{ transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
-  .btn-primary{ background-color:var(--primary); border-color:var(--primary); }
-  .btn-success{ background-color:var(--success); border-color:var(--success); }
-  .btn-danger{ background-color:var(--danger); border-color:var(--danger); }
-  .card { background:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
-  table{ width:100%; border-collapse:collapse; }
-  table thead{ position: sticky; top:0; background-color:var(--primary); color:#fff; }
-  table th, table td{ padding:12px; border-bottom:1px solid #ddd; vertical-align: middle; }
-  table tbody tr:hover{ background:#f5f5f5; }
-  .form-control:focus, .form-select:focus{ border-color:#E67E22; box-shadow:0 0 0 .2rem rgba(230,126,34,.2); }
-</style>
-</head>
-<body class="light">
-<nav class="navbar navbar-expand-lg">
-  <div class="container-fluid">
-    <a class="navbar-brand d-flex align-items-center gap-2" href="/">
-      <img src="/static/logo.svg" alt="logo" style="width:32px;height:32px;"/>
-      <span>Company</span>
-    </a>
-    <div class="d-flex align-items-center gap-2">
-      <span class="me-3 text-muted">Welcome admin</span>
-      <a class="btn btn-outline-secondary" href="?lang=en" title="English"><i class="fa-solid fa-language"></i></a>
-      <button class="btn btn-sm btn-outline-dark" type="button" id="btnThemeToggle" title="Toggle Theme"><i class="fa-solid fa-moon"></i></button>
-      <a class="btn btn-outline-danger" href="/logout" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></a>
+{% extends 'base.html' %}
+{% block title %}{{ _('Reports') }}{% endblock %}
+{% block content %}
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar mb-4">
+    <span class="ops-icon"><i class="fa-solid fa-chart-line"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Reports') }}</h1>
+      <span class="ops-subtitle">{{ _('View and print sales, expenses, purchases, payroll and financial reports') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.dashboard') }}"><i class="fa-solid fa-house me-1"></i>{{ _('Home') }}</a>
     </div>
   </div>
-  <div id="preview-pager" class="d-flex align-items-center gap-2 mb-3"></div>
-  <div id="preview-day-pm" class="mb-3"></div>
-  <div id="preview-summary" class="mb-4"></div>
-  <div id="preview-pager" class="d-flex align-items-center gap-2 mb-3"></div>
-  <div id="preview-summary" class="mb-4"></div>
-</nav>
 
-<div class="container py-4">
-  <h3>Reports & Print / التقارير والطباعة</h3>
-
-  <!-- Form Reports -->
-  <form class="row g-2 align-items-end mb-3" id="report-form">
-    <div class="col-auto">
-      <label class="form-label">Type / النوع</label>
-      <select id="rep-cat" class="form-select">
-        <option value="sales">Sales / مبيعات</option>
-        <option value="purchases">Purchases / مشتريات</option>
-        <option value="expenses">Expenses / مصروفات</option>
-      </select>
+  <div id="reports-cards-view" class="reports-cards-view">
+  <div class="row g-3">
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 border-primary shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fa-solid fa-coins text-primary me-2"></i>{{ _('Sales Report') }}</h5>
+          <p class="card-text small text-muted">{{ _('View and print sales report by period and branch.') }}</p>
+          <a href="{{ url_for('reports.reports_sales') }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</a>
+        </div>
+      </div>
     </div>
-    <div class="col-auto">
-      <label class="form-label">From Date / من تاريخ</label>
-      <input id="sd" type="date" class="form-control">
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fa-solid fa-file-invoice-dollar me-2"></i>{{ _('Expenses Report') }}</h5>
+          <p class="card-text small text-muted">{{ _('Expenses report with filters for accounts to include in print.') }}</p>
+          <a href="{{ url_for('reports.reports_expenses') }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</a>
+        </div>
+      </div>
     </div>
-    <div class="col-auto">
-      <label class="form-label">To Date / إلى تاريخ</label>
-      <input id="ed" type="date" class="form-control">
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fa-solid fa-shopping-cart me-2"></i>{{ _('Purchases Report') }}</h5>
+          <p class="card-text small text-muted">{{ _('Detailed purchase invoices and suppliers data.') }}</p>
+          <a href="{{ url_for('reports.reports_purchases') }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</a>
+        </div>
+      </div>
     </div>
-    <div class="col-auto">
-      <label class="form-label">Branch / الفرع</label>
-      <select id="branch" class="form-select">
-        <option value="all">All / جميع الفروع</option>
-        <option value="china_town">China Town</option>
-        <option value="place_india">Place India</option>
-      </select>
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fa-solid fa-chart-column me-2"></i>{{ _('Branch Sales by Day') }}</h5>
+          <p class="card-text small text-muted">{{ _('Daily sales by branch and month with print option.') }}</p>
+          <a href="{{ url_for('reports.reports_branch_sales') }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</a>
+        </div>
+      </div>
     </div>
-    <div class="col-auto">
-      <label class="form-label">Payment Method / طريقة الدفع</label>
-      <select id="pm" class="form-select">
-        <option value="all">All / الكل</option>
-        <option value="cash">Cash / نقدي</option>
-        <option value="card">Card / بطاقة</option>
-        <option value="bank">Bank / بنك</option>
-        <option value="pending">Pending / آجل</option>
-      </select>
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fa-solid fa-users me-2"></i>{{ _('Employees Report') }}</h5>
+          <p class="card-text small text-muted">{{ _('Paid and due amounts, months due, and totals.') }}</p>
+          <a href="{{ url_for('reports.reports_print_salaries_detailed') }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</a>
+        </div>
+      </div>
     </div>
-    <div class="col-auto d-flex flex-row flex-wrap gap-2">
-      <button type="submit" class="btn btn-primary" id="btnPreview">Preview / معاينة</button>
-      <button type="button" class="btn btn-outline-primary" id="btnReportPrintPdf">Print PDF / طباعة PDF</button>
-      <button type="button" class="btn btn-success" id="export-csv">Export CSV / تصدير CSV</button>
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fa-solid fa-scale-balanced me-2"></i>{{ _('Trial Balance') }}</h5>
+          <p class="card-text small text-muted">{{ _('Trial balance as of a given date.') }}</p>
+          <a href="{{ url_for('financials.trial_balance') }}" class="btn btn-outline-primary btn-sm btn-report-embed" data-report-url="{{ url_for('financials.trial_balance') }}"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</a>
+        </div>
+      </div>
     </div>
-  </form>
-
-  <!-- Table Preview -->
-  <div class="table-responsive mb-5">
-    <table class="table table-hover" id="preview-table">
-      <thead>
-        <tr>
-          <th>Date / التاريخ</th>
-          <th>Branch / الفرع</th>
-          <th>Customer / العميل</th>
-          <th>Type / النوع</th>
-          <th>Payment / الدفع</th>
-          <th>Total / الإجمالي</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td colspan="6" class="text-center text-muted">Preview will appear here / سيتم عرض المعاينة هنا</td></tr>
-      </tbody>
-      <tfoot id="preview-tfoot"></tfoot>
-    </table>
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fa-solid fa-water me-2"></i>{{ _('Cash Flow') }}</h5>
+          <p class="card-text small text-muted">{{ _('Cash flow report for the period.') }}</p>
+          <a href="{{ url_for('financials.cash_flow') }}" class="btn btn-outline-primary btn-sm btn-report-embed" data-report-url="{{ url_for('financials.cash_flow') }}"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fa-solid fa-building-columns me-2"></i>{{ _('Balance Sheet') }}</h5>
+          <p class="card-text small text-muted">{{ _('Statement of financial position as of date.') }}</p>
+          <a href="{{ url_for('financials.balance_sheet') }}" class="btn btn-outline-primary btn-sm btn-report-embed" data-report-url="{{ url_for('financials.balance_sheet') }}"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fa-solid fa-chart-line me-2"></i>{{ _('Income Statement') }}</h5>
+          <p class="card-text small text-muted">{{ _('Income statement for the period.') }}</p>
+          <a href="{{ url_for('financials.income_statement') }}" class="btn btn-outline-primary btn-sm btn-report-embed" data-report-url="{{ url_for('financials.income_statement') }}"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</a>
+        </div>
+      </div>
+    </div>
+  </div>
   </div>
 
-  <!-- Customer Sales -->
-  <h5>Customer Sales / مبيعات العملاء</h5>
-  <form class="row g-2 align-items-end mb-3" id="customer-sales-form">
-    <div class="col-md-4">
-      <label class="form-label">Customer Groups / مجموعات العملاء</label>
-      <select id="cust-groups" class="form-select" multiple>
-        <option value="hunger">hunger</option>
-        <option value="keeta">keeta</option>
-        <option value="noon">noon</option>
-      </select>
-      <div class="form-text">Select one or more groups / اختر مجموعة أو أكثر</div>
+  <div id="reports-embed-view" class="reports-embed-view" style="display: none;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">{{ _('Financial Report') }}</h5>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="reports-embed-back"><i class="fa-solid fa-arrow-right me-1"></i>{{ _('Back to cards') }}</button>
     </div>
-    <div class="col-auto">
-      <label class="form-label">From Date / من تاريخ</label>
-      <input id="csd" type="date" class="form-control">
-    </div>
-    <div class="col-auto">
-      <label class="form-label">To Date / إلى تاريخ</label>
-      <input id="ced" type="date" class="form-control">
-    </div>
-    <div class="col-auto">
-      <label class="form-label">Branch / الفرع</label>
-      <select id="cbranch" class="form-select">
-        <option value="all">All / جميع الفروع</option>
-        <option value="place_india">Place India</option>
-        <option value="china_town">China Town</option>
-      </select>
-    </div>
-    <div class="col-auto">
-      <button class="btn btn-outline-primary" type="submit">Preview / معاينة</button>
-    </div>
-  </form>
-
-  <div class="alert alert-info">
-    Choose the category, date range and payment method, then click Preview. / اختر النوع وحدد الفترة وطريقة الدفع ثم اضغط معاينة.
+    <iframe id="reports-embed-iframe" src="" style="width:100%; min-height: 75vh; border: 1px solid #dee2e6; border-radius: 8px;" title="{{ _('Financial Report') }}"></iframe>
   </div>
 
 </div>
-
+{% endblock %}
+{% block scripts %}
 <script>
-// Lang direction and theme toggle
-document.addEventListener('DOMContentLoaded', function(){
-  try{
-    const params = new URLSearchParams(window.location.search);
-    const lang = (params.get('lang')||'').toLowerCase();
-    document.documentElement.dir = (lang==='en') ? 'ltr' : 'rtl';
-  }catch(_){}
-  try{
-    const btn = document.getElementById('btnThemeToggle');
-    if(btn){
-      btn.addEventListener('click', function(){
-        const b = document.body;
-        const isDark = b.classList.toggle('dark');
-        const icon = btn.querySelector('i');
-        if(icon){ icon.classList.remove(isDark?'fa-moon':'fa-sun'); icon.classList.add(isDark?'fa-sun':'fa-moon'); }
-      });
-    }
-  }catch(_){}
-});
-// General Reports Preview (fetch backend)
-document.getElementById('report-form').addEventListener('submit', async function(e){
-  e.preventDefault();
-  const type = document.getElementById('rep-cat').value;
-  const pm = document.getElementById('pm').value;
-  const branch = document.getElementById('branch').value;
-  const sd = document.getElementById('sd').value;
-  const ed = document.getElementById('ed').value;
-  const url = `/api/reports/preview?type=${encodeURIComponent(type)}&payment_method=${encodeURIComponent(pm)}&branch=${encodeURIComponent(branch)}&start_date=${encodeURIComponent(sd||'')}&end_date=${encodeURIComponent(ed||'')}`;
-  try{
-    const r = await fetch(url, { credentials: 'same-origin' });
-    const j = await r.json();
-    const tbody = document.querySelector('#preview-table tbody');
-    const tfoot = document.getElementById('preview-tfoot');
-    tbody.innerHTML = '';
-    if(!j.ok || !j.rows || j.rows.length===0){
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No data available / لا توجد بيانات</td></tr>';
-      if(tfoot) tfoot.innerHTML = '';
-      return;
-    }
-    const pager = document.getElementById('preview-pager');
-    const summary = document.getElementById('preview-summary');
-    const byDate = {};
-    j.rows.forEach(rw=>{ const d=(rw.date||''); (byDate[d] = byDate[d] || []).push(rw); });
-    const baseDates = Object.keys(byDate).sort();
-    let dates = baseDates;
-    if(sd && ed){
-      try{
-        const start = new Date(sd + 'T00:00:00');
-        const end = new Date(ed + 'T00:00:00');
-        const range = [];
-        for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
-          const s = d.toISOString().slice(0,10);
-          range.push(s);
-          if(!(s in byDate)) byDate[s] = [];
-        }
-        dates = range;
-      }catch(_){ /* keep baseDates */ }
-    }
-    const pmTotals = {};
-    let grandSum = 0;
-    j.rows.forEach(rw=>{ const key=((rw.payment||'')||'').toUpperCase(); pmTotals[key] = (pmTotals[key]||0) + Number(rw.total||0); grandSum += Number(rw.total||0); });
-    const grandCnt = j.rows.length;
-    if(summary){
-      let html = '<div class="card p-2">';
-      html += '<div class="row g-3 align-items-start">';
-      html += '<div class="col-sm-5 col-md-4">'
-            + '<div><strong>Totals / الإجمالي:</strong> ' + grandSum.toFixed(2) + '</div>'
-            + '<div><strong>Count / العدد:</strong> ' + grandCnt + '</div>'
-            + '</div>';
-      html += '<div class="col-sm-7 col-md-8">'
-            + '<div class="mb-1"><strong>By Payment / حسب طريقة الدفع:</strong></div>'
-            + '<table class="table table-sm mb-0"><thead class="table-light"><tr><th>Method</th><th class="text-end">Total</th></tr></thead><tbody>';
-      Object.keys(pmTotals).sort().forEach(k=>{ html += `<tr><td>${k||'-'}</td><td class="text-end">${pmTotals[k].toFixed(2)}</td></tr>`; });
-      html += '</tbody></table></div>';
-      html += '</div></div>';
-      summary.innerHTML = html;
-    }
-    function renderDay(dateKey){
-      const rows = byDate[dateKey] || [];
-      tbody.innerHTML = '';
-      rows.forEach(rw=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${rw.date||''}</td><td>${rw.branch||''}</td><td>${rw.customer||''}</td><td>${rw.type||''}</td><td>${rw.payment||''}</td><td>${Number(rw.total||0).toFixed(2)}</td>`;
-        tbody.appendChild(tr);
-      });
-      const sum = rows.reduce((acc, rw)=> acc + Number(rw.total||0), 0);
-      const cnt = rows.length;
-      if(tfoot){
-        tfoot.innerHTML = `<tr class="table-secondary fw-bold"><td colspan="5" class="text-end">Day Total / إجمالي اليوم:</td><td>${sum.toFixed(2)}</td></tr>` +
-                          `<tr class="table-light"><td colspan="5" class="text-end">Count / العدد:</td><td>${cnt}</td></tr>`;
-      }
-      const lbl = document.getElementById('preview-day-label');
-      if(lbl) lbl.textContent = dateKey || '-';
-      const sel = document.getElementById('preview-day-select');
-      if(sel && sel.value !== dateKey) sel.value = dateKey || '';
-    }
-    if(pager){
-      pager.innerHTML = `
-        <div class="d-flex align-items-center gap-2">
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="preview-prev">◀</button>
-          <span id="preview-day-label" class="badge bg-light text-dark"></span>
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="preview-next">▶</button>
-          <select id="preview-day-select" class="form-select form-select-sm" style="min-width:160px"></select>
-        </div>`;
-      const sel = document.getElementById('preview-day-select');
-      sel.innerHTML = dates.map(d=>`<option value="${d}">${d}</option>`).join('');
-      let idx = 0;
-      document.getElementById('preview-prev').addEventListener('click', function(){ idx = Math.max(0, idx-1); renderDay(dates[idx]); });
-      document.getElementById('preview-next').addEventListener('click', function(){ idx = Math.min(dates.length-1, idx+1); renderDay(dates[idx]); });
-      sel.addEventListener('change', function(){ const v = this.value; idx = Math.max(0, dates.indexOf(v)); renderDay(dates[idx]); });
-      renderDay(dates[idx]);
-    }
-  }catch(_){
-    const tbody = document.querySelector('#preview-table tbody');
-    const tfoot = document.getElementById('preview-tfoot');
-    const pager = document.getElementById('preview-pager');
-    const summary = document.getElementById('preview-summary');
-    const dayPm = document.getElementById('preview-day-pm');
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Failed to load / فشل التحميل</td></tr>';
-    if(tfoot) tfoot.innerHTML = '';
-    if(pager) pager.innerHTML = '';
-    if(summary) summary.innerHTML = '';
-    if(dayPm) dayPm.innerHTML = '';
-  }
-});
+(function() {
+  var cardsView = document.getElementById('reports-cards-view');
+  var embedView = document.getElementById('reports-embed-view');
+  var iframe = document.getElementById('reports-embed-iframe');
+  var backBtn = document.getElementById('reports-embed-back');
 
-// Export CSV (from current preview table)
-document.getElementById('export-csv').addEventListener('click', function(){
-  const rows = Array.from(document.querySelectorAll('#preview-table tbody tr'));
-  let csvContent = "data:text/csv;charset=utf-8,Date,Branch,Customer,Type,Payment,Total\r\n";
-  rows.forEach(tr=>{
-    const cols = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim());
-    csvContent += cols.join(",") + "\r\n";
+  document.querySelectorAll('.btn-report-embed').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      var url = a.getAttribute('data-report-url');
+      if (!url) return;
+      iframe.src = url;
+      if (cardsView) cardsView.style.display = 'none';
+      if (embedView) embedView.style.display = 'block';
+    });
   });
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", "report.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-});
 
-// Customer Sales Preview (fetch backend)
-document.getElementById('customer-sales-form').addEventListener('submit', async function(e){
-  e.preventDefault();
-  const groups = Array.from(document.getElementById('cust-groups').selectedOptions).map(o=>o.value);
-  const branch = document.getElementById('cbranch').value;
-  const csd = document.getElementById('csd').value;
-  const ced = document.getElementById('ced').value;
-  const tbody = document.querySelector('#preview-table tbody');
-  const tfoot = document.getElementById('preview-tfoot');
-  tbody.innerHTML = '';
-  if(groups.length===0){
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Select at least one group / اختر مجموعة واحدة على الأقل</td></tr>';
-    if(tfoot) tfoot.innerHTML = '';
-    return;
+  if (backBtn && cardsView && embedView) {
+    backBtn.addEventListener('click', function() {
+      iframe.src = 'about:blank';
+      embedView.style.display = 'none';
+      cardsView.style.display = 'block';
+    });
   }
-  const url = `/api/reports/customer-sales?customers=${encodeURIComponent(groups.join(','))}&branch=${encodeURIComponent(branch)}&start_date=${encodeURIComponent(csd||'')}&end_date=${encodeURIComponent(ced||'')}`;
-  try{
-    const r = await fetch(url, { credentials: 'same-origin' });
-    const j = await r.json();
-    if(!j.ok || !j.rows || j.rows.length===0){
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No data available / لا توجد بيانات</td></tr>';
-      if(tfoot) tfoot.innerHTML = '';
-      return;
-    }
-    const pager = document.createElement('div');
-    pager.className = 'd-flex align-items-center gap-2 mb-2';
-    pager.innerHTML = `<button type="button" class="btn btn-sm btn-outline-secondary" id="preview-prev">◀</button>
-                       <span id="preview-day-label" class="badge bg-light text-dark"></span>
-                       <button type="button" class="btn btn-sm btn-outline-secondary" id="preview-next">▶</button>
-                       <select id="preview-day-select" class="form-select form-select-sm" style="min-width:160px"></select>`;
-    document.getElementById('preview-pager')?.replaceChildren(pager);
-    // Build date groups and summary
-    const byDate = {};
-    j.rows.forEach(rw=>{ const d=(rw.date||''); (byDate[d] = byDate[d] || []).push(rw); });
-    const baseDates = Object.keys(byDate).sort();
-    let dates = baseDates;
-    // include empty days within selected range
-    const sdVal = document.getElementById('sd').value || '';
-    const edVal = document.getElementById('ed').value || '';
-    if(sdVal && edVal){
-      try{
-        const start = new Date(sdVal + 'T00:00:00');
-        const end = new Date(edVal + 'T00:00:00');
-        const range = [];
-        for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
-          const s = d.toISOString().slice(0,10);
-          range.push(s);
-          if(!(s in byDate)) byDate[s] = [];
-        }
-        dates = range;
-      }catch(_){ /* keep baseDates */ }
-    }
-    // Global summary by payment
-    const pmTotals = {}; let grandSum = 0; const grandCnt = j.rows.length;
-    j.rows.forEach(rw=>{ const key=((rw.payment||'')||'').toUpperCase(); pmTotals[key] = (pmTotals[key]||0) + Number(rw.total||0); grandSum += Number(rw.total||0); });
-    const summary = document.getElementById('preview-summary');
-    if(summary){
-      let html = '<div class="card p-2"><div class="row g-2"><div class="col-auto"><strong>Totals / الإجمالي:</strong> ' + grandSum.toFixed(2) + '</div><div class="col-auto"><strong>Count / العدد:</strong> ' + grandCnt + '</div></div>';
-      html += '<div class="mt-2"><strong>By Payment / حسب طريقة الدفع:</strong><table class="table table-sm w-auto mb-0"><thead class="table-light"><tr><th>Method</th><th class="text-end">Total</th></tr></thead><tbody>';
-      Object.keys(pmTotals).sort().forEach(k=>{ html += `<tr><td>${k||'-'}</td><td class="text-end">${pmTotals[k].toFixed(2)}</td></tr>`; });
-      html += '</tbody></table></div></div>';
-      summary.innerHTML = html;
-    }
-    // Render selected day
-    const sel = document.getElementById('preview-day-select');
-    sel.innerHTML = dates.map(d=>`<option value="${d}">${d}</option>`).join('');
-    let idx = 0;
-    function renderDay(dateKey){
-      const rows = byDate[dateKey] || [];
-      tbody.innerHTML = '';
-      rows.forEach(rw=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${rw.date||''}</td><td>${rw.branch||''}</td><td>${rw.customer||''}</td><td>${rw.type||''}</td><td>${rw.payment||''}</td><td>${Number(rw.total||0).toFixed(2)}</td>`;
-        tbody.appendChild(tr);
-      });
-      const sum = rows.reduce((acc, rw)=> acc + Number(rw.total||0), 0);
-      const cnt = rows.length;
-      if(tfoot){
-        tfoot.innerHTML = `<tr class="table-secondary fw-bold"><td colspan="5" class="text-end">Day Total / إجمالي اليوم:</td><td>${sum.toFixed(2)}</td></tr>` +
-                          `<tr class="table-light"><td colspan="5" class="text-end">Count / العدد:</td><td>${cnt}</td></tr>`;
-      }
-      const lbl = document.getElementById('preview-day-label');
-      if(lbl) lbl.textContent = dateKey || '-';
-      // Day-by-payment
-      const dpm = {}; rows.forEach(rw=>{ const k=((rw.payment||'')||'').toUpperCase(); dpm[k]=(dpm[k]||0)+Number(rw.total||0); });
-      const dayPm = document.getElementById('preview-day-pm');
-      if(dayPm){
-        let html = '<div class="card p-2"><strong>Day By Payment / حسب طريقة الدفع لليوم:</strong>';
-        html += '<table class="table table-sm w-auto mb-0"><thead class="table-light"><tr><th>Method</th><th class="text-end">Total</th></tr></thead><tbody>';
-        Object.keys(dpm).sort().forEach(k=>{ html += `<tr><td>${k||'-'}</td><td class="text-end">${(dpm[k]||0).toFixed(2)}</td></tr>`; });
-        html += '</tbody></table></div>';
-        dayPm.innerHTML = html;
-      }
-    }
-    document.getElementById('preview-prev').addEventListener('click', function(){ idx = Math.max(0, idx-1); renderDay(dates[idx]); });
-    document.getElementById('preview-next').addEventListener('click', function(){ idx = Math.min(dates.length-1, idx+1); renderDay(dates[idx]); });
-    sel.addEventListener('change', function(){ const v = this.value; idx = Math.max(0, dates.indexOf(v)); renderDay(dates[idx]); });
-    renderDay(dates[idx]);
-  }catch(_){
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Failed to load / فشل التحميل</td></tr>';
-    if(tfoot) tfoot.innerHTML = '';
-  }
-});
+})();
 </script>
-
-<script>
-// Print PDF for Sales report only
-document.addEventListener('DOMContentLoaded', function(){
-  const btn = document.getElementById('btnReportPrintPdf');
-  const cat = document.getElementById('rep-cat');
-  function syncState(){
-    if(!btn || !cat) return;
-    const isSales = (cat.value||'').toLowerCase()==='sales';
-    btn.disabled = !isSales;
-    btn.title = isSales ? '' : 'متاح لطباعة تقرير المبيعات فقط';
-  }
-  syncState();
-  cat?.addEventListener('change', syncState);
-  btn?.addEventListener('click', function(){
-    const isSales = (cat.value||'').toLowerCase()==='sales';
-    if(!isSales){
-      alert('هذا الزر مخصص لتقرير المبيعات فقط');
-      return;
-    }
-    const pm = (document.getElementById('pm')?.value||'all');
-    const branch = (document.getElementById('branch')?.value||'all');
-    const sd = (document.getElementById('sd')?.value||'');
-    const ed = (document.getElementById('ed')?.value||'');
-    const url = `/reports/print/all-invoices/sales?payment_method=${encodeURIComponent(pm)}&branch=${encodeURIComponent(branch)}&start_date=${encodeURIComponent(sd)}&end_date=${encodeURIComponent(ed)}`;
-    window.open(url, '_blank');
-  });
-});
-</script>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+{% endblock %}
