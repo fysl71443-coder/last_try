@@ -5304,9 +5304,7 @@ def purchases():
             exp_acc = acc_by_code(exp_code)
             vat_in_acc = acc_by_code(vat_in_code)
             ap_acc = acc_by_code(ap_code)
-            total_before = float(invoice.total_before_tax or 0)
-            tax_amt = float(invoice.tax_amount or 0)
-            total_inc_tax = float(invoice.total_after_tax_discount or (total_before + tax_amt))
+            total_before, tax_amt, total_inc_tax = invoice.get_effective_totals()
             je = JournalEntry(entry_number=f"JE-PUR-{invoice_number}", date=invoice.date, branch_code=None, description=f"Purchase {invoice.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=invoice.id, invoice_type='purchase')
             db.session.add(je); db.session.flush()
             if total_before > 0:

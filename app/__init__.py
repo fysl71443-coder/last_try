@@ -377,6 +377,24 @@ def create_app(config_class=None):
                     ext_db.create_all()
                 except Exception:
                     pass
+            # Ensure customers table has required columns on PostgreSQL (e.g. Render when migration didn't run)
+            try:
+                from sqlalchemy import text
+                conn = db.session.connection()
+                if conn.dialect.name == 'postgresql':
+                    for stmt in [
+                        "ALTER TABLE customers ADD COLUMN IF NOT EXISTS customer_type VARCHAR(20) DEFAULT 'cash'",
+                        "ALTER TABLE customers ADD COLUMN IF NOT EXISTS discount_percent NUMERIC(5,2) DEFAULT 0",
+                        "ALTER TABLE customers ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true",
+                        "ALTER TABLE customers ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+                    ]:
+                        try:
+                            db.session.execute(text(stmt))
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+            except Exception:
+                pass
     except Exception:
         pass
     try:

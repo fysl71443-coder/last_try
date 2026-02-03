@@ -5770,12 +5770,10 @@ def _create_sale_journal(inv):
         raise
 
 def _create_purchase_journal(inv):
-    """إنشاء قيد المشتريات: إذا الفاتورة مدفوعة فوراً (نقداً/بنك) قيد واحد من حـ مخزون/مصروف إلى حـ الصندوق/البنك. وإلا ذمة مورد (2111)."""
+    """إنشاء قيد المشتريات: إذا الفاتورة مدفوعة فوراً (نقداً/بنك) قيد واحد من حـ مخزون/مصروف إلى حـ الصندوق/البنك. وإلا ذمة مورد (2111). يستخدم إجماليات الفاتورة أو من الأصناف إن كان الرأس صفراً."""
     try:
         from models import JournalEntry, JournalLine
-        total_before = float(inv.total_before_tax or 0.0)
-        tax_amt = float(inv.tax_amount or 0.0)
-        total_inc_tax = round(total_before + tax_amt, 2)
+        total_before, tax_amt, total_inc_tax = inv.get_effective_totals()
         status = (getattr(inv, 'status', None) or '').strip().lower()
         pm = (getattr(inv, 'payment_method', None) or '').strip().upper()
         paid_at_creation = (status == 'paid' and pm in ('CASH', 'BANK'))

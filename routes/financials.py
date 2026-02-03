@@ -1455,9 +1455,7 @@ def backfill_journals():
         exp_acc = acc_by_code('1161')
         vat_in_acc = acc_by_code('1170')
         ap_acc = acc_by_code('2111')
-        total_before = float(inv.total_before_tax or 0)
-        tax_amt = float(inv.tax_amount or 0)
-        total_inc_tax = round(total_before + tax_amt, 2)
+        total_before, tax_amt, total_inc_tax = inv.get_effective_totals()
         je = JournalEntry(entry_number=f"JE-PUR-{inv.invoice_number}", date=inv.date, branch_code=None, description=f"Purchase {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax)
         db.session.add(je); db.session.flush()
         if total_before > 0:

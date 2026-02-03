@@ -279,12 +279,32 @@ class PurchaseInvoice(db.Model):
     def __repr__(self):
         return f'<PurchaseInvoice {self.invoice_number}>'
 
+    def get_effective_totals(self):
+        """Return (total_before_tax, tax_amount, total_inc_tax). When header totals are 0, compute from items so journals display correctly."""
+        total_inc = float(self.total_after_tax_discount or 0)
+        tax_amt = float(self.tax_amount or 0)
+        total_before = float(self.total_before_tax or 0)
+        if total_inc != 0:
+            return (total_before, tax_amt, round(total_inc, 2))
+        try:
+            from sqlalchemy import func
+            r = db.session.query(
+                func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0),
+                func.coalesce(func.sum(PurchaseInvoiceItem.tax), 0),
+            ).filter(PurchaseInvoiceItem.invoice_id == self.id).first()
+            if r and (float(r[0] or 0) != 0 or float(r[1] or 0) != 0):
+                total_inc = float(r[0] or 0)
+                tax_amt = float(r[1] or 0)
+                total_before = max(0, total_inc - tax_amt)
+                return (total_before, tax_amt, round(total_inc, 2))
+        except Exception:
+            pass
+        return (total_before, tax_amt, round(total_before + tax_amt, 2))
+
     def to_journal_entries(self):
         rows = []
         try:
-            total_before = float(self.total_before_tax or 0)
-            tax_amt = float(self.tax_amount or 0)
-            total_inc_tax = round(total_before + tax_amt, 2)
+            total_before, tax_amt, total_inc_tax = self.get_effective_totals()
             # Inventory or expense depending on production flag (not stored here) — default inventory 1210
             rows.append({'account_code': '1161', 'debit': (total_before if total_before>0 else 0.0), 'credit': 0.0, 'description': 'Purchase', 'ref_type': 'purchase', 'ref_id': int(self.id), 'date': str(self.date or get_saudi_now().date())})
             if tax_amt > 0:

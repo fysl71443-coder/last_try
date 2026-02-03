@@ -633,9 +633,7 @@ def create_missing_journal_entries_for(kind: str):
             if _has_journal(inv.id, 'purchase', inv_num):
                 continue
             try:
-                total_before = float(inv.total_before_tax or 0)
-                tax_amt = float(inv.tax_amount or 0)
-                total_inc_tax = round(total_before + tax_amt, 2)
+                total_before, tax_amt, total_inc_tax = inv.get_effective_totals()
                 exp_acc = _acc_by_code('1161')
                 vat_in_acc = _acc_by_code('1170')
                 ap_acc = _acc_by_code('2111')
