@@ -40,11 +40,11 @@ CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments (invoice_type, invoi
 - تجنب استدعاء `Supplier.query.get(id)` أو `Customer.query.get(id)` **داخل حلقة** على عشرات الصفوف؛ استخدم الخيار أعلاه أو بناء قاموس (id → object) من استعلام واحد.
 
 ### 2.2 الترقيم (Pagination) في كل القوائم الكبيرة
-- **تم تنفيذه:** تقرير التدفق النقدي (50 صف/صفحة مع LIMIT منطقي عبر slice).
-- **مقترح:** تطبيق نفس النمط على:
-  - كشف الحساب (account_statement)
-  - قائمة القيود (journal list)
-  - تقرير المبيعات إذا تجاوز الصفوف حداً معيناً (مثلاً 100)
+- **تم تنفيذه:**
+  - تقرير التدفق النقدي (50 صف/صفحة مع LIMIT منطقي عبر slice).
+  - **قائمة القيود (journal):** API `/journal/api/journals` يدعم `page` و `per_page` (افتراضي 25)، وشاشة الحسابات تعرض «السابق/التالي» ورقم الصفحة.
+  - **شاشة جميع الفواتير:** API `/api/all-invoices` يستخدم `per_page=50` و `page` مع إرجاع `pagination` (total_sales, total_purchases, pages)، والواجهة تعرض ترقيم للمبيعات.
+  - **دفتر الأستاذ/كشف الحساب:** حد أقصى 100 سطر افتراضياً (`per_page`) لتسريع التحميل مع الحفاظ على صحة الرصيد الجاري.
 - استخدم `request.args.get('page', 1, type=int)` و `per_page` ثم:
   - إما استعلام مع `LIMIT` و `OFFSET` (أو `.limit(per_page).offset((page-1)*per_page)`)،
   - أو جلب النتائج المطلوبة فقط من طبقة التخزين (مثلاً من view أو استعلام مجمّع).

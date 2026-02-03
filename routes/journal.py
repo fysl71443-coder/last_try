@@ -1656,13 +1656,16 @@ def close_period():
 @bp.route('/api/journals', methods=['GET'])
 def api_journals():
     try:
+        import math
         from datetime import datetime as _dt
         start_s = (request.args.get('start') or '').strip()
         end_s = (request.args.get('end') or '').strip()
         acc_code = (request.args.get('account') or '').strip()
         posted = (request.args.get('posted') or '').strip().lower()
         source = (request.args.get('source') or '').strip()
-        q = JournalEntry.query.order_by(JournalEntry.date.asc(), JournalEntry.id.asc())
+        page = max(1, request.args.get('page', 1, type=int))
+        per_page = min(100, max(10, request.args.get('per_page', 25, type=int)))
+        q = JournalEntry.query.order_by(JournalEntry.date.desc(), JournalEntry.id.desc())
         if start_s:
             try:
                 sdt = _dt.strptime(start_s, '%Y-%m-%d').date(); q = q.filter(JournalEntry.date >= sdt)
@@ -1681,7 +1684,11 @@ def api_journals():
                     q = q.filter(JournalEntry.source_ref_type == source)
             except Exception:
                 pass
-        rows = q.all()
+        total = q.count()
+        pages = max(1, math.ceil(total / per_page)) if total else 1
+        page = min(page, pages)
+        q = _journal_with_lines_options(q)
+        rows = q.offset((page - 1) * per_page).limit(per_page).all()
         meta = _journal_list_entry_meta(rows)
         data = []
         for je in rows:
@@ -1719,7 +1726,14 @@ def api_journals():
             if (not acc_code) or d['lines']:
                 data.append(d)
         from flask import jsonify
-        return jsonify({'ok': True, 'entries': data})
+        return jsonify({
+            'ok': True,
+            'entries': data,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'pages': pages,
+        })
     except Exception as e:
         from flask import jsonify
         return jsonify({'ok': False, 'error': str(e)}), 500

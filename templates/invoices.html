@@ -94,6 +94,13 @@
             <tbody id="det-sales-body"></tbody>
             <tfoot id="det-sales-foot"></tfoot>
           </table>
+          <div class="d-flex align-items-center justify-content-between mt-2 flex-wrap gap-2">
+            <span class="text-muted small" id="det-sales-pagination-info"></span>
+            <div class="d-flex gap-1">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="det-sales-prev" disabled>{{ _('Previous') }}</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="det-sales-next" disabled>{{ _('Next') }}</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -225,7 +232,9 @@
       function n2(x){ try{return Number(x||0).toFixed(2);}catch(e){return '0.00';} }
       function enc(s){ return encodeURIComponent(s||''); }
       var CURRENT_TYPE = '{{ current_type }}';
-      function buildQS(){
+      var invPage = 1;
+      var invPerPage = 50;
+      function buildQS(extraPage){
         const s = document.getElementById('detStart')?.value || '';
         const e = document.getElementById('detEnd')?.value || '';
         const pm = (document.getElementById('detPM')?.value || 'all');
@@ -236,10 +245,13 @@
         if(e) parts.push('end_date='+enc(e));
         if(pm && pm!=='all') parts.push('payment_method='+enc(pm));
         if(br && br!=='all') parts.push('branch='+enc(br));
-        return parts.length ? ('?'+parts.join('&')) : '';
+        parts.push('page='+((extraPage !== undefined) ? extraPage : invPage));
+        parts.push('per_page='+invPerPage);
+        return '?'+parts.join('&');
       }
 
-      function loadDetSales(){
+      function loadDetSales(page){
+        if(page !== undefined) invPage = page;
         const qs = buildQS();
         fetch('/api/all-invoices'+qs, {credentials:'same-origin'})
           .then(r=>r.json()).then(data=>{
@@ -278,6 +290,13 @@
               <td>${n2((data.overall_totals||data.summary||overall).vat||overall.vat)}</td>
               <td>${n2((data.overall_totals||data.summary||overall).total||overall.total)}</td><td></td>`;
             foot.appendChild(tro);
+            var pag = data.pagination||{};
+            var infoEl = document.getElementById('det-sales-pagination-info');
+            var prevBtn = document.getElementById('det-sales-prev');
+            var nextBtn = document.getElementById('det-sales-next');
+            if(infoEl) infoEl.textContent = (pag.total_sales !== undefined) ? ('صفحة '+invPage+' من '+(pag.pages||1)+' (إجمالي '+pag.total_sales+' سطر)') : '';
+            if(prevBtn){ prevBtn.disabled = invPage <= 1; }
+            if(nextBtn){ nextBtn.disabled = !pag.has_more && invPage >= (pag.pages||1); }
           }).catch(err=> console.error('loadDetSales failed', err));
       }
 
@@ -466,11 +485,14 @@
       }
 
       function reloadAll(){
-        if(CURRENT_TYPE==='sales'||CURRENT_TYPE==='all') loadDetSales();
+        invPage = 1;
+        if(CURRENT_TYPE==='sales'||CURRENT_TYPE==='all') loadDetSales(1);
         if(CURRENT_TYPE==='purchases'||CURRENT_TYPE==='all') loadDetPurch();
         if(CURRENT_TYPE==='expenses'||CURRENT_TYPE==='all') loadDetExp();
       }
       document.getElementById('btnApplyFilters')?.addEventListener('click', function(ev){ ev.preventDefault(); reloadAll(); });
+      document.getElementById('det-sales-prev')?.addEventListener('click', function(){ if(invPage>1) loadDetSales(invPage-1); });
+      document.getElementById('det-sales-next')?.addEventListener('click', function(){ loadDetSales(invPage+1); });
 
       function openPrint(urlBase, dropBranch){
         let qs = buildQS();

@@ -1778,6 +1778,7 @@ def api_account_ledger_json():
     code = (request.args.get('code') or '').strip()
     start_arg = request.args.get('start_date')
     end_arg = request.args.get('end_date')
+    limit_ledger = min(500, max(50, request.args.get('per_page', 100, type=int)))
     today = get_saudi_now().date()
     try:
         start_date = datetime.strptime(start_arg, '%Y-%m-%d').date() if start_arg else datetime(2025,10,1).date()
@@ -1797,9 +1798,8 @@ def api_account_ledger_json():
         .filter(JournalEntry.status == 'posted') \
         .filter(JournalLine.account_id == acc.id) \
         .filter(JournalLine.line_date.between(start_date, end_date)) \
-        .order_by(JournalLine.line_date.asc(), JournalLine.id.asc())
+        .order_by(JournalLine.line_date.asc(), JournalLine.id.asc()).limit(limit_ledger)
     rows = []
-    bal = 0.0
     opening_debit = float(db.session.query(func.coalesce(func.sum(JournalLine.debit), 0)).join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(JournalEntry.status == 'posted').filter(JournalLine.account_id == acc.id).filter(JournalLine.line_date < start_date).scalar() or 0)
     opening_credit = float(db.session.query(func.coalesce(func.sum(JournalLine.credit), 0)).join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(JournalEntry.status == 'posted').filter(JournalLine.account_id == acc.id).filter(JournalLine.line_date < start_date).scalar() or 0)
     opening_balance = opening_debit - opening_credit if acc.type != 'LIABILITY' else opening_credit - opening_debit

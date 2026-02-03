@@ -4956,16 +4956,18 @@ def api_all_invoices():
         start_date = (request.args.get('start_date') or '').strip()
         end_date = (request.args.get('end_date') or '').strip()
         type_f = (request.args.get('type') or 'all').strip().lower()
-        if type_f not in ('sales', 'purchases', 'all'):
+        if type_f not in ('sales', 'purchases', 'expenses', 'all'):
             type_f = 'all'
         try:
-            limit = min(int(request.args.get('limit') or 2000), 5000)
+            per_page = min(int(request.args.get('per_page') or request.args.get('limit') or 50), 500)
         except (TypeError, ValueError):
-            limit = 2000
+            per_page = 50
         try:
-            offset = max(0, int(request.args.get('offset') or 0))
+            page = max(1, int(request.args.get('page') or 1))
         except (TypeError, ValueError):
-            offset = 0
+            page = 1
+        offset = (page - 1) * per_page
+        limit = per_page
         rows = []
         branch_totals = {}
         overall = {'amount': 0.0, 'discount': 0.0, 'vat': 0.0, 'total': 0.0}
@@ -5000,8 +5002,10 @@ def api_all_invoices():
                 q_sales = q_sales.order_by(SalesInvoice.created_at.desc())
             elif hasattr(SalesInvoice, 'date'):
                 q_sales = q_sales.order_by(SalesInvoice.date.desc())
+            total_sales = q_sales.count()
             results_sales = q_sales.limit(limit).offset(offset).all()
         else:
+            total_sales = 0
             results_sales = []
 
         # معالجة فواتير المشتريات (فقط عند type=purchases أو all)
@@ -5031,8 +5035,10 @@ def api_all_invoices():
                 q_purchases = q_purchases.order_by(PurchaseInvoice.created_at.desc())
             elif hasattr(PurchaseInvoice, 'date'):
                 q_purchases = q_purchases.order_by(PurchaseInvoice.date.desc())
+            total_purchases = q_purchases.count()
             results_purchases = q_purchases.limit(limit).offset(offset).all()
         else:
+            total_purchases = 0
             results_purchases = []
         
         # معالجة فواتير المبيعات
@@ -5125,12 +5131,23 @@ def api_all_invoices():
             bt['amount'] += amount; bt['discount'] += disc; bt['vat'] += vat; bt['total'] += total
             overall['amount'] += amount; overall['discount'] += disc; overall['vat'] += vat; overall['total'] += total
 
+        pages_sales = max(1, (total_sales + per_page - 1) // per_page) if type_f in ('sales', 'all') else 1
+        pages_purchases = max(1, (total_purchases + per_page - 1) // per_page) if type_f in ('purchases', 'all') else 1
+        pages = max(pages_sales, pages_purchases) if type_f == 'all' else (pages_sales if type_f == 'sales' else pages_purchases)
         has_more = (len(results_sales) == limit or len(results_purchases) == limit)
         return jsonify({
             'invoices': rows,
             'branch_totals': branch_totals,
             'overall_totals': overall,
-            'pagination': {'limit': limit, 'offset': offset, 'has_more': has_more}
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'offset': offset,
+                'total_sales': total_sales,
+                'total_purchases': total_purchases,
+                'has_more': has_more,
+                'pages': pages,
+            }
         })
     except Exception as e:
         try:
