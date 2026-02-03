@@ -393,6 +393,28 @@ def create_app(config_class=None):
                             db.session.commit()
                         except Exception:
                             db.session.rollback()
+                    # Ensure journal_lines has columns required by JournalLine model (cash_flow, etc.)
+                    for stmt in [
+                        "ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS line_date DATE DEFAULT CURRENT_DATE",
+                        "ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS employee_id INTEGER",
+                        "ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS invoice_id INTEGER",
+                        "ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(20)",
+                    ]:
+                        try:
+                            db.session.execute(text(stmt))
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+                    # Ensure accounts has name_ar/name_en for seed_official and COA
+                    for stmt in [
+                        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS name_ar VARCHAR(200)",
+                        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS name_en VARCHAR(200)",
+                    ]:
+                        try:
+                            db.session.execute(text(stmt))
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
             except Exception:
                 pass
     except Exception:

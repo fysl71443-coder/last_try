@@ -7132,16 +7132,17 @@ def api_payroll_ensure_records():
     """إنشاء مسيرات رواتب ناقصة للموظفين من تاريخ التعيين حتى الشهر الحالي، ثم إنشاء قيد استحقاق (JE-PR) لكل شهر له مسيرات لضمان صحة المحاسبة."""
     try:
         from models import Employee, EmployeeSalaryDefault
-        defaults = {int(d.employee_id): d for d in EmployeeSalaryDefault.query.all()}
+        defaults = {int(d.employee_id): d for d in (EmployeeSalaryDefault.query.all() or [])}
         total_created = 0
         for emp in Employee.query.all():
-            if not getattr(emp, 'hire_date', None):
+            hire_date = getattr(emp, 'hire_date', None)
+            if not hire_date:
                 continue
             d = defaults.get(int(emp.id))
             base = float(getattr(d, 'base_salary', 0) or 0) if d else 0.0
             allow = float(getattr(d, 'allowances', 0) or 0) if d else 0.0
             ded = float(getattr(d, 'deductions', 0) or 0) if d else 0.0
-            n = _ensure_salary_records_from_hire_date(int(emp.id), base, allow, ded, emp.hire_date)
+            n = _ensure_salary_records_from_hire_date(int(emp.id), base, allow, ded, hire_date)
             total_created += n
         db.session.commit()
         # إنشاء قيد استحقاق (مدين: مصروف رواتب، دائن: رواتب مستحقة) لكل شهر له مسيرات ولا يملك قيداً بعد
@@ -7161,7 +7162,7 @@ def api_payroll_ensure_records():
             db.session.rollback()
         except Exception:
             pass
-        return jsonify({'ok': False, 'error': str(e)}), 400
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 def _create_payroll_accrual_je(year, month):
@@ -7195,11 +7196,12 @@ def _create_payroll_accrual_je(year, month):
 @main.route('/api/payroll-post', methods=['POST'], endpoint='api_payroll_post')
 @login_required
 def api_payroll_post():
-    """ترحيل المسير: إنشاء قيد استحقاق (مصروف رواتب / رواتب مستحقة) لفترة الشهر."""
+    """ترحيل المسير: إنشاء قيد استحقاق (مصروف رواتب / رواتب مستحقة) لفترة الشهر. يقبل form أو JSON مع year, month (اختياريان: يُستخدم الشهر الحالي)."""
     try:
-        year = request.form.get('year') or request.args.get('year')
-        month = request.form.get('month') or request.args.get('month')
-        if not year or not month:
+        payload = request.get_json(silent=True) or {}
+        year = request.form.get('year') or request.args.get('year') or payload.get('year')
+        month = request.form.get('month') or request.args.get('month') or payload.get('month')
+        if year is None or year == '' or month is None or month == '':
             y, m = get_saudi_now().year, get_saudi_now().month
         else:
             try:
@@ -7207,11 +7209,13 @@ def api_payroll_post():
                 m = int(month)
             except (TypeError, ValueError):
                 return jsonify({'ok': False, 'error': 'invalid_year_month'}), 400
+        if not (1 <= m <= 12):
+            return jsonify({'ok': False, 'error': 'invalid_month'}), 400
         ok, data, entry_number = _create_payroll_accrual_je(y, m)
         if not ok:
             if data == 'already_posted':
                 return jsonify({'ok': True, 'already_posted': True, 'message': 'مسير مرحّل مسبقاً'})
-            return jsonify({'ok': False, 'error': data}), 400
+            return jsonify({'ok': False, 'error': data or 'unknown'}), 400
         db.session.commit()
         return jsonify({'ok': True, 'entry_number': entry_number, 'total': data})
     except Exception as e:
@@ -7219,7 +7223,7 @@ def api_payroll_post():
             db.session.rollback()
         except Exception:
             pass
-        return jsonify({'ok': False, 'error': str(e)}), 400
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @main.route('/api/employee-unpaid-months', methods=['GET'], endpoint='api_employee_unpaid_months')

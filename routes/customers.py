@@ -12,6 +12,20 @@ from models import Customer, SalesInvoice, Payment, Account, JournalEntry, Journ
 bp = Blueprint('customers', __name__)
 
 
+def _ui_to_db_customer_type(ui_value):
+    """تحويل قيمة الواجهة إلى قيمة قاعدة البيانات فقط — بدون عكس.
+    آجل في الواجهة → credit في القاعدة. نقدي في الواجهة → cash في القاعدة.
+    العميل غير المسجل = لا نستخدم هذا (لا خصم).
+    منطق الخصم: آجل = نسبة تُدخل يدوياً في كل فاتورة؛ نقدي = نسبة ثابتة من سجل العميل؛ غير مسجل = لا خصم.
+    """
+    if not ui_value:
+        return 'cash'
+    v = (ui_value or '').strip().lower()
+    if v in ('credit', 'آجل'):
+        return 'credit'
+    return 'cash'
+
+
 def _report_header_context():
     """ترويسة موحدة للتقارير: اسم الشركة، الرقم الضريبي، البيانات الرسمية."""
     try:
@@ -95,8 +109,7 @@ def customers():
         name = (request.form.get('name') or '').strip()
         phone = (request.form.get('phone') or '').strip() or None
         discount = request.form.get('discount_percent', type=float) or 0.0
-        ctype = (request.form.get('customer_type') or 'cash').strip().lower() or 'cash'
-        ctype = 'credit' if ctype in ('credit', 'آجل') else 'cash'
+        ctype = _ui_to_db_customer_type(request.form.get('customer_type'))
         if not name:
             flash('Name is required', 'danger')
         else:
@@ -177,9 +190,7 @@ def customer_edit(cid):
             name = (request.form.get('name') or '').strip()
             phone = (request.form.get('phone') or '').strip() or None
             discount = request.form.get('discount_percent', type=float) or 0.0
-            ctype = (request.form.get('customer_type') or 'cash').strip().lower()
-            ctype = 'credit' if ctype in ('credit', 'آجل') else 'cash'
-            
+            ctype = _ui_to_db_customer_type(request.form.get('customer_type'))
             if not name:
                 flash('Name is required', 'danger')
             else:
@@ -505,8 +516,7 @@ def api_customers_create():
         if not name:
             return jsonify({'ok': False, 'error': 'Name is required'}), 400
         d = request.get_json(silent=True) or request.form
-        ctype = (d.get('customer_type') or 'cash').strip().lower() or 'cash'
-        ctype = 'credit' if ctype in ('credit', 'آجل') else 'cash'
+        ctype = _ui_to_db_customer_type(d.get('customer_type'))
         c = Customer(name=name, phone=phone, customer_type=ctype, discount_percent=float(discount or 0))
         db.session.add(c)
         db.session.commit()
@@ -517,6 +527,7 @@ def api_customers_create():
                 'name': c.name,
                 'phone': c.phone,
                 'discount_percent': float(c.discount_percent or 0),
+                'customer_type': (getattr(c, 'customer_type', '') or 'cash').strip().lower() or 'cash',
             },
         })
     except Exception as e:

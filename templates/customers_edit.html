@@ -28,13 +28,13 @@
       <div class="col-md-3">
         <label class="form-label">{{ _('Type') }}</label>
         <select name="customer_type" class="form-select">
-          <option value="cash" {% if (c.customer_type or 'cash') != 'credit' %}selected{% endif %}>{{ _('Cash') }}</option>
           <option value="credit" {% if (c.customer_type or '') == 'credit' %}selected{% endif %}>{{ _('Credit') }}</option>
+          <option value="cash" {% if (c.customer_type or 'cash') != 'credit' %}selected{% endif %}>{{ _('Cash') }}</option>
         </select>
       </div>
       <div class="col-md-3">
         <label class="form-label">{{ _('Discount %%') }}</label>
-        <input name="discount_percent" type="number" step="0.01" value="{{ c.discount_percent or 0 }}" class="form-control">
+        <input name="discount_percent" type="number" step="0.01" value="{{ c.discount_percent or 0 }}" class="form-control" title="{{ _('Credit: per invoice. Cash: fixed.') }}">
       </div>
       <div class="col-12">
         <button class="btn btn-primary">{{ _('Save') }}</button>

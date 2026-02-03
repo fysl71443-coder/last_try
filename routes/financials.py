@@ -3617,22 +3617,31 @@ def api_accounts_sync_types_from_coa():
 def api_accounts_seed_official():
     """يزرع الحسابات من الشجرة الجديدة (data.coa_new_tree) فقط – لا يضيف حسابات قديمة."""
     from flask import jsonify
+    from sqlalchemy.exc import IntegrityError
     try:
         from data.coa_new_tree import NEW_COA_TREE
-        created = []
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'coa_import:{e}'}), 500
+    created = []
+    try:
         for row in NEW_COA_TREE:
-            code, name_ar, name_en, atype, _parent, _level = row
-            code = (code or '').strip()
+            if len(row) < 4:
+                continue
+            code = (row[0] or '').strip()
+            name_ar = row[1] if len(row) > 1 else None
+            name_en = row[2] if len(row) > 2 else None
+            atype = (row[3] or 'ASSET').strip().upper()
             if not code:
                 continue
-            a = Account.query.filter(Account.code == code).first()
-            if a:
+            if Account.query.filter(Account.code == code).first():
                 continue
             name = name_ar or name_en or code
-            a = Account(code=code, name=name, type=(atype or 'ASSET').strip().upper())
+            a = Account(code=code, name=name, type=atype)
             try:
-                setattr(a, 'name_ar', name_ar)
-                setattr(a, 'name_en', name_en)
+                if hasattr(Account, 'name_ar'):
+                    a.name_ar = name_ar
+                if hasattr(Account, 'name_en'):
+                    a.name_en = name_en
             except Exception:
                 pass
             db.session.add(a)
@@ -3640,9 +3649,12 @@ def api_accounts_seed_official():
         if created:
             try:
                 db.session.commit()
-            except Exception:
+            except IntegrityError:
                 db.session.rollback()
                 return jsonify({'ok': False, 'error': 'commit_failed', 'created': created}), 500
+            except Exception as e:
+                db.session.rollback()
+                return jsonify({'ok': False, 'error': str(e), 'created': created}), 500
         return jsonify({'ok': True, 'created_count': len(created), 'created': created})
     except Exception as e:
         try:

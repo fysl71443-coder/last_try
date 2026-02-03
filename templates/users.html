@@ -245,19 +245,60 @@
     userModal.show();
   });
 
-  btnEdit?.addEventListener('click', ()=>{
-    const ids = selectedIds(); if(ids.length!==1) return; editId = ids[0];
-    const row = table.querySelector(`tr[data-id="${editId}"]`);
+  function openEditModalForRow(row){
+    if(!row || !row.dataset.id) return;
+    editId = row.dataset.id;
     userModalTitle.textContent='تعديل مستخدم';
-    uf_username.value = row.children[1].innerText; // readonly in update
+    uf_username.value = (row.dataset.username || row.children[1].innerText || '').trim();
     uf_username.readOnly = true;
-    uf_email.value = row.children[3].innerText==='-'?'':row.children[3].innerText;
-    uf_role.value = row.children[4].innerText || 'user';
+    const emailVal = (row.dataset.email || row.children[2].innerText || '').trim();
+    uf_email.value = (emailVal === '-' || !emailVal) ? '' : emailVal;
+    uf_role.value = (row.dataset.role || 'user').toLowerCase();
     uf_active.checked = (row.dataset.active==='1');
     uf_password.value = '';
-    pwGroup.classList.remove('d-none'); // allow optional password change
+    pwGroup.classList.remove('d-none');
     userFormAlert.classList.add('d-none');
     userModal.show();
+  }
+
+  btnEdit?.addEventListener('click', ()=>{
+    const ids = selectedIds(); if(ids.length!==1) return;
+    const row = table.querySelector(`tr[data-id="${ids[0]}"]`);
+    openEditModalForRow(row);
+  });
+
+  // نقر زر "تعديل" أو "الصلاحيات" داخل الصف: تحديد الصف ثم فتح النافذة المناسبة
+  table.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-action]');
+    if(!btn) return;
+    const row = btn.closest('tr');
+    if(!row || !row.dataset.id) return;
+    table.querySelectorAll('.rowSel').forEach(cb=> cb.checked = false);
+    const rowCb = row.querySelector('.rowSel');
+    if(rowCb){ rowCb.checked = true; updateToolbar(); }
+    if(btn.dataset.action === 'edit'){
+      openEditModalForRow(row);
+    } else if(btn.dataset.action === 'perms'){
+      const uid = row.dataset.id;
+      (async ()=>{
+        try{
+          const scope = document.getElementById('branchSelect').value;
+          const res = await fetch(`/api/users/${uid}/permissions?branch_scope=${encodeURIComponent(scope)}`);
+          const data = await res.json();
+          list.querySelectorAll('.permCheck, .screenCheck').forEach(cb=>cb.checked=false);
+          (data.items||[]).forEach(p=>{
+            const hasAny = p.view||p.add||p.edit||p.delete||p.print;
+            const scrCb = document.getElementById(`sc_${p.screen_key}`);
+            if(scrCb) scrCb.checked = hasAny;
+            ['view','add','edit','delete','print'].forEach(k=>{
+              const el = document.getElementById(`${p.screen_key}_${k}`);
+              if(el) el.checked = !!p[k];
+            });
+          });
+          permsModal.show();
+        }catch(err){ console.warn('load perms failed', err); }
+      })();
+    }
   });
 
   function apiErrorToMessage(err){
@@ -305,6 +346,8 @@
     {key:'purchases', name:'المشتريات'},
     {key:'inventory', name:'المخزون'},
     {key:'expenses', name:'المصروفات'},
+    {key:'employees', name:'الموظفون'},
+    {key:'salaries', name:'الرواتب'},
     {key:'financials', name:'القوائم المالية'},
     {key:'vat', name:'VAT'},
     {key:'reports', name:'التقارير'},
@@ -316,7 +359,9 @@
     {key:'suppliers', name:'الموردون'},
     {key:'table_settings', name:'إعدادات الطاولات'},
     {key:'users', name:'إدارة المستخدمين والصلاحيات'},
-    {key:'sample_data', name:'إنشاء بيانات تجريبية'}
+    {key:'sample_data', name:'إنشاء بيانات تجريبية'},
+    {key:'archive', name:'الأرشفة'},
+    {key:'journal', name:'قيود اليومية'}
   ];
   function permRow(scr){
     return `<div class="list-group-item">
@@ -414,6 +459,7 @@
     });
     try{
       await api('POST', `/api/users/${uid}/permissions`, { items, branch_scope: scope });
+      permsModal.hide();
       alert('تم حفظ الصلاحيات');
     }catch(e){ alert('تعذر الحفظ: '+(e.message||e)); }
   });
