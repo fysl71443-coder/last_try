@@ -924,11 +924,11 @@ def api_draft_checkout():
                 customer_name = (cust_obj.name or '').strip()
                 customer_phone = (getattr(cust_obj, 'phone', None) or '').strip()
 
-    # لا خصم للعميل النقدي المسجل — discount only for credit customers
+    # العميل النقدي المسجل: خصم ثابت من سجل العميل. غير المسجل: لا خصم. الآجل: النسبة المُدخلة في الفاتورة.
     if payment_method in ('CASH', 'CARD') and customer_id:
         cust_obj = Customer.query.get(customer_id)
         if cust_obj and getattr(cust_obj, 'customer_type', 'cash') not in ('credit', 'آجل'):
-            discount_pct = 0.0
+            discount_pct = float(getattr(cust_obj, 'discount_percent', 0) or 0)
             discount_amount = subtotal * (discount_pct / 100.0)
             taxable_amount = max(subtotal - discount_amount, 0.0)
             vat_amount = taxable_amount * (tax_pct / 100.0)
@@ -1084,7 +1084,7 @@ def api_sales_checkout():
     if payment_method in ('CASH', 'CARD') and customer_id:
         cust_obj = Customer.query.get(customer_id)
         if cust_obj and getattr(cust_obj, 'customer_type', 'cash') not in ('credit', 'آجل'):
-            discount_pct = 0.0
+            discount_pct = float(getattr(cust_obj, 'discount_percent', 0) or 0)
     tax_pct = float(payload.get('tax_pct') or 15)
     discount_amount = subtotal * (discount_pct/100.0)
     taxable_amount = max(subtotal - discount_amount, 0.0)

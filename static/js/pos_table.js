@@ -542,26 +542,43 @@
       if(initTax){ const el = qs('#taxPct'); if(el) el.value = String(number(initTax)); }
       if(initPay){ const el = qs('#payMethod'); if(el) el.value = initPay.toUpperCase(); }
     }catch(_e){}
+    renderItems();
+    setTotals();
+    if(typeof updatePaymentMethodFromCustomer === 'function') updatePaymentMethodFromCustomer();
 
-    // Fallback: fetch draft if attributes are missing
+    // Always fetch latest draft from API on load so cached HTML still shows current draft
     (async function(){
       try{
-        const dn = init?.getAttribute('data-cust-name');
-        const dp = init?.getAttribute('data-pay');
-        if(dn || dp) return; // already initialized
         if(!BRANCH || !TABLE_NO) return;
         const resp = await fetch(`/api/draft/${BRANCH}/${TABLE_NO}`, { credentials:'same-origin' });
         if(!resp.ok) return;
         const j = await resp.json().catch(()=>({}));
         const rec = j.draft || {};
+        const draftItems = rec.items || [];
+        if(Array.isArray(draftItems) && draftItems.length > 0){
+          items.length = 0;
+          draftItems.forEach(function(d){
+            items.push({
+              meal_id: d.meal_id || d.id,
+              name: d.name || '',
+              unit: number(d.price || d.unit),
+              qty: number(d.quantity || d.qty || 1)
+            });
+          });
+        }
+        if(rec.draft_id){ CURRENT_DRAFT_ID = String(rec.draft_id).trim() || null; }
         const customer = rec.customer || {};
-        const name = (customer.name||''); const phone=(customer.phone||'');
-        const disc = rec.discount_pct; const tax = rec.tax_pct; const pay= (rec.payment_method||'').toUpperCase();
+        const name = (customer.name||'').trim();
+        const phone = (customer.phone||'').trim();
+        const disc = rec.discount_pct;
+        const tax = rec.tax_pct;
+        const pay = (rec.payment_method||'').toString().trim().toUpperCase();
         if(name){ const el = qs('#custName'); if(el) el.value = name; }
         if(phone){ const el = qs('#custPhone'); if(el) el.value = phone; }
-        if(typeof disc !== 'undefined'){ const el = qs('#discountPct'); if(el) el.value = String(number(disc)); }
-        if(typeof tax !== 'undefined'){ const el = qs('#taxPct'); if(el) el.value = String(number(tax)); }
+        if(typeof disc !== 'undefined' && disc !== null){ const el = qs('#discountPct'); if(el) el.value = String(number(disc)); }
+        if(typeof tax !== 'undefined' && tax !== null){ const el = qs('#taxPct'); if(el) el.value = String(number(tax)); }
         if(pay){ const el = qs('#payMethod'); if(el) el.value = pay; }
+        renderItems();
         setTotals();
         if(typeof updatePaymentMethodFromCustomer === 'function') updatePaymentMethodFromCustomer();
       }catch(_e){}
@@ -682,16 +699,17 @@
       const customerType = custIdEl?.getAttribute('data-customer-type') || '';
       const isCredit = (customerType === 'credit') || (custNameVal.indexOf('keeta') !== -1) || (custNameVal.indexOf('hunger') !== -1);
       const cur = (paySel.value || '').toUpperCase();
+      const dp = qs('#discountPct');
       if(isCredit){
         paySel.innerHTML = '<option value="">-- اختر --</option><option value="CREDIT">Credit / آجل</option>';
         paySel.value = 'CREDIT';
-        const dp = qs('#discountPct');
         if(dp && dp.hasAttribute('readonly')){ try{ dp.removeAttribute('readonly'); dp.classList.remove('bg-light'); }catch(_e){} }
       } else {
         paySel.innerHTML = '<option value="">-- اختر طريقة الدفع --</option><option value="CASH">CASH</option><option value="CARD">CARD</option>';
         if(cur === 'CREDIT') paySel.value = 'CASH';
         else if(cur && cur !== 'CASH' && cur !== 'CARD') paySel.value = 'CASH';
-        setDiscountFieldForCustomer(false, 0);
+        const currentPct = (custIdEl && custIdEl.value) ? number(dp?.value || 0, 0) : 0;
+        setDiscountFieldForCustomer(false, currentPct);
       }
       scheduleSave();
     }
@@ -708,12 +726,13 @@
     function setDiscountFieldForCustomer(isCredit, discountPct){
       const dp = qs('#discountPct');
       if(!dp) return;
+      const pct = number(discountPct, 0);
       if(isCredit){
-        dp.value = String(number(discountPct, 0));
+        dp.value = String(pct);
         try{ dp.removeAttribute('readonly'); dp.classList.remove('bg-light'); dp.title = 'قابل للتعديل — عميل آجل'; }catch(_e){}
       } else {
-        dp.value = '0';
-        try{ dp.setAttribute('readonly',''); dp.classList.add('bg-light'); dp.title = 'لا خصم للعميل النقدي — عميل نقدي مسجل'; }catch(_e){}
+        dp.value = String(pct);
+        try{ dp.setAttribute('readonly',''); dp.classList.add('bg-light'); dp.title = pct > 0 ? 'خصم ثابت للعميل النقدي المسجل' : 'لا خصم — عميل غير مسجل'; }catch(_e){}
       }
       setTotals(); scheduleSave();
     }
@@ -770,7 +789,7 @@
             if((r.customer_type||'cash')==='credit'){
               setDiscountFieldForCustomer(true, number(r.discount_percent||0));
             } else {
-              setDiscountFieldForCustomer(false, 0);
+              setDiscountFieldForCustomer(false, number(r.discount_percent||0));
             }
             updatePaymentMethodFromCustomer();
           });
@@ -794,21 +813,20 @@
         if(custIdEl){ custIdEl.value = ''; custIdEl.removeAttribute('data-customer-type'); }
         setDiscountFieldForCustomer(false, 0);
         updatePaymentMethodFromCustomer();
-        showToast('العميل غير مسجل أو غير مسجل كعميل آجل — لا يتم إضافته للفاتورة');
+        showToast('العميل غير مسجل — لا خصم');
         return;
       }
-      if(!j.is_credit){
-        custInput.value = ''; if(custPhone) custPhone.value = '';
-        if(custIdEl){ custIdEl.value = ''; custIdEl.removeAttribute('data-customer-type'); }
-        setDiscountFieldForCustomer(false, 0);
-        updatePaymentMethodFromCustomer();
-        showToast('العميل غير مسجل كعميل آجل — لا خصم ولا إضافة للفاتورة');
-        return;
+      if(j.is_credit){
+        custIdEl.value = String(j.id); custIdEl.setAttribute('data-customer-type', 'credit');
+        if(custInput) custInput.value = j.name || name;
+        if(custPhone) custPhone.value = j.phone || phone || '';
+        setDiscountFieldForCustomer(true, number(j.discount_percent||0));
+      } else {
+        custIdEl.value = String(j.id); custIdEl.setAttribute('data-customer-type', 'cash');
+        if(custInput) custInput.value = j.name || name;
+        if(custPhone) custPhone.value = j.phone || phone || '';
+        setDiscountFieldForCustomer(false, number(j.discount_percent||0));
       }
-      custIdEl.value = String(j.id); custIdEl.setAttribute('data-customer-type', 'credit');
-      if(custInput) custInput.value = j.name || name;
-      if(custPhone) custPhone.value = j.phone || phone || '';
-      setDiscountFieldForCustomer(true, number(j.discount_percent||0));
       updatePaymentMethodFromCustomer();
     });
 
