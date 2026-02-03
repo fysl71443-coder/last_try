@@ -13,7 +13,7 @@ ext_db = None
 from app.models import AppKV, TableLayout
 from models import User
 from models import OrderInvoice
-from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault, DepartmentRate, EmployeeHours, Account, LedgerEntry, JournalEntry, JournalLine, JournalAudit
+from models import MenuCategory, MenuItem, SalesInvoice, SalesInvoiceItem, Customer, PurchaseInvoice, PurchaseInvoiceItem, ExpenseInvoice, ExpenseInvoiceItem, Settings, Meal, MealIngredient, RawMaterial, Supplier, Employee, Salary, Payment, EmployeeSalaryDefault, DepartmentRate, EmployeeHours, Account, AccountUsageMap, LedgerEntry, JournalEntry, JournalLine, JournalAudit
 from models import get_saudi_now, KSA_TZ
 from forms import SalesInvoiceForm, EmployeeForm, ExpenseInvoiceForm, PurchaseInvoiceForm, MealForm, RawMaterialForm
 
@@ -1148,8 +1148,8 @@ def invoices_delete():
                     pass
                 try:
                     from models import JournalEntry, JournalLine
-                    rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
-                    for je in (rows or []):
+                    je = JournalEntry.query.filter_by(invoice_id=inv.id, invoice_type='sales').first()
+                    if je:
                         JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
                         db.session.delete(je)
                 except Exception:
@@ -1176,8 +1176,8 @@ def invoices_delete():
                     pass
                 try:
                     from models import JournalEntry, JournalLine
-                    rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
-                    for je in (rows or []):
+                    je = JournalEntry.query.filter_by(invoice_id=inv.id, invoice_type='purchase').first()
+                    if je:
                         JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
                         db.session.delete(je)
                 except Exception:
@@ -1204,8 +1204,8 @@ def invoices_delete():
                     pass
                 try:
                     from models import JournalEntry, JournalLine
-                    rows = JournalEntry.query.filter(JournalEntry.description.ilike('%{}%'.format(inv.invoice_number))).all()
-                    for je in (rows or []):
+                    je = JournalEntry.query.filter_by(invoice_id=inv.id, invoice_type='expense').first()
+                    if je:
                         JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
                         db.session.delete(je)
                 except Exception:
@@ -4913,8 +4913,12 @@ def print_trial_balance():
      .order_by(Account.code.asc()).all()
     rows = []
     if rows_q:
+        try:
+            from data.coa_new_tree import get_account_display_name
+        except Exception:
+            get_account_display_name = lambda code, name: name or code
         for r in rows_q:
-            rows.append({'Code': r.code, 'Account': r.name, 'Debit': float(r.debit or 0.0), 'Credit': float(r.credit or 0.0)})
+            rows.append({'Code': r.code, 'Account': get_account_display_name(r.code, r.name), 'Debit': float(r.debit or 0.0), 'Credit': float(r.credit or 0.0)})
     else:
         rev = float(db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)).filter(SalesInvoice.date <= asof).scalar() or 0.0)
         cgs = float(db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.price_before_tax * PurchaseInvoiceItem.quantity), 0))
@@ -5631,7 +5635,26 @@ def _account(code, name, kind):
         return None
 
 def _pm_account(pm):
+    """حساب الدفع: يُحدد من إعدادات الحسابات (account_usage_map) إن وُجد، وإلا من SHORT_TO_NUMERIC."""
     p = (pm or 'CASH').strip().upper()
+    usage_group = 'Cash' if p == 'CASH' else 'Bank'
+    try:
+        acc = (
+            db.session.query(Account)
+            .join(AccountUsageMap, AccountUsageMap.account_id == Account.id)
+            .filter(
+                AccountUsageMap.module == 'Payments',
+                AccountUsageMap.action == 'PayExpense',
+                AccountUsageMap.usage_group == usage_group,
+                AccountUsageMap.active == True,
+            )
+            .order_by(AccountUsageMap.is_default.desc())
+            .first()
+        )
+        if acc:
+            return acc
+    except Exception:
+        pass
     try:
         from app.routes import SHORT_TO_NUMERIC as _short
     except Exception:
@@ -5744,16 +5767,21 @@ def _create_sale_journal(inv):
             db.session.rollback()
         except Exception:
             pass
+        raise
 
 def _create_purchase_journal(inv):
+    """إنشاء قيد المشتريات: إذا الفاتورة مدفوعة فوراً (نقداً/بنك) قيد واحد من حـ مخزون/مصروف إلى حـ الصندوق/البنك. وإلا ذمة مورد (2111)."""
     try:
         from models import JournalEntry, JournalLine
         total_before = float(inv.total_before_tax or 0.0)
         tax_amt = float(inv.tax_amount or 0.0)
         total_inc_tax = round(total_before + tax_amt, 2)
+        status = (getattr(inv, 'status', None) or '').strip().lower()
+        pm = (getattr(inv, 'payment_method', None) or '').strip().upper()
+        paid_at_creation = (status == 'paid' and pm in ('CASH', 'BANK'))
         exp_acc = _account('1161', CHART_OF_ACCOUNTS.get('1161', {'name':'مخزون بضائع','type':'ASSET'}).get('name','مخزون بضائع'), CHART_OF_ACCOUNTS.get('1161', {'name':'مخزون بضائع','type':'ASSET'}).get('type','ASSET'))
         vat_in_acc = _account('1170', CHART_OF_ACCOUNTS.get('1170', {'name':'ضريبة القيمة المضافة – مدخلات','type':'ASSET'}).get('name','ضريبة القيمة المضافة – مدخلات'), CHART_OF_ACCOUNTS.get('1170', {'name':'ضريبة القيمة المضافة – مدخلات','type':'ASSET'}).get('type','ASSET'))
-        ap_acc = _account('2111', CHART_OF_ACCOUNTS.get('2111', {'name':'موردون','type':'LIABILITY'}).get('name','موردون'), CHART_OF_ACCOUNTS.get('2111', {'name':'موردون','type':'LIABILITY'}).get('type','LIABILITY'))
+        credit_acc = _pm_account(pm) if paid_at_creation else _account('2111', CHART_OF_ACCOUNTS.get('2111', {'name':'موردون','type':'LIABILITY'}).get('name','موردون'), CHART_OF_ACCOUNTS.get('2111', {'name':'موردون','type':'LIABILITY'}).get('type','LIABILITY'))
         je = JournalEntry(entry_number=f"JE-PUR-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=None, description=f"Purchase {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=inv.id, invoice_type='purchase')
         db.session.add(je); db.session.flush()
         ln = 1
@@ -5761,30 +5789,45 @@ def _create_purchase_journal(inv):
             db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=exp_acc.id, debit=total_before, credit=0.0, description="Purchase", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
         if vat_in_acc and tax_amt > 0:
             db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=vat_in_acc.id, debit=tax_amt, credit=0.0, description="VAT Input", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
-        if ap_acc:
-            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ap_acc.id, debit=0.0, credit=total_inc_tax, description="Accounts Payable", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+        if credit_acc:
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=credit_acc.id, debit=0.0, credit=total_inc_tax, description="صندوق/بنك" if paid_at_creation else "Accounts Payable", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
         db.session.commit()
     except Exception:
         try:
             db.session.rollback()
         except Exception:
             pass
+        raise
 
 def _create_expense_journal(inv):
-    """إنشاء قيد المصروف باستخدام الحساب المختار في الفاتورة (مثل 5230). يدعم liability_account_code للمنصات/الحكومة."""
+    """إنشاء قيد المصروف: إذا الفاتورة مدفوعة فوراً (نقداً/بنك) قيد واحد من حـ مصروف إلى حـ الصندوق/البنك. وإلا ذمة مورد (2111).
+    للهدر والتالف (payment_method=INTERNAL): قيد من حـ تكلفة الهدر والتالف (5160) إلى حـ المخزون (1160) — لا نقد، لا مورد، لا ضريبة."""
     try:
         from models import JournalEntry, JournalLine
         total_before = float(inv.total_before_tax or 0.0)
         tax_amt = float(inv.tax_amount or 0.0)
         total_inc_tax = round(total_before + tax_amt, 2)
+        status = (getattr(inv, 'status', None) or '').strip().lower()
+        pm = (getattr(inv, 'payment_method', None) or '').strip().upper()
+        is_waste = (pm == 'INTERNAL')
+        if is_waste:
+            total_inc_tax = round(total_before, 2)
+            tax_amt = 0.0
+        paid_at_creation = (status == 'paid' and pm in ('CASH', 'BANK'))
         vat_in_acc = _account('1170', CHART_OF_ACCOUNTS.get('1170', {'name':'ضريبة القيمة المضافة – مدخلات','type':'ASSET'}).get('name','VAT مدخلات'), 'ASSET')
-        liability_code = (getattr(inv, 'liability_account_code', None) or '').strip() or '2111'
-        ap_info = CHART_OF_ACCOUNTS.get(liability_code, {'name': 'ذمم دائنة', 'type': 'LIABILITY'})
-        ap_acc = _account(liability_code, ap_info.get('name', 'ذمم دائنة'), 'LIABILITY')
-        je = JournalEntry(entry_number=f"JE-EXP-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=None, description=f"Expense {inv.invoice_number}", status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=inv.id, invoice_type='expense')
+        credit_acc = None
+        if is_waste:
+            inv_info = CHART_OF_ACCOUNTS.get('1160', {'name': 'المخزون', 'type': 'ASSET'})
+            credit_acc = _account('1160', inv_info.get('name', 'المخزون'), 'ASSET')
+        elif paid_at_creation:
+            credit_acc = _pm_account(pm)
+        if not credit_acc and not is_waste:
+            liability_code = (getattr(inv, 'liability_account_code', None) or '').strip() or '2111'
+            ap_info = CHART_OF_ACCOUNTS.get(liability_code, {'name': 'ذمم دائنة', 'type': 'LIABILITY'})
+            credit_acc = _account(liability_code, ap_info.get('name', 'ذمم دائنة'), 'LIABILITY')
+        je = JournalEntry(entry_number=f"JE-EXP-{inv.invoice_number}", date=(getattr(inv,'date',None) or get_saudi_now().date()), branch_code=None, description=f"Expense {inv.invoice_number}" + (" (هدر/تالف)" if is_waste else ""), status='posted', total_debit=total_inc_tax, total_credit=total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=inv.id, invoice_type='expense')
         db.session.add(je); db.session.flush()
         ln = 1
-        # تجميع المصروفات حسب الحساب من عناصر الفاتورة
         acc_totals = {}
         items = getattr(inv, 'items', []) or []
         for it in items:
@@ -5795,11 +5838,13 @@ def _create_expense_journal(inv):
             if not code:
                 sel = _expense_account_for(getattr(it, 'description', '') or '')
                 code = (sel[0] if sel else '5410')
+            if is_waste:
+                code = '5160'
             if code not in acc_totals:
                 acc_totals[code] = 0.0
             acc_totals[code] += amt
         if not acc_totals and total_before > 0:
-            acc_totals['5410'] = total_before
+            acc_totals['5160' if is_waste else '5410'] = total_before
         for code, amt in acc_totals.items():
             if amt <= 0:
                 continue
@@ -5810,12 +5855,13 @@ def _create_expense_journal(inv):
             acc_type = exp_type if exp_type in ('EXPENSE', 'COGS') else 'EXPENSE'
             exp_acc = _account(exp_code, CHART_OF_ACCOUNTS.get(exp_code, {'name': exp_name}).get('name', exp_name), acc_type)
             if exp_acc:
-                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=exp_acc.id, debit=round(amt, 2), credit=0.0, description="Expense", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+                db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=exp_acc.id, debit=round(amt, 2), credit=0.0, description="تكلفة الهدر والتالف" if is_waste else "Expense", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
                 ln += 1
-        if vat_in_acc and tax_amt > 0:
+        if not is_waste and vat_in_acc and tax_amt > 0:
             db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=vat_in_acc.id, debit=tax_amt, credit=0.0, description="VAT Input", line_date=(getattr(inv,'date',None) or get_saudi_now().date()))); ln += 1
-        if ap_acc:
-            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=ap_acc.id, debit=0.0, credit=total_inc_tax, description="Accounts Payable" if liability_code == '2111' else "Platform/Gov Payable", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+        if credit_acc:
+            desc_credit = "المخزون" if is_waste else ("صندوق/بنك" if paid_at_creation else "موردون/ذمم دائنة")
+            db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=credit_acc.id, debit=0.0, credit=total_inc_tax, description=desc_credit, line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
         db.session.commit()
     except Exception:
         try:
@@ -8230,8 +8276,9 @@ def api_ledger_create():
 def api_ledger_delete(jeid: int):
     try:
         from models import JournalEntry
+        from routes.journal import delete_journal_entry_and_linked_invoice
         je = JournalEntry.query.get_or_404(int(jeid))
-        db.session.delete(je)
+        delete_journal_entry_and_linked_invoice(je)
         db.session.commit()
         return jsonify({'ok': True})
     except Exception as e:

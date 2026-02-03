@@ -972,32 +972,22 @@ def api_draft_checkout():
                 discount=0,
                 total_price=round((price or 0.0) * qty, 2),
             ))
-        db.session.commit()
-        # Auto-mark paid for non Keeta/Hunger and create Payment record
-        try:
-            from models import Payment
-            cust = (payload.get('customer_name') or '').strip().lower()
-            grp = _platform_group(cust)
-            amt = float(inv.total_after_tax_discount or 0.0)
-            if grp in ('keeta', 'hunger') or payment_method == 'CREDIT':
-                inv.status = 'unpaid'
-                db.session.commit()
-            else:
-                db.session.add(Payment(
-                    invoice_id=inv.id,
-                    invoice_type='sales',
-                    amount_paid=amt,
-                    payment_method=(payment_method or 'CASH').upper(),
-                    payment_date=get_saudi_now()
-                ))
-                inv.status = 'paid'
-                db.session.commit()
-        except Exception:
-            pass
-        try:
-            _create_sale_journal(inv)
-        except Exception:
-            pass
+        from models import Payment
+        cust = (payload.get('customer_name') or '').strip().lower()
+        grp = _platform_group(cust)
+        amt = float(inv.total_after_tax_discount or 0.0)
+        if grp in ('keeta', 'hunger') or payment_method == 'CREDIT':
+            inv.status = 'unpaid'
+        else:
+            db.session.add(Payment(
+                invoice_id=inv.id,
+                invoice_type='sales',
+                amount_paid=amt,
+                payment_method=(payment_method or 'CASH').upper(),
+                payment_date=get_saudi_now()
+            ))
+            inv.status = 'paid'
+        _create_sale_journal(inv)
         # Mark table available only after we confirm print+pay (handled in api_invoice_confirm_print)
     except Exception as e:
 
@@ -1195,43 +1185,22 @@ def api_sales_checkout():
                 return jsonify({'success': False, 'error': str(e)}), 503
 
         if not adapter_success:
-            db.session.commit()
-            try:
-                from models import Payment
-                cust = (payload.get('customer_name') or '').strip().lower()
-                grp = _platform_group(cust)
-                amt = float(inv.total_after_tax_discount or 0.0)
-                if grp or payment_method == 'CREDIT':
-                    inv.status = 'unpaid'
-                    db.session.commit()
-                else:
-                    db.session.add(Payment(
-                        invoice_id=inv.id,
-                        invoice_type='sales',
-                        amount_paid=amt,
-                        payment_method=(payment_method or 'CASH').upper(),
-                        payment_date=get_saudi_now(),
-                    ))
-                    inv.status = 'paid'
-                    db.session.commit()
-                    cash_acc = _pm_account(payment_method)
-                    try:
-                        cust2 = (getattr(inv, 'customer_name', '') or '').lower()
-                        grp2 = _platform_group(cust2)
-                        if grp2 == 'keeta':
-                            ar_code = _acc_override('AR_KEETA', SHORT_TO_NUMERIC['AR_KEETA'][0])
-                        elif grp2 == 'hunger':
-                            ar_code = _acc_override('AR_HUNGER', SHORT_TO_NUMERIC['AR_HUNGER'][0])
-                        else:
-                            ar_code = _acc_override('AR', CHART_OF_ACCOUNTS.get('1141', {'code':'1141'}).get('code','1141'))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            try:
-                _create_sale_journal(inv)
-            except Exception:
-                pass
+            from models import Payment
+            cust = (payload.get('customer_name') or '').strip().lower()
+            grp = _platform_group(cust)
+            amt = float(inv.total_after_tax_discount or 0.0)
+            if grp or payment_method == 'CREDIT':
+                inv.status = 'unpaid'
+            else:
+                db.session.add(Payment(
+                    invoice_id=inv.id,
+                    invoice_type='sales',
+                    amount_paid=amt,
+                    payment_method=(payment_method or 'CASH').upper(),
+                    payment_date=get_saudi_now(),
+                ))
+                inv.status = 'paid'
+            _create_sale_journal(inv)
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400

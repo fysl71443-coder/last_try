@@ -1,5 +1,7 @@
 # مصدر الحقيقة: قيود اليومية المنشورة (Journal as Single Source of Truth)
 
+**القواعد الكاملة (لا استثناءات):** [IMMUTABLE_ACCOUNTING_RULES.md](IMMUTABLE_ACCOUNTING_RULES.md)
+
 ## المبدأ
 
 - **مصدر الحقيقة الوحيد** في النظام المحاسبي هو **قيود اليومية المنشورة** (`journal_entries.status = 'posted'` و`journal_lines`).

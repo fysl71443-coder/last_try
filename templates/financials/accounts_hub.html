@@ -85,6 +85,7 @@
             <div class="col-md-2"><button class="btn btn-secondary w-100" id="coa-search">بحث</button></div>
             <div class="col-md-2"><button class="btn btn-primary w-100" id="coa-print">طباعة</button></div>
             <div class="col-md-3 text-end">
+              <button class="btn btn-outline-secondary me-1" id="coa-sync-types" title="مزامنة نوع الحساب من الشجرة (1160=ASSET، 5160=COGS، 3220=EQUITY)"><i class="fa-solid fa-sync-alt me-1"></i>مزامنة الأنواع</button>
               <button class="btn btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#modal-add-account">إضافة حساب</button>
               <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal-add-sub-account"><i class="fa-solid fa-folder-plus me-1"></i>إنشاء حساب فرعي</button>
             </div>
@@ -209,8 +210,9 @@
         <div class="card p-3">
           <div class="row g-2 mb-2">
             <div class="col-md-3"><input type="date" id="tb-date" class="form-control"/><small class="text-muted">يوم/شهر/سنة</small></div>
-            <div class="col-md-3"><select id="tb-level" class="form-select"><option value="detail">حسابات تفصيلية</option><option value="group">مجموعات رئيسية</option></select></div>
-            <div class="col-md-3"><select id="tb-adjust" class="form-select"><option value="pre">قبل التسويات</option><option value="post">بعد التسويات</option></select></div>
+            <div class="col-md-2"><label class="d-flex align-items-center gap-1 small text-muted mb-0"><input type="checkbox" id="tb-hide-zero" class="form-check-input" checked> إخفاء الصفرية</label></div>
+            <div class="col-md-2"><select id="tb-level" class="form-select"><option value="detail">حسابات تفصيلية</option><option value="group">مجموعات رئيسية</option></select></div>
+            <div class="col-md-2"><select id="tb-adjust" class="form-select"><option value="pre">قبل التسويات</option><option value="post">بعد التسويات</option></select></div>
             <div class="col-md-3 toolbar"><button class="btn btn-secondary" id="tb-load">عرض</button><button class="btn btn-outline-primary" id="tb-print">طباعة</button><button class="btn btn-outline-secondary" id="tb-export">تصدير CSV</button></div>
           </div>
           <table class="table table-sm" id="tb-table">
@@ -282,7 +284,7 @@
                 </select>
               </div>
               <div class="col-md-3"><label class="form-label">التاريخ</label><input type="date" id="op-sadad-date" class="form-control"/></div>
-              <div class="col-md-3"><label class="form-label">المبلغ</label><input type="number" step="0.01" id="op-sadad-amount" class="form-control" placeholder="0.00"/></div>
+              <div class="col-md-3"><label class="form-label">المبلغ</label><input type="number" step="0.01" min="0" id="op-sadad-amount" class="form-control" placeholder="0.00" title="أدخل مبلغًا أكبر من 0"/></div>
               <div class="col-md-3"><label class="form-label">طريقة الدفع</label><select id="op-sadad-method" class="form-select"><option value="cash">نقد</option><option value="bank">بنك</option><option value="card">نقاط بيع</option></select></div>
               <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" id="op-sadad-submit">تنفيذ السداد</button></div>
             </div>
@@ -347,7 +349,7 @@
         </div>
         <div class="card p-3 mb-3" style="border-color:var(--border);">
           <h6 class="mb-2" style="color:var(--ops-blue-dark);"><i class="fa-solid fa-file-invoice me-1"></i> الفاتورة المرتبطة / المبلغ المطلوب</h6>
-          <p class="text-muted small mb-2">يُعرض هنا الفاتورة أو المستحقات عند اختيار المورد أو العميل أو المسير أو نوع المستحق.</p>
+          <p class="text-muted small mb-2">يُعرض هنا الفاتورة أو المستحقات عند اختيار المورد أو العميل أو المسير أو نوع المستحق. <button type="button" class="btn btn-sm btn-outline-secondary ms-1" id="op-related-refresh" title="تحديث القائمة">تحديث</button></p>
           <div id="op-related-loading" class="text-center text-muted py-2" style="display:none;">جاري التحميل...</div>
           <div id="op-related-empty" class="text-muted py-2">اختر نوع العملية والجهة (مورد / عميل / مسير) لعرض المستحقات.</div>
           <div id="op-related-content" style="display:none;">
@@ -363,20 +365,30 @@
       </div>
 
       <div class="tab-pane fade" id="tab-settings">
+        <div class="card p-3 mb-3">
+          <p class="text-muted mb-0"><strong>الهدف من إعدادات الحسابات:</strong> ليست عرض الحسابات، بل تحديد <em>متى وأين ولماذا</em> يُستخدم كل حساب. شجرة الحسابات = ما هو الحساب؛ إعدادات الحسابات = كيف يُستخدم. كل قسم = مجموعة عمليات (مثل SAP/Odoo). العمود «الوظيفة» = Role وليس اسم الحساب.</p>
+        </div>
+        <ul class="nav nav-pills mb-3 flex-wrap" id="settingsSubTabs">
+          <li class="nav-item"><a class="nav-link active" href="#" data-section-key="CashAndBank" data-groups="Cash,Bank">النقد والبنوك</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Supplier" data-groups="Supplier">الموردين</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Customer" data-groups="Customer">العملاء</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Inventory" data-groups="Inventory">المخزون</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Tax" data-groups="Tax">الضرائب</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Payroll" data-groups="Payroll">الرواتب</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Expense" data-groups="Expense">المصروفات</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Revenue" data-groups="Revenue">الإيرادات</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Asset" data-groups="Asset">الأصول</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Waste" data-groups="Waste">الهدر والتالف</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-section-key="Variance" data-groups="Variance">فروقات وتسويات</a></li>
+        </ul>
         <div class="card p-3">
-          <div class="row g-2 mb-2">
-            <div class="col-md-3"><input type="text" id="ac-code" class="form-control" placeholder="رمز الحساب"/></div>
-            <div class="col-md-3"><input type="text" id="ac-name" class="form-control" placeholder="اسم الحساب"/></div>
-            <div class="col-md-3"><select id="ac-type" class="form-select"><option>ASSET</option><option>LIABILITY</option><option>EQUITY</option><option>REVENUE</option><option>EXPENSE</option><option>COGS</option><option>TAX</option></select></div>
-            <div class="col-md-3"><button class="btn btn-primary w-100" id="ac-add">إضافة حساب</button></div>
+          <div class="mb-2 d-flex justify-content-between align-items-center">
+            <span class="text-muted" id="settings-group-label">النقد والبنوك</span>
+            <button class="btn btn-sm btn-outline-primary" id="settings-seed"><i class="fa-solid fa-download me-1"></i>تحميل الافتراضي</button>
           </div>
-          <div class="mb-2">
-            <button class="btn btn-outline-danger" id="ac-clean">حذف الحسابات التي تحتوي 'مكرر' (دمج القيود ثم حذف)</button>
-            <label class="ms-2"><input type="checkbox" id="ac-clean-dry"/> محاكاة (Dry-Run)</label>
-          </div>
-          <table class="table table-sm" id="ac-list">
-            <thead><tr><th>رمز</th><th>اسم</th><th>نوع</th><th>نشط</th><th></th></tr></thead>
-            <tbody></tbody>
+          <table class="table table-sm table-striped" id="settings-accounts-table">
+            <thead><tr><th>الوظيفة (Role)</th><th>الحساب</th><th class="text-center">افتراضي</th><th class="text-center">تعطيل/تفعيل</th></tr></thead>
+            <tbody id="settings-accounts-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -390,7 +402,7 @@
   function num(v){ return (Math.round((parseFloat(v||0))*100)/100).toFixed(2); }
   function exportCSV(tableId, filename){ const rows=[...document.querySelectorAll(`#${tableId} tr`)]; const data=rows.map(tr=>[...tr.querySelectorAll('th,td')].map(td=>('"'+(td.textContent||'').replaceAll('"','""')+'"')).join(',')); const blob=new Blob([data.join('\n')],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename||('export_'+Date.now()+'.csv'); a.click(); URL.revokeObjectURL(a.href); }
   function printSection(headerTitle, targetTableId){ const w=window.open('', '_blank'); const now=new Date().toISOString().slice(0,10); const html = `<!doctype html><html><head><meta charset='utf-8'><title>${headerTitle}</title><style>@media print{ .print-sheet{ width:210mm; min-height:297mm; margin:0 auto } .print-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px } .print-footer{ margin-top:24px; display:flex; gap:20px; justify-content:space-between } .line{ border-top:1px solid #000; width:30%; padding-top:6px } table{ width:100%; border-collapse:collapse } th,td{ border:1px solid #000; padding:6px } }</style></head><body class='print-sheet'><div class='print-header'><div class='title'>${headerTitle}</div><div>${now}</div></div><table>${document.querySelector('#'+targetTableId).innerHTML}</table><div class='print-footer'><div class='line'>Prepared By</div><div class='line'>Approved By</div><div class='line'>Signature</div></div></body></html>`; w.document.write(html); w.document.close(); w.focus(); w.print(); w.close(); }
-  async function loadAccounts(){ const j = await fetchJSON('/financials/api/accounts/list'); accountsList = (j.accounts||[]).filter(a=>a.active!==false); const tbody=document.querySelector('#je-lines tbody'); const listTbody=document.querySelector('#ac-list tbody'); listTbody.innerHTML=''; accountsList.forEach(a=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${a.code}</td><td>${a.name}</td><td>${a.type}</td><td>${a.active?'✓':'✗'}</td><td><button class='btn btn-sm btn-outline-secondary' data-code='${a.code}'>تفعيل/تعطيل</button></td>`; listTbody.appendChild(tr); tr.querySelector('button').addEventListener('click', async()=>{ await fetchJSON('/financials/api/accounts/toggle_active', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: a.code }) }); loadAccounts(); }); }); if(tbody.children.length===0){ addLine(); addLine(); } populateLedgerDatalist(); }
+  async function loadAccounts(){ const j = await fetchJSON('/financials/api/accounts/list'); accountsList = (j.accounts||[]).filter(a=>a.active!==false); const tbody=document.querySelector('#je-lines tbody'); const listTbody=document.querySelector('#ac-list tbody'); if(listTbody){ listTbody.innerHTML=''; accountsList.forEach(a=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${a.code}</td><td>${a.name}</td><td>${a.type}</td><td>${a.active?'✓':'✗'}</td><td><button class='btn btn-sm btn-outline-secondary' data-code='${a.code}'>تفعيل/تعطيل</button></td>`; listTbody.appendChild(tr); tr.querySelector('button').addEventListener('click', async()=>{ await fetchJSON('/financials/api/accounts/toggle_active', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: a.code }) }); loadAccounts(); }); }); } if(tbody&&tbody.children.length===0){ addLine(); addLine(); } populateLedgerDatalist(); }
   function populateLedgerDatalist(){ const dl=document.getElementById('lg-accounts'); if(!dl) return; dl.innerHTML=''; accountsList.forEach(a=>{ const opt=document.createElement('option'); opt.value=a.code; opt.label=`${a.code} — ${a.name}`; dl.appendChild(opt); }); }
   function buildAccSelect(){ const sel=document.createElement('select'); sel.className='form-select form-select-sm acc-select'; const opt0=document.createElement('option'); opt0.value=''; opt0.textContent='اختر الحساب'; sel.appendChild(opt0); accountsList.forEach(a=>{ const o=document.createElement('option'); o.value=a.code; o.textContent=a.name; sel.appendChild(o); }); return sel; }
   function addLine(){ const tbody=document.querySelector('#je-lines tbody'); const tr=document.createElement('tr'); const codeTd=document.createElement('td'); const nameTd=document.createElement('td'); const debitTd=document.createElement('td'); const creditTd=document.createElement('td'); const ccTd=document.createElement('td'); const actTd=document.createElement('td'); const codeInput=document.createElement('input'); codeInput.className='form-control form-control-sm code'; codeInput.readOnly=true; codeTd.appendChild(codeInput); const sel=buildAccSelect(); nameTd.appendChild(sel); const debitInput=document.createElement('input'); debitInput.className='form-control form-control-sm text-end debit'; debitInput.type='number'; debitInput.step='0.01'; debitTd.appendChild(debitInput); const creditInput=document.createElement('input'); creditInput.className='form-control form-control-sm text-end credit'; creditInput.type='number'; creditInput.step='0.01'; creditTd.appendChild(creditInput); const ccInput=document.createElement('input'); ccInput.className='form-control form-control-sm costcenter'; ccTd.appendChild(ccInput); const rmBtn=document.createElement('button'); rmBtn.className='btn btn-sm btn-outline-danger rm'; rmBtn.textContent='×'; actTd.appendChild(rmBtn); tr.appendChild(codeTd); tr.appendChild(nameTd); tr.appendChild(debitTd); tr.appendChild(creditTd); tr.appendChild(ccTd); tr.appendChild(actTd); tbody.appendChild(tr); rmBtn.addEventListener('click',()=>{ tr.remove(); totals(); }); ['debit','credit'].forEach(cls=>{ (cls==='debit'?debitInput:creditInput).addEventListener('input', totals); }); sel.addEventListener('change', function(){ const code=this.value||''; codeInput.value=code; }); }
@@ -398,11 +410,12 @@
   async function postJE(){ try{ const btn = document.getElementById('je-post'); btn.disabled = true; const date=document.getElementById('je-date').value||new Date().toISOString().slice(0,10); const desc=document.getElementById('je-desc').value||'Manual JE'; const lines=[]; document.querySelectorAll('#je-lines tbody tr').forEach(tr=>{ const code=(tr.querySelector('.code').value||'').trim(); const debit=parseFloat(tr.querySelector('.debit').value||0); const credit=parseFloat(tr.querySelector('.credit').value||0); const cc=(tr.querySelector('.costcenter').value||'').trim(); if(code) lines.push({ account_code: code, debit, credit, description: desc, date, cost_center: cc }); }); if(lines.length===0){ alert('أضف سطرًا واحدًا على الأقل'); btn.disabled=false; return; } const payload={ entries:[{ date, description: desc, lines }] }; const r=await fetch('/journal/api/transactions/post', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }); if(!r.ok){ alert('فشل الاتصال بالخادم (HTTP '+r.status+')'); btn.disabled=false; return; } let j={}; try{ j = await r.json(); }catch(e){ alert('استجابة غير صالحة (ليست JSON)'); btn.disabled=false; return; } if(j.ok){ alert('تم نشر القيد'); document.querySelector('#je-lines tbody').innerHTML=''; addLine(); addLine(); totals(); } else { alert('فشل نشر القيد: '+(j.error||'')); } btn.disabled=false; }catch(e){ alert('خطأ: '+e); const btn = document.getElementById('je-post'); if(btn) btn.disabled=false; } }
   function buildViewEntryContent(j){ const e=j.entry||{}; const op=j.operational||{}; const fin=j.financial; const lines=j.lines||[]; const dateStr=(e.date||'').slice(0,10); const dd=dateStr?dateStr.split('-').reverse().join('-'):'-'; let html='<div class="card p-3 mb-2" style="border-color:var(--border);">'; html+='<table class="table table-sm table-borderless mb-0">'; html+='<tr><td class="text-muted" style="width:8rem;">نوع العملية</td><td><strong>'+(op.op_type_ar||'-')+'</strong></td></tr>'; html+='<tr><td class="text-muted">رقم القيد</td><td><strong>'+(e.entry_number||'-')+'</strong></td></tr>'; html+='<tr><td class="text-muted">تاريخ العملية</td><td><strong>'+dd+'</strong></td></tr>'; html+='<tr><td class="text-muted">الخصم</td><td>'+(fin&&fin.discount!=null&&fin.discount>0?num(fin.discount)+' ر.س':'-')+'</td></tr>'; html+='<tr><td class="text-muted">الضريبة</td><td>'+(fin&&fin.tax!=null&&fin.tax>0?num(fin.tax)+' ر.س':'-')+'</td></tr>'; html+='<tr><td class="text-muted">طريقة الدفع</td><td>'+(op.payment_method||'-')+'</td></tr>'; html+='</table></div>'; html+='<div class="card p-3" style="border-color:var(--border);"><h6 class="mb-2" style="color:var(--ops-blue-dark);">تفاصيل الأسطر</h6>'; html+='<table class="table table-sm table-bordered"><thead><tr><th>الحساب</th><th class="text-end">مدين</th><th class="text-end">دائن</th></tr></thead><tbody>'; lines.forEach(l=>{ html+='<tr><td>'+(l.account_code||'')+' – '+(l.account_name||'')+'</td><td class="text-end">'+num(l.debit||0)+'</td><td class="text-end">'+num(l.credit||0)+'</td></tr>'; }); html+='</tbody></table></div>'; return html; }
   async function showJournalDetail(jid){ const modal=document.getElementById('modal-view-entry'); const loading=document.getElementById('modal-view-entry-loading'); const content=document.getElementById('modal-view-entry-content'); loading.style.display='block'; content.style.display='none'; content.innerHTML=''; const bsModal=typeof bootstrap!=='undefined'&&bootstrap.Modal?bootstrap.Modal.getOrCreateInstance(modal):null; if(bsModal) bsModal.show(); try{ const r=await fetch('/journal/'+jid+'/detail',{credentials:'same-origin'}); const j=await r.json(); loading.style.display='none'; if(j&&j.ok){ content.innerHTML=buildViewEntryContent(j); content.style.display='block'; } else { content.innerHTML='<div class="alert alert-danger">فشل تحميل التفاصيل</div>'; content.style.display='block'; } }catch(err){ loading.style.display='none'; content.innerHTML='<div class="alert alert-danger">خطأ في الاتصال</div>'; content.style.display='block'; } }
-  async function loadJournal(){ const s=document.getElementById('jr-start').value||'2025-10-01'; const e=document.getElementById('jr-end').value||new Date().toISOString().slice(0,10); const acc=document.getElementById('jr-account').value||''; const u='/journal/api/journals?start='+s+'&end='+e+(acc?('&account='+encodeURIComponent(acc)):''); const j=await fetchJSON(u); const tbody=document.querySelector('#jr-table tbody'); tbody.innerHTML=''; (j.entries||[]).forEach(je=>{ const st=(je.status||'').toLowerCase(); const isPosted=st==='posted'; const statusLabel=isPosted?'منشور':'مسودة'; const statusClass=isPosted?'badge-posted':'badge-draft'; const actions=[]; actions.push('<button type="button" class="btn btn-sm btn-outline-primary me-1 view-je" data-jid="'+je.id+'">عرض</button>'); if(isPosted) actions.push('<button type="button" class="btn btn-sm btn-outline-warning revert-je me-1" data-entry="'+je.entry_number+'">إرجاع لمسودة</button>'); if(!isPosted) actions.push('<button type="button" class="btn btn-sm btn-outline-danger del-je" data-entry="'+je.entry_number+'">حذف</button>'); const tr=document.createElement('tr'); tr.innerHTML='<td>'+je.entry_number+'</td><td>'+je.date+'</td><td>'+(je.description||'')+'</td><td class="text-end">'+num(je.total_debit||0)+'</td><td class="text-end">'+num(je.total_credit||0)+'</td><td><span class="badge '+statusClass+'">'+statusLabel+'</span></td><td>'+actions.join('')+'</td>'; tbody.appendChild(tr); }); tbody.querySelectorAll('.del-je').forEach(btn=>{ btn.addEventListener('click', async function(){ const entry=this.getAttribute('data-entry'); if(!entry) return; if(!confirm('تأكيد حذف القيد؟')) return; const r=await fetch('/journal/api/journals/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entry_number: entry }) }); const jr=await r.json(); if(jr&&jr.ok){ alert('تم حذف القيد'); loadJournal(); } else { alert('فشل: '+(jr&&jr.message?jr.message:(jr&&jr.error?jr.error:''))); } }); }); tbody.querySelectorAll('.revert-je').forEach(btn=>{ btn.addEventListener('click', async function(){ const entry=this.getAttribute('data-entry'); if(!entry) return; if(!confirm('إرجاع القيد لمسودة؟ لن يظهر في التقارير حتى يُنشر مجدداً.')) return; const r=await fetch('/journal/api/journals/revert', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entry_number: entry }) }); const jr=await r.json(); if(jr&&jr.ok){ alert('تم إرجاع القيد لمسودة'); loadJournal(); } else { alert('فشل: '+(jr&&jr.message?jr.message:(jr&&jr.error?jr.error:''))); } }); }); tbody.querySelectorAll('.view-je').forEach(btn=>{ btn.addEventListener('click', function(){ const jid=this.getAttribute('data-jid'); if(jid) showJournalDetail(parseInt(jid,10)); }); }); }
+  async function loadJournal(){ const s=document.getElementById('jr-start').value||'2025-10-01'; const e=document.getElementById('jr-end').value||new Date().toISOString().slice(0,10); const acc=document.getElementById('jr-account').value||''; const u='/journal/api/journals?start='+s+'&end='+e+(acc?('&account='+encodeURIComponent(acc)):''); const j=await fetchJSON(u); const tbody=document.querySelector('#jr-table tbody'); tbody.innerHTML=''; (j.entries||[]).forEach(je=>{ const st=(je.status||'').toLowerCase(); const isPosted=st==='posted'; const statusLabel=isPosted?'منشور':'مسودة'; const statusClass=isPosted?'badge-posted':'badge-draft'; const actions=[]; actions.push('<button type="button" class="btn btn-sm btn-outline-primary me-1 view-je" data-jid="'+je.id+'">عرض</button>'); if(isPosted) actions.push('<button type="button" class="btn btn-sm btn-outline-warning revert-je me-1" data-entry="'+je.entry_number+'">إرجاع لمسودة</button>'); if(!isPosted){ actions.push('<button type="button" class="btn btn-sm btn-outline-success repost-je me-1" data-entry="'+je.entry_number+'">إعادة النشر</button>'); actions.push('<button type="button" class="btn btn-sm btn-outline-danger del-je" data-entry="'+je.entry_number+'">حذف</button>'); } const tr=document.createElement('tr'); tr.innerHTML='<td>'+je.entry_number+'</td><td>'+je.date+'</td><td>'+(je.description||'')+'</td><td class="text-end">'+num(je.total_debit||0)+'</td><td class="text-end">'+num(je.total_credit||0)+'</td><td><span class="badge '+statusClass+'">'+statusLabel+'</span></td><td>'+actions.join('')+'</td>'; tbody.appendChild(tr); }); tbody.querySelectorAll('.del-je').forEach(btn=>{ btn.addEventListener('click', async function(){ const entry=this.getAttribute('data-entry'); if(!entry) return; if(!confirm('تأكيد حذف القيد؟')) return; const r=await fetch('/journal/api/journals/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entry_number: entry }) }); const jr=await r.json(); if(jr&&jr.ok){ alert('تم حذف القيد'); loadJournal(); } else { alert('فشل: '+(jr&&jr.message?jr.message:(jr&&jr.error?jr.error:''))); } }); }); tbody.querySelectorAll('.revert-je').forEach(btn=>{ btn.addEventListener('click', async function(){ const entry=this.getAttribute('data-entry'); if(!entry) return; if(!confirm('إرجاع القيد لمسودة؟ لن يظهر في التقارير حتى يُنشر مجدداً.')) return; const r=await fetch('/journal/api/journals/revert', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entry_number: entry }) }); const jr=await r.json(); if(jr&&jr.ok){ alert('تم إرجاع القيد لمسودة'); loadJournal(); } else { alert('فشل: '+(jr&&jr.message?jr.message:(jr&&jr.error?jr.error:''))); } }); }); tbody.querySelectorAll('.repost-je').forEach(btn=>{ btn.addEventListener('click', async function(){ const entry=this.getAttribute('data-entry'); if(!entry) return; if(!confirm('إعادة نشر القيد؟ سيظهر في التقارير بعد النشر.')) return; const r=await fetch('/journal/api/journals/repost', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entry_number: entry }) }); const jr=await r.json(); if(jr&&jr.ok){ alert('تم إعادة نشر القيد'); loadJournal(); } else { alert('فشل: '+(jr&&jr.message?jr.message:(jr&&jr.error?jr.error:''))); } }); }); tbody.querySelectorAll('.view-je').forEach(btn=>{ btn.addEventListener('click', function(){ const jid=this.getAttribute('data-jid'); if(jid) showJournalDetail(parseInt(jid,10)); }); }); }
   async function loadLedger(){ const code=(document.getElementById('lg-code').value||'').trim(); const s=document.getElementById('lg-start').value||'2025-10-01'; const e=document.getElementById('lg-end').value||new Date().toISOString().slice(0,10); const j=await fetchJSON('/financials/api/account_ledger_json?code='+encodeURIComponent(code)+'&start_date='+s+'&end_date='+e); if(!j.ok){ alert('الحساب غير موجود'); return; } const head=document.getElementById('lg-header'); head.innerHTML=`اسم الحساب: ${j.account.code} · ${j.account.name} — الرصيد الافتتاحي: ${num(j.opening_balance)} ريال`; const tbody=document.querySelector('#lg-table tbody'); tbody.innerHTML=''; (j.lines||[]).forEach(row=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${row.date}</td><td>${row.entry_number}</td><td>${row.description||''}</td><td class='text-end'>${num(row.debit||0)}</td><td class='text-end'>${num(row.credit||0)}</td><td class='text-end'>${num(row.balance||0)}</td>`; tbody.appendChild(tr); }); head.innerHTML += ` — الرصيد النهائي: ${num(j.final_balance)} ريال`; }
   async function loadTrial(){
     const d=document.getElementById('tb-date').value||new Date().toISOString().slice(0,10);
-    const j=await fetchJSON('/financials/api/trial_balance_json?date='+d);
+    const hideZero = document.getElementById('tb-hide-zero') && document.getElementById('tb-hide-zero').checked;
+    const j=await fetchJSON('/financials/api/trial_balance_json?date='+d+'&hide_zero='+(hideZero?'1':'0'));
     const tbody=document.querySelector('#tb-table tbody');
     tbody.innerHTML='';
     const order=j.order||[];
@@ -492,13 +505,97 @@
   document.getElementById('tb-load').addEventListener('click', loadTrial);
   document.getElementById('tb-print').addEventListener('click', function(){ printSection('Trial Balance / ميزان المراجعة', 'tb-table'); });
   document.getElementById('tb-export').addEventListener('click', function(){ exportCSV('tb-table', 'trial_balance.csv'); });
-  document.getElementById('ac-add').addEventListener('click', addAccount);
-  document.getElementById('ac-clean').addEventListener('click', async()=>{
-    const dry = document.getElementById('ac-clean-dry').checked;
+  if(document.getElementById('ac-add')) document.getElementById('ac-add').addEventListener('click', addAccount);
+  const acClean = document.getElementById('ac-clean');
+  if(acClean) acClean.addEventListener('click', async()=>{
+    const dry = document.getElementById('ac-clean-dry')&&document.getElementById('ac-clean-dry').checked;
     const r = await fetch('/financials/api/accounts/cleanup_duplicates'+(dry?'?dry_run=1':''), { method:'POST' });
     const j = await r.json();
     if(j.ok){ alert(`تمت العملية: مكررات=${j.duplicates_found} / نظّف=${(j.cleaned||[]).length} / تخطي=${(j.skipped||[]).length}`); loadAccounts(); }
     else{ alert('فشل: '+(j.error||'')); }
+  });
+  let currentSettingsSectionKey = 'CashAndBank';
+  let currentSettingsGroups = ['Cash','Bank'];
+  let currentSettingsLabel = 'النقد والبنوك';
+  let settingsAvailableAccounts = [];
+  async function loadAccountSettingsBySection(sectionKey, groups, sectionLabel){
+    currentSettingsSectionKey = sectionKey;
+    currentSettingsGroups = Array.isArray(groups) ? groups : (groups||'').toString().split(',').map(s=>s.trim()).filter(Boolean);
+    currentSettingsLabel = sectionLabel || sectionKey;
+    const labelEl = document.getElementById('settings-group-label');
+    if(labelEl) labelEl.textContent = currentSettingsLabel;
+    document.querySelectorAll('#settingsSubTabs .nav-link').forEach(l=>{ l.classList.toggle('active', (l.getAttribute('data-section-key')||'')===sectionKey); });
+    const tbody = document.getElementById('settings-accounts-tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">جاري التحميل...</td></tr>';
+    try {
+      const g0 = currentSettingsGroups[0] || 'Cash';
+      const avail = await fetchJSON('/financials/api/account_settings/accounts_available?group='+encodeURIComponent(g0));
+      settingsAvailableAccounts = (avail.ok && avail.accounts) ? avail.accounts : [];
+      let accounts = [];
+      for(const g of currentSettingsGroups){
+        const j = await fetchJSON('/financials/api/account_settings/by_group?group='+encodeURIComponent(g));
+        (j.ok ? (j.accounts||[]) : []).forEach(a=>{ a._usageGroup = g; });
+        accounts = accounts.concat(j.ok ? (j.accounts||[]) : []);
+      }
+      tbody.innerHTML = '';
+      if(!accounts.length){ tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا توجد حسابات مرتبطة. استخدم «تحميل الافتراضي».</td></tr>'; return; }
+      accounts.forEach(a=>{
+        const ug = a._usageGroup || currentSettingsGroups[0];
+        const roleLabel = (a.function_label_ar||a.name||a.code||'').trim();
+        const tr = document.createElement('tr');
+        if(!a.active) tr.classList.add('text-muted');
+        const lockIcon = (a.locked ? ' <i class="fa-solid fa-lock text-muted" title="حساب نظامي"></i>' : '');
+        const tdRole = document.createElement('td');
+        tdRole.innerHTML = lockIcon + roleLabel;
+        const sel = document.createElement('select');
+        sel.className = 'form-select form-select-sm settings-account-select';
+        sel.dataset.mappingId = (a.mapping_id||'').toString();
+        sel.dataset.accountId = (a.account_id||'').toString();
+        const opt0 = document.createElement('option');
+        opt0.value = ''; opt0.textContent = '— اختر الحساب —';
+        sel.appendChild(opt0);
+        settingsAvailableAccounts.forEach(ac=>{
+          const o = document.createElement('option');
+          o.value = ac.id;
+          o.textContent = (ac.code||'') + ' — ' + (ac.name||'');
+          if(Number(ac.id)===Number(a.account_id)) o.selected = true;
+          sel.appendChild(o);
+        });
+        const tdAccount = document.createElement('td');
+        tdAccount.appendChild(sel);
+        const tdDefault = document.createElement('td');
+        tdDefault.className = 'text-center';
+        tdDefault.innerHTML = '<button type="button" class="btn btn-sm '+(a.is_default?'btn-success':'btn-outline-success')+' btn-set-default" data-mapping-id="'+(a.mapping_id||'')+'" data-account-id="'+(a.account_id||'')+'" data-usage-group="'+ug+'">'+(a.is_default?'✓ افتراضي':'تعيين افتراضي')+'</button>';
+        const tdToggle = document.createElement('td');
+        tdToggle.className = 'text-center';
+        tdToggle.innerHTML = '<button type="button" class="btn btn-sm '+(a.active?'btn-outline-warning':'btn-warning')+' btn-toggle-active" data-mapping-id="'+(a.mapping_id||'')+'" data-account-id="'+(a.account_id||'')+'" data-usage-group="'+ug+'">'+(a.active?'⛔ تعطيل':'تفعيل')+'</button>';
+        tr.appendChild(tdRole); tr.appendChild(tdAccount); tr.appendChild(tdDefault); tr.appendChild(tdToggle);
+        tbody.appendChild(tr);
+        sel.addEventListener('change', async function(){
+          const mid = this.dataset.mappingId;
+          const newId = this.value;
+          if(!mid || !newId) return;
+          const r = await fetch('/financials/api/account_settings/update_mapping', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mapping_id: parseInt(mid,10), account_id: parseInt(newId,10) }) });
+          const jr = await r.json();
+          if(jr.ok){ this.dataset.accountId = newId; const opt = this.querySelector('option[value="'+newId+'"]'); if(opt) this.value = newId; }
+          else alert('فشل تحديث الربط: '+(jr.error||''));
+        });
+        const defBtn = tr.querySelector('.btn-set-default');
+        const togBtn = tr.querySelector('.btn-toggle-active');
+        if(defBtn){ defBtn.addEventListener('click', async function(){ const mid = this.getAttribute('data-mapping-id'); const aid = this.getAttribute('data-account-id'); const ug = this.getAttribute('data-usage-group'); const body = mid ? { mapping_id: parseInt(mid,10) } : { account_id: parseInt(aid,10), usage_group: ug }; const r = await fetch('/financials/api/account_settings/set_default', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) }); const jr = await r.json(); if(jr.ok) loadAccountSettingsBySection(currentSettingsSectionKey, currentSettingsGroups, currentSettingsLabel); else alert('فشل: '+(jr.error||'')); }); }
+        if(togBtn && a.mapping_id){ togBtn.addEventListener('click', async function(){ const mid = this.getAttribute('data-mapping-id'); if(!mid) return; const r = await fetch('/financials/api/account_settings/toggle_active', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mapping_id: parseInt(mid,10) }) }); const jr = await r.json(); if(jr.ok) loadAccountSettingsBySection(currentSettingsSectionKey, currentSettingsGroups, currentSettingsLabel); else alert('فشل: '+(jr.error||'')); }); }
+        if(togBtn && !a.mapping_id) togBtn.disabled = true;
+      });
+    } catch(e) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">خطأ: '+e.message+'</td></tr>'; }
+  }
+  document.querySelectorAll('#settingsSubTabs .nav-link').forEach(link=>{
+    link.addEventListener('click', function(e){ e.preventDefault(); const key = this.getAttribute('data-section-key'); const groups = (this.getAttribute('data-groups')||'').split(',').map(s=>s.trim()).filter(Boolean); const label = (this.textContent||'').trim(); loadAccountSettingsBySection(key, groups, label); });
+  });
+  const seedBtn = document.getElementById('settings-seed');
+  if(seedBtn) seedBtn.addEventListener('click', async function(){ const r = await fetch('/financials/api/account_settings/seed', { method:'POST', headers:{'Content-Type':'application/json'}, body: '{}' }); const j = await r.json(); if(j.ok){ alert('تم تحميل الربط الافتراضي'); loadAccountSettingsBySection(currentSettingsSectionKey, currentSettingsGroups, currentSettingsLabel); } else alert('فشل: '+(j.error||'')); });
+  document.querySelectorAll('#accTabs .nav-link').forEach(tab=>{
+    tab.addEventListener('shown.bs.tab', function(ev){ if(ev.target.getAttribute('data-bs-target')==='#tab-settings') loadAccountSettingsBySection(currentSettingsSectionKey, currentSettingsGroups, currentSettingsLabel); });
   });
   (async function(){ try{ await fetch('/financials/api/accounts/seed_official', { method:'POST' }); await fetch('/financials/api/accounts/apply_official_names', { method:'POST' }); }catch(e){} })();
   loadAccounts(); loadJournal();
@@ -558,6 +655,8 @@
   }
   document.getElementById('coa-search').addEventListener('click', buildCoa);
   document.getElementById('coa-print').addEventListener('click', function(){ printSection('Chart of Accounts / شجرة الحسابات', 'coaAccordion'); });
+  const coaSyncTypes = document.getElementById('coa-sync-types');
+  if(coaSyncTypes) coaSyncTypes.addEventListener('click', async function(){ const j=await fetchJSON('/financials/api/accounts/sync_types_from_coa', { method:'POST', headers:{'Content-Type':'application/json'}, body: '{}' }); if(j.ok){ alert('تمت مزامنة أنواع الحسابات من الشجرة: '+(j.updated_count||0)+' حساب'); loadAccounts(); buildCoa(); } else { alert('فشل: '+(j.error||'')); } });
   document.getElementById('m-ac-add').addEventListener('click', async function(){ const code=(document.getElementById('m-ac-code').value||'').trim(); const name=(document.getElementById('m-ac-name').value||'').trim(); const type=(document.getElementById('m-ac-type').value||'').trim(); if(!code||!name){ alert('أدخل الرمز والاسم'); return; } const j=await fetchJSON('/financials/api/accounts/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code, name, type }) }); if(j.ok){ document.getElementById('m-ac-code').value=''; document.getElementById('m-ac-name').value=''; loadAccounts(); buildCoa(); bootstrap.Modal.getInstance(document.getElementById('modal-add-account')).hide(); } else { alert('فشل إضافة الحساب'); } });
   document.getElementById('modal-add-sub-account').addEventListener('show.bs.modal', function(){ const sel=document.getElementById('m-sub-parent'); sel.innerHTML='<option value="">اختر الحساب الأب</option>'; accountsList.forEach(a=>{ const o=document.createElement('option'); o.value=a.code; o.textContent=a.code+' — '+(a.name||a.name_ar||''); sel.appendChild(o); }); });
   document.getElementById('m-sub-add').addEventListener('click', async function(){ const parent_code=(document.getElementById('m-sub-parent').value||'').trim(); const name_ar=(document.getElementById('m-sub-name-ar').value||'').trim(); const name_en=(document.getElementById('m-sub-name-en').value||'').trim(); if(!parent_code||!name_ar){ alert('اختر الحساب الأب وأدخل الاسم بالعربية'); return; } const j=await fetchJSON('/financials/api/accounts/add_sub', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ parent_code, name_ar, name_en }) }); if(j.ok){ document.getElementById('m-sub-name-ar').value=''; document.getElementById('m-sub-name-en').value=''; loadAccounts(); buildCoa(); bootstrap.Modal.getInstance(document.getElementById('modal-add-sub-account')).hide(); alert('تم إنشاء الحساب الفرعي: '+j.code); } else { alert('فشل: '+(j.error||'')); } });
@@ -585,6 +684,7 @@
         if(panel) panel.style.display='block';
         document.getElementById('op-related-empty').style.display='block';
         document.getElementById('op-related-content').style.display='none';
+        setTimeout(function(){ opsLoadOutstanding(); }, 50);
       });
     });
 
@@ -610,7 +710,15 @@
       const j=await fetchJSON('/financials/api/list_suppliers');
       const sel=document.getElementById('op-sadad-supplier');
       sel.innerHTML='<option value="">اختر المورد</option>';
-      (j.suppliers||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.name; o.textContent=s.name; sel.appendChild(o); });
+      (j.suppliers||[]).forEach(s=>{
+        const o=document.createElement('option');
+        const sid=(s.id!=null&&s.id!=='')?String(s.id):'';
+        const name=(s.name||'').trim();
+        o.value=sid?sid+'::'+name:name;
+        o.setAttribute('data-supplier-id',sid);
+        o.textContent=name;
+        sel.appendChild(o);
+      });
     }
     async function opsLoadPayrollRuns(){
       const j=await fetchJSON('/financials/api/unpaid_payroll_runs');
@@ -627,6 +735,7 @@
     }
     document.getElementById('op-sadad-supplier').addEventListener('change', opsLoadOutstanding);
     document.getElementById('op-sadad-payroll').addEventListener('change', opsLoadOutstanding);
+    const opRelatedRefresh=document.getElementById('op-related-refresh'); if(opRelatedRefresh) opRelatedRefresh.addEventListener('click', opsLoadOutstanding);
     document.getElementById('op-sadad-liability').addEventListener('change', opsLoadOutstanding);
     document.getElementById('op-sadad-platform').addEventListener('change', opsLoadOutstanding);
     document.getElementById('op-tahsil-customer').addEventListener('change', opsLoadOutstanding);
@@ -648,7 +757,7 @@
       const j=await fetchJSON('/financials/api/list_customers');
       const sel=document.getElementById('op-tahsil-customer');
       sel.innerHTML='<option value="">اختر العميل</option>';
-      (j.customers||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; sel.appendChild(o); });
+      (j.customers||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c.name; o.dataset.customerId=(c.id!=null?c.id:''); o.textContent=c.name; sel.appendChild(o); });
       sel.addEventListener('change', opsLoadOutstanding);
     }
     async function opsLoadTahsilEmployees(){
@@ -667,39 +776,52 @@
       let url='';
       if(sec==='sadad'){
         const t=document.getElementById('op-sadad-type').value;
-        if(t==='supplier'){ const n=document.getElementById('op-sadad-supplier').value; if(n) url='/financials/api/operations/outstanding?party_type=supplier&party_name='+encodeURIComponent(n); }
+        if(t==='supplier'){ const sel=document.getElementById('op-sadad-supplier'); const raw=(sel?sel.value:'').trim(); let n=raw, sid=''; if(raw.indexOf('::')>=0){ const parts=raw.split('::'); sid=(parts[0]||'').trim(); n=parts.slice(1).join('::').trim()||raw; } else { const opt=sel&&sel.selectedIndex>=0?sel.options[sel.selectedIndex]:null; sid=opt?(opt.getAttribute('data-supplier-id')||opt.dataset?.supplierId||''):''; } if(n||sid){ url='/financials/api/operations/outstanding?party_type=supplier'; if(n) url+='&party_name='+encodeURIComponent(n); if(sid) url+='&party_id='+encodeURIComponent(sid); url+='&_='+Date.now(); } }
         else if(t==='payroll'){ const v=document.getElementById('op-sadad-payroll').value; if(v){ const p=v.split('-'); url='/financials/api/operations/outstanding?party_type=payroll&payroll_year='+p[0]+'&payroll_month='+p[1]; } }
         else if(t==='liability'){ const c=document.getElementById('op-sadad-liability').value; if(c) url='/financials/api/operations/outstanding?party_type=liability&liability_code='+encodeURIComponent(c); }
         else if(t==='platform'){ const c=document.getElementById('op-sadad-platform').value; if(c) url='/financials/api/operations/outstanding?party_type=liability&liability_code='+encodeURIComponent(c); }
       } else if(sec==='tahsil'){
         const t=document.getElementById('op-tahsil-type').value;
-        if(t==='customer'){ const n=document.getElementById('op-tahsil-customer').value; if(n) url='/financials/api/operations/outstanding?party_type=customer&party_name='+encodeURIComponent(n); }
+        if(t==='customer'){ const sel=document.getElementById('op-tahsil-customer'); const n=sel?sel.value:''; const opt=sel&&sel.selectedIndex>=0?sel.options[sel.selectedIndex]:null; const cid=opt&&opt.dataset&&opt.dataset.customerId?opt.dataset.customerId:''; if(n){ url='/financials/api/operations/outstanding?party_type=customer&party_name='+encodeURIComponent(n); if(cid) url+='&party_id='+encodeURIComponent(cid); } }
       }
       if(!url){ return; }
       document.getElementById('op-related-loading').style.display='block';
       try{
-        const j=await fetchJSON(url);
+        const r=await fetch(url, {credentials:'same-origin'});
+        let j=null;
+        try{ j=await r.json(); }catch(_){ j=null; }
         document.getElementById('op-related-loading').style.display='none';
-        if(j&&j.ok&&(j.invoices||[]).length>0){
-          document.getElementById('op-related-empty').style.display='none';
-          document.getElementById('op-related-content').style.display='block';
+        if(r.ok&&j&&j.ok){
+          const hasInvoices=(j.invoices||[]).length>0;
           document.getElementById('op-related-label').textContent=j.label||'';
-          const tbody=document.getElementById('op-related-tbody');
-          tbody.innerHTML='';
-          (j.invoices||[]).forEach(inv=>{
-            const tr=document.createElement('tr');
-            tr.innerHTML='<td>'+(inv.invoice_number||'')+'</td><td>'+(inv.date||'')+'</td><td class="text-end">'+num(inv.total)+'</td><td class="text-end">'+num(inv.paid)+'</td><td class="text-end"><strong>'+num(inv.remaining)+'</strong></td>';
-            tbody.appendChild(tr);
-          });
           document.getElementById('op-related-total').textContent=num(j.total_remaining||0);
+          if(hasInvoices){
+            document.getElementById('op-related-empty').style.display='none';
+            document.getElementById('op-related-content').style.display='block';
+            const tbody=document.getElementById('op-related-tbody');
+            tbody.innerHTML='';
+            (j.invoices||[]).forEach(inv=>{
+              const tr=document.createElement('tr');
+              tr.innerHTML='<td>'+(inv.invoice_number||'')+'</td><td>'+(inv.date||'')+'</td><td class="text-end">'+num(inv.total)+'</td><td class="text-end">'+num(inv.paid)+'</td><td class="text-end"><strong>'+num(inv.remaining)+'</strong></td>';
+              tbody.appendChild(tr);
+            });
+          } else {
+            document.getElementById('op-related-content').style.display='block';
+            document.getElementById('op-related-empty').style.display='block';
+            document.getElementById('op-related-empty').textContent=(j.label?j.label+'. ':'')+'لا توجد فواتير/مستحقات مرتبطة.';
+            document.getElementById('op-related-tbody').innerHTML='';
+          }
         } else {
           document.getElementById('op-related-empty').style.display='block';
-          document.getElementById('op-related-empty').textContent=j&&j.label?j.label:'لا توجد فواتير/مستحقات مرتبطة.';
+          const errMsg=(j&&j.error)?j.error:('خطأ في الخادم (HTTP '+r.status+'). أعد تشغيل التطبيق ثم حدّث الصفحة.');
+          document.getElementById('op-related-empty').textContent=errMsg;
+          document.getElementById('op-related-content').style.display='none';
         }
       } catch(e){
         document.getElementById('op-related-loading').style.display='none';
         document.getElementById('op-related-empty').style.display='block';
-        document.getElementById('op-related-empty').textContent='خطأ في تحميل المستحقات.';
+        document.getElementById('op-related-empty').textContent='خطأ في تحميل المستحقات: '+(e&&e.message?e.message:'اتصال فاشل');
+        document.getElementById('op-related-content').style.display='none';
       }
     }
 
@@ -719,12 +841,11 @@
       if(!(amount>0)){ showResult('<div class="alert alert-warning">أدخل مبلغًا صالحًا</div>'); return; }
       const t=document.getElementById('op-sadad-type').value;
       let type='supplier_payment'; let party='';
-      if(t==='supplier'){ party=document.getElementById('op-sadad-supplier').value||''; if(!party){ showResult('<div class="alert alert-warning">اختر المورد</div>'); return; } type='supplier_payment'; }
+      if(t==='supplier'){ const rawSupp=document.getElementById('op-sadad-supplier').value||''; party=rawSupp.indexOf('::')>=0?rawSupp.split('::').slice(1).join('::'):rawSupp; if(!party){ showResult('<div class="alert alert-warning">اختر المورد</div>'); return; } type='supplier_payment'; }
       else if(t==='payroll'){ const v=document.getElementById('op-sadad-payroll').value; if(!v){ showResult('<div class="alert alert-warning">اختر المسير</div>'); return; } const p=v.split('-'); const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'pay_liability', date, amount, payment_method:method, liability_code:'2121', payroll_year:parseInt(p[0],10), payroll_month:parseInt(p[1],10) })}); const jr=await r.json(); if(jr&&jr.ok&&jr.entry_number){ showResult('<div class="alert alert-success">تم سداد مسير الرواتب — قيد: '+jr.entry_number+'</div>'); document.getElementById('op-sadad-amount').value=''; opsLoadPayrollRuns(); opsLoadOutstanding(); } else { showResult('<div class="alert alert-danger">'+(jr&&jr.error?jr.error:'فشل إنشاء القيد')+'</div>'); } return; }
       else if(t==='liability'){ const code=document.getElementById('op-sadad-liability').value||'2121'; const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'pay_liability', date, amount, payment_method:method, liability_code:code })}); const jr=await r.json(); if(jr&&jr.ok&&jr.entry_number){ showResult('<div class="alert alert-success">تم السداد — قيد: '+jr.entry_number+'</div>'); document.getElementById('op-sadad-amount').value=''; opsLoadOutstanding(); } else { showResult('<div class="alert alert-danger">'+(jr&&jr.error?jr.error:'فشل إنشاء القيد')+'</div>'); } return; }
       else if(t==='platform'){ const code=document.getElementById('op-sadad-platform').value; if(!code){ showResult('<div class="alert alert-warning">اختر المنصة</div>'); return; } const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'pay_liability', date, amount, payment_method:method, liability_code:code, note: 'سداد عمولات منصة إلكترونية' })}); const jr=await r.json(); if(jr&&jr.ok&&jr.entry_number){ showResult('<div class="alert alert-success">تم سداد عمولات المنصة — قيد: '+jr.entry_number+'</div>'); document.getElementById('op-sadad-amount').value=''; opsLoadOutstanding(); } else { showResult('<div class="alert alert-danger">'+(jr&&jr.error?jr.error:'فشل إنشاء القيد')+'</div>'); } return; }
-      const payload={ type:'supplier_payment', date, amount, payment_method:method, supplier_name:party, note:'سداد من شاشة العمليات' };
-      const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      const sel=document.getElementById('op-sadad-supplier'); const rawSupp=sel?sel.value:''; let sid=''; if(rawSupp.indexOf('::')>=0) sid=(rawSupp.split('::')[0]||'').trim(); else { const opt=sel&&sel.selectedIndex>=0?sel.options[sel.selectedIndex]:null; sid=opt&&(opt.getAttribute('data-supplier-id')||opt.dataset?.supplierId)?(opt.getAttribute('data-supplier-id')||opt.dataset.supplierId):''; } const payload={ type:'supplier_payment', date, amount, payment_method:method, supplier_name:party, note:'سداد من شاشة العمليات' }; if(sid) payload.supplier_id=parseInt(sid,10)||sid; const r=await fetch('/financials/api/quick-txn',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
       const j=await r.json();
       if(j&&j.ok&&j.entry_number){ showResult('<div class="alert alert-success">تم إنشاء العملية — قيد: '+j.entry_number+'</div>'); document.getElementById('op-sadad-amount').value=''; opsLoadOutstanding(); }
       else { showResult('<div class="alert alert-danger">'+(j&&j.error?j.error:'فشل إنشاء القيد — العملية لم تُنفَّذ')+'</div>'); }

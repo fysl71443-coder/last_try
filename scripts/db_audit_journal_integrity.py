@@ -125,7 +125,7 @@ def run():
 
         # --- 4. فواتير بدون قيد مرتبط ---
         report.append("")
-        report.append("=== 4. Invoices without linked journal entry ===")
+        report.append("=== 4. Invoices without linked journal (invoice_id + invoice_type) ===")
         try:
             from models import JournalEntry, SalesInvoice, PurchaseInvoice, ExpenseInvoice
 
@@ -176,9 +176,29 @@ def run():
         except Exception as e:
             report.append(f"  خطأ: {e}")
 
-        # --- 6. أعمدة مطلوبة في الجداول الرئيسية ---
+        # --- 6. Report totals vs posted journal lines ---
         report.append("")
-        report.append("=== 6. Required columns (sample) ===")
+        report.append("=== 6. Report totals vs posted journal lines ===")
+        try:
+            from models import JournalEntry, JournalLine
+            q = db.session.query(
+                func.coalesce(func.sum(JournalLine.debit), 0),
+                func.coalesce(func.sum(JournalLine.credit), 0),
+            ).join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(JournalEntry.status == 'posted')
+            row = q.first()
+            total_d = float(row[0] or 0)
+            total_c = float(row[1] or 0)
+            diff = round(abs(total_d - total_c), 2)
+            if diff > 0.01:
+                report.append(f"  WARN: Posted journal lines sum: debit={total_d:.2f}, credit={total_c:.2f}; diff={diff:.2f} (should be 0).")
+            else:
+                report.append(f"  OK: Posted journal lines balanced (debit={total_d:.2f}, credit={total_c:.2f}).")
+        except Exception as e:
+            report.append(f"  Error: {e}")
+
+        # --- 7. أعمدة مطلوبة في الجداول الرئيسية ---
+        report.append("")
+        report.append("=== 7. Required columns (sample) ===")
         try:
             from sqlalchemy import inspect
             insp = inspect(db.engine)

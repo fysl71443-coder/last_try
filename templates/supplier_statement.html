@@ -107,7 +107,7 @@
           <tbody>
             {% for p in payments %}
             <tr>
-              <td>{{ p.date.strftime('%Y-%m-%d %H:%M') if p.date else '-' }}</td>
+              <td>{{ p.date_display }}</td>
               <td class="text-end">{{ '{:,.2f}'.format(p.amount) }}</td>
               <td>{{ p.method or '-' }}</td>
             </tr>

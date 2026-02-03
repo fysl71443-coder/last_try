@@ -145,6 +145,7 @@ NEW_COA_TREE = [
     ("5130", "تكلفة مواد تغليف", "Packaging Cost", "COGS", "5100", 3),
     ("5140", "تكلفة مواد تنظيف", "Cleaning Supplies Cost", "COGS", "5100", 3),
     ("5150", "تكلفة مواد تشغيل أخرى", "Other Operating Materials Cost", "COGS", "5100", 3),
+    ("5160", "تكلفة الهدر والتالف", "Waste & Spoilage", "COGS", "5100", 3),
     # 2️⃣ المصروفات التشغيلية
     ("5200", "المصروفات التشغيلية", "Operating Expenses", "EXPENSE", "5000", 2),
     ("5210", "مصروف كهرباء", "Electricity", "EXPENSE", "5200", 3),
@@ -261,7 +262,7 @@ OLD_TO_NEW_MAP = {
     "5020": "5210", "5030": "5260", "5040": "5280", "5050": "5230",
     "5060": "5280", "5070": "5280", "5080": "5260", "5090": "5610",
     "5100": "5410", "5110": "5110", "5120": "5120", "5130": "5130", "5140": "5140",
-    "5150": "5150", "5160": "5280",
+    "5150": "5150", "5160": "5160",
     "5310": "5310", "5320": "5320", "5330": "5330",
     "6000": "5820", "6100": "5810", "6200": "5820", "6300": "2141",
     "5111": "5110", "5112": "5110",
@@ -294,6 +295,21 @@ def leaf_coa_dict():
     """فقط الحسابات الورقية (للاستخدام في القيود)."""
     full = build_coa_dict()
     return {c: full[c] for c in LEAF_CODES if c in full}
+
+
+def get_account_display_name(code, name_from_db=None):
+    """اسم الحساب للعرض: إذا كان name_from_db معبأً ومختلفاً عن الكود يُستخدم، وإلا من شجرة الحسابات.
+    يُستخدم في كل الشاشات لضمان ظهور 'كود – اسم' (مثل 1111 – صندوق رئيسي)."""
+    code = (code or '').strip()
+    if name_from_db is not None and name_from_db != '':
+        n = (name_from_db if isinstance(name_from_db, str) else str(name_from_db)).strip()
+        if n and n != code:
+            return n
+    try:
+        coa = build_coa_dict()
+        return (coa.get(code) or {}).get('name') or name_from_db or code or ''
+    except Exception:
+        return name_from_db or code or ''
 
 
 def get_short_to_numeric(coa=None):

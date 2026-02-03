@@ -18,7 +18,7 @@
     <span class="ops-icon"><i class="fa-solid fa-file-lines"></i></span>
     <div>
       <h1 class="ops-title mb-0">{{ _('Account Statement') }}</h1>
-      <span class="ops-subtitle">{% if acc %}{{ acc.code }} — {{ acc.name }}{% else %}{{ _('View running balance by period') }}{% endif %}</span>
+      <span class="ops-subtitle">{% if acc %}{{ acc.code }} — {{ account_display_name or acc.name }}{% else %}{{ _('View running balance by period') }}{% endif %}</span>
     </div>
     <div class="ops-actions">
       <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>

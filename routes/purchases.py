@@ -647,41 +647,19 @@ def purchases():
                     inv.notes = ((inv.notes or '') + f" | ITEMS:{items_saved}").strip(' |')
                 except Exception:
                     pass
-            db.session.commit()
         except Exception as e:
             try:
                 db.session.rollback()
             except Exception:
                 pass
             flash(f'Failed to save purchase items: {e}', 'warning')
+            return redirect(url_for('purchases.purchases'))
 
-        # Auto-create payment and ledger outside main try
+        # لا حفظ بدون قيد. إذا مدفوعة فوراً: قيد واحد من حـ مخزون إلى حـ الصندوق (لا ذمة مورد). وإلا ذمة مورد ثم قيد الدفع للجزء المدفوع.
         st = (getattr(inv, 'status', '') or '').lower()
         total_amt = float(inv.total_after_tax_discount or 0.0)
-        base_amt = float(getattr(inv, 'total_before_tax', 0) or 0.0) - float(getattr(inv, 'discount_amount', 0) or 0.0)
-        tax_amt = float(getattr(inv, 'tax_amount', 0) or 0.0)
-        extra = []
-        if supplier_invoice_number:
-            extra.append(f"SUPREF:{supplier_invoice_number}")
-        if notes_val:
-            extra.append(f"NOTE:{notes_val[:50]}")
-        ref = f"PUR {inv.invoice_number}" + ((' ' + ' '.join(extra)) if extra else '')
-        production_flag = ((request.form.get('production_flag') or '').strip().lower() in ('1','true','yes','on'))
-        inv_kind = (request.form.get('inventory_kind') or '').strip().upper()
-        inv_acc = '1162' if inv_kind == 'FOOD' else ('1161' if inv_kind == 'OTHER' else None)
-        debit_code = None
-        if inv_type == 'VAT':
-            debit_code = inv_acc if production_flag and inv_acc else '5110'
-        else:
-            debit_code = inv_acc if production_flag and inv_acc else '5110'
         if st == 'paid' and total_amt > 0:
             db.session.add(Payment(invoice_id=inv.id, invoice_type='purchase', amount_paid=total_amt, payment_method=(pm or 'CASH').upper()))
-            db.session.commit()
-            try:
-                fee = round(total_amt * 0.02, 2) if (pm or '').strip().lower() == 'bank' else 0
-                _create_supplier_payment_journal(inv.date, total_amt, inv.invoice_number, pm or 'CASH', bank_fee=fee if fee > 0 else 0)
-            except Exception:
-                pass
         elif st == 'partial':
             amt_raw = request.form.get('partial_paid_amount')
             amt = float(amt_raw or 0.0)
@@ -689,7 +667,6 @@ def purchases():
                 if amt > total_amt:
                     amt = total_amt
                 db.session.add(Payment(invoice_id=inv.id, invoice_type='purchase', amount_paid=amt, payment_method=(pm or 'CASH').upper()))
-                db.session.commit()
                 try:
                     fee = round(amt * 0.02, 2) if (pm or '').strip().lower() == 'bank' else 0
                     _create_supplier_payment_journal(inv.date, amt, inv.invoice_number, pm or 'CASH', bank_fee=fee if fee > 0 else 0)
@@ -697,8 +674,13 @@ def purchases():
                     pass
         try:
             _create_purchase_journal(inv)
-        except Exception:
-            pass
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            flash('فشل حفظ فاتورة المشتريات: لم يُنشأ القيد. ' + str(e), 'danger')
+            return redirect(url_for('purchases.purchases'))
         flash('Purchase invoice saved', 'success')
         return redirect(url_for('purchases.purchases'))
 

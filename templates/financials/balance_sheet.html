@@ -214,9 +214,9 @@
   </div>
 
   <div class="bs-actions no-print">
-    <a target="_blank" href="{{ url_for('financials.print_balance_sheet', date=data.date) }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
-    <a target="_blank" href="{{ url_for('financials.print_balance_sheet', date=data.date) }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-file-pdf me-1"></i>{{ _('Export PDF') }}</a>
-    <a target="_blank" href="{{ url_for('financials.export_balance_sheet', date=data.date) }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-file-excel me-1"></i>{{ _('Export Excel') }}</a>
+    <a target="_blank" href="{{ url_for('financials.print_balance_sheet', date=data.date, branch=data.branch or 'all') }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+    <a target="_blank" href="{{ url_for('financials.print_balance_sheet', date=data.date, branch=data.branch or 'all') }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-file-pdf me-1"></i>{{ _('Export PDF') }}</a>
+    <a target="_blank" href="{{ url_for('financials.export_balance_sheet', date=data.date, branch=data.branch or 'all') }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-file-excel me-1"></i>{{ _('Export Excel') }}</a>
     <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
       <form method="get" class="d-flex flex-wrap align-items-center gap-2">
         <label class="mb-0 small text-muted">{{ _('As of date') }}</label>
@@ -371,8 +371,10 @@
               {% endfor %}
             </tbody>
           </table>
+          <p class="small text-muted mt-2 mb-0">حساب 3220 (أرباح السنة الحالية) يستقبل قيد الإقفال من صافي قائمة الدخل.</p>
           {% else %}
           <div class="bs-empty">لا توجد حركات في هذه الفترة. (يُحسب من الأصول − الالتزامات)</div>
+          <p class="small text-muted mt-2 mb-0">حساب 3220 (أرباح السنة الحالية) يستقبل قيد الإقفال من صافي قائمة الدخل.</p>
           {% endif %}
         </div>
       </div>

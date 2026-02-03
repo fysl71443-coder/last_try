@@ -89,6 +89,7 @@
                                             <select name="payment_method" id="expense-payment-method" class="form-select">
                                                 <option value="CASH">{{ _('Cash') }}</option>
                                                 <option value="BANK">{{ _('Bank') }}</option>
+                                                <option value="INTERNAL">{{ _('Internal / N/A') }}</option>
                                             </select>
                                         </div>
                                         <div class="col-md-4">
@@ -97,6 +98,7 @@
                                                 <option value="paid">{{ _('Paid') }}</option>
                                                 <option value="partial">{{ _('Partial') }}</option>
                                                 <option value="unpaid">{{ _('Unpaid') }}</option>
+                                                <option value="posted">{{ _('Posted') }}</option>
                                             </select>
                                         </div>
                                         <div class="col-md-6">
@@ -112,6 +114,9 @@
                                                 <label class="form-check-label" for="expense-apply-vat">{{ _('Apply 15%% VAT') }}</label>
                                             </div>
                                             <span class="ms-2 small text-muted" id="expense-vat-hint"></span>
+                                        </div>
+                                        <div class="col-12 small alert alert-secondary py-2 mb-0" id="expense-waste-hint" style="display:none;">
+                                            <i class="fa-solid fa-info-circle me-1"></i> {{ _('Waste & Spoilage: Internal adjustment — no cash, no supplier, no VAT. Journal: Debit Expense (5160), Credit Inventory (1160).') }}
                                         </div>
                                         <div class="col-12">
                                             <label class="form-label fw-bold">{{ _('Description') }}</label>
@@ -161,11 +166,13 @@
                                         <td><span class="badge bg-light text-dark">{{ invoice.date.strftime('%Y-%m-%d') }}</span></td>
                                         <td>
                                             {% set pm = (invoice.payment_method or '')|lower %}
-                                            {% if pm == 'cash' %}<span class="badge bg-success">{{ _('Cash') }}</span>{% else %}<span class="badge bg-primary">{{ _('Bank') }}</span>{% endif %}
+                                            {% if pm == 'internal' %}<span class="badge bg-secondary">{{ _('Internal') }}</span>
+                                            {% elif pm == 'cash' %}<span class="badge bg-success">{{ _('Cash') }}</span>{% else %}<span class="badge bg-primary">{{ _('Bank') }}</span>{% endif %}
                                         </td>
                                         <td class="text-end"><span class="fw-bold text-danger fs-6">﷼{{ "%.2f"|format(invoice.total_after_tax_discount) }}</span></td>
                                         <td class="text-center">
-                                            {% if invoice.status == 'paid' %}<span class="badge bg-success">{{ _('Paid') }}</span>
+                                            {% if invoice.status == 'posted' %}<span class="badge bg-secondary">{{ _('Posted') }}</span>
+                                            {% elif invoice.status == 'paid' %}<span class="badge bg-success">{{ _('Paid') }}</span>
                                             {% elif invoice.status == 'partial' %}<span class="badge bg-warning">{{ _('Partial') }}</span>
                                             {% else %}<span class="badge bg-danger">{{ _('Unpaid') }}</span>{% endif %}
                                         </td>
@@ -254,6 +261,7 @@
                             opt.value = st.id;
                             opt.textContent = (st.label_ar || st.label_en || st.id);
                             opt.dataset.defaultVat = (st.default_vat === true || st.default_vat === '1') ? '1' : '0';
+                            opt.dataset.isWaste = (st.is_internal_adjustment === true && st.id === 'spoilage_waste') ? '1' : '0';
                             subTypeSelect.appendChild(opt);
                         });
                         expenseFormEl.style.display = 'none';
@@ -264,6 +272,22 @@
             .catch(e => console.error('Expense types load error', e));
     }
 
+    const paymentMethodWrap = document.querySelector('.col-md-4:has(#expense-payment-method)');
+    const paymentStatusWrap = document.querySelector('.col-md-4:has(#expense-status)');
+    const vatRowWrap = document.querySelector('.col-md-6.d-flex.align-items-end');
+    function toggleWasteUI(isWaste) {
+        if (paymentMethodWrap) paymentMethodWrap.style.display = isWaste ? 'none' : '';
+        if (paymentStatusWrap) paymentStatusWrap.style.display = isWaste ? 'none' : '';
+        if (vatRowWrap) vatRowWrap.style.display = isWaste ? 'none' : '';
+        const wasteHint = document.getElementById('expense-waste-hint');
+        if (wasteHint) wasteHint.style.display = isWaste ? 'block' : 'none';
+        if (isWaste) {
+            const pm = document.getElementById('expense-payment-method');
+            const st = document.getElementById('expense-status');
+            if (pm) pm.value = 'INTERNAL';
+            if (st) st.value = 'posted';
+        }
+    }
     if (subTypeSelect) {
         subTypeSelect.addEventListener('change', function() {
             const val = this.value;
@@ -272,13 +296,17 @@
             if (val) {
                 expenseFormEl.style.display = 'block';
                 const opt = this.selectedOptions[0];
-                if (opt && expenseVatCheck) {
+                const isWaste = opt && opt.dataset.isWaste === '1';
+                toggleWasteUI(isWaste);
+                if (opt && expenseVatCheck && !isWaste) {
                     const defaultVat = opt.dataset.defaultVat === '1';
                     expenseVatCheck.checked = defaultVat;
                     if (expenseVatHint) expenseVatHint.textContent = defaultVat ? '{{ _("VAT applied by default for this type") }}' : '';
                 }
+                if (isWaste && expenseVatCheck) expenseVatCheck.checked = false;
             } else {
                 expenseFormEl.style.display = 'none';
+                toggleWasteUI(false);
             }
         });
     }

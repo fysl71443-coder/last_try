@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 
 from app import db, csrf
-from models import Customer, SalesInvoice, Payment
+from models import Customer, SalesInvoice, Payment, Account, JournalEntry, JournalLine
 
 bp = Blueprint('customers', __name__)
 
@@ -224,38 +224,43 @@ def customers_receivables_statements():
 @bp.route('/customers/<int:cid>/statement', methods=['GET'], endpoint='customer_statement')
 @login_required
 def customer_statement(cid):
-    """كشف حساب عميل آجل: فواتير، مسدد، متبقي."""
+    """كشف حساب عميل آجل: فواتير ومسدد من القيود (1141) + جدول الدفعات القديم؛ كل تحصيلة في صف مع التوقيت الفعلي."""
     c = db.session.get(Customer, cid)
     if not c:
         flash('Customer not found', 'warning')
         return redirect(url_for('customers.customers'))
-    start = (request.args.get('start_date') or '').strip()
-    end = (request.args.get('end_date') or '').strip()
+    start_arg = (request.args.get('start_date') or '').strip()
+    end_arg = (request.args.get('end_date') or '').strip()
     try:
         from models import get_saudi_now
         today = get_saudi_now().date()
     except Exception:
         from datetime import date
         today = date.today()
-    if not start:
-        start = today.replace(day=1).isoformat()
-    if not end:
-        end = today.isoformat()
-    rows = []
-    invs = SalesInvoice.query.filter(
-        SalesInvoice.customer_id == cid,
-        SalesInvoice.date >= start,
-        SalesInvoice.date <= end
-    ).order_by(SalesInvoice.date.asc()).all()
-    inv_ids = [i.id for i in invs]
-    opening = 0.0
-    for inv in SalesInvoice.query.filter(SalesInvoice.customer_id == cid, SalesInvoice.date < start).all():
-        opening += float(inv.total_after_tax_discount or 0)
+    if not start_arg:
+        start_arg = today.replace(day=1).isoformat()
+    if not end_arg:
+        end_arg = today.isoformat()
     try:
-        from datetime import datetime
-        start_dt = datetime.strptime(start, '%Y-%m-%d').date()
+        from datetime import datetime as dt_parse
+        start_dt = dt_parse.strptime(start_arg, '%Y-%m-%d').date()
+        end_dt = dt_parse.strptime(end_arg, '%Y-%m-%d').date()
     except Exception:
         start_dt = today
+        end_dt = today
+    start = start_arg
+    end = end_arg
+
+    invs = SalesInvoice.query.filter(
+        SalesInvoice.customer_id == cid,
+        SalesInvoice.date >= start_dt,
+        SalesInvoice.date <= end_dt
+    ).order_by(SalesInvoice.date.asc()).all()
+    inv_ids = [int(i.id) for i in invs]
+
+    opening = 0.0
+    for inv in SalesInvoice.query.filter(SalesInvoice.customer_id == cid, SalesInvoice.date < start_dt).all():
+        opening += float(inv.total_after_tax_discount or 0)
     for p in Payment.query.filter(Payment.invoice_type == 'sales').join(SalesInvoice, Payment.invoice_id == SalesInvoice.id).filter(
         SalesInvoice.customer_id == cid
     ).all():
@@ -264,30 +269,163 @@ def customer_statement(cid):
         if pdate is None or pdate >= start_dt:
             continue
         opening -= float(p.amount_paid or 0)
+
+    acc_1141 = Account.query.filter_by(code='1141').first()
+    paid_per_inv = {}
+    for inv in invs:
+        paid = 0.0
+        if acc_1141:
+            s = db.session.query(func.coalesce(func.sum(JournalLine.credit), 0)).join(
+                JournalEntry, JournalLine.journal_id == JournalEntry.id
+            ).filter(
+                JournalLine.account_id == acc_1141.id,
+                JournalLine.invoice_id == inv.id,
+                JournalLine.invoice_type == 'sales',
+                JournalEntry.status == 'posted'
+            ).scalar() or 0
+            paid = round(float(s), 2)
+        if paid < 0.01:
+            leg = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                Payment.invoice_type == 'sales', Payment.invoice_id == inv.id
+            ).scalar() or 0
+            paid = round(float(leg), 2)
+        paid_per_inv[inv.id] = paid
+
+    if acc_1141:
+        unalloc = db.session.query(func.coalesce(func.sum(JournalLine.credit), 0)).join(
+            JournalEntry, JournalLine.journal_id == JournalEntry.id
+        ).filter(
+            JournalLine.account_id == acc_1141.id,
+            JournalLine.credit > 0,
+            JournalLine.invoice_id.is_(None),
+            JournalEntry.status == 'posted'
+        ).scalar() or 0
+        unalloc = round(float(unalloc), 2)
+        if unalloc >= 0.01:
+            for inv in sorted(invs, key=lambda i: (i.date or __import__('datetime').date(1900, 1, 1), i.id)):
+                if unalloc <= 0:
+                    break
+                tot = float(inv.total_after_tax_discount or 0)
+                already = paid_per_inv.get(inv.id, 0)
+                rem_inv = max(0.0, tot - already)
+                if rem_inv < 0.01:
+                    continue
+                alloc = min(unalloc, rem_inv)
+                paid_per_inv[inv.id] = already + alloc
+                unalloc -= alloc
+
+    from datetime import datetime
+    def _date_display(d):
+        if d is None:
+            return '-'
+        if isinstance(d, datetime) and (d.hour != 0 or d.minute != 0):
+            return d.strftime('%Y-%m-%d %H:%M')
+        return (d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)[:10])
+
+    rows = []
     total_invoices = 0.0
     total_paid = 0.0
     for inv in invs:
         amt = float(inv.total_after_tax_discount or 0.0)
-        rows.append({'date': str(inv.date or ''), 'ref': inv.invoice_number, 'desc': "فاتورة مبيعات", 'debit': amt, 'credit': 0.0, 'balance': None})
+        rows.append({
+            'date': str(inv.date or '')[:10],
+            'date_display': None,
+            'ref': inv.invoice_number,
+            'desc': 'فاتورة مبيعات',
+            'debit': amt,
+            'credit': 0.0,
+            'balance': None
+        })
         total_invoices += amt
-    pays = Payment.query.filter(Payment.invoice_type == 'sales', Payment.invoice_id.in_(inv_ids)).all() if inv_ids else []
-    for p in pays:
-        inv = SalesInvoice.query.get(p.invoice_id)
-        amt = float(p.amount_paid or 0.0)
-        pd = str(getattr(p, 'payment_date', None) or '')[:10]
-        if start <= pd <= end:
-            rows.append({'date': pd, 'ref': (inv.invoice_number if inv else ''), 'desc': "سداد", 'debit': 0.0, 'credit': amt, 'balance': None})
-            total_paid += amt
-    rows.sort(key=lambda x: (x['date'], x['debit'] > 0))
+
+    pay_rows = []
+    if acc_1141:
+        je_ids = []
+        if inv_ids:
+            je_ids = db.session.query(JournalEntry.id).join(
+                JournalLine, JournalLine.journal_id == JournalEntry.id
+            ).filter(
+                JournalLine.account_id == acc_1141.id,
+                JournalLine.invoice_id.in_(inv_ids),
+                JournalLine.invoice_type == 'sales',
+                JournalEntry.status == 'posted'
+            ).distinct().all()
+            je_ids = [r[0] for r in je_ids]
+        je_ids_legacy = db.session.query(JournalEntry.id).join(
+            JournalLine, JournalLine.journal_id == JournalEntry.id
+        ).filter(
+            JournalLine.account_id == acc_1141.id,
+            JournalLine.credit > 0,
+            JournalLine.invoice_id.is_(None),
+            JournalEntry.status == 'posted'
+        ).distinct().all()
+        je_ids_legacy = [r[0] for r in je_ids_legacy]
+        all_je_ids = list(set(je_ids) | set(je_ids_legacy))
+        if all_je_ids:
+            lines = db.session.query(JournalLine, JournalEntry).join(
+                JournalEntry, JournalLine.journal_id == JournalEntry.id
+            ).filter(
+                JournalLine.journal_id.in_(all_je_ids),
+                JournalLine.account_id == acc_1141.id,
+                JournalLine.credit > 0
+            ).order_by(JournalEntry.date.asc(), JournalEntry.id.asc(), JournalLine.id.asc()).all()
+            inv_by_id = {inv.id: inv for inv in invs}
+            for jl, je in lines:
+                dt = getattr(je, 'created_at', None) or getattr(je, 'date', None)
+                ref = ''
+                if getattr(jl, 'invoice_id', None):
+                    si = inv_by_id.get(jl.invoice_id) or SalesInvoice.query.get(jl.invoice_id)
+                    if si:
+                        ref = si.invoice_number or ''
+                pay_rows.append({
+                    'date': dt,
+                    'date_display': _date_display(dt),
+                    'ref': ref,
+                    'desc': 'سداد',
+                    'debit': 0.0,
+                    'credit': float(jl.credit or 0),
+                    'balance': None
+                })
+    if not pay_rows and inv_ids:
+        for p in Payment.query.filter(Payment.invoice_type == 'sales', Payment.invoice_id.in_(inv_ids)).order_by(Payment.payment_date.asc()).all():
+            inv = SalesInvoice.query.get(p.invoice_id)
+            pd = getattr(p, 'payment_date', None)
+            pdate = (pd.date() if hasattr(pd, 'date') else pd) if pd else None
+            pd_str = (pdate.strftime('%Y-%m-%d') if pdate and hasattr(pdate, 'strftime') else str(pd or '')[:10])
+            if start <= pd_str <= end:
+                pay_rows.append({
+                    'date': pd_str,
+                    'date_display': _date_display(pd) if pd else pd_str,
+                    'ref': (inv.invoice_number if inv else ''),
+                    'desc': 'سداد',
+                    'debit': 0.0,
+                    'credit': float(p.amount_paid or 0),
+                    'balance': None
+                })
+    for pr in pay_rows:
+        total_paid += pr['credit']
+        rows.append(pr)
+
+    def _row_sort_key(r):
+        d = r.get('date') or ''
+        if hasattr(d, 'strftime'):
+            d = d.strftime('%Y-%m-%d')
+        return (str(d)[:10], 0 if (r.get('debit') or 0) > 0 else 1)
+    rows.sort(key=_row_sort_key)
+
     bal = opening
     for r in rows:
         bal += (r['debit'] or 0) - (r['credit'] or 0)
         r['balance'] = round(bal, 2)
     remaining = max(0.0, bal)
+
+    for r in rows:
+        if r.get('date_display') is None and r.get('date'):
+            r['date_display'] = str(r['date'])[:10]
+
     try:
         generated_at = get_saudi_now().strftime('%Y-%m-%d %H:%M')
     except Exception:
-        from datetime import datetime
         generated_at = datetime.now().strftime('%Y-%m-%d %H:%M')
     customer_email = getattr(c, 'email', None) or None
     return render_template('customers/statement.html',

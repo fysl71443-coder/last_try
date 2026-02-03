@@ -5549,18 +5549,24 @@ def edit_expense_invoice(invoice_id):
 @app.route('/delete_expense_invoice/<int:invoice_id>', methods=['POST'])
 @login_required
 def delete_expense_invoice(invoice_id):
-    """Delete expense invoice"""
-    from models import ExpenseInvoice, ExpenseInvoiceItem
-    
+    """Delete expense invoice and linked journal (canonical: invoice_id + invoice_type)."""
+    from models import ExpenseInvoice, ExpenseInvoiceItem, JournalEntry, JournalLine
+
     try:
         invoice = ExpenseInvoice.query.get_or_404(invoice_id)
-        
+        # Delete linked journal by canonical link (rule: invoice delete → journal delete)
+        try:
+            je = JournalEntry.query.filter_by(invoice_id=invoice_id, invoice_type='expense').first()
+            if je:
+                JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
+                db.session.delete(je)
+        except Exception:
+            pass
         # Delete associated items first
         ExpenseInvoiceItem.query.filter_by(invoice_id=invoice_id).delete()
-        
         # Delete the invoice
         db.session.delete(invoice)
-        
+
         if safe_db_commit("expense invoice deletion"):
             flash(_('Expense invoice deleted successfully / تم حذف فاتورة المصروفات بنجاح'), 'success')
         else:

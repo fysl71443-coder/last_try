@@ -64,12 +64,17 @@
     <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
     <a href="{{ url_for('financials.income_statement') }}" class="btn btn-sm btn-outline-primary">{{ _('Income Statement') }}</a>
     <a href="{{ url_for('financials.balance_sheet') }}" class="btn btn-sm btn-outline-primary">{{ _('Balance sheet') }}</a>
-    <a target="_blank" href="{{ url_for('financials.print_trial_balance', date=data.date) }}" class="btn btn-sm btn-primary"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
-    <a target="_blank" href="{{ url_for('financials.export_trial_balance', date=data.date) }}" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-file-excel me-1"></i>{{ _('Export CSV') }}</a>
+    <a target="_blank" href="{{ url_for('financials.print_trial_balance', date=data.date, hide_zero=1 if data.hide_zero else 0) }}" class="btn btn-sm btn-primary"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+    <a target="_blank" href="{{ url_for('financials.export_trial_balance', date=data.date, hide_zero=1 if data.hide_zero else 0) }}" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-file-excel me-1"></i>{{ _('Export CSV') }}</a>
     <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
       <form method="get" class="d-flex flex-wrap align-items-center gap-2">
         <label class="mb-0 small text-muted">{{ _('As of date') }}</label>
         <input type="date" name="date" class="form-control form-control-sm" value="{{ data.date }}" style="max-width: 11rem;">
+        <label class="mb-0 small text-muted d-flex align-items-center gap-1">
+          <input type="checkbox" name="hide_zero" value="1" {% if data.hide_zero %}checked{% endif %} class="form-check-input">
+          إخفاء الحسابات الصفرية
+        </label>
+        <input type="hidden" name="hide_zero" value="0">
         <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-filter me-1"></i>{{ _('Show') }}</button>
       </form>
     </div>

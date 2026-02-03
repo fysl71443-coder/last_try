@@ -103,7 +103,7 @@
 
   {% set _all_zero = ( (data.revenue or 0)==0 and (data.cogs or 0)==0 and (data.operating_expenses or 0)==0 and (data.other_income or 0)==0 and (data.other_expenses or 0)==0 ) %}
   {% if _all_zero %}
-  <div class="alert alert-warning">{{ _('No data for the selected period.') }}</div>
+  <div class="alert alert-info">لا توجد قيود منشورة (إيراد/تكلفة/مصروف) في الفترة المحددة. التقرير يعتمد على القيود المنشورة فقط.</div>
   {% endif %}
 
   <!-- 2️⃣ ملخص تنفيذي: 4 بطاقات فقط -->

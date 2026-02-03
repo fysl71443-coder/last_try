@@ -853,9 +853,33 @@ class Account(db.Model):
     parent_account_code = db.Column(db.String(20), nullable=True, index=True)  # للحسابات الفرعية المُنشأة من الشاشة
     name_ar = db.Column(db.String(200), nullable=True)
     name_en = db.Column(db.String(200), nullable=True)
+    # إعدادات الاستخدام (Usage): متى وأين يُستخدم الحساب — لا يغيّر شجرة الحسابات
+    usage_group = db.Column(db.String(30), nullable=True, index=True)  # Cash, Bank, Supplier, Customer, Inventory, Expense
+    is_control = db.Column(db.Boolean, default=False, nullable=True)  # حساب تحكم (مثل 2111) — لا يُقيد عليه مباشرة
+    allow_posting = db.Column(db.Boolean, default=True, nullable=True)  # يسمح بالقيود المباشرة
 
     def __repr__(self):
         return f'<Account {self.code} {self.name}>'
+
+
+class AccountUsageMap(db.Model):
+    """ربط الاستخدام: في أي عملية (module/action) يُعرض أي حساب حسب usage_group. الوظيفة = Role (function_key/label)."""
+    __tablename__ = 'account_usage_map'
+    id = db.Column(db.Integer, primary_key=True)
+    module = db.Column(db.String(50), nullable=False, index=True)  # Payments, Purchases, Expenses, ...
+    action = db.Column(db.String(50), nullable=False, index=True)  # PayExpense, PaySupplier, ReceiveCash, ...
+    usage_group = db.Column(db.String(30), nullable=False, index=True)  # Cash, Bank, Supplier, Customer, ...
+    function_key = db.Column(db.String(50), nullable=True, index=True)  # MAIN_CASH, SUPPLIER_CTRL, ...
+    function_label_ar = db.Column(db.String(120), nullable=True)  # الصندوق الرئيسي، حساب الموردين (Control)
+    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=False, index=True)
+    is_default = db.Column(db.Boolean, default=False, nullable=True)
+    active = db.Column(db.Boolean, default=True, nullable=True)
+    locked = db.Column(db.Boolean, default=False, nullable=True)  # حساب نظامي لا يُحذف
+
+    account = db.relationship('Account', backref='usage_mappings')
+
+    def __repr__(self):
+        return f'<AccountUsageMap {self.module}/{self.action} {self.usage_group} {self.function_key} acc={self.account_id}>'
 
 class LedgerEntry(db.Model):
     __tablename__ = 'ledger_entries'
@@ -890,6 +914,7 @@ class JournalEntry(db.Model):
     invoice_id = db.Column(db.Integer, nullable=True, index=True)
     invoice_type = db.Column(db.String(20), nullable=True, index=True)
     salary_id = db.Column(db.Integer, nullable=True, index=True)
+    payment_method = db.Column(db.String(20), nullable=True)  # للقيود الناتجة عن سداد/تحصيل
 
     lines = db.relationship('JournalLine', backref='journal', cascade='all, delete-orphan', lazy=True)
 
@@ -910,6 +935,8 @@ class JournalLine(db.Model):
     attachment_path = db.Column(db.String(300), nullable=True)
     line_date = db.Column(db.Date, nullable=False)
     employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=True)
+    invoice_id = db.Column(db.Integer, nullable=True, index=True)  # ربط سطر القيد بفاتورة (سداد/تحصيل)
+    invoice_type = db.Column(db.String(20), nullable=True, index=True)  # purchase, expense, sales
 
     account = db.relationship('Account')
 

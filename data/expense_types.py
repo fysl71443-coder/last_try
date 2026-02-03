@@ -20,7 +20,7 @@ EXPENSE_CATEGORIES = [
         "sub_types": [
             {"id": "food_meat_veg_dairy", "label_ar": "مشتريات المواد الغذائية (لحوم، خضروات، ألبان)", "label_en": "Food (meat, vegetables, dairy)", "account_code": "5110", "liability_code": None, "default_vat": False},
             {"id": "beverages", "label_ar": "مشتريات المشروبات", "label_en": "Beverages", "account_code": "5120", "liability_code": None, "default_vat": False},
-            {"id": "spoilage_waste", "label_ar": "تكلفة الهدر والتالف", "label_en": "Spoilage & waste", "account_code": "5160", "liability_code": None, "default_vat": False},
+            {"id": "spoilage_waste", "label_ar": "تكلفة الهدر والتالف", "label_en": "Spoilage & waste", "account_code": "5160", "liability_code": None, "default_vat": False, "is_internal_adjustment": True, "source": "inventory_adjustment"},
             {"id": "packaging", "label_ar": "مواد تغليف", "label_en": "Packaging", "account_code": "5130", "liability_code": None, "default_vat": False},
             {"id": "cleaning_supplies", "label_ar": "مواد التنظيف", "label_en": "Cleaning supplies", "account_code": "5140", "liability_code": None, "default_vat": False},
         ],
@@ -172,6 +172,8 @@ def get_sub_type_by_ids(category_id, sub_type_id):
                     "account_code": st["account_code"],
                     "liability_code": st.get("liability_code"),
                     "default_vat": st.get("default_vat", cat.get("default_vat", False)),
+                    "is_internal_adjustment": st.get("is_internal_adjustment", False),
+                    "source": st.get("source"),
                 }
     return None
 

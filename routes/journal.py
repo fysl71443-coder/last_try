@@ -1,3 +1,6 @@
+# Immutable Accounting Backbone: POSTED journals cannot be modified or deleted directly.
+# Only reversing entries may adjust balances. Delete/revert rules: docs/IMMUTABLE_ACCOUNTING_RULES.md
+
 import os
 import json
 from datetime import datetime
@@ -100,6 +103,133 @@ def _can(screen, perm, branch_scope=None):
         return can_perm(screen, perm, branch_scope)
     except Exception:
         return False
+
+
+def delete_journal_entry_and_linked_invoice(je):
+    """
+    القاعدة: حذف القيد = حذف الفاتورة/العملية المرتبطة تلقائياً.
+    Deletes the given journal entry and, when linked (invoice_id/invoice_type or salary_id),
+    deletes ALL journal entries for that invoice/salary, then Payments, then the invoice/salary.
+    Does NOT commit — caller must commit.
+    """
+    from models import (
+        JournalLine, LedgerEntry, Payment,
+        SalesInvoice, SalesInvoiceItem, PurchaseInvoice, PurchaseInvoiceItem,
+        ExpenseInvoice, ExpenseInvoiceItem, Salary, JournalAudit,
+    )
+    itype = (getattr(je, 'invoice_type', None) or '').strip().lower()
+    iid = getattr(je, 'invoice_id', None)
+    sid = getattr(je, 'salary_id', None)
+
+    # Collect all JEs to remove: either all JEs for this invoice/salary, or just this one
+    if itype and iid:
+        try:
+            iid = int(iid)
+        except Exception:
+            iid = None
+    if sid is not None:
+        try:
+            sid = int(sid)
+        except Exception:
+            sid = None
+
+    if itype and iid is not None:
+        related = list(JournalEntry.query.filter(
+            JournalEntry.invoice_type == itype,
+            JournalEntry.invoice_id == iid,
+        ).all())
+    elif sid is not None:
+        related = list(JournalEntry.query.filter(JournalEntry.salary_id == sid).all())
+    else:
+        related = [je]
+
+    je_ids = [e.id for e in related]
+    entry_numbers = [e.entry_number for e in related]
+
+    # LedgerEntry by description (legacy)
+    for en in entry_numbers:
+        try:
+            LedgerEntry.query.filter(LedgerEntry.description.ilike(f"JE {en}%")).delete(synchronize_session=False)
+        except Exception:
+            try:
+                LedgerEntry.query.filter(LedgerEntry.description.ilike(f"%{en}%")).delete(synchronize_session=False)
+            except Exception:
+                pass
+
+    # Invoice/salary–specific LedgerEntry descriptions
+    if itype and iid is not None:
+        try:
+            if itype == 'sales':
+                inv = SalesInvoice.query.get(iid)
+                if inv:
+                    inv_num = getattr(inv, 'invoice_number', None)
+                    if inv_num:
+                        LedgerEntry.query.filter(LedgerEntry.description == f"Sales {inv_num}").delete(synchronize_session=False)
+                        LedgerEntry.query.filter(LedgerEntry.description == f"VAT Output {inv_num}").delete(synchronize_session=False)
+            elif itype == 'purchase':
+                inv = PurchaseInvoice.query.get(iid)
+                if inv:
+                    inv_num = getattr(inv, 'invoice_number', None)
+                    if inv_num:
+                        LedgerEntry.query.filter(LedgerEntry.description == f"Purchase {inv_num}").delete(synchronize_session=False)
+                        LedgerEntry.query.filter(LedgerEntry.description == f"VAT Input {inv_num}").delete(synchronize_session=False)
+                        LedgerEntry.query.filter(LedgerEntry.description == f"AP for {inv_num}").delete(synchronize_session=False)
+            elif itype == 'expense':
+                inv = ExpenseInvoice.query.get(iid)
+                if inv:
+                    inv_num = getattr(inv, 'invoice_number', None)
+                    if inv_num:
+                        LedgerEntry.query.filter(LedgerEntry.description == f"Expense {inv_num}").delete(synchronize_session=False)
+                        LedgerEntry.query.filter(LedgerEntry.description == f"VAT Input {inv_num}").delete(synchronize_session=False)
+                        LedgerEntry.query.filter(LedgerEntry.description == f"AP for {inv_num}").delete(synchronize_session=False)
+        except Exception:
+            pass
+    if sid is not None:
+        try:
+            sal = Salary.query.get(sid)
+            if sal:
+                emp_id = getattr(sal, 'employee_id', None)
+                yr = getattr(sal, 'year', None)
+                mo = getattr(sal, 'month', None)
+                if emp_id is not None and yr is not None and mo is not None:
+                    LedgerEntry.query.filter(LedgerEntry.description == f"PAY SAL {yr}-{mo} EMP {emp_id}").delete(synchronize_session=False)
+                    LedgerEntry.query.filter(LedgerEntry.description == f"ADV EMP {emp_id} {yr}-{mo}").delete(synchronize_session=False)
+        except Exception:
+            pass
+
+    # JournalAudit and JournalLine for all related JEs
+    for jid in je_ids:
+        JournalAudit.query.filter_by(journal_id=jid).delete(synchronize_session=False)
+        JournalLine.query.filter_by(journal_id=jid).delete(synchronize_session=False)
+
+    # Payments and invoice/salary
+    if itype and iid is not None:
+        Payment.query.filter(Payment.invoice_type == itype, Payment.invoice_id == iid).delete(synchronize_session=False)
+        if itype == 'sales':
+            SalesInvoiceItem.query.filter_by(invoice_id=iid).delete(synchronize_session=False)
+            inv = SalesInvoice.query.get(iid)
+            if inv:
+                db.session.delete(inv)
+        elif itype == 'purchase':
+            PurchaseInvoiceItem.query.filter_by(invoice_id=iid).delete(synchronize_session=False)
+            inv = PurchaseInvoice.query.get(iid)
+            if inv:
+                db.session.delete(inv)
+        elif itype == 'expense':
+            ExpenseInvoiceItem.query.filter_by(invoice_id=iid).delete(synchronize_session=False)
+            inv = ExpenseInvoice.query.get(iid)
+            if inv:
+                db.session.delete(inv)
+    if sid is not None:
+        Payment.query.filter(Payment.invoice_type == 'salary', Payment.invoice_id == sid).delete(synchronize_session=False)
+        sal = Salary.query.get(sid)
+        if sal:
+            db.session.delete(sal)
+
+    # Delete the journal entry/entries
+    for e in related:
+        db.session.delete(e)
+
 
 def _ensure_accounts():
     """التأكد من وجود جميع الحسابات من الشجرة الجديدة فقط."""
@@ -1115,80 +1245,9 @@ def delete_entry(jid):
     except Exception:
         pass
     try:
-        from models import JournalLine, LedgerEntry
-        JournalAudit.query.filter_by(journal_id=je.id).delete(synchronize_session=False)
-        try:
-            LedgerEntry.query.filter(LedgerEntry.description.ilike(f"JE {je.entry_number}%")).delete(synchronize_session=False)
-        except Exception:
-            try:
-                LedgerEntry.query.filter(LedgerEntry.description.ilike(f"%{je.entry_number}%")).delete(synchronize_session=False)
-            except Exception:
-                pass
-        try:
-            if getattr(je, 'invoice_type', None) and getattr(je, 'invoice_id', None):
-                inv_num = None
-                itype = (je.invoice_type or '').strip().lower()
-                if itype == 'sales':
-                    try:
-                        from models import SalesInvoice
-                        inv = SalesInvoice.query.get(int(je.invoice_id))
-                        inv_num = getattr(inv, 'invoice_number', None)
-                    except Exception:
-                        inv_num = None
-                    if inv_num:
-                        LedgerEntry.query.filter(LedgerEntry.description == f"Sales {inv_num}").delete(synchronize_session=False)
-                        LedgerEntry.query.filter(LedgerEntry.description == f"VAT Output {inv_num}").delete(synchronize_session=False)
-                elif itype == 'purchase':
-                    try:
-                        from models import PurchaseInvoice
-                        inv = PurchaseInvoice.query.get(int(je.invoice_id))
-                        inv_num = getattr(inv, 'invoice_number', None)
-                    except Exception:
-                        inv_num = None
-                    if inv_num:
-                        LedgerEntry.query.filter(LedgerEntry.description == f"Purchase {inv_num}").delete(synchronize_session=False)
-                        LedgerEntry.query.filter(LedgerEntry.description == f"VAT Input {inv_num}").delete(synchronize_session=False)
-                        LedgerEntry.query.filter(LedgerEntry.description == f"AP for {inv_num}").delete(synchronize_session=False)
-                elif itype == 'expense':
-                    try:
-                        from models import ExpenseInvoice
-                        inv = ExpenseInvoice.query.get(int(je.invoice_id))
-                        inv_num = getattr(inv, 'invoice_number', None)
-                    except Exception:
-                        inv_num = None
-                    if inv_num:
-                        LedgerEntry.query.filter(LedgerEntry.description == f"Expense {inv_num}").delete(synchronize_session=False)
-                        LedgerEntry.query.filter(LedgerEntry.description == f"VAT Input {inv_num}").delete(synchronize_session=False)
-                        LedgerEntry.query.filter(LedgerEntry.description == f"AP for {inv_num}").delete(synchronize_session=False)
-        except Exception:
-            pass
-        try:
-            if getattr(je, 'salary_id', None):
-                # Delete salary-related postings: payment and advance patterns
-                try:
-                    from models import Salary
-                    sal = Salary.query.get(int(je.salary_id))
-                except Exception:
-                    sal = None
-                if sal:
-                    try:
-                        emp_id = getattr(sal, 'employee_id', None)
-                        yr = getattr(sal, 'year', None)
-                        mo = getattr(sal, 'month', None)
-                        if emp_id and yr and mo:
-                            LedgerEntry.query.filter(LedgerEntry.description == f"PAY SAL {yr}-{mo} EMP {emp_id}").delete(synchronize_session=False)
-                            LedgerEntry.query.filter(LedgerEntry.description == f"ADV EMP {emp_id} {yr}-{mo}").delete(synchronize_session=False)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-        try:
-            JournalLine.query.filter_by(journal_id=je.id).delete(synchronize_session=False)
-        except Exception:
-            pass
-        db.session.delete(je)
+        delete_journal_entry_and_linked_invoice(je)
         db.session.commit()
-        flash('تم حذف القيد', 'success')
+        flash('تم حذف القيد والفاتورة/العملية المرتبطة', 'success')
     except Exception as e:
         try:
             db.session.rollback()
@@ -1258,11 +1317,12 @@ def entry_detail_json(jid):
                 op['party'] = 'موردون'
                 pm = (getattr(inv, 'payment_method', None) or '').strip().upper()
                 op['payment_method'] = 'بنك' if pm in ('BANK', 'CARD', 'VISA', 'MADA', 'TRANSFER') else 'نقداً'
+    from data.coa_new_tree import get_account_display_name
     lines = []
     for ln in sorted(je.lines or [], key=lambda x: (x.line_no or 0)):
         acc = ln.account
         code = (getattr(acc, 'code', None) or '')
-        name = (getattr(acc, 'name', None) or '')
+        name = get_account_display_name(code, getattr(acc, 'name', None))
         lines.append({'account_code': code, 'account_name': name, 'debit': float(ln.debit or 0), 'credit': float(ln.credit or 0)})
     return jsonify({
         'ok': True,
@@ -1384,9 +1444,9 @@ def employees_api():
 @bp.route('/accounts', methods=['GET'])
 @login_required
 def accounts_api():
-    """تُرجع فقط الحسابات من الشجرة الجديدة (الحسابات الورقية فقط)."""
+    """تُرجع فقط الحسابات من الشجرة الجديدة (الحسابات الورقية فقط)، مع اسم عرض محلّل (كود – اسم)."""
     try:
-        from data.coa_new_tree import leaf_coa_dict
+        from data.coa_new_tree import leaf_coa_dict, get_account_display_name
         from models import Account
         coa = leaf_coa_dict()
         # الحصول على الحسابات من DB التي تطابق الشجرة الجديدة
@@ -1400,16 +1460,20 @@ def accounts_api():
             # البحث في النتائج من DB
             db_row = next((r for r in rows if str(r[1]) == code), None)
             if db_row:
-                result.append({'id': db_row[0], 'code': str(db_row[1]), 'name': db_row[2]})
+                result.append({'id': db_row[0], 'code': str(db_row[1]), 'name': get_account_display_name(db_row[1], db_row[2])})
             else:
                 # استخدام بيانات الشجرة
                 info = coa.get(code, {})
                 result.append({'id': None, 'code': code, 'name': info.get('name', code)})
         return jsonify(result)
     except Exception as e:
-        # Fallback: استخدام DB فقط
+        # Fallback: استخدام DB فقط مع اسم عرض محلّل
+        try:
+            from data.coa_new_tree import get_account_display_name
+        except Exception:
+            get_account_display_name = lambda c, n: n or c
         rows = db.session.query(Account.id, Account.code, Account.name).order_by(Account.code.asc()).all()
-        return jsonify([{'id': rid, 'code': code, 'name': name} for (rid, code, name) in rows])
+        return jsonify([{'id': rid, 'code': code, 'name': get_account_display_name(code, name)} for (rid, code, name) in rows])
 
 @csrf.exempt
 @bp.route('/<int:jid>', methods=['GET','POST'])
@@ -1641,10 +1705,11 @@ def api_journals():
                     acc = getattr(ln,'account',None)
                     if acc_code and (getattr(acc,'code',None) or '') != acc_code:
                         continue
+                    code_val = getattr(acc,'code',None) or ''
                     d['lines'].append({
                         'line_no': int(getattr(ln,'line_no',0) or 0),
-                        'account_code': getattr(acc,'code',None),
-                        'account_name': getattr(acc,'name',None),
+                        'account_code': code_val,
+                        'account_name': get_account_display_name(code_val, getattr(acc,'name',None)),
                         'debit': float(getattr(ln,'debit',0) or 0),
                         'credit': float(getattr(ln,'credit',0) or 0),
                         'description': getattr(ln,'description',''),
@@ -1809,13 +1874,11 @@ def api_journals_delete():
         je = JournalEntry.query.filter(JournalEntry.entry_number == entry_no).first()
         if not je:
             return jsonify({'ok': False, 'error': 'not_found'}), 404
-        if (getattr(je, 'status', None) or '').strip().lower() == 'posted':
-            return jsonify({'ok': False, 'error': 'cannot_delete_posted', 'message': 'لا يمكن حذف قيد منشور. أرجِعْه لمسودة أولاً.'}), 400
-        try:
-            JournalLine.query.filter(JournalLine.journal_id == je.id).delete(synchronize_session=False)
-        except Exception:
-            pass
-        db.session.delete(je)
+        # القاعدة: حذف القيد = حذف الفاتورة/العملية المرتبطة. إذا القيد مرتبط بفاتورة/عملية يُسمح بحذفه حتى لو منشور.
+        has_linked = (getattr(je, 'invoice_id', None) is not None and (getattr(je, 'invoice_type', None) or '').strip()) or getattr(je, 'salary_id', None) is not None
+        if not has_linked and (getattr(je, 'status', None) or '').strip().lower() == 'posted':
+            return jsonify({'ok': False, 'error': 'cannot_delete_posted', 'message': 'لا يمكن حذف قيد منشور (يدوي). أرجِعْه لمسودة أولاً.'}), 400
+        delete_journal_entry_and_linked_invoice(je)
         db.session.commit()
         return jsonify({'ok': True})
     except Exception as e:

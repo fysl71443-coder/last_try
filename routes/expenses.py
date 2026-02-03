@@ -104,15 +104,21 @@ def expenses():
                 if not config:
                     flash('Invalid expense type', 'danger')
                     return redirect(url_for('expenses.expenses'))
+                is_waste = config.get('is_internal_adjustment') and expense_sub_type == 'spoilage_waste'
                 date_str = request.form.get('date') or get_saudi_now().date().isoformat()
-                pm = (request.form.get('payment_method') or 'CASH').strip().upper()
-                if pm not in ('CASH', 'BANK'):
-                    pm = 'CASH'
-                status_val = (request.form.get('status') or 'paid').strip().lower()
-                if status_val not in ('paid', 'partial', 'unpaid'):
-                    status_val = 'paid'
-                apply_vat = (str(request.form.get('apply_vat') or '').lower() in {'on', 'true', '1', 'yes'})
-                use_vat = apply_vat if apply_vat else config.get('default_vat', False)
+                if is_waste:
+                    pm = 'INTERNAL'
+                    status_val = 'posted'
+                    use_vat = False
+                else:
+                    pm = (request.form.get('payment_method') or 'CASH').strip().upper()
+                    if pm not in ('CASH', 'BANK'):
+                        pm = 'CASH'
+                    status_val = (request.form.get('status') or 'paid').strip().lower()
+                    if status_val not in ('paid', 'partial', 'unpaid'):
+                        status_val = 'paid'
+                    apply_vat = (str(request.form.get('apply_vat') or '').lower() in {'on', 'true', '1', 'yes'})
+                    use_vat = apply_vat if apply_vat else config.get('default_vat', False)
                 desc = (request.form.get('description') or request.form.get('expense_description') or '').strip() or 'Expense'
                 total_before = float(amt)
                 tax_amt = (total_before * 0.15) if use_vat else 0.0
@@ -156,10 +162,10 @@ def expenses():
                     total_price=Decimal(str(total_inc_tax)),
                 )
                 db.session.add(item)
-                if status_val == 'paid' and total_inc_tax > 0:
+                if not is_waste and status_val == 'paid' and total_inc_tax > 0:
                     db.session.add(Payment(invoice_id=inv.id, invoice_type='expense', amount_paid=float(total_inc_tax), payment_method=pm))
                 _create_expense_journal(inv)
-                if status_val == 'paid' and total_inc_tax > 0:
+                if not is_waste and status_val != 'paid' and total_inc_tax > 0:
                     try:
                         _create_expense_payment_journal(inv.date, float(total_inc_tax), inv.invoice_number, pm or 'CASH', getattr(inv, 'liability_account_code', None))
                     except Exception:
@@ -303,7 +309,7 @@ def expenses():
             if pay_amt > 0.0:
                 db.session.add(Payment(invoice_id=inv.id, invoice_type='expense', amount_paid=pay_amt, payment_method=pm))
             _create_expense_journal(inv)
-            if pay_amt > 0.0:
+            if pay_amt > 0.0 and status_val != 'paid':
                 try:
                     _create_expense_payment_journal(inv.date, pay_amt, inv.invoice_number, pm or 'CASH')
                 except Exception:

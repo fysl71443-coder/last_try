@@ -4,6 +4,7 @@ import json
 from contextlib import contextmanager
 
 # Ensure test database (in-memory) and testing mode
+# ⚠️ :memory: للتجربة فقط – بيانات مؤقتة وتُمسح عند الإغلاق. لا تستخدم في الإنتاج.
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 os.environ.setdefault('SECRET_KEY', 'dev')
 

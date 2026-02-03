@@ -118,7 +118,7 @@
         <tbody>
           {% for r in rows %}
           <tr>
-            <td>{{ r.date }}</td>
+            <td>{{ r.date_display if r.date_display else r.date }}</td>
             <td>{{ r.ref }}</td>
             <td>{{ r.desc }}</td>
             <td class="text-end mono">{{ '%.2f'|format(r.debit or 0) }}</td>

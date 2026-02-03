@@ -284,8 +284,8 @@ def suppliers_payments_statements():
 @bp.route('/suppliers/<int:sid>/statement', methods=['GET'], endpoint='supplier_statement_id')
 @login_required
 def supplier_statement(sid=None):
-    """كشف حساب مورد بتفاصيل الفواتير والمدفوعات."""
-    from models import PurchaseInvoice, Payment
+    """كشف حساب مورد — المدفوع والدفعات من القيود المنشورة (مصدر الحقيقة). إن لم يُربط القيد بفاتورة يُستكمل من جدول الدفعات للتوافق مع القيود القديمة."""
+    from models import PurchaseInvoice, Account, JournalEntry, JournalLine, Payment
     from sqlalchemy import func
 
     if sid is None:
@@ -314,12 +314,57 @@ def supplier_statement(sid=None):
         PurchaseInvoice.date <= end_date
     ).order_by(PurchaseInvoice.date.asc(), PurchaseInvoice.invoice_number.asc()).all()
 
+    acc_2111 = Account.query.filter_by(code='2111').first()
+    # المدفوع من القيود المرتبطة بفاتورة + استكمال من Payment للقديم
+    paid_per_inv = {}
+    for inv in invs:
+        paid = 0.0
+        if acc_2111:
+            s = db.session.query(func.coalesce(func.sum(JournalLine.debit), 0)).join(
+                JournalEntry, JournalLine.journal_id == JournalEntry.id
+            ).filter(
+                JournalLine.account_id == acc_2111.id,
+                JournalLine.invoice_id == inv.id,
+                JournalLine.invoice_type == 'purchase',
+                JournalEntry.status == 'posted'
+            ).scalar() or 0
+            paid = round(float(s), 2)
+        if paid < 0.01:
+            leg = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                Payment.invoice_type == 'purchase', Payment.invoice_id == inv.id
+            ).scalar() or 0
+            paid = round(float(leg), 2)
+        paid_per_inv[inv.id] = paid
+
+    # تخصيص مدفوعات القيود القديمة (سطر 2111 مدين بدون invoice_id) للفواتير FIFO
+    if acc_2111:
+        unalloc = db.session.query(func.coalesce(func.sum(JournalLine.debit), 0)).join(
+            JournalEntry, JournalLine.journal_id == JournalEntry.id
+        ).filter(
+            JournalLine.account_id == acc_2111.id,
+            JournalLine.debit > 0,
+            JournalLine.invoice_id.is_(None),
+            JournalEntry.status == 'posted'
+        ).scalar() or 0
+        unalloc = round(float(unalloc), 2)
+        if unalloc >= 0.01:
+            for inv in sorted(invs, key=lambda i: (i.date or __import__('datetime').date(1900, 1, 1), i.id)):
+                if unalloc <= 0:
+                    break
+                tot = float(inv.total_after_tax_discount or 0)
+                already = paid_per_inv.get(inv.id, 0)
+                rem_inv = max(0.0, tot - already)
+                if rem_inv < 0.01:
+                    continue
+                alloc = min(unalloc, rem_inv)
+                paid_per_inv[inv.id] = already + alloc
+                unalloc -= alloc
+
     invoices_ctx = []
     total_inv = 0.0
     total_paid = 0.0
     for inv in invs:
-        paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0))
-            .filter(Payment.invoice_type == 'purchase', Payment.invoice_id == inv.id).scalar() or 0)
+        paid = paid_per_inv.get(inv.id, 0)
         tot = float(inv.total_after_tax_discount or 0)
         rem = max(0.0, tot - paid)
         total_inv += tot
@@ -334,15 +379,66 @@ def supplier_statement(sid=None):
         })
 
     inv_ids = [int(inv.id) for inv in invs]
-    if inv_ids:
-        pay_rows = db.session.query(Payment.payment_date, Payment.amount_paid, Payment.payment_method).filter(
+    # قائمة الدفعات: كل دفعة (سطر قيد) منفصلة — من القيود المنشورة (سطور 2111 مرتبطة بفاتورة) + قيود 2111 مدين بدون invoice_id (قديمة)
+    pay_rows = []
+    if acc_2111:
+        je_ids = []
+        if inv_ids:
+            je_ids = db.session.query(JournalEntry.id).join(
+                JournalLine, JournalLine.journal_id == JournalEntry.id
+            ).filter(
+                JournalLine.account_id == acc_2111.id,
+                JournalLine.invoice_id.in_(inv_ids),
+                JournalLine.invoice_type == 'purchase',
+                JournalEntry.status == 'posted'
+            ).distinct().all()
+            je_ids = [r[0] for r in je_ids]
+        # قيود سداد قديمة: سطر 2111 مدين بدون invoice_id — ندمجها مع الجديدة لظهور كل الدفعات
+        je_ids_legacy = db.session.query(JournalEntry.id).join(
+            JournalLine, JournalLine.journal_id == JournalEntry.id
+        ).filter(
+            JournalLine.account_id == acc_2111.id,
+            JournalLine.debit > 0,
+            JournalLine.invoice_id.is_(None),
+            JournalEntry.status == 'posted'
+        ).distinct().all()
+        je_ids_legacy = [r[0] for r in je_ids_legacy]
+        all_je_ids = list(set(je_ids) | set(je_ids_legacy))
+        if all_je_ids:
+            # صف واحد لكل سطر قيد (دفعة) مع التوقيت الفعلي إن وُجد
+            lines = db.session.query(JournalLine, JournalEntry).join(
+                JournalEntry, JournalLine.journal_id == JournalEntry.id
+            ).filter(
+                JournalLine.journal_id.in_(all_je_ids),
+                JournalLine.account_id == acc_2111.id,
+                JournalLine.debit > 0
+            ).order_by(JournalEntry.date.asc(), JournalEntry.id.asc(), JournalLine.id.asc()).all()
+            for jl, je in lines:
+                dt = getattr(je, 'created_at', None) or getattr(je, 'date', None)
+                pay_rows.append((
+                    dt,
+                    float(jl.debit or 0),
+                    getattr(je, 'payment_method', None) or ''
+                ))
+    # استكمال من جدول الدفعات للقيود القديمة
+    if not pay_rows and inv_ids:
+        leg_pays = db.session.query(Payment.payment_date, Payment.amount_paid, Payment.payment_method).filter(
             Payment.invoice_type == 'purchase',
             Payment.invoice_id.in_(inv_ids)
         ).order_by(Payment.payment_date.asc()).all()
-    else:
-        pay_rows = []
+        pay_rows = [(r[0], float(r[1] or 0), r[2] or '') for r in leg_pays]
 
-    payments_ctx = [{'date': r[0], 'amount': float(r[1] or 0), 'method': r[2] or ''} for r in pay_rows]
+    from datetime import datetime
+    def _payment_date_display(d):
+        if d is None:
+            return '-'
+        if isinstance(d, datetime) and (d.hour != 0 or d.minute != 0):
+            return d.strftime('%Y-%m-%d %H:%M')
+        return d.strftime('%Y-%m-%d')
+    payments_ctx = [
+        {'date': r[0], 'date_display': _payment_date_display(r[0]), 'amount': round(r[1], 2), 'method': r[2] or ''}
+        for r in pay_rows
+    ]
 
     return render_template('supplier_statement.html',
         supplier=supplier,

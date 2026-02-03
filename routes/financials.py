@@ -1,10 +1,25 @@
+# ---------------------------------------------------------------------------
+# SINGLE SOURCE OF TRUTH (المبدأ الذهبي) — Immutable Accounting Backbone
+# ---------------------------------------------------------------------------
+# If it's not posted, it does not exist.
+# المصدر الوحيد للحقيقة = قيود اليومية المنشورة (Journal Entries, status = POSTED).
+# شجرة الحسابات، الفواتير، المصروفات، العمليات = مصادر إدخال فقط.
+# التقارير (Trial Balance, Income Statement, Balance Sheet) تُبنى فقط من:
+#   journal_entries (status='posted') + journal_lines + accounts
+# لا اعتماد على أي جدول آخر للأرقام المالية. أي رقم لا يُشتق من القيود المنشورة = مرفوض.
+# Full rules: docs/IMMUTABLE_ACCOUNTING_RULES.md (no exceptions).
+# ---------------------------------------------------------------------------
+
+import logging
 from flask import Blueprint, render_template, request, jsonify
 from datetime import datetime, timedelta
 from models import get_saudi_now
-from sqlalchemy import func, or_, and_
+
+logger = logging.getLogger(__name__)
+from sqlalchemy import func, or_, and_, text
 from extensions import db
 from sqlalchemy.exc import IntegrityError
-from models import Account, JournalEntry, JournalLine, SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, LedgerEntry, Settings, Employee
+from models import Account, AccountUsageMap, JournalEntry, JournalLine, SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, LedgerEntry, Settings, Employee
 
 bp = Blueprint('financials', __name__, url_prefix='/financials')
 
@@ -283,21 +298,67 @@ def period_range(kind: str):
     return today.replace(day=1), today
 
 
-# P&L account groups (COA-aligned)
-_COGS_CODES = ['5110', '5120', '5130', '5140', '5150']
+# P&L: قوائم رموز (للتوافق مع التفاصيل الاختيارية). التقرير يعتمد على نوع الحساب (type) من القيود المنشورة فقط.
+_COGS_CODES = ['5110', '5120', '5130', '5140', '5150', '5160']
 _OPEX_CODES = [
-    '5210', '5220', '5230', '5240', '5250', '5260', '5270', '5280',
+    '5210', '5215', '5220', '5230', '5240', '5250', '5260', '5270', '5280',
     '5310', '5320', '5330', '5340', '5350', '5360',
     '5410', '5420', '5430', '5440', '5450', '5460', '5470',
-    '5510', '5520', '5530', '5540', '5610', '5620', '5630',
+    '5510', '5520', '5530', '5540', '5550', '5610', '5620', '5630',
 ]
 _OTHER_EXP_CODES = ['5710', '5720', '5730', '5810', '5820']
 _REV_OP_CODES = ['4111', '4112', '4120']
 _OTHER_REV_CODES = ['4210', '4211', '4212', '4310']
 
 
+def _jl_sum_by_type(account_types, debit_minus_credit, start_date, end_date, branch):
+    """مجموع من القيود المنشورة فقط حسب نوع الحساب (REVENUE, COGS, EXPENSE). لا اعتماد على رموز ثابتة."""
+    if not account_types:
+        return 0.0
+    sign = (JournalLine.debit - JournalLine.credit) if debit_minus_credit else (JournalLine.credit - JournalLine.debit)
+    q = (
+        db.session.query(func.coalesce(func.sum(sign), 0))
+        .join(Account, JournalLine.account_id == Account.id)
+        .join(JournalEntry, JournalLine.journal_id == JournalEntry.id)
+        .filter(
+            Account.type.in_(account_types),
+            JournalLine.line_date.between(start_date, end_date),
+            JournalEntry.status == 'posted',
+        )
+    )
+    if branch and branch != 'all' and branch in ('china_town', 'place_india'):
+        q = q.filter(JournalEntry.branch_code == branch)
+    return float(q.scalar() or 0)
+
+
+def _jl_detail_by_type(account_types, debit_minus_credit, start_date, end_date, branch):
+    """تفصيل حسب نوع الحساب (للعرض في التقرير). قيود منشورة فقط."""
+    if not account_types:
+        return []
+    sign = (JournalLine.debit - JournalLine.credit) if debit_minus_credit else (JournalLine.credit - JournalLine.debit)
+    q = (
+        db.session.query(
+            Account.code,
+            Account.name,
+            func.coalesce(func.sum(sign), 0).label('amt'),
+        )
+        .join(Account, JournalLine.account_id == Account.id)
+        .join(JournalEntry, JournalLine.journal_id == JournalEntry.id)
+        .filter(
+            Account.type.in_(account_types),
+            JournalLine.line_date.between(start_date, end_date),
+            JournalEntry.status == 'posted',
+        )
+        .group_by(Account.id)
+    )
+    if branch and branch != 'all' and branch in ('china_town', 'place_india'):
+        q = q.filter(JournalEntry.branch_code == branch)
+    rows = q.all()
+    return [(r.code, r.name or '', float(r.amt or 0)) for r in rows if abs(float(r.amt or 0)) >= 0.005]
+
+
 def _jl_sum_codes(codes, credit_minus_debit, start_date, end_date, branch):
-    """Sum JournalLine by account codes (posted only). credit_minus_debit=True for revenue."""
+    """Sum JournalLine by account codes. POSTED entries only (Single Source of Truth). credit_minus_debit=True for revenue."""
     q = db.session.query(
         func.coalesce(
             func.sum(JournalLine.credit - JournalLine.debit if credit_minus_debit else JournalLine.debit - JournalLine.credit),
@@ -353,13 +414,24 @@ def income_statement():
     except Exception:
         pass
 
-    # ---------- P&L from journals (COA-based), branch-aware ----------
-    rev_op = _jl_sum_codes(_REV_OP_CODES, True, start_date, end_date, branch)
-    other_rev = _jl_sum_codes(_OTHER_REV_CODES, True, start_date, end_date, branch)
-    revenue_total = rev_op + other_rev
+    # ---------- P&L from POSTED journals only. By Account.type (لا اعتماد على رموز ثابتة). ----------
+    revenue_total = _jl_sum_by_type(['REVENUE', 'OTHER_INCOME'], False, start_date, end_date, branch)
+    cogs_raw = _jl_sum_by_type(['COGS'], True, start_date, end_date, branch)
+    opex_raw = _jl_sum_by_type(['EXPENSE'], True, start_date, end_date, branch)
+    # عرض تكلفة المبيعات والمصروفات موجبة (مدين)، والطرح في المعادلة: Gross = Revenue - COGS, Operating = Gross - OPEX
+    cogs_total = abs(cogs_raw)
+    opex_total = abs(opex_raw)
+    other_rev = 0.0
+    other_exp_raw = 0.0
+    other_exp = 0.0
 
-    cogs_j = _jl_sum_codes(_COGS_CODES, False, start_date, end_date, branch)
-    cogs_lines = _jl_sum_by_code(_COGS_CODES, False, start_date, end_date, branch)
+    rev_detail = _jl_detail_by_type(['REVENUE', 'OTHER_INCOME'], False, start_date, end_date, branch)
+    cogs_lines = [(code, name, abs(amt)) for code, name, amt in _jl_detail_by_type(['COGS'], True, start_date, end_date, branch)]
+    opex_lines = [(code, name, abs(amt)) for code, name, amt in _jl_detail_by_type(['EXPENSE'], True, start_date, end_date, branch)]
+    other_rev_lines = []
+    other_exp_lines = []
+
+    cogs_j = cogs_raw
 
     def inv_balance(code, end_dt):
         q = db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0)).join(
@@ -390,13 +462,7 @@ def income_statement():
     waste_amt = 0.0
 
     cogs_computed = max(0.0, opening_inv + purchases_amt - closing_inv) + max(0.0, waste_amt)
-    cogs = cogs_computed if cogs_computed > 0 else cogs_j
-    cogs_total = cogs
-
-    opex_total = _jl_sum_codes(_OPEX_CODES, False, start_date, end_date, branch)
-    opex_lines = _jl_sum_by_code(_OPEX_CODES, False, start_date, end_date, branch)
-
-    other_exp = _jl_sum_codes(_OTHER_EXP_CODES, False, start_date, end_date, branch)
+    # Single Source of Truth: P&L uses journal only. cogs_total/opex_total = |مجموع القيود| (موجب للعرض والطرح).
 
     gross_profit = revenue_total - cogs_total
     operating_profit = gross_profit - opex_total
@@ -429,28 +495,10 @@ def income_statement():
         ).scalar() or 0
         vat_out = float(voq)
         vat_in = float(viq)
-    if vat_out == 0 or vat_in == 0:
-        try:
-            qs = db.session.query(func.coalesce(func.sum(SalesInvoice.tax_amount), 0)).filter(
-                SalesInvoice.date.between(start_date, end_date)
-            )
-            qp = db.session.query(func.coalesce(func.sum(PurchaseInvoice.tax_amount), 0)).filter(
-                PurchaseInvoice.date.between(start_date, end_date)
-            )
-            if branch in ('china_town', 'place_india'):
-                qs = qs.filter(SalesInvoice.branch == branch)
-                qp = qp.filter(PurchaseInvoice.branch == branch)
-            vat_out = vat_out or float(qs.scalar() or 0)
-            vat_in = vat_in or float(qp.scalar() or 0)
-        except Exception:
-            pass
+    # Single Source of Truth: VAT from journal only. No fallback to SalesInvoice/PurchaseInvoice.
     vat_net = vat_out - vat_in
     tax = max(vat_net, 0.0)
     net_profit_after_tax = net_before_other - tax
-
-    rev_detail = _jl_sum_by_code(_REV_OP_CODES, True, start_date, end_date, branch)
-    other_rev_lines = _jl_sum_by_code(_OTHER_REV_CODES, True, start_date, end_date, branch)
-    other_exp_lines = _jl_sum_by_code(_OTHER_EXP_CODES, False, start_date, end_date, branch)
 
     cogs_breakdown = {
         'opening': opening_inv,
@@ -459,7 +507,7 @@ def income_statement():
         'waste': waste_amt,
         'computed': cogs_computed,
         'journal': cogs_j,
-        'used': 'computed' if cogs == cogs_computed else 'journal',
+        'used': 'journal',
     }
 
     branch_totals = {}
@@ -571,6 +619,8 @@ _BS_NONCURRENT_ASSET_PREFIX = ('12',)  # 1200+
 _BS_CURRENT_LIAB_PREFIX = ('21',)  # 2100–2160
 _BS_NONCURRENT_LIAB_PREFIX = ('22',)  # 2200+
 _BS_EXCLUDE_CODES = frozenset({'0006', '1000', '2000', '3000'})  # نظامية وجذور – لا تعرض في التفاصيل
+# حسابات تُعرض في الميزانية حتى برصيد صفر (هيكل التقرير: موردين، رواتب، أرباح مرحلة)
+_BS_ALWAYS_SHOW_CODES = frozenset({'2111', '2113', '2114', '2121', '3210', '3220'})
 
 
 def _is_current_asset(code):
@@ -592,6 +642,8 @@ def _bs_show_in_detail(row):
     code = (row.get('code') or '').strip()
     if code in _BS_EXCLUDE_CODES:
         return False
+    if code in _BS_ALWAYS_SHOW_CODES:
+        return True
     return _bs_has_movement(row)
 
 
@@ -603,14 +655,28 @@ def _tb_has_movement(d, c):
     return abs(float(d or 0)) > 1e-9 or abs(float(c or 0)) > 1e-9
 
 
-def _tb_show(row, exclude=None):
+def _tb_balance(row):
+    """الرصيد المحاسبي للحساب: مدين-دائن للأصول/المصروفات، دائن-مدين للالتزامات/حقوق الملكية."""
+    d = float(getattr(row, 'debit', 0) or 0)
+    c = float(getattr(row, 'credit', 0) or 0)
+    t = (getattr(row, 'type', None) or '').upper()
+    if t in ('LIABILITY', 'EQUITY'):
+        return c - d
+    return d - c
+
+
+def _tb_show(row, exclude=None, hide_zero_balance=False):
     code = (getattr(row, 'code', None) or '').strip()
     ex = exclude or _TB_EXCLUDE_CODES
     if code in ex:
         return False
     d = getattr(row, 'debit', None)
     c = getattr(row, 'credit', None)
-    return _tb_has_movement(d, c)
+    if not _tb_has_movement(d, c):
+        return False
+    if hide_zero_balance and abs(_tb_balance(row)) < 0.005:
+        return False
+    return True
 
 
 @bp.route('/balance_sheet')
@@ -636,6 +702,8 @@ def balance_sheet():
         .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted')))
         .filter(Account.code.in_(new_codes))
     )
+    if branch and branch != 'all' and branch in ('china_town', 'place_india'):
+        q = q.filter(or_(JournalEntry.id.is_(None), JournalEntry.branch_code == branch))
     rows = q.group_by(Account.id).order_by(Account.type.asc(), Account.code.asc()).all()
     current_assets = 0.0
     noncurrent_assets = 0.0
@@ -758,7 +826,8 @@ def trial_balance():
      .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted'))) \
      .filter(Account.code.in_(new_codes))
     raw = q.group_by(Account.id).order_by(Account.type.asc(), Account.code.asc()).all()
-    rows = [r for r in raw if _tb_show(r)]
+    hide_zero = (request.args.get('hide_zero') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
+    rows = [r for r in raw if _tb_show(r, hide_zero_balance=hide_zero)]
 
     total_debit = float(sum([float(r.debit or 0) for r in rows]))
     total_credit = float(sum([float(r.credit or 0) for r in rows]))
@@ -770,8 +839,9 @@ def trial_balance():
         type_totals[t]['debit'] += float(r.debit or 0)
         type_totals[t]['credit'] += float(r.credit or 0)
 
+    from data.coa_new_tree import get_account_display_name
     def _row_dict(r):
-        return {'code': r.code, 'name': r.name, 'debit': float(r.debit or 0), 'credit': float(r.credit or 0)}
+        return {'code': r.code, 'name': get_account_display_name(r.code, r.name), 'debit': float(r.debit or 0), 'credit': float(r.credit or 0)}
 
     tb_groups = []
     order = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE', 'COGS', 'TAX']
@@ -833,6 +903,7 @@ def trial_balance():
         'type_totals': type_totals,
         'tb_groups': tb_groups,
         'order': order,
+        'hide_zero': hide_zero,
     }
     if request.args.get('embed'):
         return render_template('financials/trial_balance_embed.html', data=tb_data)
@@ -847,10 +918,12 @@ def print_trial_balance():
         asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
     except Exception:
         asof = today
+    hide_zero = (request.args.get('hide_zero') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
     new_codes = _new_coa_codes()
     q = db.session.query(
         Account.code.label('code'),
         Account.name.label('name'),
+        Account.type.label('type'),
         func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
         func.coalesce(func.sum(JournalLine.credit), 0).label('credit'),
     ).join(JournalLine, JournalLine.account_id == Account.id) \
@@ -859,6 +932,7 @@ def print_trial_balance():
      .filter(Account.code.in_(new_codes))
     rows = q.group_by(Account.id).order_by(Account.code.asc()).all()
 
+    from data.coa_new_tree import get_account_display_name
     columns = ["Code", "Account", "Debit", "Credit"]
     data = []
     total_debit = 0.0
@@ -866,11 +940,13 @@ def print_trial_balance():
     for r in rows:
         d = float(r.debit or 0)
         c = float(r.credit or 0)
+        if hide_zero and abs(_tb_balance(r)) < 0.005:
+            continue
         total_debit += d
         total_credit += c
         data.append({
             "Code": r.code,
-            "Account": r.name,
+            "Account": get_account_display_name(r.code, r.name),
             "Debit": d,
             "Credit": c
         })
@@ -904,36 +980,37 @@ def print_income_statement():
         except Exception:
             pass
 
-    # Reuse the same aggregation logic as view
+    # Single Source of Truth: POSTED journal entries only. No fallback to invoices.
     def sum_revenue():
         return float(db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0))
             .join(Account, JournalLine.account_id == Account.id)
+            .join(JournalEntry, JournalLine.journal_id == JournalEntry.id)
             .filter(Account.type.in_(['REVENUE', 'OTHER_INCOME']))
             .filter(JournalLine.line_date.between(start_date, end_date))
+            .filter(JournalEntry.status == 'posted')
             .scalar() or 0)
 
     def sum_expense(types):
         return float(db.session.query(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
             .join(Account, JournalLine.account_id == Account.id)
+            .join(JournalEntry, JournalLine.journal_id == JournalEntry.id)
             .filter(Account.type.in_(types))
             .filter(JournalLine.line_date.between(start_date, end_date))
+            .filter(JournalEntry.status == 'posted')
             .scalar() or 0)
 
     revenue = sum_revenue()
-    cogs = sum_expense(['COGS'])
-    operating_expenses = sum_expense(['EXPENSE'])
+    cogs_raw = sum_expense(['COGS'])
+    operating_expenses_raw = sum_expense(['EXPENSE'])
     other_income = 0.0
-    other_expenses = sum_expense(['OTHER_EXPENSE'])
-    tax = sum_expense(['TAX'])
-
-    if revenue == 0 and cogs == 0 and operating_expenses == 0 and other_income == 0 and other_expenses == 0 and tax == 0:
-        revenue = float(db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0))
-            .filter(SalesInvoice.date.between(start_date, end_date)).scalar() or 0)
-        cogs = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_before_tax), 0))
-            .filter(PurchaseInvoice.date.between(start_date, end_date)).scalar() or 0)
-        operating_expenses = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_before_tax), 0))
-            .filter(ExpenseInvoice.date.between(start_date, end_date)).scalar() or 0)
-        tax = 0.0
+    other_expenses_raw = sum_expense(['OTHER_EXPENSE'])
+    tax_raw = sum_expense(['TAX'])
+    # عرض تكلفة المبيعات والمصروفات موجبة (مدين)، والطرح في المعادلة.
+    cogs = abs(cogs_raw)
+    operating_expenses = abs(operating_expenses_raw)
+    other_expenses = abs(other_expenses_raw)
+    tax = abs(tax_raw)
+    # No fallback to SalesInvoice/PurchaseInvoice/ExpenseInvoice. If journal says 0, report shows 0 (or loss).
 
     gross_profit = revenue - cogs
     operating_profit = gross_profit - operating_expenses
@@ -977,10 +1054,12 @@ def export_trial_balance():
         asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
     except Exception:
         asof = today
+    hide_zero = (request.args.get('hide_zero') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
     new_codes = _new_coa_codes()
     q = db.session.query(
         Account.code.label('code'),
         Account.name.label('name'),
+        Account.type.label('type'),
         func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
         func.coalesce(func.sum(JournalLine.credit), 0).label('credit'),
     ).outerjoin(JournalLine, JournalLine.account_id == Account.id) \
@@ -988,6 +1067,7 @@ def export_trial_balance():
      .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted'))) \
      .filter(Account.code.in_(new_codes))
     rows = q.group_by(Account.id).order_by(Account.code.asc()).all()
+    from data.coa_new_tree import get_account_display_name
     import csv
     from io import StringIO
     buf = StringIO()
@@ -995,9 +1075,11 @@ def export_trial_balance():
     w.writerow(['Code','Account','Debit','Credit'])
     td = 0.0; tc = 0.0
     for r in rows:
+        if hide_zero and abs(_tb_balance(r)) < 0.005:
+            continue
         d = float(r.debit or 0); c = float(r.credit or 0);
         td += d; tc += c
-        w.writerow([r.code, r.name, f"{d:.2f}", f"{c:.2f}"])
+        w.writerow([r.code, get_account_display_name(r.code, r.name), f"{d:.2f}", f"{c:.2f}"])
     w.writerow(['TOTAL','','{:.2f}'.format(td), '{:.2f}'.format(tc)])
     from flask import Response
     return Response(buf.getvalue(), mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename=trial_balance_{asof}.csv'})
@@ -1026,7 +1108,12 @@ def export_income_statement():
             .join(JournalEntry, JournalLine.journal_id == JournalEntry.id)
             .filter(Account.type.in_(types), JournalLine.line_date.between(start_date, end_date), JournalEntry.status == 'posted')
             .scalar() or 0)
-    revenue = sum_revenue(); cogs = sum_expense(['COGS']); operating_expenses = sum_expense(['EXPENSE']); other_income = 0.0; other_expenses = sum_expense(['OTHER_EXPENSE']); tax = sum_expense(['TAX'])
+    revenue = sum_revenue()
+    cogs = abs(sum_expense(['COGS']))
+    operating_expenses = abs(sum_expense(['EXPENSE']))
+    other_income = 0.0
+    other_expenses = abs(sum_expense(['OTHER_EXPENSE']))
+    tax = abs(sum_expense(['TAX']))
     gross_profit = revenue - cogs
     operating_profit = gross_profit - operating_expenses
     net_profit_before_tax = operating_profit + other_income - other_expenses
@@ -1044,6 +1131,7 @@ def export_income_statement():
 def print_balance_sheet():
     """مصدر الحقيقة: قيود اليومية المنشورة فقط (JournalLine + JournalEntry.status=posted)."""
     asof_str = request.args.get('date')
+    branch = (request.args.get('branch') or 'all').strip()
     today = get_saudi_now().date()
     try:
         asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
@@ -1063,6 +1151,8 @@ def print_balance_sheet():
         .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted')))
         .filter(Account.code.in_(new_codes))
     )
+    if branch and branch != 'all' and branch in ('china_town', 'place_india'):
+        q = q.filter(or_(JournalEntry.id.is_(None), JournalEntry.branch_code == branch))
     rows = q.group_by(Account.id).order_by(Account.type.asc(), Account.code.asc()).all()
 
     current_assets = 0.0
@@ -1115,6 +1205,7 @@ def print_balance_sheet():
 def export_balance_sheet():
     from flask import Response
     asof_str = request.args.get('date')
+    branch = (request.args.get('branch') or 'all').strip()
     today = get_saudi_now().date()
     try:
         asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
@@ -1132,6 +1223,8 @@ def export_balance_sheet():
         .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted')))
         .filter(Account.code.in_(new_codes))
     )
+    if branch and branch != 'all' and branch in ('china_town', 'place_india'):
+        q = q.filter(or_(JournalEntry.id.is_(None), JournalEntry.branch_code == branch))
     rows = q.group_by(Account.id).order_by(Account.type.asc(), Account.code.asc()).all()
     import csv
     from io import StringIO
@@ -1170,7 +1263,7 @@ def accounts():
     new_coa = build_coa_dict()
     new_codes = list(new_coa.keys())
     
-    rows = db.session.query(
+    raw = db.session.query(
         Account.id.label('id'), Account.code.label('code'), Account.name.label('name'), Account.type.label('type'),
         func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
         func.coalesce(func.sum(JournalLine.credit), 0).label('credit')
@@ -1180,6 +1273,8 @@ def accounts():
      .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date.between(start_date, end_date), JournalEntry.status == 'posted'))) \
      .group_by(Account.id) \
      .order_by(Account.code.asc()).all()
+    from data.coa_new_tree import get_account_display_name
+    rows = [{'id': r.id, 'code': r.code, 'name': get_account_display_name(r.code, r.name), 'type': r.type, 'debit': r.debit, 'credit': r.credit} for r in raw]
 
     return render_template('financials/accounts.html', rows=rows, start_date=start_date, end_date=end_date)
 
@@ -1217,7 +1312,9 @@ def account_statement():
         .filter(JournalLine.account_id == acc.id).filter(JournalLine.line_date < start_date).scalar() or 0)
     opening_balance = opening_debit - opening_credit if acc.type != 'LIABILITY' else opening_credit - opening_debit
 
-    return render_template('financials/account_statement.html', acc=acc, entries=entries,
+    from data.coa_new_tree import get_account_display_name
+    account_display_name = get_account_display_name(acc.code, acc.name)
+    return render_template('financials/account_statement.html', acc=acc, account_display_name=account_display_name, entries=entries,
                            start_date=start_date, end_date=end_date, opening_balance=opening_balance)
 @bp.route('/backfill_journals', methods=['GET','POST'])
 def backfill_journals():
@@ -1358,6 +1455,7 @@ def api_trial_balance_json():
         asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
     except Exception:
         asof = today
+    hide_zero = (request.args.get('hide_zero') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
     new_codes = _new_coa_codes()
     try:
         from data.coa_new_tree import OLD_TO_NEW_MAP
@@ -1478,9 +1576,12 @@ def api_trial_balance_json():
                 'balance': round(data['balance'], 2), 'type': t
             })
         grouped[t] = arr
+    if hide_zero:
+        for t in grouped:
+            grouped[t] = [r for r in grouped[t] if abs(float(r.get('balance') or 0)) >= 0.005]
     total_debit = sum(v['debit'] for v in leaf_balances.values())
     total_credit = sum(v['credit'] for v in leaf_balances.values())
-    return jsonify({'ok': True, 'date': str(asof), 'total_debit': total_debit, 'total_credit': total_credit, 'grouped': grouped, 'order': order, 'top_level': top_level})
+    return jsonify({'ok': True, 'date': str(asof), 'total_debit': total_debit, 'total_credit': total_credit, 'grouped': grouped, 'order': order, 'top_level': top_level, 'hide_zero': hide_zero})
 
 @bp.route('/api/account_ledger_json')
 def api_account_ledger_json():
@@ -1659,6 +1760,7 @@ def api_operations_outstanding():
     try:
         party_type = (request.args.get('party_type') or '').strip().lower()
         party_name = (request.args.get('party_name') or '').strip()
+        party_id = request.args.get('party_id', type=int)  # supplier_id أو customer_id للربط المباشر
         liability_code = (request.args.get('liability_code') or '').strip()
         payroll_year = request.args.get('payroll_year', type=int)
         payroll_month = request.args.get('payroll_month', type=int)
@@ -1666,18 +1768,149 @@ def api_operations_outstanding():
         total_remaining = 0.0
         label = ''
 
-        if party_type == 'supplier' and party_name:
+        if party_type == 'supplier' and (party_name or (party_id is not None and party_id > 0)):
             # فواتير مشتريات ومصروفات للمورد (غير مسددة أو مسددة جزئياً)
-            p_rows = PurchaseInvoice.query.filter(
-                or_(PurchaseInvoice.supplier_name == party_name, func.coalesce(PurchaseInvoice.supplier_name, '').ilike('%' + party_name + '%'))
-            ).order_by(PurchaseInvoice.date.desc()).limit(50).all()
+            # الربط: بـ supplier_id (من القائمة) أو بالاسم حتى تظهر الفواتير حتى لو supplier_name مختلف أو فارغ
+            from models import Supplier
+            supplier_ids = []
+            if party_id is not None and party_id > 0:
+                supplier_ids = [int(party_id)]
+            if party_name:
+                try:
+                    suppliers = Supplier.query.filter(
+                        or_(
+                            func.lower(func.trim(Supplier.name)) == party_name.lower().strip(),
+                            func.coalesce(Supplier.name, '').ilike('%' + party_name + '%')
+                        )
+                    ).all()
+                    for s in suppliers:
+                        sid = getattr(s, 'id', None)
+                        if sid and int(sid) not in supplier_ids:
+                            supplier_ids.append(int(sid))
+                except Exception:
+                    pass
+            # عند وجود party_id فقط (بدون party_name): جلب اسم المورد من الجدول لاستخدامه في المطابقة
+            if supplier_ids and not (party_name or '').strip():
+                try:
+                    s = Supplier.query.get(supplier_ids[0])
+                    if s:
+                        party_name = (getattr(s, 'name', '') or '').strip()
+                except Exception:
+                    pass
+            # احتياطي: استنتاج معرفات الموردين من فواتير المشتريات عند عدم التطابق بالاسم في جدول الموردين
+            if not supplier_ids and party_name:
+                try:
+                    inv_sids = db.session.query(PurchaseInvoice.supplier_id).filter(
+                        PurchaseInvoice.supplier_id.isnot(None),
+                        PurchaseInvoice.supplier_id != 0,
+                        func.coalesce(PurchaseInvoice.supplier_name, '').ilike('%' + (party_name or '').strip() + '%')
+                    ).distinct().all()
+                    for (sid,) in inv_sids:
+                        if sid and int(sid) not in supplier_ids:
+                            supplier_ids.append(int(sid))
+                except Exception:
+                    pass
+            # شروط الاسم: من الطلب + من أسماء الموردين في الجدول (للمطابقة المرنة حتى مع اختلاف الكتابة)
+            # لا نستخدم الشرط في تعبير if (يسبب TypeError: Boolean value of this clause is not defined)
+            name_conditions_list = []
+            if (party_name or '').strip():
+                name_conditions_list.append(PurchaseInvoice.supplier_name == party_name)
+                name_conditions_list.append(
+                    func.coalesce(PurchaseInvoice.supplier_name, '').ilike('%' + (party_name or '').strip() + '%')
+                )
+            if supplier_ids:
+                try:
+                    supplier_names_from_table = [
+                        (getattr(s, 'name', '') or '').strip()
+                        for s in Supplier.query.filter(Supplier.id.in_(supplier_ids)).all()
+                    ]
+                    for sname in supplier_names_from_table:
+                        if not sname:
+                            continue
+                        name_conditions_list.append(
+                            func.coalesce(PurchaseInvoice.supplier_name, '').ilike('%' + sname + '%')
+                        )
+                        first_word = (sname.split() or [''])[0]
+                        if first_word and len(first_word) >= 2:
+                            name_conditions_list.append(
+                                func.coalesce(PurchaseInvoice.supplier_name, '').ilike('%' + first_word + '%')
+                            )
+                except Exception:
+                    pass
+            supplier_name_conditions = or_(*name_conditions_list) if name_conditions_list else None
+            if supplier_ids:
+                if supplier_name_conditions is not None:
+                    p_rows = PurchaseInvoice.query.filter(
+                        or_(PurchaseInvoice.supplier_id.in_(supplier_ids), supplier_name_conditions)
+                    ).order_by(PurchaseInvoice.date.desc()).limit(50).all()
+                else:
+                    p_rows = PurchaseInvoice.query.filter(
+                        PurchaseInvoice.supplier_id.in_(supplier_ids)
+                    ).order_by(PurchaseInvoice.date.desc()).limit(50).all()
+            else:
+                p_rows = PurchaseInvoice.query.filter(supplier_name_conditions).order_by(PurchaseInvoice.date.desc()).limit(50).all() if supplier_name_conditions is not None else []
+            # إذا لم تُعثر على فواتير: محاولة أوسع بالاسم (أول كلمة من الاسم للمطابقة المرنة)
+            if not p_rows and (party_name or '').strip():
+                try:
+                    first_word = ((party_name or '').strip().split() or [''])[0]
+                    if first_word and len(first_word) >= 2:
+                        if supplier_ids:
+                            p_rows = PurchaseInvoice.query.filter(
+                                or_(
+                                    PurchaseInvoice.supplier_id.in_(supplier_ids),
+                                    func.coalesce(PurchaseInvoice.supplier_name, '').ilike('%' + first_word + '%')
+                                )
+                            ).order_by(PurchaseInvoice.date.desc()).limit(50).all()
+                        else:
+                            p_rows = PurchaseInvoice.query.filter(
+                                func.coalesce(PurchaseInvoice.supplier_name, '').ilike('%' + first_word + '%')
+                            ).order_by(PurchaseInvoice.date.desc()).limit(50).all()
+                except Exception:
+                    pass
+            # تسمية المورد للعرض (اسم من القائمة أو من الجدول عند الاعتماد على party_id فقط)
+            _supplier_label = party_name
+            if not _supplier_label and supplier_ids:
+                try:
+                    s = Supplier.query.get(supplier_ids[0])
+                    if s:
+                        _supplier_label = getattr(s, 'name', '') or ''
+                except Exception:
+                    pass
             p_ids = [inv.id for inv in p_rows]
+            # المدفوع من القيود المنشورة (سطور مرتبطة بفاتورة) + استكمال من Payment للقديم
             p_paid = {}
-            if p_ids:
-                for i, s in db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-                    Payment.invoice_type == 'purchase', Payment.invoice_id.in_(p_ids)
-                ).group_by(Payment.invoice_id).all():
-                    p_paid[int(i)] = float(s or 0)
+            for inv in p_rows:
+                paid = _paid_from_journal(inv.id, 'purchase', '2111')
+                if paid < 0.01:
+                    leg = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                        Payment.invoice_type == 'purchase', Payment.invoice_id == inv.id
+                    ).scalar() or 0
+                    paid = round(float(leg), 2)
+                p_paid[inv.id] = paid
+            # تخصيص مدفوعات القيود القديمة (2111 مدين بدون invoice_id) FIFO
+            acc_2111 = Account.query.filter_by(code='2111').first()
+            if acc_2111:
+                unalloc = db.session.query(func.coalesce(func.sum(JournalLine.debit), 0)).join(
+                    JournalEntry, JournalLine.journal_id == JournalEntry.id
+                ).filter(
+                    JournalLine.account_id == acc_2111.id,
+                    JournalLine.debit > 0,
+                    JournalLine.invoice_id.is_(None),
+                    JournalEntry.status == 'posted'
+                ).scalar() or 0
+                unalloc = round(float(unalloc), 2)
+                if unalloc >= 0.01:
+                    for inv in sorted(p_rows, key=lambda i: (getattr(i, 'date', None) or __import__('datetime').date(1900, 1, 1), i.id)):
+                        if unalloc <= 0:
+                            break
+                        tot = float(inv.total_after_tax_discount or 0)
+                        already = p_paid.get(inv.id, 0)
+                        rem_inv = max(0.0, tot - already)
+                        if rem_inv < 0.01:
+                            continue
+                        alloc = min(unalloc, rem_inv)
+                        p_paid[inv.id] = already + alloc
+                        unalloc -= alloc
             for inv in p_rows:
                 total = float(inv.total_after_tax_discount or 0)
                 paid = float(p_paid.get(inv.id, 0))
@@ -1692,16 +1925,14 @@ def api_operations_outstanding():
                         'type': 'purchase',
                     })
                     total_remaining += rem
-            e_rows = ExpenseInvoice.query.filter(
-                or_(ExpenseInvoice.supplier_name == party_name, func.coalesce(ExpenseInvoice.supplier_name, '').ilike('%' + party_name + '%'))
-            ).order_by(ExpenseInvoice.date.desc()).limit(50).all()
+            try:
+                e_rows = ExpenseInvoice.query.filter(
+                    or_(ExpenseInvoice.supplier_name == party_name, func.coalesce(ExpenseInvoice.supplier_name, '').ilike('%' + (party_name or _supplier_label or '') + '%'))
+                ).order_by(ExpenseInvoice.date.desc()).limit(50).all() if hasattr(ExpenseInvoice, 'supplier_name') else []
+            except Exception:
+                e_rows = []
             e_ids = [inv.id for inv in e_rows]
-            e_paid = {}
-            if e_ids:
-                for i, s in db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-                    Payment.invoice_type == 'expense', Payment.invoice_id.in_(e_ids)
-                ).group_by(Payment.invoice_id).all():
-                    e_paid[int(i)] = float(s or 0)
+            e_paid = {inv.id: _paid_from_journal(inv.id, 'expense', '2111') for inv in e_rows}
             for inv in e_rows:
                 total = float(inv.total_after_tax_discount or 0)
                 paid = float(e_paid.get(inv.id, 0))
@@ -1716,13 +1947,53 @@ def api_operations_outstanding():
                         'type': 'expense',
                     })
                     total_remaining += rem
-            label = f'مستحقات المورد: {party_name}'
+            label = f'مستحقات المورد: {_supplier_label or party_name or ("#" + str(supplier_ids[0]) if supplier_ids else "")}'
 
-        elif party_type == 'customer' and party_name:
-            # فواتير مبيعات للعميل (غير محصلة أو جزئياً)
-            s_rows = SalesInvoice.query.filter(
-                or_(SalesInvoice.customer_name == party_name, func.coalesce(SalesInvoice.customer_name, '').ilike('%' + party_name + '%'))
-            ).order_by(SalesInvoice.date.desc()).limit(50).all()
+        elif party_type == 'customer' and (party_name or party_id is not None):
+            # فواتير مبيعات للعميل (غير محصلة أو جزئياً) — الربط بـ customer_id أو customer_name
+            from models import Customer
+            customer_ids = []
+            if party_id is not None and party_id > 0:
+                customer_ids = [int(party_id)]
+            if party_name:
+                try:
+                    customers = Customer.query.filter(
+                        or_(
+                            func.lower(func.trim(Customer.name)) == party_name.lower().strip(),
+                            func.coalesce(Customer.name, '').ilike('%' + party_name + '%')
+                        )
+                    ).all()
+                    for c in customers:
+                        cid = getattr(c, 'id', None)
+                        if cid and int(cid) not in customer_ids:
+                            customer_ids.append(int(cid))
+                except Exception:
+                    pass
+            customer_name_conditions = (
+                or_(
+                    SalesInvoice.customer_name == party_name,
+                    func.coalesce(SalesInvoice.customer_name, '').ilike('%' + party_name + '%')
+                ) if party_name else None
+            )
+            if customer_ids:
+                if customer_name_conditions is not None:
+                    s_rows = SalesInvoice.query.filter(
+                        or_(SalesInvoice.customer_id.in_(customer_ids), customer_name_conditions)
+                    ).order_by(SalesInvoice.date.desc()).limit(50).all()
+                else:
+                    s_rows = SalesInvoice.query.filter(
+                        SalesInvoice.customer_id.in_(customer_ids)
+                    ).order_by(SalesInvoice.date.desc()).limit(50).all()
+            else:
+                s_rows = SalesInvoice.query.filter(customer_name_conditions).order_by(SalesInvoice.date.desc()).limit(50).all() if customer_name_conditions is not None else []
+            _customer_label = party_name
+            if not _customer_label and customer_ids:
+                try:
+                    c = Customer.query.get(customer_ids[0])
+                    if c:
+                        _customer_label = getattr(c, 'name', '') or ''
+                except Exception:
+                    pass
             s_ids = [inv.id for inv in s_rows]
             s_paid = {}
             if s_ids:
@@ -1744,7 +2015,7 @@ def api_operations_outstanding():
                         'type': 'sales',
                     })
                     total_remaining += rem
-            label = f'مستحقات العميل: {party_name}'
+            label = f'مستحقات العميل: {_customer_label or party_name or ("#" + str(customer_ids[0]) if customer_ids else "")}'
 
         elif party_type == 'payroll' and payroll_year is not None and payroll_month is not None:
             sal_rows = Salary.query.filter_by(year=payroll_year, month=payroll_month).order_by(Salary.employee_id.asc()).all()
@@ -1773,12 +2044,14 @@ def api_operations_outstanding():
         elif party_type == 'liability' and liability_code:
             # رصيد حساب المستحقات (قيود مرحّلة فقط) — المبلغ المستحق للسداد = دائن - مدين
             acc = Account.query.filter_by(code=liability_code).first()
-            if acc:
+            if not acc:
+                label = f'حساب {liability_code} غير موجود في شجرة الحسابات. قم بمزامنة الحسابات من إعدادات الحسابات أو شجرة الحسابات.'
+            else:
                 from models import get_saudi_now as _now
                 end_d = _now().date()
                 bal, _ = _account_balance_as_of(liability_code, end_d)
+                name = next((n for c, n in QUICK_TXN_LIABILITY_OPTIONS if c == liability_code), acc.name)
                 if bal > 0.01:
-                    name = next((n for c, n in QUICK_TXN_LIABILITY_OPTIONS if c == liability_code), acc.name)
                     invoices.append({
                         'invoice_number': liability_code,
                         'date': str(end_d),
@@ -1790,8 +2063,32 @@ def api_operations_outstanding():
                     total_remaining = round(bal, 2)
                     label = f'مستحقات: {name} (الرصيد المستحق: {total_remaining:.2f} ر.س)'
                 else:
-                    name = next((n for c, n in QUICK_TXN_LIABILITY_OPTIONS if c == liability_code), acc.name)
-                    label = f'لا يوجد رصيد مستحق لحساب {name} — لا يمكن تنفيذ السداد'
+                    if bal < -0.01:
+                        label = f'رصيد حساب {name}: {abs(bal):.2f} ر.س (استرداد) — لا يُسدد'
+                    elif abs(bal) <= 0.01:
+                        label = f'رصيد حساب {name}: صفر — لا يوجد مبلغ مستحق للسداد'
+                        # لضريبة 2141: إظهار تقدير من الفواتير (للمرجع فقط) إن وُجد — لا يُضاف للمبلغ القابل للسداد
+                        if liability_code == '2141':
+                            try:
+                                sales_vat = float(db.session.query(func.coalesce(func.sum(SalesInvoice.tax_amount), 0)).scalar() or 0)
+                                purch_vat = float(db.session.query(func.coalesce(func.sum(PurchaseInvoice.tax_amount), 0)).scalar() or 0)
+                                exp_vat = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.tax_amount), 0)).scalar() or 0)
+                                estimate = max(0.0, sales_vat - purch_vat - exp_vat)
+                                if estimate >= 0.01:
+                                    label += f' تقدير من الفواتير (للمرجع فقط): {round(estimate, 2):.2f} ر.س. لظهور الرصيد في القيود، راجع ترحيل فواتير المبيعات.'
+                                    invoices.append({
+                                        'invoice_number': 'تقدير من الفواتير (للمرجع فقط)',
+                                        'date': str(end_d),
+                                        'total': round(estimate, 2),
+                                        'paid': 0,
+                                        'remaining': round(estimate, 2),
+                                        'type': 'liability_estimate',
+                                    })
+                                    # لا نضيف estimate إلى total_remaining — الرصيد المعتمد من القيود فقط
+                            except Exception:
+                                pass
+                    else:
+                        label = f'لا يوجد رصيد مستحق لحساب {name} — لا يمكن تنفيذ السداد'
 
         return jsonify({
             'ok': True,
@@ -1800,7 +2097,31 @@ def api_operations_outstanding():
             'label': label or 'لا يوجد مستحقات',
         })
     except Exception as e:
+        logger.exception(
+            'api_operations_outstanding failed: party_type=%s party_id=%s party_name=%r',
+            request.args.get('party_type'),
+            request.args.get('party_id'),
+            request.args.get('party_name'),
+        )
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _paid_from_journal(invoice_id, invoice_type, account_code='2111'):
+    """المدفوع لفاتورة من القيود المنشورة فقط (مصدر الحقيقة الوحيد). مجموع مدين سطور الحساب 2111 المرتبطة بالفاتورة."""
+    if invoice_id is None or not invoice_type:
+        return 0.0
+    acc = Account.query.filter_by(code=(account_code or '2111').strip()).first()
+    if not acc:
+        return 0.0
+    s = db.session.query(func.coalesce(func.sum(JournalLine.debit), 0)).join(
+        JournalEntry, JournalLine.journal_id == JournalEntry.id
+    ).filter(
+        JournalLine.account_id == acc.id,
+        JournalLine.invoice_id == invoice_id,
+        JournalLine.invoice_type == (invoice_type or 'purchase'),
+        JournalEntry.status == 'posted'
+    ).scalar() or 0
+    return round(float(s), 2)
 
 
 def _account_balance_as_of(account_code, asof_date):
@@ -1919,6 +2240,22 @@ def api_unpaid_payroll_runs():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+def _next_je_qtx_entry_number():
+    """توليد رقم قيد JE-QTX فريد (أكبر رقم موجود + 1) لتجنب UNIQUE constraint."""
+    rows = db.session.query(JournalEntry.entry_number).filter(
+        JournalEntry.entry_number.like('JE-QTX-%')
+    ).all()
+    max_n = 0
+    for (en,) in rows:
+        try:
+            n = int(str(en).rsplit('-', 1)[-1])
+            if n > max_n:
+                max_n = n
+        except (ValueError, IndexError, TypeError):
+            pass
+    return f'JE-QTX-{max_n + 1}'
+
+
 @bp.route('/api/quick-txn', methods=['POST'])
 @csrf.exempt
 def api_quick_txn():
@@ -1942,29 +2279,82 @@ def api_quick_txn():
 
         if op_type == 'supplier_payment':
             party = (payload.get('supplier_name') or '').strip()
-            if not party:
+            supplier_id = payload.get('supplier_id')
+            try:
+                supplier_id = int(supplier_id) if supplier_id is not None else None
+            except (TypeError, ValueError):
+                supplier_id = None
+            if not party and supplier_id is None:
                 return jsonify({'ok': False, 'error': 'يجب تحديد المورد'}), 400
-            # التحقق من وجود مستحقات فعلية للمورد قبل السماح بالسداد
-            p_rows = PurchaseInvoice.query.filter(
-                or_(PurchaseInvoice.supplier_name == party, func.coalesce(PurchaseInvoice.supplier_name, '').ilike('%' + party + '%'))
-            ).all()
-            e_rows = ExpenseInvoice.query.filter(
-                or_(ExpenseInvoice.supplier_name == party, func.coalesce(ExpenseInvoice.supplier_name, '').ilike('%' + party + '%'))
-            ).all()
+            # التحقق من وجود مستحقات فعلية للمورد قبل السماح بالسداد (ربط بـ supplier_id أو الاسم)
+            from models import Supplier
+            supplier_ids = [supplier_id] if supplier_id and supplier_id > 0 else []
+            if party:
+                try:
+                    suppliers = Supplier.query.filter(
+                        or_(
+                            func.lower(func.trim(Supplier.name)) == party.lower().strip(),
+                            func.coalesce(Supplier.name, '').ilike('%' + party + '%')
+                        )
+                    ).all()
+                    for s in suppliers:
+                        sid = getattr(s, 'id', None)
+                        if sid and int(sid) not in supplier_ids:
+                            supplier_ids.append(int(sid))
+                except Exception:
+                    pass
+            name_cond = or_(PurchaseInvoice.supplier_name == party, func.coalesce(PurchaseInvoice.supplier_name, '').ilike('%' + (party or '') + '%')) if party else None
+            if supplier_ids:
+                if name_cond is not None:
+                    p_rows = PurchaseInvoice.query.filter(
+                        or_(PurchaseInvoice.supplier_id.in_(supplier_ids), name_cond)
+                    ).all()
+                else:
+                    p_rows = PurchaseInvoice.query.filter(PurchaseInvoice.supplier_id.in_(supplier_ids)).all()
+            else:
+                p_rows = PurchaseInvoice.query.filter(name_cond).all() if name_cond is not None else []
+            try:
+                e_rows = ExpenseInvoice.query.filter(
+                    or_(ExpenseInvoice.supplier_name == party, func.coalesce(ExpenseInvoice.supplier_name, '').ilike('%' + (party or '') + '%'))
+                ).all() if hasattr(ExpenseInvoice, 'supplier_name') else []
+            except Exception:
+                e_rows = []
             p_ids = [inv.id for inv in p_rows]
             e_ids = [inv.id for inv in e_rows]
+            # المدفوع من القيود (مرتبط بفاتورة) + استكمال من Payment + تخصيص قيود قديمة بدون invoice_id
             p_paid = {}
-            e_paid = {}
-            if p_ids:
-                for i, s in db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-                    Payment.invoice_type == 'purchase', Payment.invoice_id.in_(p_ids)
-                ).group_by(Payment.invoice_id).all():
-                    p_paid[int(i)] = float(s or 0)
-            if e_ids:
-                for i, s in db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
-                    Payment.invoice_type == 'expense', Payment.invoice_id.in_(e_ids)
-                ).group_by(Payment.invoice_id).all():
-                    e_paid[int(i)] = float(s or 0)
+            for inv in p_rows:
+                paid = _paid_from_journal(inv.id, 'purchase', '2111')
+                if paid < 0.01:
+                    leg = db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                        Payment.invoice_type == 'purchase', Payment.invoice_id == inv.id
+                    ).scalar() or 0
+                    paid = round(float(leg), 2)
+                p_paid[inv.id] = paid
+            acc_2111 = Account.query.filter_by(code='2111').first()
+            if acc_2111:
+                unalloc = db.session.query(func.coalesce(func.sum(JournalLine.debit), 0)).join(
+                    JournalEntry, JournalLine.journal_id == JournalEntry.id
+                ).filter(
+                    JournalLine.account_id == acc_2111.id,
+                    JournalLine.debit > 0,
+                    JournalLine.invoice_id.is_(None),
+                    JournalEntry.status == 'posted'
+                ).scalar() or 0
+                unalloc = round(float(unalloc), 2)
+                if unalloc >= 0.01:
+                    for inv in sorted(p_rows, key=lambda i: (getattr(i, 'date', None) or __import__('datetime').date(1900, 1, 1), i.id)):
+                        if unalloc <= 0:
+                            break
+                        tot = float(inv.total_after_tax_discount or 0)
+                        already = p_paid.get(inv.id, 0)
+                        rem_inv = max(0.0, tot - already)
+                        if rem_inv < 0.01:
+                            continue
+                        alloc = min(unalloc, rem_inv)
+                        p_paid[inv.id] = already + alloc
+                        unalloc -= alloc
+            e_paid = {i: _paid_from_journal(i, 'expense', '2111') for i in e_ids}
             total_remaining = 0.0
             for inv in p_rows:
                 total_remaining += max(0.0, float(inv.total_after_tax_discount or 0) - float(p_paid.get(inv.id, 0)))
@@ -1975,10 +2365,65 @@ def api_quick_txn():
                 return jsonify({'ok': False, 'error': 'لا يوجد مستحقات فعلية لهذا المورد — لا يُسمح بإنشاء عملية سداد بدون دائن فعلي'}), 400
             if amount > total_remaining:
                 return jsonify({'ok': False, 'error': f'المبلغ أكبر من المستحقات المتبقية للمورد ({total_remaining:.2f} ر.س)'}), 400
-            lines = [
-                {'account_code': '2111', 'debit': amount, 'credit': 0.0, 'description': f'دفعة لمورد {party} {note}', 'date': str(dval)},
-                {'account_code': cash_code, 'debit': 0.0, 'credit': amount, 'description': 'صندوق/بنك', 'date': str(dval)},
-            ]
+            # تخصيص الدفعة للفواتير (FIFO) وتسجيلها في القيد — كل سطر مدين 2111 مرتبط بفاتورة (invoice_id) ليكون مصدر الحقيقة
+            from decimal import Decimal, ROUND_HALF_UP
+            def _to_cents(v):
+                try:
+                    return Decimal(str(v)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                except Exception:
+                    return Decimal('0.00')
+            method_upper = (method or 'cash').strip().upper()
+            remaining_pay = float(amount)
+            lines = []
+            p_rows_sorted = sorted(p_rows, key=lambda inv: (getattr(inv, 'date', None) or getattr(inv, 'created_at', dval), inv.id))
+            for inv in p_rows_sorted:
+                if remaining_pay <= 0:
+                    break
+                total_inv = float(inv.total_after_tax_discount or 0.0)
+                paid_inv = float(p_paid.get(inv.id, 0.0))
+                rem_inv = max(0.0, total_inv - paid_inv)
+                if rem_inv < 0.01:
+                    continue
+                alloc = min(remaining_pay, rem_inv)
+                lines.append({
+                    'account_code': '2111', 'debit': round(alloc, 2), 'credit': 0.0,
+                    'description': f'دفعة فاتورة {getattr(inv, "invoice_number", inv.id)} {party}',
+                    'date': str(dval), 'invoice_id': inv.id, 'invoice_type': 'purchase',
+                })
+                new_paid = paid_inv + alloc
+                tc, pc = _to_cents(total_inv), _to_cents(new_paid)
+                if (tc - pc) <= Decimal('0.01') and tc > Decimal('0.00'):
+                    inv.status = 'paid'
+                elif pc > Decimal('0.00'):
+                    inv.status = 'partial'
+                else:
+                    inv.status = 'unpaid'
+                remaining_pay -= alloc
+            e_rows_sorted = sorted(e_rows, key=lambda inv: (getattr(inv, 'date', None) or getattr(inv, 'created_at', dval), inv.id))
+            for inv in e_rows_sorted:
+                if remaining_pay <= 0:
+                    break
+                total_inv = float(inv.total_after_tax_discount or 0.0)
+                paid_inv = float(e_paid.get(inv.id, 0.0))
+                rem_inv = max(0.0, total_inv - paid_inv)
+                if rem_inv < 0.01:
+                    continue
+                alloc = min(remaining_pay, rem_inv)
+                lines.append({
+                    'account_code': '2111', 'debit': round(alloc, 2), 'credit': 0.0,
+                    'description': f'دفعة مصروف {getattr(inv, "invoice_number", inv.id)} {party}',
+                    'date': str(dval), 'invoice_id': inv.id, 'invoice_type': 'expense',
+                })
+                new_paid = paid_inv + alloc
+                tc, pc = _to_cents(total_inv), _to_cents(new_paid)
+                if (tc - pc) <= Decimal('0.01') and tc > Decimal('0.00'):
+                    inv.status = 'paid'
+                elif pc > Decimal('0.00'):
+                    inv.status = 'partial'
+                else:
+                    inv.status = 'unpaid'
+                remaining_pay -= alloc
+            lines.append({'account_code': cash_code, 'debit': 0.0, 'credit': amount, 'description': 'صندوق/بنك', 'date': str(dval)})
         elif op_type == 'pay_liability':
             code = (payload.get('liability_code') or '2121').strip()
             name = next((n for c, n in QUICK_TXN_LIABILITY_OPTIONS if c == code), code)
@@ -2012,7 +2457,7 @@ def api_quick_txn():
                     uid = None
                 from datetime import datetime as _dt
                 pay_dt = _dt(dval.year, dval.month, dval.day, 12, 0, 0)
-                entry_number = f"JE-QTX-{int(JournalEntry.query.count() + 1)}"
+                entry_number = _next_je_qtx_entry_number()
                 je = JournalEntry(
                     entry_number=entry_number,
                     date=dval,
@@ -2087,6 +2532,18 @@ def api_quick_txn():
                 {'account_code': '1121', 'debit': amount, 'credit': 0.0, 'description': f'إيداع بنكي {note}', 'date': str(dval)},
                 {'account_code': '1111', 'debit': 0.0, 'credit': amount, 'description': 'صندوق رئيسي', 'date': str(dval)},
             ]
+        elif op_type == 'capital_injection':
+            # تمويل / رصيد افتتاحي: مدين صندوق أو بنك، دائن أرباح سنوات سابقة (3210)
+            cash_code = (payload.get('cash_code') or '1111').strip()
+            if cash_code not in ('1111', '1121'):
+                cash_code = '1111'
+            equity_code = (payload.get('equity_code') or '3210').strip()  # 3210 أرباح سنوات سابقة
+            if equity_code not in ('3210', '3220'):
+                equity_code = '3210'
+            lines = [
+                {'account_code': cash_code, 'debit': amount, 'credit': 0.0, 'description': f'تمويل / رصيد افتتاحي {note}', 'date': str(dval)},
+                {'account_code': equity_code, 'debit': 0.0, 'credit': amount, 'description': 'حقوق ملكية', 'date': str(dval)},
+            ]
         elif op_type == 'owner_draw':
             lines = [
                 {'account_code': '3310', 'debit': amount, 'credit': 0.0, 'description': f'سحب المالك {note}', 'date': str(dval)},
@@ -2105,7 +2562,7 @@ def api_quick_txn():
             uid = getattr(current_user, 'id', None)
         except Exception:
             uid = None
-        entry_number = f"JE-QTX-{int(JournalEntry.query.count() + 1)}"
+        entry_number = _next_je_qtx_entry_number()
         je = JournalEntry(
             entry_number=entry_number,
             date=dval,
@@ -2117,6 +2574,8 @@ def api_quick_txn():
             created_by=uid,
             posted_by=uid,
         )
+        if op_type == 'supplier_payment':
+            je.payment_method = (payload.get('payment_method') or 'cash').strip().upper()
         db.session.add(je)
         db.session.flush()
         for i, ln in enumerate(lines, 1):
@@ -2134,6 +2593,8 @@ def api_quick_txn():
                 credit=float(ln.get('credit') or 0),
                 description=(ln.get('description') or '')[:500],
                 line_date=dval,
+                invoice_id=ln.get('invoice_id'),
+                invoice_type=ln.get('invoice_type'),
             ))
         try:
             from models import JournalAudit
@@ -2388,6 +2849,386 @@ def api_accounts_toggle_active():
     from flask import jsonify
     return jsonify({'ok': True, 'active': bool(getattr(a,'active', True))})
 
+
+# ---- إعدادات الحسابات (Account Settings): متى وأين يُستخدم كل حساب ----
+_MODULE_PAYMENTS = 'Payments'
+_ACTION_PAY_EXPENSE = 'PayExpense'
+_ACTION_PAY_SUPPLIER = 'PaySupplier'
+_ACTION_RECEIVE_CASH = 'ReceiveCash'
+
+# كل عنصر: (function_key, function_label_ar, account_code, is_default, locked)
+_SECTIONS_DEFAULTS = {
+    'Cash': [
+        ('MAIN_CASH', 'الصندوق الرئيسي', '1111', True, True),
+        ('SUB_CASH', 'صندوق فرعي', '1112', False, True),
+        ('POS_CASH', 'صندوق POS', '1113', False, True),
+    ],
+    'Bank': [
+        ('DEFAULT_BANK', 'بنك افتراضي', '1121', True, True),
+        ('BANK_ALAHLI', 'بنك الأهلي', '1122', False, True),
+        ('BANK_RIYAD', 'بنك الرياض', '1123', False, True),
+    ],
+    'Supplier': [
+        ('SUPPLIER_CTRL', 'حساب الموردين (Control)', '2111', True, True),
+        ('COMM_HUNGER', 'عمولات هنقرستيشن', '2113', False, True),
+        ('COMM_KEETA', 'عمولات كيتا', '2114', False, True),
+    ],
+    'Customer': [
+        ('CUSTOMER_CTRL', 'حساب العملاء (Control)', '1141', True, True),
+    ],
+    'Inventory': [
+        ('RAW_MAT', 'مخزون مواد خام', '1162', False, False),
+        ('OP_MAT', 'مخزون مواد تشغيلية', '1163', False, False),
+        ('WIP', 'مخزون تحت التشغيل', '1164', False, False),
+        ('WASTE_COST', 'هدر وتالف', '5160', True, False),
+    ],
+    'Tax': [
+        ('VAT_IN', 'ض.ق.م مدخلات', '1170', True, True),
+        ('VAT_OUT', 'ض.ق.م مخرجات', '2141', False, True),
+    ],
+    'Payroll': [
+        ('SALARIES_PAYABLE', 'رواتب مستحقة', '2121', True, True),
+    ],
+    'Expense': [
+        ('DEFAULT_EXPENSE', 'مصروفات عامة', '5820', True, False),
+    ],
+    'Revenue': [
+        ('DEFAULT_REVENUE', 'إيرادات مبيعات', '4011', True, False),
+    ],
+    'Asset': [
+        ('FIXED_ASSETS', 'ممتلكات ومعدات', '1210', True, False),
+    ],
+    'Waste': [
+        ('WASTE_COST', 'تكلفة الهدر والتالف', '5160', True, True),
+    ],
+    'Variance': [
+        ('ADJUSTMENT', 'فروقات وتسويات', '3210', True, False),
+    ],
+}
+
+# للتوافق مع by_group fallback: group -> [(code, name_ar), ...]
+_DEFAULT_USAGE_ACCOUNTS = {}
+for _g, _items in _SECTIONS_DEFAULTS.items():
+    _DEFAULT_USAGE_ACCOUNTS[_g] = [(_code, _label) for (_, _label, _code, _, _) in _items]
+
+
+def _ensure_account_by_code(code, name_ar, atype='ASSET'):
+    a = Account.query.filter(func.lower(Account.code) == code.lower()).first()
+    if not a:
+        a = Account(code=code.upper(), name=name_ar or code, type=atype)
+        db.session.add(a)
+        db.session.flush()
+    return a
+
+
+def _ensure_account_usage_map_table():
+    """إنشاء جدول account_usage_map وأعمدة الاستخدام في accounts إن لم تكن موجودة (بدون الاعتماد على الهجرة)."""
+    try:
+        with db.engine.connect() as conn:
+            for col, typ in [('usage_group', 'VARCHAR(30)'), ('is_control', 'INTEGER'), ('allow_posting', 'INTEGER')]:
+                try:
+                    conn.execute(text(f"ALTER TABLE accounts ADD COLUMN {col} {typ}"))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+            try:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS account_usage_map (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        module VARCHAR(50) NOT NULL,
+                        action VARCHAR(50) NOT NULL,
+                        usage_group VARCHAR(30) NOT NULL,
+                        function_key VARCHAR(50),
+                        function_label_ar VARCHAR(120),
+                        account_id INTEGER NOT NULL,
+                        is_default INTEGER,
+                        active INTEGER,
+                        locked INTEGER,
+                        FOREIGN KEY(account_id) REFERENCES accounts (id)
+                    )
+                """))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_account_usage_map_module ON account_usage_map (module)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_account_usage_map_usage_group ON account_usage_map (usage_group)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_account_usage_map_account_id ON account_usage_map (account_id)"))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+            for col, typ in [('function_key', 'VARCHAR(50)'), ('function_label_ar', 'VARCHAR(120)'), ('locked', 'INTEGER')]:
+                try:
+                    conn.execute(text(f"ALTER TABLE account_usage_map ADD COLUMN {col} {typ}"))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _valid_settings_groups():
+    return list(_SECTIONS_DEFAULTS.keys())
+
+
+# 11 أقسام إعدادات الحسابات (تقسيم هرمي مثل SAP/Odoo): كل قسم = مجموعة عمليات
+_SETTINGS_SECTIONS = [
+    {'section_key': 'CashAndBank', 'label_ar': 'النقد والبنوك', 'groups': ['Cash', 'Bank']},
+    {'section_key': 'Supplier', 'label_ar': 'الموردين', 'groups': ['Supplier']},
+    {'section_key': 'Customer', 'label_ar': 'العملاء', 'groups': ['Customer']},
+    {'section_key': 'Inventory', 'label_ar': 'المخزون', 'groups': ['Inventory']},
+    {'section_key': 'Tax', 'label_ar': 'الضرائب', 'groups': ['Tax']},
+    {'section_key': 'Payroll', 'label_ar': 'الرواتب', 'groups': ['Payroll']},
+    {'section_key': 'Expense', 'label_ar': 'المصروفات', 'groups': ['Expense']},
+    {'section_key': 'Revenue', 'label_ar': 'الإيرادات', 'groups': ['Revenue']},
+    {'section_key': 'Asset', 'label_ar': 'الأصول', 'groups': ['Asset']},
+    {'section_key': 'Waste', 'label_ar': 'الهدر والتالف', 'groups': ['Waste']},
+    {'section_key': 'Variance', 'label_ar': 'فروقات وتسويات', 'groups': ['Variance']},
+]
+
+
+@bp.route('/api/account_settings/sections')
+def api_account_settings_sections():
+    """قائمة الأقسام الـ 11 لإعدادات الحسابات (للـ UI)."""
+    return jsonify({'ok': True, 'sections': _SETTINGS_SECTIONS})
+
+
+@bp.route('/api/account_settings/by_group')
+def api_account_settings_by_group():
+    """قائمة الحسابات المرتبطة بمجموعة استخدام (الوظيفة = Role) للعرض في تبويب إعدادات الحسابات."""
+    group = (request.args.get('group') or '').strip()
+    if group not in _valid_settings_groups():
+        return jsonify({'ok': False, 'error': 'invalid_group', 'accounts': []}), 400
+    _ensure_account_usage_map_table()
+    accounts = []
+    try:
+        rows = (
+            db.session.query(AccountUsageMap, Account)
+            .join(Account, AccountUsageMap.account_id == Account.id)
+            .filter(
+                AccountUsageMap.usage_group == group,
+                AccountUsageMap.module == _MODULE_PAYMENTS,
+                AccountUsageMap.action == _ACTION_PAY_EXPENSE,
+            )
+            .order_by(AccountUsageMap.is_default.desc(), Account.code.asc())
+            .all()
+        )
+        for m, acc in rows:
+            accounts.append({
+                'mapping_id': m.id,
+                'account_id': acc.id,
+                'code': acc.code,
+                'name': getattr(acc, 'name_ar', None) or acc.name,
+                'name_en': getattr(acc, 'name_en', None) or '',
+                'function_key': getattr(m, 'function_key', None) or '',
+                'function_label_ar': getattr(m, 'function_label_ar', None) or (getattr(acc, 'name_ar', None) or acc.name),
+                'is_default': bool(getattr(m, 'is_default', False)),
+                'active': bool(getattr(m, 'active', True)),
+                'locked': bool(getattr(m, 'locked', False)),
+            })
+    except Exception:
+        db.session.rollback()
+        rows = []
+        accounts = []
+    if not accounts and group in _SECTIONS_DEFAULTS:
+        try:
+            from data.coa_new_tree import build_coa_dict
+            coa_types = build_coa_dict()
+        except Exception:
+            coa_types = {}
+        for fk, label_ar, code, is_def, locked in _SECTIONS_DEFAULTS[group]:
+            try:
+                acc = _ensure_account_by_code(code, label_ar, (coa_types.get(code) or {}).get('type', 'ASSET'))
+                if acc:
+                    accounts.append({
+                        'mapping_id': None,
+                        'account_id': acc.id,
+                        'code': acc.code,
+                        'name': getattr(acc, 'name_ar', None) or acc.name,
+                        'name_en': getattr(acc, 'name_en', None) or '',
+                        'function_key': fk,
+                        'function_label_ar': label_ar,
+                        'is_default': is_def,
+                        'active': True,
+                        'locked': locked,
+                    })
+            except Exception:
+                db.session.rollback()
+                continue
+        if accounts:
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+    try:
+        return jsonify({'ok': True, 'group': group, 'accounts': accounts})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'accounts': []}), 500
+
+
+@bp.route('/api/account_settings/set_default', methods=['POST'])
+@csrf.exempt
+def api_account_settings_set_default():
+    """تعيين حساب واحد كافتراضي لمجموعة الاستخدام."""
+    try:
+        from flask_login import login_required, current_user
+        from app.routes import _has_role
+    except Exception:
+        pass
+    try:
+        data = request.get_json(force=True, silent=True) or request.form or {}
+        mapping_id = data.get('mapping_id')
+        account_id = data.get('account_id')
+        usage_group = (data.get('usage_group') or '').strip()
+        if mapping_id:
+            m = AccountUsageMap.query.get(int(mapping_id))
+            if not m:
+                return jsonify({'ok': False, 'error': 'mapping_not_found'}), 404
+            # افتراضي واحد فقط لكل وظيفة (function_key) ضمن نفس المجموعة
+            fk = getattr(m, 'function_key', None) or ''
+            q = AccountUsageMap.query.filter(
+                AccountUsageMap.module == m.module,
+                AccountUsageMap.action == m.action,
+                AccountUsageMap.usage_group == m.usage_group,
+            )
+            if fk:
+                q = q.filter(AccountUsageMap.function_key == fk)
+            q.update({'is_default': False}, synchronize_session=False)
+            m.is_default = True
+            db.session.commit()
+            return jsonify({'ok': True})
+        if account_id and usage_group in _valid_settings_groups():
+            acc = Account.query.get(int(account_id))
+            if not acc:
+                return jsonify({'ok': False, 'error': 'account_not_found'}), 404
+            m = AccountUsageMap.query.filter(
+                AccountUsageMap.module == _MODULE_PAYMENTS,
+                AccountUsageMap.action == _ACTION_PAY_EXPENSE,
+                AccountUsageMap.usage_group == usage_group,
+                AccountUsageMap.account_id == acc.id,
+            ).first()
+            if not m:
+                m = AccountUsageMap(module=_MODULE_PAYMENTS, action=_ACTION_PAY_EXPENSE, usage_group=usage_group, account_id=acc.id, is_default=True, active=True)
+                db.session.add(m)
+                db.session.flush()
+            fk = getattr(m, 'function_key', None) or ''
+            q = AccountUsageMap.query.filter(
+                AccountUsageMap.module == _MODULE_PAYMENTS,
+                AccountUsageMap.action == _ACTION_PAY_EXPENSE,
+                AccountUsageMap.usage_group == usage_group,
+            )
+            if fk:
+                q = q.filter(AccountUsageMap.function_key == fk)
+            q.update({'is_default': False}, synchronize_session=False)
+            m.is_default = True
+            m.active = True
+            db.session.commit()
+            return jsonify({'ok': True})
+        return jsonify({'ok': False, 'error': 'missing_params'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/account_settings/accounts_available')
+def api_account_settings_accounts_available():
+    """قائمة الحسابات المتاحة للقوائم المنسدلة في إعدادات الحسابات. أي حساب جديد في شجرة الحسابات يظهر تلقائياً."""
+    group = (request.args.get('group') or '').strip()
+    _ensure_account_usage_map_table()
+    try:
+        rows = Account.query.order_by(Account.code.asc()).all()
+        out = [{'id': a.id, 'code': a.code, 'name': getattr(a, 'name_ar', None) or a.name or a.code} for a in rows]
+        return jsonify({'ok': True, 'group': group, 'accounts': out})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e), 'accounts': []}), 500
+
+
+@bp.route('/api/account_settings/update_mapping', methods=['POST'])
+@csrf.exempt
+def api_account_settings_update_mapping():
+    """تغيير الحساب المرتبط بوظيفة (Role): ربط حساب آخر من القائمة المنسدلة."""
+    data = request.get_json(force=True, silent=True) or request.form or {}
+    mapping_id = data.get('mapping_id')
+    account_id = data.get('account_id')
+    if not mapping_id or not account_id:
+        return jsonify({'ok': False, 'error': 'missing_mapping_id_or_account_id'}), 400
+    m = AccountUsageMap.query.get(int(mapping_id))
+    if not m:
+        return jsonify({'ok': False, 'error': 'mapping_not_found'}), 404
+    acc = Account.query.get(int(account_id))
+    if not acc:
+        return jsonify({'ok': False, 'error': 'account_not_found'}), 404
+    m.account_id = acc.id
+    db.session.commit()
+    return jsonify({'ok': True, 'code': acc.code, 'name': getattr(acc, 'name_ar', None) or acc.name})
+
+
+@bp.route('/api/account_settings/toggle_active', methods=['POST'])
+@csrf.exempt
+def api_account_settings_toggle_active():
+    """تفعيل/تعطيل حساب في مجموعة الاستخدام."""
+    data = request.get_json(force=True, silent=True) or request.form or {}
+    mapping_id = data.get('mapping_id')
+    if not mapping_id:
+        return jsonify({'ok': False, 'error': 'missing_mapping_id'}), 400
+    m = AccountUsageMap.query.get(int(mapping_id))
+    if not m:
+        return jsonify({'ok': False, 'error': 'mapping_not_found'}), 404
+    m.active = not bool(getattr(m, 'active', True))
+    db.session.commit()
+    return jsonify({'ok': True, 'active': m.active})
+
+
+@bp.route('/api/account_settings/seed', methods=['POST'])
+@csrf.exempt
+def api_account_settings_seed():
+    """تحميل الافتراضي: إنشاء ربط ذكي (usage_group + function_key + account) لجميع الأقسام إذا لم تكن موجودة."""
+    _ensure_account_usage_map_table()
+    try:
+        from data.coa_new_tree import build_coa_dict
+        coa = build_coa_dict()
+    except Exception:
+        coa = {}
+    created = 0
+    for group, items in _SECTIONS_DEFAULTS.items():
+        for function_key, label_ar, code, is_default, locked in items:
+            acc = _ensure_account_by_code(code, label_ar, (coa.get(code) or {}).get('type', 'ASSET'))
+            existing = AccountUsageMap.query.filter(
+                AccountUsageMap.module == _MODULE_PAYMENTS,
+                AccountUsageMap.action == _ACTION_PAY_EXPENSE,
+                AccountUsageMap.usage_group == group,
+                AccountUsageMap.account_id == acc.id,
+            ).first()
+            if not existing:
+                db.session.add(AccountUsageMap(
+                    module=_MODULE_PAYMENTS, action=_ACTION_PAY_EXPENSE,
+                    usage_group=group, account_id=acc.id,
+                    function_key=function_key, function_label_ar=label_ar,
+                    is_default=is_default, active=True, locked=locked,
+                ))
+                created += 1
+    db.session.commit()
+    return jsonify({'ok': True, 'created': created})
+
+
+def get_account_by_usage(module, action, usage_group, prefer_default=True):
+    """تُرجع الحساب المرتبط بـ (module, action, usage_group) للاستخدام في الدفع/التحصيل. للاستدعاء من app.routes._pm_account."""
+    q = (
+        db.session.query(Account)
+        .join(AccountUsageMap, AccountUsageMap.account_id == Account.id)
+        .filter(
+            AccountUsageMap.module == module,
+            AccountUsageMap.action == action,
+            AccountUsageMap.usage_group == usage_group,
+            AccountUsageMap.active == True,
+        )
+    )
+    if prefer_default:
+        q = q.order_by(AccountUsageMap.is_default.desc())
+    acc = q.first()
+    return acc
+
+
 @bp.route('/api/accounts/cleanup_duplicates', methods=['POST'])
 @csrf.exempt
 def api_accounts_cleanup_duplicates():
@@ -2550,6 +3391,36 @@ def api_accounts_purge():
             pass
         from flask import jsonify
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+@bp.route('/api/accounts/sync_types_from_coa', methods=['POST'])
+@csrf.exempt
+def api_accounts_sync_types_from_coa():
+    """مزامنة نوع الحساب (Account.type) من الشجرة الرسمية (COA). يضمن 1160=ASSET، 5160=COGS، 3220=EQUITY، إلخ."""
+    from flask import jsonify
+    try:
+        from data.coa_new_tree import build_coa_dict
+        coa = build_coa_dict()
+        updated = []
+        for code, info in coa.items():
+            atype = (info.get('type') or 'ASSET').strip().upper()
+            if not atype:
+                continue
+            a = Account.query.filter(Account.code == code).first()
+            if not a:
+                continue
+            if (getattr(a, 'type', None) or '').strip().upper() != atype:
+                a.type = atype
+                updated.append(code)
+        if updated:
+            db.session.commit()
+        return jsonify({'ok': True, 'updated_count': len(updated), 'updated': updated})
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 
 @bp.route('/api/accounts/seed_official', methods=['POST'])
 @csrf.exempt

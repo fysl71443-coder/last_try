@@ -2,6 +2,12 @@ import os
 from sqlalchemy.pool import NullPool
 
 # ─── استخدام SQLite المحلي فقط – لا Render ولا PostgreSQL ───
+# ─── قاعدة البيانات الدائمة (لا تضييع بيانات) ───
+# ❌ لا نستخدم أبداً: sqlite:///:memory: (يُمسح عند إعادة التشغيل)
+# ❌ لا نستخدم: /tmp أو مجلد مؤقت (يُمسح عند إعادة التشغيل)
+# ✅ مسار ثابت داخل المشروع: instance/accounting_app.db (أو LOCAL_SQLITE_PATH مثل data/db.sqlite)
+# ✅ كل تعديل يُحفظ عبر db.session.commit() (Flask-SQLAlchemy يلتزم نهاية الطلب)
+# ─────────────────────────────────────────────────────────────────
 USE_ONLY_LOCAL_SQLITE = True
 _base_dir = os.path.abspath(os.path.dirname(__file__))
 _project_root = _base_dir
