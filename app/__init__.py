@@ -61,15 +61,9 @@ def create_app(config_class=None):
     except Exception:
         pass
 
-    from config import Config, USE_ONLY_LOCAL_SQLITE, _default_sqlite_path
+    from config import Config
     app.config.from_object(Config)
-    # إجبار SQLite المحلي فقط – لا Render ولا PostgreSQL
-    if USE_ONLY_LOCAL_SQLITE:
-        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{_default_sqlite_path}"
-    else:
-        uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').lower()
-        if 'postgres' in uri or 'render.com' in uri:
-            app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{_default_sqlite_path}"
+    # قاعدة واحدة من Config حسب ENV (development → SQLite، production → DATABASE_URL)
     # Ensure secrets
     app.config.setdefault('SECRET_KEY', os.getenv('SECRET_KEY', os.urandom(24)))
     app.config.setdefault('WTF_CSRF_SECRET_KEY', app.config['SECRET_KEY'])

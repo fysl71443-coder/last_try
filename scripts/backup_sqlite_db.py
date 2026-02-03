@@ -18,8 +18,8 @@ if ROOT not in sys.path:
 
 def main():
     try:
-        from config import _default_sqlite_path
-        db_path = _default_sqlite_path
+        from config import LOCAL_SQLITE_PATH_FOR_SCRIPTS
+        db_path = LOCAL_SQLITE_PATH_FOR_SCRIPTS
     except Exception:
         db_path = os.path.join(ROOT, 'instance', 'accounting_app.db')
 

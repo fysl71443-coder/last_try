@@ -1,29 +1,45 @@
 import os
 from sqlalchemy.pool import NullPool
 
-# ─── استخدام SQLite المحلي فقط – لا Render ولا PostgreSQL ───
-# ─── قاعدة البيانات الدائمة (لا تضييع بيانات) ───
-# ❌ لا نستخدم أبداً: sqlite:///:memory: (يُمسح عند إعادة التشغيل)
-# ❌ لا نستخدم: /tmp أو مجلد مؤقت (يُمسح عند إعادة التشغيل)
-# ✅ مسار ثابت داخل المشروع: instance/accounting_app.db (أو LOCAL_SQLITE_PATH مثل data/db.sqlite)
-# ✅ كل تعديل يُحفظ عبر db.session.commit() (Flask-SQLAlchemy يلتزم نهاية الطلب)
+# ─── إعداد قاعدة ذكي حسب البيئة (الحل المثالي) ───
+# ✔ تطوير محلي: SQLite (سريع، لا إعداد)
+# ✔ إنتاج: PostgreSQL من DATABASE_URL (مستقر، لا فقدان بيانات)
+# 📌 لا يوجد أي مسار SQLite معرّف خارج هذا الملف
 # ─────────────────────────────────────────────────────────────────
-USE_ONLY_LOCAL_SQLITE = True
+
 _base_dir = os.path.abspath(os.path.dirname(__file__))
 _project_root = _base_dir
 _instance_dir = os.path.join(_project_root, 'instance')
 os.makedirs(_instance_dir, exist_ok=True)
-_default_sqlite_path = os.getenv('LOCAL_SQLITE_PATH') or os.path.join(_instance_dir, 'accounting_app.db')
-# تجاهل DATABASE_URL تماماً – لا نقرأ من Render أبداً
-_database_url = f"sqlite:///{_default_sqlite_path}"
+
+ENV = os.getenv("ENV", "development")
+
+if ENV == "production":
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL must be set in production (ENV=production)")
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    _database_uri = DATABASE_URL
+else:
+    # تطوير: SQLite في instance/ (مسار واحد فقط هنا؛ غيّر LOCAL_SQLITE_PATH إن شئت)
+    _sqlite_path = os.getenv("LOCAL_SQLITE_PATH") or os.path.join(_instance_dir, "accounting_app.db")
+    _database_uri = "sqlite:///" + _sqlite_path.replace("\\", "/")
+
+# للمساعدات والسكربتات فقط (قراءة المسار المحلي عند التطوير)
+LOCAL_SQLITE_PATH_FOR_SCRIPTS = os.getenv("LOCAL_SQLITE_PATH") or os.path.join(_instance_dir, "accounting_app.db")
 
 
 def _engine_options_for(db_uri: str):
-    """Return SQLAlchemy engine options for SQLite only."""
-    # استخدام SQLite فقط - لا حاجة لخيارات PostgreSQL
+    """خيارات المحرك: SQLite (NullPool, check_same_thread) أو PostgreSQL (pool_pre_ping)."""
+    if db_uri and "sqlite" in db_uri:
+        return {
+            "poolclass": NullPool,
+            "connect_args": {"check_same_thread": False},
+            "echo": False,
+        }
     return {
-        "poolclass": NullPool,  # Avoid connection pooling issues on SQLite
-        "connect_args": {"check_same_thread": False},
+        "pool_pre_ping": True,
         "echo": False,
     }
 
@@ -33,8 +49,8 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret_key")
 
     # CSRF Protection settings
-    WTF_CSRF_TIME_LIMIT = None  # No time limit for CSRF tokens
-    WTF_CSRF_SSL_STRICT = False  # Allow CSRF over HTTP for development
+    WTF_CSRF_TIME_LIMIT = None
+    WTF_CSRF_SSL_STRICT = False
 
     # Cookie/session settings (Render-friendly defaults)
     SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
@@ -53,13 +69,13 @@ class Config:
         CACHE_REDIS_URL = _redis_url
     else:
         CACHE_TYPE = 'simple'
-    CACHE_DEFAULT_TIMEOUT = 300  # 5 min default
+    CACHE_DEFAULT_TIMEOUT = 300
     CACHE_KEY_PREFIX = 'ctpi_'
 
-    SQLALCHEMY_DATABASE_URI = _database_url
+    SQLALCHEMY_DATABASE_URI = _database_uri
     SQLALCHEMY_ENGINE_OPTIONS = _engine_options_for(SQLALCHEMY_DATABASE_URI)
 
-    # Babel / i18n — تبديل اللغة (عربي / إنجليزي)
+    # Babel / i18n
     BABEL_DEFAULT_LOCALE = os.getenv('BABEL_DEFAULT_LOCALE', 'ar')
     BABEL_SUPPORTED_LOCALES = ['ar', 'en']
     BABEL_TRANSLATION_DIRECTORIES = os.getenv('BABEL_TRANSLATION_DIRECTORIES') or os.path.join(_project_root, 'translations')
