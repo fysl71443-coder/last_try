@@ -17,8 +17,13 @@ from models import get_saudi_now
 
 logger = logging.getLogger(__name__)
 from sqlalchemy import func, or_, and_, text
-from extensions import db
+from extensions import db, cache
 from sqlalchemy.exc import IntegrityError
+from types import SimpleNamespace
+
+# Cache TTL for trial balance and income statement (5 min)
+TB_CACHE_TTL = 300
+IS_CACHE_TTL = 300
 from models import Account, AccountUsageMap, JournalEntry, JournalLine, SalesInvoice, PurchaseInvoice, ExpenseInvoice, Salary, Payment, LedgerEntry, Settings, Employee
 
 bp = Blueprint('financials', __name__, url_prefix='/financials')
@@ -414,6 +419,18 @@ def income_statement():
     except Exception:
         pass
 
+    if cache:
+        is_key = f"income_statement:{start_date.isoformat()}:{end_date.isoformat()}:{branch}"
+        cached_is = cache.get(is_key)
+        if cached_is is not None:
+            from datetime import datetime as _dt
+            data = dict(cached_is)
+            data['start_date'] = _dt.strptime(cached_is['start_date'], '%Y-%m-%d').date()
+            data['end_date'] = _dt.strptime(cached_is['end_date'], '%Y-%m-%d').date()
+            if request.args.get('embed'):
+                return render_template('financials/income_statement_embed.html', data=data)
+            return render_template('financials/income_statement.html', data=data)
+
     # ---------- P&L from POSTED journals only. By Account.type (لا اعتماد على رموز ثابتة). ----------
     revenue_total = _jl_sum_by_type(['REVENUE', 'OTHER_INCOME'], False, start_date, end_date, branch)
     cogs_raw = _jl_sum_by_type(['COGS'], True, start_date, end_date, branch)
@@ -565,6 +582,15 @@ def income_statement():
         'branch_totals': branch_totals,
         'branch_channels': branch_channels,
     }
+    if cache:
+        try:
+            cache.set(
+                f"income_statement:{start_date.isoformat()}:{end_date.isoformat()}:{branch}",
+                {**data, 'start_date': start_date.isoformat(), 'end_date': end_date.isoformat()},
+                timeout=IS_CACHE_TTL,
+            )
+        except Exception:
+            pass
     if request.args.get('embed'):
         return render_template('financials/income_statement_embed.html', data=data)
     return render_template('financials/income_statement.html', data=data)
@@ -806,6 +832,17 @@ def balance_sheet():
     return render_template('financials/balance_sheet.html', data=data, settings=settings, logo_url=logo_url)
 
 
+def _trial_balance_from_cache(cached):
+    """Restore trial balance data from cache (dates + object-like access for template)."""
+    from datetime import datetime as _dt
+    out = dict(cached)
+    out['date'] = _dt.strptime(cached['date'], '%Y-%m-%d').date()
+    out['rows'] = [SimpleNamespace(**r) for r in cached['rows']]
+    for g in out['tb_groups']:
+        g['accounts'] = [SimpleNamespace(**a) for a in g.get('accounts', [])]
+    return out
+
+
 @bp.route('/trial_balance')
 def trial_balance():
     asof_str = request.args.get('date')
@@ -814,6 +851,16 @@ def trial_balance():
         asof = datetime.strptime(asof_str, '%Y-%m-%d').date() if asof_str else today
     except Exception:
         asof = today
+    hide_zero = (request.args.get('hide_zero') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
+    cache_key = f"trial_balance:{asof.isoformat()}:{hide_zero}"
+    if cache:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            tb_data = _trial_balance_from_cache(cached)
+            if request.args.get('embed'):
+                return render_template('financials/trial_balance_embed.html', data=tb_data)
+            return render_template('financials/trial_balance.html', data=tb_data)
+
     new_codes = _new_coa_codes()
     q = db.session.query(
         Account.code.label('code'),
@@ -826,7 +873,6 @@ def trial_balance():
      .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted'))) \
      .filter(Account.code.in_(new_codes))
     raw = q.group_by(Account.id).order_by(Account.type.asc(), Account.code.asc()).all()
-    hide_zero = (request.args.get('hide_zero') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
     rows = [r for r in raw if _tb_show(r, hide_zero_balance=hide_zero)]
 
     total_debit = float(sum([float(r.debit or 0) for r in rows]))
@@ -905,6 +951,22 @@ def trial_balance():
         'order': order,
         'hide_zero': hide_zero,
     }
+    if cache:
+        cache_data = {
+            'date': asof.isoformat(),
+            'company_name': company_name,
+            'rows': [_row_dict(r) for r in rows],
+            'total_debit': total_debit,
+            'total_credit': total_credit,
+            'type_totals': type_totals,
+            'tb_groups': tb_groups,
+            'order': order,
+            'hide_zero': hide_zero,
+        }
+        try:
+            cache.set(cache_key, cache_data, timeout=TB_CACHE_TTL)
+        except Exception:
+            pass
     if request.args.get('embed'):
         return render_template('financials/trial_balance_embed.html', data=tb_data)
     return render_template('financials/trial_balance.html', data=tb_data)
@@ -1293,11 +1355,11 @@ def account_statement():
 
     acc = Account.query.filter_by(code=code).first()
     if not acc:
-        return render_template('financials/account_statement.html', acc=None, entries=[], start_date=start_date, end_date=end_date, opening_balance=0.0)
+        return render_template('financials/account_statement.html', acc=None, entries=[], start_date=start_date, end_date=end_date, opening_balance=0.0, pagination=None)
     if code and str(code).strip() not in _new_coa_codes():
-        return render_template('financials/account_statement.html', acc=None, entries=[], start_date=start_date, end_date=end_date, opening_balance=0.0)
+        return render_template('financials/account_statement.html', acc=None, entries=[], start_date=start_date, end_date=end_date, opening_balance=0.0, pagination=None)
 
-    entries = db.session.query(JournalLine, JournalEntry.entry_number, JournalEntry.description) \
+    rows_raw = db.session.query(JournalLine, JournalEntry.entry_number, JournalEntry.description) \
         .join(JournalEntry, JournalLine.journal_id == JournalEntry.id) \
         .filter(JournalEntry.status == 'posted') \
         .filter(JournalLine.account_id == acc.id) \
@@ -1310,12 +1372,30 @@ def account_statement():
     opening_credit = float(db.session.query(func.coalesce(func.sum(JournalLine.credit), 0))
         .join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(JournalEntry.status == 'posted')
         .filter(JournalLine.account_id == acc.id).filter(JournalLine.line_date < start_date).scalar() or 0)
-    opening_balance = opening_debit - opening_credit if acc.type != 'LIABILITY' else opening_credit - opening_debit
+    opening_balance = opening_debit - opening_credit if (getattr(acc, 'type', None) or '').upper() != 'LIABILITY' else opening_credit - opening_debit
+
+    # رصيد متراكم لكل صف ثم ترقيم الصفحات
+    running = float(opening_balance)
+    entries_with_balance = []
+    for ln, entry_number, desc in rows_raw:
+        change = (float(ln.debit or 0) - float(ln.credit or 0)) if (getattr(acc, 'type', None) or '').upper() != 'LIABILITY' else (float(ln.credit or 0) - float(ln.debit or 0))
+        running += change
+        entries_with_balance.append((ln, entry_number, desc, round(running, 2)))
+
+    per_page = min(max(request.args.get('per_page', 50, type=int), 1), 500)
+    total_rows = len(entries_with_balance)
+    page = max(request.args.get('page', 1, type=int), 1)
+    total_pages = max(1, (total_rows + per_page - 1) // per_page) if total_rows else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+    entries = entries_with_balance[offset:offset + per_page]
+    pagination = {'page': page, 'per_page': per_page, 'total': total_rows, 'total_pages': total_pages,
+                  'has_prev': page > 1, 'has_next': page < total_pages, 'prev_num': page - 1 if page > 1 else None, 'next_num': page + 1 if page < total_pages else None} if total_pages > 1 else None
 
     from data.coa_new_tree import get_account_display_name
     account_display_name = get_account_display_name(acc.code, acc.name)
     return render_template('financials/account_statement.html', acc=acc, account_display_name=account_display_name, entries=entries,
-                           start_date=start_date, end_date=end_date, opening_balance=opening_balance)
+                           start_date=start_date, end_date=end_date, opening_balance=opening_balance, pagination=pagination)
 @bp.route('/backfill_journals', methods=['GET','POST'])
 def backfill_journals():
     if request.method == 'GET':
@@ -1409,6 +1489,8 @@ def backfill_journals():
 @bp.route('/cash_flow')
 def cash_flow():
     from datetime import datetime
+    from sqlalchemy.exc import OperationalError, ProgrammingError
+
     period = request.args.get('period', 'custom')
     start_arg = request.args.get('start_date')
     end_arg = request.args.get('end_date')
@@ -1422,11 +1504,121 @@ def cash_flow():
                 start_date = datetime(2025,10,1).date(); end_date = get_saudi_now().date()
     except Exception:
         pass
-    rows = db.session.query(JournalLine).join(Account, JournalLine.account_id == Account.id).join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(Account.code.in_(['1111','1112','1121','1122','1123']), JournalLine.line_date.between(start_date, end_date), JournalEntry.status == 'posted').all()
-    inflow = float(sum([float(r.debit or 0) for r in rows]))
-    outflow = float(sum([float(r.credit or 0) for r in rows]))
-    net = round(inflow - outflow, 2)
-    data = {'title': 'Cash Flow', 'start_date': start_date, 'end_date': end_date, 'inflow': inflow, 'outflow': outflow, 'net': net, 'rows': [{'code': r.account.code, 'name': r.account.name, 'debit': float(r.debit or 0), 'credit': float(r.credit or 0), 'date': r.line_date} for r in rows]}
+
+    # مصدر البيانات: جدول cashflow_summary إن وُجد، وإلا من قيود اليومية (حسابات النقد 1111,1112,1121,1122,1123)
+    rows_from_summary = None
+    try:
+        # دعم أعمدة: account_code, account_name, و line_date أو date، و debit، credit
+        for date_col in ('line_date', 'date'):
+            try:
+                q = text(
+                    "SELECT account_code AS code, account_name AS name, " + date_col + " AS line_date, debit, credit "
+                    "FROM cashflow_summary WHERE " + date_col + " BETWEEN :start AND :end ORDER BY " + date_col + ", account_code"
+                )
+                result = db.session.execute(q, {'start': start_date, 'end': end_date})
+                rows_from_summary = result.fetchall()
+                break
+            except (OperationalError, ProgrammingError):
+                continue
+    except (OperationalError, ProgrammingError, Exception):
+        rows_from_summary = None
+
+    CASH_CODES = ['1111', '1112', '1121', '1122', '1123']
+
+    def _opening_balances():
+        """رصيد افتتاحي لكل حساب نقدي حتى اليوم السابق لبداية الفترة."""
+        from datetime import timedelta
+        before_start = start_date - timedelta(days=1) if hasattr(start_date, '__sub__') else start_date
+        q = db.session.query(
+            Account.code,
+            func.coalesce(func.sum(JournalLine.debit), 0).label('d'),
+            func.coalesce(func.sum(JournalLine.credit), 0).label('c')
+        ).join(JournalLine, JournalLine.account_id == Account.id).join(
+            JournalEntry, JournalLine.journal_id == JournalEntry.id
+        ).filter(
+            Account.code.in_(CASH_CODES),
+            JournalLine.line_date <= before_start,
+            JournalEntry.status == 'posted'
+        ).group_by(Account.code).all()
+        out = {}
+        for r in q:
+            out[str(r.code)] = float(r.d or 0) - float(r.c or 0)
+        for c in CASH_CODES:
+            out.setdefault(c, 0.0)
+        return out
+
+    def _add_running_balance(rows_list):
+        """ترتيب الحركات بالتاريخ ثم إضافة الرصيد المتراكم بعد كل حركة (لكل حساب صندوق/بنك)."""
+        opening = _opening_balances()
+        for r in rows_list:
+            r['running_balance'] = None
+        # ترتيب: تاريخ ثم كود الحساب
+        def _sort_key(r):
+            d = r.get('date')
+            if hasattr(d, 'isoformat'):
+                d = d.isoformat()
+            return (str(d or ''), str(r.get('code') or ''))
+        rows_list.sort(key=_sort_key)
+        balance_by_code = dict(opening)
+        for r in rows_list:
+            code = str(r.get('code') or '')
+            debit = float(r.get('debit') or 0)
+            credit = float(r.get('credit') or 0)
+            balance_by_code[code] = balance_by_code.get(code, 0) + debit - credit
+            r['running_balance'] = round(balance_by_code[code], 2)
+        return rows_list
+
+    if rows_from_summary is not None and len(rows_from_summary) >= 0:
+        def _num(v):
+            try:
+                return float(v) if v is not None else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+        rows_list = []
+        inflow = 0.0
+        outflow = 0.0
+        for r in rows_from_summary:
+            row = getattr(r, '_mapping', r) if hasattr(r, '_mapping') else r
+            code = getattr(row, 'code', None) or (row[0] if isinstance(row, (list, tuple)) else None)
+            name = getattr(row, 'name', None) or (row[1] if isinstance(row, (list, tuple)) and len(row) > 1 else '')
+            line_date = getattr(row, 'line_date', None) or (row[2] if isinstance(row, (list, tuple)) and len(row) > 2 else None)
+            debit = _num(getattr(row, 'debit', None) or (row[3] if isinstance(row, (list, tuple)) and len(row) > 3 else 0))
+            credit = _num(getattr(row, 'credit', None) or (row[4] if isinstance(row, (list, tuple)) and len(row) > 4 else 0))
+            rows_list.append({'code': code, 'name': name or '', 'debit': debit, 'credit': credit, 'date': line_date})
+            inflow += debit
+            outflow += credit
+        net = round(inflow - outflow, 2)
+        rows_list = _add_running_balance(rows_list)
+        data = {'title': 'Cash Flow', 'start_date': start_date, 'end_date': end_date, 'inflow': inflow, 'outflow': outflow, 'net': net, 'rows': rows_list, 'source': 'cashflow_summary'}
+    else:
+        rows = db.session.query(JournalLine).join(Account, JournalLine.account_id == Account.id).join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(Account.code.in_(CASH_CODES), JournalLine.line_date.between(start_date, end_date), JournalEntry.status == 'posted').order_by(JournalLine.line_date.asc(), Account.code.asc()).all()
+        inflow = float(sum([float(r.debit or 0) for r in rows]))
+        outflow = float(sum([float(r.credit or 0) for r in rows]))
+        net = round(inflow - outflow, 2)
+        rows_list = [{'code': r.account.code, 'name': r.account.name, 'debit': float(r.debit or 0), 'credit': float(r.credit or 0), 'date': r.line_date} for r in rows]
+        rows_list = _add_running_balance(rows_list)
+        data = {'title': 'Cash Flow', 'start_date': start_date, 'end_date': end_date, 'inflow': inflow, 'outflow': outflow, 'net': net, 'rows': rows_list, 'source': 'journal'}
+
+    # ترقيم الصفحات: عرض 50 صف في الصفحة؛ عند الطباعة (print=1) عرض حتى 500 صف لظهورها في التقرير
+    default_per = 500 if request.args.get('print') else 50
+    per_page = min(max(request.args.get('per_page', default_per, type=int), 1), 2000)
+    total_rows = len(data['rows'])
+    page = max(request.args.get('page', 1, type=int), 1)
+    total_pages = max(1, (total_rows + per_page - 1) // per_page) if total_rows else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+    data['rows'] = data['rows'][offset:offset + per_page]
+    data['pagination'] = {
+        'page': page,
+        'per_page': per_page,
+        'total': total_rows,
+        'total_pages': total_pages,
+        'has_prev': page > 1,
+        'has_next': page < total_pages,
+        'prev_num': page - 1 if page > 1 else None,
+        'next_num': page + 1 if page < total_pages else None,
+    }
+
     if request.args.get('embed'):
         return render_template('financials/cash_flow_embed.html', data=data)
     return render_template('financials/cash_flow.html', data=data)

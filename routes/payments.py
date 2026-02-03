@@ -13,6 +13,7 @@ from sqlalchemy import func, or_
 from app import db, csrf
 from models import (
     PurchaseInvoice,
+    PurchaseInvoiceItem,
     ExpenseInvoice,
     SalesInvoice,
     SalesInvoiceItem,
@@ -601,8 +602,14 @@ def payments_json():
         if p_ids:
             for i, s in db.session.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount_paid), 0)).filter(Payment.invoice_type == 'purchase', Payment.invoice_id.in_(p_ids)).group_by(Payment.invoice_id).all():
                 p_paid[int(i)] = float(s or 0.0)
+        p_total_from_items = {}
+        if p_ids:
+            for iid, s in db.session.query(PurchaseInvoiceItem.invoice_id, func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0)).filter(PurchaseInvoiceItem.invoice_id.in_(p_ids)).group_by(PurchaseInvoiceItem.invoice_id).all():
+                p_total_from_items[int(iid)] = float(s or 0.0)
         for inv in p_rows:
             total = float(inv.total_after_tax_discount or 0.0)
+            if total == 0 and inv.id in p_total_from_items:
+                total = p_total_from_items[inv.id]
             paid = float(p_paid.get(int(inv.id), 0.0))
             invoices.append({'id': inv.id, 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id, 'type': 'purchase', 'party': inv.supplier_name or 'Supplier', 'total': total, 'paid': paid, 'status': compute_status(total, paid), 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')})
     except Exception:
@@ -739,8 +746,19 @@ def payments():
                      .all())
             for i, s in _rows:
                 p_paid[int(i)] = float(s or 0.0)
+        # Fallback: when header total is 0 (e.g. Render/sync), use sum of items so amounts display correctly
+        p_total_from_items = {}
+        if p_ids:
+            _item_rows = (db.session.query(PurchaseInvoiceItem.invoice_id, func.coalesce(func.sum(PurchaseInvoiceItem.total_price), 0))
+                          .filter(PurchaseInvoiceItem.invoice_id.in_(p_ids))
+                          .group_by(PurchaseInvoiceItem.invoice_id)
+                          .all())
+            for iid, s in _item_rows:
+                p_total_from_items[int(iid)] = float(s or 0.0)
         for inv in p_rows:
             total = float(inv.total_after_tax_discount or 0.0)
+            if total == 0 and inv.id in p_total_from_items:
+                total = p_total_from_items[inv.id]
             paid = float(p_paid.get(int(inv.id), 0.0))
             status_calc = compute_status(total, paid)
             invoices.append({'id': inv.id, 'invoice_number': getattr(inv, 'invoice_number', None) or inv.id, 'type': 'purchase', 'party': inv.supplier_name or 'Supplier', 'total': total, 'paid': paid, 'status': status_calc, 'date': (inv.date.strftime('%Y-%m-%d') if getattr(inv, 'date', None) else '')})

@@ -2316,6 +2316,9 @@ msgstr "إجمالي الكاش"
 msgid "Total Card"
 msgstr "إجمالي البطاقة"
 
+msgid "Total Credit"
+msgstr "إجمالي الآجل"
+
 msgid "Invoices count"
 msgstr "عدد الفواتير"
 
@@ -2414,3 +2417,27 @@ msgstr "لعرض البيانات التفصيلية (تفاصيل الفوات�
 
 msgid "Prepared by system"
 msgstr "تم الإعداد بواسطة النظام"
+
+msgid "Total assets"
+msgstr "إجمالي الأصول"
+
+msgid "Liabilities and equity"
+msgstr "الالتزامات وحقوق الملكية"
+
+msgid "Total liabilities and equity"
+msgstr "إجمالي الالتزامات وحقوق الملكية"
+
+msgid "Current liabilities"
+msgstr "التزامات متداولة"
+
+msgid "Non-current liabilities"
+msgstr "التزامات غير متداولة"
+
+msgid "Income statement"
+msgstr "قائمة الدخل"
+
+msgid "Account 3220 (current year profit) receives closing entry from net income."
+msgstr "حساب 3220 (أرباح السنة الحالية) يستقبل قيد الإقفال من صافي قائمة الدخل."
+
+msgid "No movements in this period. (Calculated from assets − liabilities)"
+msgstr "لا توجد حركات في هذه الفترة. (يُحسب من الأصول − الالتزامات)"

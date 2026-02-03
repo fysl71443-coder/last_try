@@ -930,6 +930,7 @@ def list_entries():
     if emp_id:
         from sqlalchemy import distinct
         query = query.join(JournalLine, JournalLine.journal_id == JournalEntry.id).filter(JournalLine.employee_id == int(emp_id)).group_by(JournalEntry.id)
+    query = query.options(selectinload(JournalEntry.lines))
     pag = query.paginate(page=page, per_page=per_page, error_out=False)
     employees = Employee.query.order_by(Employee.full_name).limit(500).all()
     entry_meta = _journal_list_entry_meta(pag.items)

@@ -203,7 +203,7 @@
         {% endif %}
         <div>
           <h1 class="bs-company">{{ data.company_name }}</h1>
-          <p class="bs-title">{{ _('Balance sheet') }} — المركز المالي</p>
+          <p class="bs-title">{{ _('Balance sheet') }}</p>
           <div class="bs-meta">
             <span><i class="fa-solid fa-calendar-days"></i> {{ _('As of date') }}: {{ data.date.strftime('%d-%m-%Y') }}</span>
             <span><i class="fa-solid fa-building"></i> {{ _('Branch') }}: {{ data.branch_label }}</span>
@@ -227,7 +227,7 @@
           <option value="china_town" {% if data.branch == 'china_town' %}selected{% endif %}>China Town</option>
           <option value="place_india" {% if data.branch == 'place_india' %}selected{% endif %}>Place India</option>
         </select>
-        <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-filter me-1"></i>فلترة</button>
+        <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-filter me-1"></i>{{ _('Filter') }}</button>
       </form>
     </div>
   </div>
@@ -300,16 +300,16 @@
         </div>
       </div>
       <div class="bs-total-row">
-        <span>إجمالي الأصول</span>
+        <span>{{ _('Total assets') }}</span>
         <span class="amount">{{ '{:,.2f}'.format(data.assets or 0) }} SAR</span>
       </div>
     </div>
 
     <div class="bs-panel liab-panel">
-      <div class="bs-panel-head liab"><i class="fa-solid fa-scale-balanced"></i> الالتزامات وحقوق الملكية</div>
+      <div class="bs-panel-head liab"><i class="fa-solid fa-scale-balanced"></i> {{ _('Liabilities and equity') }}</div>
       <div class="bs-section">
         <div class="bs-section-toggle" data-target="bs-detail-lc">
-          <span>التزامات متداولة {% if data.n_liab_current %}<span class="text-muted small">({{ data.n_liab_current }} حساب ذات حركة)</span>{% endif %}</span>
+          <span>{{ _('Current liabilities') }} {% if data.n_liab_current %}<span class="text-muted small">({{ data.n_liab_current }} {{ _('accounts') }})</span>{% endif %}</span>
           <span><span class="amount">{{ '{:,.2f}'.format(data.current_liabilities or 0) }}</span> <span class="small text-muted">SAR</span> <i class="fa-solid fa-chevron-down chevron"></i></span>
         </div>
         <div class="bs-section-detail collapsed" id="bs-detail-lc">
@@ -332,7 +332,7 @@
       </div>
       <div class="bs-section">
         <div class="bs-section-toggle" data-target="bs-detail-lnc">
-          <span>التزامات غير متداولة {% if data.n_liab_noncurrent %}<span class="text-muted small">({{ data.n_liab_noncurrent }} حساب ذات حركة)</span>{% endif %}</span>
+          <span>{{ _('Non-current liabilities') }} {% if data.n_liab_noncurrent %}<span class="text-muted small">({{ data.n_liab_noncurrent }} {{ _('accounts') }})</span>{% endif %}</span>
           <span><span class="amount">{{ '{:,.2f}'.format(data.noncurrent_liabilities or 0) }}</span> <span class="small text-muted">SAR</span> <i class="fa-solid fa-chevron-down chevron"></i></span>
         </div>
         <div class="bs-section-detail collapsed" id="bs-detail-lnc">
@@ -355,7 +355,7 @@
       </div>
       <div class="bs-section">
         <div class="bs-section-toggle" data-target="bs-detail-eq">
-          <span>حقوق الملكية {% if data.n_equity %}<span class="text-muted small">({{ data.n_equity }} حساب ذات حركة)</span>{% endif %}</span>
+          <span>{{ _('Equity') }} {% if data.n_equity %}<span class="text-muted small">({{ data.n_equity }} {{ _('accounts') }})</span>{% endif %}</span>
           <span><span class="amount">{{ '{:,.2f}'.format(data.equity or 0) }}</span> <span class="small text-muted">SAR</span> <i class="fa-solid fa-chevron-down chevron"></i></span>
         </div>
         <div class="bs-section-detail collapsed" id="bs-detail-eq">
@@ -371,24 +371,24 @@
               {% endfor %}
             </tbody>
           </table>
-          <p class="small text-muted mt-2 mb-0">حساب 3220 (أرباح السنة الحالية) يستقبل قيد الإقفال من صافي قائمة الدخل.</p>
+          <p class="small text-muted mt-2 mb-0">{{ _('Account 3220 (current year profit) receives closing entry from net income.') }}</p>
           {% else %}
-          <div class="bs-empty">لا توجد حركات في هذه الفترة. (يُحسب من الأصول − الالتزامات)</div>
-          <p class="small text-muted mt-2 mb-0">حساب 3220 (أرباح السنة الحالية) يستقبل قيد الإقفال من صافي قائمة الدخل.</p>
+          <div class="bs-empty">{{ _('No movements in this period. (Calculated from assets − liabilities)') }}</div>
+          <p class="small text-muted mt-2 mb-0">{{ _('Account 3220 (current year profit) receives closing entry from net income.') }}</p>
           {% endif %}
         </div>
       </div>
       <div class="bs-total-row">
-        <span>إجمالي الالتزامات وحقوق الملكية</span>
+        <span>{{ _('Total liabilities and equity') }}</span>
         <span class="amount">{{ '{:,.2f}'.format((data.liabilities or 0) + (data.equity or 0)) }} SAR</span>
       </div>
     </div>
   </div>
 
   <div class="d-flex gap-2 mt-3 no-print">
-    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-house me-1"></i>الرئيسية</a>
-    <a href="{{ url_for('financials.income_statement') }}" class="btn btn-outline-primary btn-sm">قائمة الدخل</a>
-    <a href="{{ url_for('financials.trial_balance') }}" class="btn btn-outline-primary btn-sm">ميزان المراجعة</a>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-house me-1"></i>{{ _('Home') }}</a>
+    <a href="{{ url_for('financials.income_statement') }}" class="btn btn-outline-primary btn-sm">{{ _('Income statement') }}</a>
+    <a href="{{ url_for('financials.trial_balance') }}" class="btn btn-outline-primary btn-sm">{{ _('Trial balance') }}</a>
   </div>
 </div>
 

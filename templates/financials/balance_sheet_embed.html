@@ -32,23 +32,23 @@
         <div class="collapse stmt-section-detail" id="bs-anc">
           <table class="stmt-table table table-sm"><tbody>{% for r in (data.asset_noncurrent_active or []) %}<tr><td>{{ r.code }} – {{ r.name }}</td><td class="stmt-num">{{ '{:,.2f}'.format(r.balance or 0) }}</td></tr>{% endfor %}</tbody></table>
         </div>
-        <div class="stmt-total-row"><span>إجمالي الأصول</span><span class="stmt-num">{{ '{:,.2f}'.format(data.assets or 0) }} SAR</span></div>
+        <div class="stmt-total-row"><span>{{ _('Total assets') }}</span><span class="stmt-num">{{ '{:,.2f}'.format(data.assets or 0) }} SAR</span></div>
       </div>
     </div>
   </div>
   <div class="col-md-6">
     <div class="stmt-panel">
-      <div class="stmt-panel-head"><i class="fa-solid fa-scale-balanced me-1"></i>الالتزامات وحقوق الملكية</div>
+      <div class="stmt-panel-head"><i class="fa-solid fa-scale-balanced me-1"></i>{{ _('Liabilities and equity') }}</div>
       <div class="p-2">
-        <div class="stmt-section-toggle collapsed" data-bs-toggle="collapse" data-bs-target="#bs-lc" style="cursor:pointer;"><span>التزامات متداولة</span><span class="stmt-num">{{ '{:,.2f}'.format(data.current_liabilities or 0) }} <i class="fa-solid fa-chevron-down chevron"></i></span></div>
+        <div class="stmt-section-toggle collapsed" data-bs-toggle="collapse" data-bs-target="#bs-lc" style="cursor:pointer;"><span>{{ _('Current liabilities') }}</span><span class="stmt-num">{{ '{:,.2f}'.format(data.current_liabilities or 0) }} <i class="fa-solid fa-chevron-down chevron"></i></span></div>
         <div class="collapse stmt-section-detail" id="bs-lc">
           <table class="stmt-table table table-sm"><tbody>{% for r in (data.liab_current_active or []) %}<tr><td>{{ r.code }} – {{ r.name }}</td><td class="stmt-num">{{ '{:,.2f}'.format(r.balance or 0) }}</td></tr>{% endfor %}</tbody></table>
         </div>
-        <div class="stmt-section-toggle collapsed" data-bs-toggle="collapse" data-bs-target="#bs-eq" style="cursor:pointer;"><span>حقوق الملكية</span><span class="stmt-num">{{ '{:,.2f}'.format(data.equity or 0) }} <i class="fa-solid fa-chevron-down chevron"></i></span></div>
+        <div class="stmt-section-toggle collapsed" data-bs-toggle="collapse" data-bs-target="#bs-eq" style="cursor:pointer;"><span>{{ _('Equity') }}</span><span class="stmt-num">{{ '{:,.2f}'.format(data.equity or 0) }} <i class="fa-solid fa-chevron-down chevron"></i></span></div>
         <div class="collapse stmt-section-detail" id="bs-eq">
           <table class="stmt-table table table-sm"><tbody>{% for r in (data.equity_active or []) %}<tr><td>{{ r.code }} – {{ r.name }}</td><td class="stmt-num">{{ '{:,.2f}'.format(r.balance or 0) }}</td></tr>{% endfor %}</tbody></table>
         </div>
-        <div class="stmt-total-row"><span>إجمالي الالتزامات وحقوق الملكية</span><span class="stmt-num">{{ '{:,.2f}'.format((data.liabilities or 0) + (data.equity or 0)) }} SAR</span></div>
+        <div class="stmt-total-row"><span>{{ _('Total liabilities and equity') }}</span><span class="stmt-num">{{ '{:,.2f}'.format((data.liabilities or 0) + (data.equity or 0)) }} SAR</span></div>
       </div>
     </div>
   </div>

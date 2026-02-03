@@ -9,6 +9,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_, text
+from sqlalchemy.orm import selectinload
 
 from app import db
 from models import (
@@ -152,10 +153,12 @@ def _sales_report_data(start_d, end_d, branch):
             by_pm_use['آجل'] = by_pm_use.get('آجل', 0) + v
     total_cash = by_pm_use.get('نقدي', 0)
     total_card = by_pm_use.get('بطاقة', 0)
+    total_credit = by_pm_use.get('آجل', 0)
     return {
         'rows': rows,
         'total_cash': total_cash,
         'total_card': total_card,
+        'total_credit': total_credit,
         'total_before_tax': total_before_tax,
         'total_discount': total_discount,
         'total_tax': total_tax,
@@ -192,7 +195,7 @@ def reports_print_payments():
         totals_by_party = {}
 
         if inv_type == 'purchase':
-            q = PurchaseInvoice.query.filter(PurchaseInvoice.date.between(start_d, end_d))
+            q = PurchaseInvoice.query.options(selectinload(PurchaseInvoice.items)).filter(PurchaseInvoice.date.between(start_d, end_d))
             for inv in q.order_by(PurchaseInvoice.date.desc(), PurchaseInvoice.id.desc()).all():
                 total = float(inv.total_after_tax_discount or 0.0)
                 paid = float(
@@ -214,7 +217,7 @@ def reports_print_payments():
                 t = totals_by_party.setdefault(party, {'TOTAL':0.0,'PAID':0.0,'REMAINING':0.0})
                 t['TOTAL'] += total; t['PAID'] += paid; t['REMAINING'] += remaining
         else:
-            q = ExpenseInvoice.query.filter(ExpenseInvoice.date.between(start_d, end_d))
+            q = ExpenseInvoice.query.options(selectinload(ExpenseInvoice.items)).filter(ExpenseInvoice.date.between(start_d, end_d))
             for inv in q.order_by(ExpenseInvoice.date.desc(), ExpenseInvoice.id.desc()).all():
                 total = float(inv.total_after_tax_discount or 0.0)
                 paid = float(
@@ -346,6 +349,11 @@ def reports_sales():
         today = get_saudi_now().date()
         start_d = end_d = today
     data = _sales_report_data(start_d, end_d, branch)
+    # عرض طريقة الدفع حسب لغة النظام (يدعم التبديل الكامل عربي/إنجليزي)
+    from flask_babel import gettext as _
+    _pm_display = {'نقدي': _('Cash'), 'بطاقة': _('Card'), 'آجل': _('Credit')}
+    for r in (data.get('rows') or []):
+        r['payment_method_display'] = _pm_display.get((r.get('payment_method') or '').strip(), _('Credit'))
     header = _report_header_context()
     branch_label = 'الكل' if not branch or branch == 'all' else BRANCH_LABELS.get(branch, branch)
     ctx = {

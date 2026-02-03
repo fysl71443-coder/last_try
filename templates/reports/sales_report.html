@@ -13,9 +13,9 @@
   .sr-card { background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); color: #fff; border-radius: 10px; padding: 0.85rem 1rem; text-align: center; }
   .sr-card .label { font-size: 0.8rem; opacity: 0.9; margin-bottom: 0.25rem; }
   .sr-card .value { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .sr-table-wrap { overflow-x: auto; border: 1px solid var(--sr-border); border-radius: 10px; overflow: hidden; }
+  .sr-table-wrap { overflow-x: auto; max-height: 70vh; overflow-y: auto; border: 1px solid var(--sr-border); border-radius: 10px; }
   .sr-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-  .sr-table th { background: var(--sr-primary); color: #fff; padding: 0.6rem 0.75rem; text-align: right; font-weight: 600; }
+  .sr-table th { position: sticky; top: 0; z-index: 1; background: var(--sr-primary); color: #fff; padding: 0.6rem 0.75rem; text-align: right; font-weight: 600; box-shadow: 0 1px 0 rgba(0,0,0,0.1); }
   .sr-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--sr-border); text-align: right; }
   .sr-table tbody tr:hover { background: var(--sr-bg); }
   .sr-table tfoot tr { background: #e3f2fd; font-weight: 700; border-top: 2px solid var(--sr-primary); }
@@ -43,6 +43,9 @@
     .sr-table tfoot tr { background: #e8e8e8 !important; color: #000 !important; border-top: 2px solid #333 !important; }
     .sr-table tfoot td { color: #000 !important; border: 1px solid #333 !important; }
     .sr-table tbody tr:hover { background: #fff !important; }
+    .sr-table-wrap { max-height: none !important; }
+    .sr-table th { position: static !important; }
+    .sr-table tbody tr:nth-of-type(25n) { page-break-after: always; }
     @page { size: A4; margin: 15mm; }
   }
 </style>
@@ -101,6 +104,10 @@
       <div class="value">{{ '{:,.2f}'.format(data.total_card or 0) }}</div>
     </div>
     <div class="sr-card">
+      <div class="label">{{ _('Total Credit') }} SAR</div>
+      <div class="value">{{ '{:,.2f}'.format(data.total_credit or 0) }}</div>
+    </div>
+    <div class="sr-card">
       <div class="label">{{ _('Invoices count') }}</div>
       <div class="value">{{ data.count or 0 }}</div>
     </div>
@@ -138,7 +145,7 @@
           <td>{{ '{:,.2f}'.format(r.tax or 0) }}</td>
           <td>{{ '{:,.2f}'.format(r.discount or 0) }}</td>
           <td>{{ '{:,.2f}'.format(r.total or 0) }}</td>
-          <td>{{ r.payment_method }}</td>
+          <td>{{ r.payment_method_display | default(r.payment_method) }}</td>
         </tr>
         {% endfor %}
         {% if not (data.rows or []) %}

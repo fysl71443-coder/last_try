@@ -4,6 +4,22 @@
   <meta charset="utf-8"/>
   <title>Cash Flow</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+  <style>
+    .cf-table-wrap { overflow-x: auto; max-height: 70vh; }
+    .cf-table-wrap table { margin-bottom: 0; }
+    .cf-table-wrap thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 1; box-shadow: 0 1px 0 #dee2e6; white-space: nowrap; }
+    .cf-debit { color: #198754; }
+    .cf-credit { color: #dc3545; }
+    .pagination-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0; }
+    @media print {
+      .cf-table-wrap { max-height: none; overflow: visible; }
+      .cf-table-wrap thead th { position: static; }
+      .pagination-wrap, .no-print { display: none !important; }
+      .cf-table-wrap tbody tr { page-break-inside: avoid; }
+      .cf-print-break { page-break-after: auto; }
+      .cf-table-wrap tbody tr:nth-of-type(25n) { page-break-after: always; }
+    }
+  </style>
 </head>
 <body class="p-3">
   <div class="container">
@@ -15,19 +31,31 @@
       <div class="col-md-4"><div class="border rounded p-2">Net: <strong>{{ '%.2f'|format(data.net or 0) }}</strong></div></div>
     </div>
     <hr/>
-    <table class="table table-sm table-striped">
-      <thead><tr><th>Account</th><th>Date</th><th class="text-end">Debit</th><th class="text-end">Credit</th></tr></thead>
-      <tbody>
-        {% for r in data.rows %}
-        <tr>
-          <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ r.code }} – {{ r.name }}</a></td>
-          <td>{{ r.date }}</td>
-          <td class="text-end">{{ '%.2f'|format(r.debit or 0) }}</td>
-          <td class="text-end">{{ '%.2f'|format(r.credit or 0) }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="cf-table-wrap">
+      <table class="table table-sm table-striped">
+        <thead><tr><th>Account</th><th>Date</th><th class="text-end">Debit (Inflow)</th><th class="text-end">Credit (Outflow)</th><th class="text-end">Balance</th></tr></thead>
+        <tbody>
+          {% for r in data.rows %}
+          <tr>
+            <td><a href="{{ url_for('financials.account_statement') }}?code={{ r.code }}&start_date={{ data.start_date }}&end_date={{ data.end_date }}" class="text-decoration-none">{{ r.code }} – {{ r.name }}</a></td>
+            <td>{{ r.date }}</td>
+            <td class="text-end cf-debit">{{ '%.2f'|format(r.debit or 0) }}</td>
+            <td class="text-end cf-credit">{{ '%.2f'|format(r.credit or 0) }}</td>
+            <td class="text-end fw-semibold">{{ '%.2f'|format(r.running_balance | default(0)) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if data.pagination and data.pagination.total_pages > 1 %}
+    <div class="pagination-wrap no-print">
+      {% set pag = data.pagination %}
+      <span class="text-muted small">{{ pag.total }} صف — صفحة {{ pag.page }} / {{ pag.total_pages }}</span>
+      <a href="{{ url_for('financials.cash_flow', start_date=data.start_date, end_date=data.end_date, page=pag.prev_num or 1, per_page=pag.per_page) }}" class="btn btn-sm btn-outline-secondary {% if not pag.has_prev %}disabled{% endif %}">السابق</a>
+      <a href="{{ url_for('financials.cash_flow', start_date=data.start_date, end_date=data.end_date, page=pag.next_num or pag.total_pages, per_page=pag.per_page) }}" class="btn btn-sm btn-outline-secondary {% if not pag.has_next %}disabled{% endif %}">التالي</a>
+      <a href="{{ url_for('financials.cash_flow', start_date=data.start_date, end_date=data.end_date, print=1, per_page=500) }}" class="btn btn-sm btn-outline-primary" target="_blank">طباعة الكل</a>
+    </div>
+    {% endif %}
   </div>
 </body>
 </html>
