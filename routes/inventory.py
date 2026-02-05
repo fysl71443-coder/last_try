@@ -268,7 +268,7 @@ def inventory_intelligence():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        flash(f'فشل تحميل لوحة الذكاء: {e}', 'danger')
+        flash(_('فشل تحميل لوحة الذكاء: %(error)s', error=e), 'danger')
         return redirect(url_for('inventory.inventory'))
 
 @bp.route('/inventory', endpoint='inventory')

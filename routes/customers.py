@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask_babel import gettext as _
 from flask_login import login_required
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -111,16 +112,16 @@ def customers():
         discount = request.form.get('discount_percent', type=float) or 0.0
         ctype = _ui_to_db_customer_type(request.form.get('customer_type'))
         if not name:
-            flash('Name is required', 'danger')
+            flash(_('Name is required'), 'danger')
         else:
             try:
                 c = Customer(name=name, phone=phone, customer_type=ctype, discount_percent=float(discount or 0))
                 db.session.add(c)
                 db.session.commit()
-                flash('Customer added', 'success')
+                flash(_('Customer added'), 'success')
             except Exception as e:
                 db.session.rollback()
-                flash('Error adding customer', 'danger')
+                flash(_('Error adding customer'), 'danger')
         return redirect(url_for('customers.customers'))
     
     # Pagination and filtering
@@ -183,7 +184,7 @@ def customer_edit(cid):
     try:
         c = db.session.get(Customer, cid)
         if not c:
-            flash('Customer not found', 'warning')
+            flash(_('Customer not found'), 'warning')
             return redirect(url_for('customers.customers'))
         
         if request.method == 'POST':
@@ -192,7 +193,7 @@ def customer_edit(cid):
             discount = request.form.get('discount_percent', type=float) or 0.0
             ctype = _ui_to_db_customer_type(request.form.get('customer_type'))
             if not name:
-                flash('Name is required', 'danger')
+                flash(_('Name is required'), 'danger')
             else:
                 try:
                     c.name = name
@@ -200,16 +201,16 @@ def customer_edit(cid):
                     c.customer_type = ctype
                     c.discount_percent = float(discount or 0)
                     db.session.commit()
-                    flash('Customer updated successfully', 'success')
+                    flash(_('Customer updated successfully'), 'success')
                     return redirect(url_for('customers.customers'))
                 except Exception as e:
                     db.session.rollback()
-                    flash(f'Error updating customer: {e}', 'danger')
+                    flash(_('Error updating customer: %(error)s', error=e), 'danger')
         
         return render_template('customers_edit.html', c=c)
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {e}', 'danger')
+        flash(_('Error: %(error)s', error=e), 'danger')
         return redirect(url_for('customers.customers'))
 
 
@@ -238,7 +239,7 @@ def customer_statement(cid):
     """كشف حساب عميل آجل: فواتير ومسدد من القيود (1141) + جدول الدفعات القديم؛ كل تحصيلة في صف مع التوقيت الفعلي."""
     c = db.session.get(Customer, cid)
     if not c:
-        flash('Customer not found', 'warning')
+        flash(_('Customer not found'), 'warning')
         return redirect(url_for('customers.customers'))
     start_arg = (request.args.get('start_date') or '').strip()
     end_arg = (request.args.get('end_date') or '').strip()
@@ -452,11 +453,11 @@ def customer_toggle(cid):
     try:
         c = db.session.get(Customer, cid)
         if not c:
-            flash('Customer not found', 'warning')
+            flash(_('Customer not found'), 'warning')
             return redirect(url_for('customers.customers'))
         c.active = not bool(getattr(c, 'active', True))
         db.session.commit()
-        flash('Customer status updated', 'success')
+        flash(_('Customer status updated'), 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error updating customer: {e}', 'danger')
@@ -469,12 +470,12 @@ def customer_delete(cid):
     try:
         c = db.session.get(Customer, cid)
         if not c:
-            flash('Customer not found', 'warning')
+            flash(_('Customer not found'), 'warning')
         else:
             try:
                 db.session.delete(c)
                 db.session.commit()
-                flash('Customer deleted', 'success')
+                flash(_('Customer deleted'), 'success')
             except IntegrityError:
                 db.session.rollback()
                 c.active = False
@@ -482,7 +483,7 @@ def customer_delete(cid):
                 flash('Customer has related records; deactivated instead', 'warning')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error deleting customer: {e}', 'danger')
+        flash(_('Error deleting customer: %(error)s', error=e), 'danger')
     return redirect(url_for('customers.customers'))
 
 

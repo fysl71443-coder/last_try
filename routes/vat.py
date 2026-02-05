@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, send_file, url_for, redirect, flash, Response
+from flask_babel import gettext as _
 from sqlalchemy import func
 from datetime import date, datetime
 import io
@@ -213,7 +214,7 @@ def vat_print():
     if period == 'monthly':
         ym = request.args.get('month')
         if not ym:
-            flash("حدد الشهر للطباعة", "danger")
+            flash(_("حدد الشهر للطباعة"), "danger")
             return redirect(url_for('vat.vat_dashboard'))
         try:
             y, m = ym.split('-'); yy = int(y); mm = int(m)
@@ -230,7 +231,7 @@ def vat_print():
             year = int(year or date.today().year)
             quarter = int(quarter or ((date.today().month - 1)//3 + 1))
         except Exception:
-            flash("حدد السنة والربع للطباعة", "danger")
+            flash(_("حدد السنة والربع للطباعة"), "danger")
             return redirect(url_for('vat.vat_dashboard'))
         start_date, end_date = quarter_start_end(year, quarter)
 

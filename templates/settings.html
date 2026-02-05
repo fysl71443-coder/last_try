@@ -5,7 +5,7 @@
 {% set back_url = '#' %}
 {% endif %}
 
-{% block title %}Settings{% endblock %}
+{% block title %}{{ _('Settings') }}{% endblock %}
 {% block content %}
 <div class="container py-4 ops-layout hub-wrap">
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -13,7 +13,7 @@
       {% for category, message in messages %}
         <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
           {{ message }}
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ _('Close') }}"></button>
         </div>
       {% endfor %}
     {% endif %}
@@ -22,8 +22,8 @@
   <div class="ops-header-bar">
     <span class="ops-icon"><i class="fa-solid fa-gear"></i></span>
     <div>
-      <h1 class="ops-title mb-0">الإعدادات / Settings</h1>
-      <span class="ops-subtitle">General, branches, print</span>
+      <h1 class="ops-title mb-0">{{ _('الإعدادات / Settings') }}</h1>
+      <span class="ops-subtitle">{{ _('General, branches, print') }}</span>
     </div>
     <div class="ops-actions" data-partial-links>
       <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm"><i class="fa-solid fa-house"></i> {{ _('Dashboard') }}</a>
@@ -31,7 +31,7 @@
   </div>
 
   <div class="ops-form-card mt-0 mb-3">
-    <div class="ops-form-head">الإعدادات / Settings</div>
+    <div class="ops-form-head">{{ _('الإعدادات / Settings') }}</div>
     <div class="ops-form-body pt-3">
   <ul class="nav nav-tabs screen-tabs mb-3" id="settingsTabs" role="tablist">
     <li class="nav-item" role="presentation">
@@ -41,17 +41,17 @@
     </li>
     <li class="nav-item" role="presentation">
       <button class="nav-link" id="vat-tab" data-bs-toggle="tab" data-bs-target="#vat" type="button" role="tab">
-        <i class="fa-solid fa-percent me-1"></i> VAT
+        <i class="fa-solid fa-percent me-1"></i> {{ _('VAT') }}
       </button>
     </li>
     <li class="nav-item" role="presentation">
       <button class="nav-link" id="china-tab" data-bs-toggle="tab" data-bs-target="#china" type="button" role="tab">
-        <i class="fa-solid fa-store me-1"></i> China Town
+        <i class="fa-solid fa-store me-1"></i> {{ _('China Town') }}
       </button>
     </li>
     <li class="nav-item" role="presentation">
       <button class="nav-link" id="india-tab" data-bs-toggle="tab" data-bs-target="#india" type="button" role="tab">
-        <i class="fa-solid fa-store me-1"></i> Place India
+        <i class="fa-solid fa-store me-1"></i> {{ _('Place India') }}
       </button>
     </li>
     <li class="nav-item" role="presentation">

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="{{ get_locale() or 'ar' }}" dir="{{ 'rtl' if (get_locale() or 'ar') == 'ar' else 'ltr' }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -18,12 +18,12 @@
       {% if show_logo and logo_url %}
         <img src="{{ logo_url }}" alt="" class="acct-print-logo">
       {% endif %}
-      <h1>{{ company_name or 'Company' }}</h1>
+      <h1>{{ company_name or _('Company') }}</h1>
       <small>VAT: {{ tax_number or '-' }}{% if address %} | {{ address }}{% endif %}</small>
     </div>
     <div class="acct-print-report-title">
       <h2>{{ report_title }}</h2>
-      <small>المركز المالي / الميزانية العمومية</small>
+      <small>{{ _('المركز المالي / الميزانية العمومية') }}</small>
     </div>
   </div>
 

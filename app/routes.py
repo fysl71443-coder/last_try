@@ -9,6 +9,10 @@ from sqlalchemy.exc import IntegrityError
 
 from app import db, csrf
 from app import __init__ as app_init  # for template globals, including can()
+try:
+    from flask_babel import gettext as _
+except Exception:
+    _ = lambda s, **kwargs: (s.format(**kwargs) if kwargs else s)
 ext_db = None
 from app.models import AppKV, TableLayout
 from models import User
@@ -813,11 +817,11 @@ def login():
                     db.session.add(new_admin)
                     db.session.commit()
                     login_user(new_admin)
-                    flash('تم إنشاء مستخدم المدير الافتراضي بنجاح', 'success')
+                    flash(_('تم إنشاء مستخدم المدير الافتراضي بنجاح'), 'success')
                     return redirect(url_for('main.dashboard'))
                 except Exception:
                     db.session.rollback()
-                    flash('خطأ في تهيئة المستخدم الافتراضي', 'danger')
+                    flash(_('خطأ في تهيئة المستخدم الافتراضي'), 'danger')
 
         if user and password and user.check_password(password):
             try:
@@ -828,13 +832,13 @@ def login():
             if use_2fa:
                 otp = (request.form.get('otp') or '').strip()
                 if not otp:
-                    flash('أدخل رمز التحقق الثنائي 2FA', 'warning')
+                    flash(_('أدخل رمز التحقق الثنائي 2FA'), 'warning')
                     return render_template('login.html')
                 try:
                     import base64, hmac, hashlib, time
                     sec = getattr(user,'twofa_secret', None) or ''
                     if not sec:
-                        flash('لم يتم إعداد 2FA لهذا المستخدم', 'danger')
+                        flash(_('لم يتم إعداد 2FA لهذا المستخدم'), 'danger')
                         return render_template('login.html')
                     def _totp_check(secret, code, window=1):
                         try:
@@ -853,16 +857,16 @@ def login():
                                 return True
                         return False
                     if not _totp_check(sec, otp, 1):
-                        flash('رمز 2FA غير صحيح', 'danger')
+                        flash(_('رمز 2FA غير صحيح'), 'danger')
                         return render_template('login.html')
                 except Exception:
-                    flash('حدث خطأ في التحقق الثنائي', 'danger')
+                    flash(_('حدث خطأ في التحقق الثنائي'), 'danger')
                     return render_template('login.html')
             remember = request.form.get('remember') in ('on', '1', 'true', 'yes')
             login_user(user, remember=remember)
             return redirect(url_for('main.dashboard'))
         else:
-            flash('خطأ في اسم المستخدم أو كلمة المرور', 'danger')
+            flash(_('خطأ في اسم المستخدم أو كلمة المرور'), 'danger')
     return render_template('login.html')
 
 @main.route('/debug/db', methods=['GET'], endpoint='debug_db')
@@ -947,7 +951,7 @@ def order_invoices_list():
         return render_template('order_invoices.html', orders=orders, totals=totals, items_summary=items_summary, current_branch=branch_f)
     except Exception as e:
         current_app.logger.error('order_invoices_list error: %s', e)
-        flash('Failed to load order invoices', 'danger')
+        flash(_('Failed to load order invoices'), 'danger')
         return render_template('order_invoices.html', orders=[], totals={'subtotal_sum':0,'discount_sum':0,'vat_sum':0,'total_sum':0}, items_summary=[])
 
 @main.route('/orders/clear', methods=['POST'], endpoint='order_invoices_clear_all')
@@ -958,13 +962,13 @@ def order_invoices_clear_all():
         num = db.session.query(OrderInvoice).delete(synchronize_session=False)
         db.session.commit()
         try:
-            flash(f'تم حذف {num} من فواتير الطلبات نهائياً', 'success')
+            flash(_('تم حذف %(num)s من فواتير الطلبات نهائياً', num=num), 'success')
         except Exception:
-            flash('تم حذف جميع فواتير الطلبات نهائياً', 'success')
+            flash(_('تم حذف جميع فواتير الطلبات نهائياً'), 'success')
     except Exception as e:
         db.session.rollback()
         current_app.logger.error('order_invoices_clear_all error: %s', e)
-        flash('فشل حذف فواتير الطلبات', 'danger')
+        flash(_('فشل حذف فواتير الطلبات'), 'danger')
     return redirect(url_for('main.order_invoices_list'))
 
 @main.route('/invoices', endpoint='invoices')
@@ -1074,8 +1078,6 @@ def invoices():
 @main.route('/invoices/<string:kind>/<int:invoice_id>', endpoint='view_invoice')
 @login_required
 def view_invoice(kind, invoice_id):
-    from flask import flash
-    from flask_babel import gettext as _
     kind = (kind or '').lower()
     # Normalize: invoices list uses 'sales','purchases','expenses'; route accepts 'sales','purchase','expense'
     if kind == 'purchases':
@@ -1123,9 +1125,9 @@ def invoices_delete():
     # If user chose to delete selected invoices but none were selected, do not proceed with bulk delete
     if scope == 'selected' and not ids:
         try:
-            flash('لم يتم تحديد أي فاتورة للحذف', 'warning')
+            flash(_('لم يتم تحديد أي فاتورة للحذف'), 'warning')
         except Exception:
-            flash('No selected invoices to delete', 'warning')
+            flash(_('No selected invoices to delete'), 'warning')
         return redirect(url_for('main.invoices', type=inv_type))
     try:
         if inv_type == 'sales':
@@ -1213,10 +1215,10 @@ def invoices_delete():
                 db.session.delete(inv)
                 deleted += 1
         db.session.commit()
-        flash(f"Deleted {deleted} invoice(s)", 'success')
+        flash(_('Deleted %(n)s invoice(s)', n=deleted), 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f"Delete failed: {e}", 'danger')
+        flash(_('Delete failed: %(error)s', error=e), 'danger')
     return redirect(url_for('main.invoices', type=inv_type))
 
 
@@ -1269,7 +1271,7 @@ def employees():
 @login_required
 def employee_delete(eid=None):
     if not user_can('employees','delete'):
-        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
         return redirect(url_for('main.dashboard'))
     if eid is None:
         eid = request.args.get('id', type=int)
@@ -1291,10 +1293,10 @@ def employee_delete(eid=None):
             pass
         db.session.delete(emp)
         db.session.commit()
-        flash('Employee and all related records deleted successfully', 'success')
+        flash(_('Employee and all related records deleted successfully'), 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error deleting employee: {e}', 'danger')
+        flash(_('Error deleting employee: %(error)s', error=e), 'danger')
     return redirect(url_for('main.employees'))
 
 @main.route('/employees/create-salary', methods=['POST'], endpoint='employees_create_salary')
@@ -1388,7 +1390,7 @@ def salaries_pay():
             else:
                 method = 'cash'
             if not (amount > 0):
-                error_msg = 'قيمة السداد مطلوبة'
+                error_msg = _('قيمة السداد مطلوبة')
                 if request.is_json or ('application/json' in (request.headers.get('Accept') or '').lower()):
                     return jsonify({'error': True, 'message': error_msg}), 400
                 flash(error_msg, 'danger')
@@ -1397,7 +1399,7 @@ def salaries_pay():
             # Validate employee id for single-payment mode
             if (emp_id_raw or '').strip().lower() != 'all':
                 if not str(emp_id_raw or '').strip().isdigit():
-                    error_msg = 'الموظف غير محدد أو رقم غير صالح'
+                    error_msg = _('الموظف غير محدد أو رقم غير صالح')
                     if request.is_json or ('application/json' in (request.headers.get('Accept') or '').lower()):
                         return jsonify({'error': True, 'message': error_msg}), 400
                     flash(error_msg, 'danger')
@@ -1407,7 +1409,7 @@ def salaries_pay():
                 except Exception:
                     emp_check = None
                 if not emp_check:
-                    error_msg = 'الموظف غير موجود'
+                    error_msg = _('الموظف غير موجود')
                     if request.is_json or ('application/json' in (request.headers.get('Accept') or '').lower()):
                         return jsonify({'error': True, 'message': error_msg}), 404
                     flash(error_msg, 'danger')
@@ -1612,13 +1614,13 @@ def salaries_pay():
                 pass
 
             db.session.commit()
-            success_msg = 'تم تسجيل السداد'
+            success_msg = _('تم تسجيل السداد')
             if request.is_json or ('application/json' in (request.headers.get('Accept') or '').lower()):
                 return jsonify({'success': True, 'message': success_msg, 'payment_ids': created_payment_ids})
             flash(success_msg, 'success')
         except Exception as e:
             db.session.rollback()
-            error_msg = f'خطأ في حفظ الراتب/الدفع: {str(e)}'
+            error_msg = _('خطأ في حفظ الراتب/الدفع: %(error)s', error=str(e))
             if request.is_json or ('application/json' in (request.headers.get('Accept') or '').lower()):
                 return jsonify({'error': True, 'message': error_msg}), 400
             flash(error_msg, 'danger')
@@ -2475,7 +2477,7 @@ def pay_salary(emp_id):
             try:
                 return salaries_pay()
             except Exception as e:
-                flash(f'Error saving salary/payment: {e}', 'danger')
+                flash(_('Error saving salary/payment: %(error)s', error=e), 'danger')
                 return redirect(url_for('main.pay_salary', emp_id=emp.id, employee_id=selected_employee_id, year=year, month=month))
 
     # Build employees list for dropdown
@@ -3480,7 +3482,7 @@ def menu_item_add():
         if meal_id:
             existing = MenuItem.query.filter_by(category_id=int(cat_id), meal_id=int(meal_id)).first()
             if existing:
-                flash('الصنف مضاف مسبقاً لهذا القسم / Item already in this section', 'info')
+                flash(_('الصنف مضاف مسبقاً لهذا القسم / Item already in this section'), 'info')
                 return redirect(url_for('main.menu', cat_id=cat_id))
         # Resolve meal if provided
         meal = db.session.get(Meal, int(meal_id)) if meal_id else None
@@ -3493,16 +3495,16 @@ def menu_item_add():
             final_price = float(price or 0.0)
         final_name = (final_name or '').strip()[:150]
         if not final_name:
-            flash('Missing item name', 'danger')
+            flash(_('Missing item name'), 'danger')
             return redirect(url_for('main.menu', cat_id=cat_id))
         it = MenuItem(name=final_name, price=final_price, category_id=int(cat_id), meal_id=(meal.id if meal else None))
         db.session.add(it)
         db.session.commit()
-        flash('تمت إضافة الصنف / Item added', 'success')
+        flash(_('تمت إضافة الصنف / Item added'), 'success')
         return redirect(url_for('main.menu', cat_id=cat_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error creating item: {e}', 'danger')
+        flash(_('Error creating item: %(error)s', error=e), 'danger')
         return redirect(url_for('main.menu', cat_id=cat_id))
 
 
@@ -3514,10 +3516,10 @@ def menu_items_bulk_add():
     cat_id = request.form.get('section_id', type=int)
     meal_ids = request.form.getlist('meal_ids[]') or request.form.getlist('meal_ids')
     if not cat_id:
-        flash('Missing section', 'danger')
+        flash(_('Missing section'), 'danger')
         return redirect(url_for('main.menu'))
     if not meal_ids:
-        flash('لم تحدد أي أصناف / No meals selected', 'warning')
+        flash(_('لم تحدد أي أصناف / No meals selected'), 'warning')
         return redirect(url_for('main.menu', cat_id=cat_id))
     added = 0
     skipped = 0
@@ -3541,12 +3543,12 @@ def menu_items_bulk_add():
             added += 1
         db.session.commit()
         if skipped:
-            flash(f'تمت إضافة {added} صنف، وتخطي {skipped} (مضاف مسبقاً) / Added {added}, skipped {skipped} (already in section)', 'success')
+            flash(_('تمت إضافة %(added)s صنف، وتخطي %(skipped)s (مضاف مسبقاً) / Added %(added)s, skipped %(skipped)s (already in section)', added=added, skipped=skipped), 'success')
         else:
-            flash(f'تمت إضافة {added} صنف للقسم / Added {added} item(s)', 'success')
+            flash(_('تمت إضافة %(added)s صنف للقسم / Added %(added)s item(s)', added=added), 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {e}', 'danger')
+        flash(_('Error: %(error)s', error=e), 'danger')
     return redirect(url_for('main.menu', cat_id=cat_id))
 
 
@@ -3559,7 +3561,7 @@ def menu_item_update(item_id):
     try:
         it = db.session.get(MenuItem, int(item_id))
         if not it:
-            flash('Item not found', 'warning')
+            flash(_('Item not found'), 'warning')
             return redirect(url_for('main.menu'))
         if name:
             it.name = name
@@ -3569,7 +3571,7 @@ def menu_item_update(item_id):
         return redirect(url_for('main.menu', cat_id=it.category_id))
     except Exception:
         db.session.rollback()
-        flash('Error updating item', 'danger')
+        flash(_('Error updating item'), 'danger')
         return redirect(url_for('main.menu'))
 
 
@@ -3583,11 +3585,11 @@ def menu_item_delete(item_id):
             cat_id = it.category_id
             db.session.delete(it)
             db.session.commit()
-            flash('Item deleted', 'info')
+            flash(_('Item deleted'), 'info')
             return redirect(url_for('main.menu', cat_id=cat_id))
     except Exception:
         db.session.rollback()
-        flash('Error deleting item', 'danger')
+        flash(_('Error deleting item'), 'danger')
     return redirect(url_for('main.menu'))
 
 
@@ -3979,10 +3981,10 @@ def settings():
                 invalidate_settings_cache()
             except Exception:
                 pass
-            flash('Settings saved', 'success')
+            flash(_('Settings saved'), 'success')
         except Exception as e:
             db.session.rollback()
-            flash('Could not save settings: ' + str(e), 'danger')
+            flash(_('Could not save settings: %(error)s', error=str(e)), 'danger')
         return redirect(url_for('main.settings'))
     return render_template('settings.html', s=s or Settings())
 
@@ -4007,7 +4009,7 @@ def table_manager(branch_code):
     
     # Check if branch exists
     if branch_code not in branch_labels:
-        flash('Branch not found', 'error')
+        flash(_('Branch not found'), 'error')
         return redirect(url_for('main.table_settings'))
     
     branch_label = branch_labels[branch_code]

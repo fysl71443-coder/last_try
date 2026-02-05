@@ -294,7 +294,7 @@ def expenses():
             from services.gl_truth import can_create_invoice_on_date
             ok, period_err = can_create_invoice_on_date(inv_date)
             if not ok:
-                flash(period_err or 'الفترة المالية مغلقة لهذا التاريخ.', 'danger')
+                flash(period_err or _('الفترة المالية مغلقة لهذا التاريخ.'), 'danger')
                 return redirect(request.url)
             try:
                 last = ExpenseInvoice.query.order_by(ExpenseInvoice.id.desc()).first()
@@ -424,7 +424,7 @@ def expense_delete(eid):
     try:
         inv = ExpenseInvoice.query.get(int(eid))
         if not inv:
-            flash('Expense invoice not found', 'warning')
+            flash(_('Expense invoice not found'), 'warning')
             return redirect(url_for('expenses.expenses'))
         for it in (inv.items or []):
             try:

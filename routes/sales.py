@@ -10,6 +10,7 @@ from datetime import datetime, date, time, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app
+from flask_babel import gettext as _
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_, text
 
@@ -70,7 +71,7 @@ def sales():
 @login_required
 def sales_tables(branch_code):
     if not user_can('sales','view', branch_code):
-        flash('لا تملك صلاحية الوصول لفرع المبيعات هذا', 'warning')
+        flash(_('لا تملك صلاحية الوصول لفرع المبيعات هذا'), 'warning')
         return redirect(url_for('sales.sales'))
     branch_label = BRANCH_LABELS.get(branch_code, branch_code)
 
@@ -198,7 +199,7 @@ def sales_india():
 @login_required
 def pos_home(branch_code):
     if not user_can('sales','view', branch_code):
-        flash('\u0644\u0627 \u062a\u0645\u0644\u0643 \u0635\u0644\u0627\u062d\u064a\u0629 \u0627\u0644\u0648\u0635\u0648\u0644 \u0644\u0641\u0631\u0639 \u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0647\u0630\u0627', 'warning')
+        flash(_('لا تملك صلاحية الوصول لفرع المبيعات هذا'), 'warning')
         return redirect(url_for('sales.sales'))
 
     return redirect(url_for('sales.sales_tables', branch_code=branch_code))

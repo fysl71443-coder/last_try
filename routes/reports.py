@@ -2030,7 +2030,7 @@ def print_payroll():
             Employee = None; Salary = None; Payment = None; EmployeeSalaryDefault = None
 
     if not Employee or not Salary or not Payment:
-        flash('Payroll models not available', 'danger')
+        flash(_('Payroll models not available'), 'danger')
         return redirect(url_for('main.dashboard'))
 
     def iter_months(y1, m1, y2, m2):

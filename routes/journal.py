@@ -5,6 +5,7 @@ import os
 import json
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
+from flask_babel import gettext as _
 from flask_login import login_required, current_user
 from sqlalchemy.orm import selectinload, joinedload
 from extensions import db, csrf
@@ -565,7 +566,7 @@ def backfill_missing():
             db.session.rollback()
         except Exception:
             pass
-        flash(f"Backfill failed: {e}", 'danger')
+        flash(_("Backfill failed: %(error)s", error=e), 'danger')
     entries = JournalEntry.query.order_by(JournalEntry.date.desc(), JournalEntry.id.desc()).limit(50).all()
     return render_template('journal_entries.html', entries=entries, page=1, pages=1, total=JournalEntry.query.count(), accounts=[], employees=[], branch='all', mode='list', entry_meta=_journal_list_entry_meta(entries))
 
@@ -859,7 +860,7 @@ def backfill_missing_kind(kind):
             db.session.rollback()
         except Exception:
             pass
-        flash(str(e) or 'Backfill failed', 'danger')
+        flash(str(e) or _('Backfill failed'), 'danger')
     entries = JournalEntry.query.order_by(JournalEntry.date.desc(), JournalEntry.id.desc()).limit(50).all()
     return render_template('journal_entries.html', entries=entries, page=1, pages=1, total=JournalEntry.query.count(), accounts=[], employees=[], branch='all', mode='list', entry_meta=_journal_list_entry_meta(entries))
 
@@ -881,7 +882,7 @@ def backfill_missing_all():
             db.session.rollback()
         except Exception:
             pass
-        flash(str(e) or 'Backfill failed', 'danger')
+        flash(str(e) or _('Backfill failed'), 'danger')
     return _redirect_accounts_hub()
 
 @csrf.exempt
@@ -928,13 +929,13 @@ def remap_sales_channels():
             except Exception as e:
                 errors.append(str(e))
         db.session.commit()
-        flash(f"تم تحديث {updated} قيود مبيعات حسب القناة", 'success')
+        flash(_("تم تحديث %(n)s قيود مبيعات حسب القناة", n=updated), 'success')
     except Exception as e:
         try:
             db.session.rollback()
         except Exception:
             pass
-        flash(str(e) or 'Remap failed', 'danger')
+        flash(str(e) or _('Remap failed'), 'danger')
     return _redirect_accounts_hub()
 
 
@@ -961,7 +962,7 @@ def _parse_audit_dates_from_request():
 def audit():
     """إجراء تدقيق محاسبي شامل — يشغّل محرك التدقيق ويعرض التقرير."""
     if not _can('journal', 'view'):
-        flash('لا تملك صلاحية الوصول', 'danger')
+        flash(_('لا تملك صلاحية الوصول'), 'danger')
         return _redirect_accounts_hub()
     from modules.audit import run_audit as run_audit_engine
     report = None
@@ -1013,7 +1014,7 @@ def _audit_report_with_ref_urls(report):
 def audit_print():
     """نسخة التقرير الجاهزة للطباعة / PDF (بدون إطار التطبيق)."""
     if not _can('journal', 'view'):
-        flash('لا تملك صلاحية الوصول', 'danger')
+        flash(_('لا تملك صلاحية الوصول'), 'danger')
         return _redirect_accounts_hub()
     from services.audit_engine import run_audit
     from datetime import datetime as _dt
@@ -1086,7 +1087,7 @@ def _closure_info_for_pdf(fiscal_year_id):
 def audit_pdf():
     """تقرير التدقيق PDF (رسمي واحترافي). استخدم WeasyPrint إن وُجد، وإلا HTML للطباعة من المتصفح."""
     if not _can('journal', 'view'):
-        flash('لا تملك صلاحية الوصول', 'danger')
+        flash(_('لا تملك صلاحية الوصول'), 'danger')
         return _redirect_accounts_hub()
     from modules.audit.engine import run_audit
     from datetime import datetime as _dt
@@ -1104,7 +1105,7 @@ def audit_pdf():
         except Exception:
             pass
     if not from_date or not to_date:
-        flash('يجب تحديد من تاريخ وإلى تاريخ (أو سنة مالية) لتوليد التقرير.', 'warning')
+        flash(_('يجب تحديد من تاريخ وإلى تاريخ (أو سنة مالية) لتوليد التقرير.'), 'warning')
         return redirect(url_for('journal.audit'))
     report = run_audit(from_date=from_date, to_date=to_date, fiscal_year_id=fiscal_year_id, persist_findings=False)
     _audit_report_with_ref_urls(report)
@@ -1273,7 +1274,7 @@ def journal_index():
 def list_entries():
     """لا توجد شاشة قيود مستقلة — التوجيه إلى الحسابات المتكاملة (تبويب قيود اليومية)."""
     if not _can('journal', 'view'):
-        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
         return redirect(url_for('main.dashboard'))
     return _redirect_accounts_hub()
 
@@ -1282,7 +1283,7 @@ def list_entries():
 def print_all():
     """لا شاشة طباعة قيود مستقلة — التوجيه إلى الحسابات المتكاملة."""
     if not _can('journal', 'print'):
-        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
         return redirect(url_for('main.dashboard'))
     return _redirect_accounts_hub()
 
@@ -1292,7 +1293,7 @@ def print_all():
 def print_all_pdf():
     """لا شاشة PDF قيود مستقلة — التوجيه إلى الحسابات المتكاملة."""
     if not _can('journal', 'print'):
-        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
         return redirect(url_for('main.dashboard'))
     return _redirect_accounts_hub()
 
@@ -1302,7 +1303,7 @@ def print_all_pdf():
 def export_all():
     """لا شاشة تصدير قيود مستقلة — التوجيه إلى الحسابات المتكاملة."""
     if not _can('journal', 'print'):
-        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
         return redirect(url_for('main.dashboard'))
     return _redirect_accounts_hub()
 
@@ -1385,7 +1386,7 @@ def rebalance_rounding():
                 errors.append(str(e))
         db.session.commit()
         try:
-            flash(f"تمت إعادة موازنة القيود: {updated} قيود؛ أخطاء: {len(errors)}", 'success' if not errors else 'warning')
+            flash(_("تمت إعادة موازنة القيود: %(updated)s قيود؛ أخطاء: %(errors)s", updated=updated, errors=len(errors)), 'success' if not errors else 'warning')
         except Exception:
             pass
     except Exception as e:
@@ -1393,7 +1394,7 @@ def rebalance_rounding():
             db.session.rollback()
         except Exception:
             pass
-        flash(str(e) or 'Rounding rebalance failed', 'danger')
+        flash(str(e) or _('Rounding rebalance failed'), 'danger')
     return redirect(url_for('financials.trial_balance'))
 
 @bp.route('/<int:jid>/delete', methods=['POST'])
@@ -1402,7 +1403,7 @@ def delete_entry(jid):
     je = JournalEntry.query.get_or_404(jid)
     try:
         if not _can('journal','edit'):
-            flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+            flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
             return _redirect_accounts_hub()
     except Exception:
         pass
@@ -1412,7 +1413,7 @@ def delete_entry(jid):
     try:
         delete_journal_entry_and_linked_invoice(je)
         db.session.commit()
-        flash('تم حذف القيد والفاتورة/العملية المرتبطة', 'success')
+        flash(_('تم حذف القيد والفاتورة/العملية المرتبطة'), 'success')
     except Exception as e:
         try:
             db.session.rollback()
@@ -1504,7 +1505,7 @@ def entry_detail_json(jid):
 def new_entry():
     """لا شاشة قيد جديد مستقلة — GET يوجّه للحسابات المتكاملة؛ POST يُعالج ثم توجيه (لتوافق الطلبات القديمة)."""
     if not _can('journal', 'add'):
-        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
         return redirect(url_for('main.dashboard'))
     if request.method == 'GET':
         return _redirect_accounts_hub()
@@ -1515,14 +1516,14 @@ def new_entry():
     branch = (request.form.get('branch') or '').strip() or None
     description = (request.form.get('description') or '').strip()
     if not description:
-        flash('يرجى إدخال وصف القيد.', 'danger')
+        flash(_('يرجى إدخال وصف القيد.'), 'danger')
         return _redirect_accounts_hub()
     try:
         d = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else get_saudi_now().date()
     except Exception:
         d = get_saudi_now().date()
     if d > get_saudi_now().date() and getattr(current_user,'role','')!='admin':
-        flash('لا يمكن حفظ قيد بتاريخ مستقبلي.', 'danger')
+        flash(_('لا يمكن حفظ قيد بتاريخ مستقبلي.'), 'danger')
         return _redirect_accounts_hub()
     lines = []
     idx = 0
@@ -1553,10 +1554,10 @@ def new_entry():
         except Exception:
             line_date = d
         if not line_desc:
-            flash('يرجى إدخال وصف القيد.', 'danger')
+            flash(_('يرجى إدخال وصف القيد.'), 'danger')
             return _redirect_accounts_hub()
         if debit and credit:
-            flash('لا يسمح بوجود قيمة في المدين والدائن معاً.', 'danger')
+            flash(_('لا يسمح بوجود قيمة في المدين والدائن معاً.'), 'danger')
             return _redirect_accounts_hub()
         if (debit <= 0 and credit <= 0):
             idx += 1
@@ -1568,14 +1569,14 @@ def new_entry():
             emp_id_val = None
         acc = Account.query.get(acc_id)
         if not acc:
-            flash('الحساب غير موجود في شجرة الحسابات.', 'danger')
+            flash(_('الحساب غير موجود في شجرة الحسابات.'), 'danger')
             return _redirect_accounts_hub()
         code = (acc.code or '').strip().upper()
         if not is_leaf_account(code):
-            flash(f'الحساب "{code}" تجميعي؛ لا يمكن ترحيل أرصدة عليه. استخدم حساباً ورقياً فقط.', 'danger')
+            flash(_('الحساب "%(code)s" تجميعي؛ لا يمكن ترحيل أرصدة عليه. استخدم حساباً ورقياً فقط.', code=code), 'danger')
             return _redirect_accounts_hub()
         if code in {'1151','2121','5310'} and not emp_id_val:
-            flash('اختر الموظف عند استخدام حساب السلف أو الرواتب.', 'danger')
+            flash(_('اختر الموظف عند استخدام حساب السلف أو الرواتب.'), 'danger')
             return _redirect_accounts_hub()
         f = request.files.get(f'lines-{idx}-attachment')
         attachment_path = None
@@ -1593,7 +1594,7 @@ def new_entry():
         total_credit += credit
         idx += 1
     if round(total_debit,2) != round(total_credit,2) or total_debit <= 0:
-        flash('لا يمكن حفظ القيد لأن مجموع المدين لا يساوي مجموع الدائن.', 'danger')
+        flash(_('لا يمكن حفظ القيد لأن مجموع المدين لا يساوي مجموع الدائن.'), 'danger')
         return _redirect_accounts_hub()
     ok, period_err = is_period_open_for_date(d)
     if not ok:
@@ -1609,7 +1610,7 @@ def new_entry():
         db.session.add(JournalLine(journal_id=je.id, line_no=i, account_id=ln['account_id'], debit=ln['debit'], credit=ln['credit'], cost_center=ln['cost_center'], description=ln['description'], attachment_path=ln['attachment_path'], line_date=ln['line_date'], employee_id=ln['employee_id']))
     db.session.add(JournalAudit(journal_id=je.id, action='create', user_id=getattr(current_user,'id',None), before_json=None, after_json=json.dumps({'id': je.id, 'number': je.entry_number}, ensure_ascii=False)))
     db.session.commit()
-    flash('تم إضافة القيد', 'success')
+    flash(_('تم إضافة القيد'), 'success')
     return _redirect_accounts_hub()
 
 
@@ -1663,28 +1664,28 @@ def edit_entry(jid):
     je = _journal_with_lines_options(JournalEntry.query).filter_by(id=jid).first_or_404()
     if request.method == 'GET':
         if not _can('journal', 'view'):
-            flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+            flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
             return redirect(url_for('main.dashboard'))
         return _redirect_accounts_hub()
     ok, err = can_mutate_journal(je)
     if not ok:
         abort(403, err or 'الفترة المالية مغلقة')
     if je.status == 'posted' and getattr(current_user,'role','')!='admin':
-        flash("لا يمكنك تعديل قيد مرحل بدون صلاحية 'Modify Posted'.", 'danger')
+        flash(_("لا يمكنك تعديل قيد مرحل بدون صلاحية 'Modify Posted'."), 'danger')
         return _redirect_accounts_hub()
     if not _can('journal','edit'):
-        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
         return _redirect_accounts_hub()
     before = {'desc': je.description, 'date': str(je.date), 'total_debit': float(je.total_debit or 0), 'total_credit': float(je.total_credit or 0)}
     description = (request.form.get('description') or '').strip()
     if not description:
-        flash('يرجى إدخال وصف القيد.', 'danger')
+        flash(_('يرجى إدخال وصف القيد.'), 'danger')
         return _redirect_accounts_hub()
     je.description = description
     je.updated_by = getattr(current_user,'id',None)
     db.session.add(JournalAudit(journal_id=je.id, action='edit', user_id=getattr(current_user,'id',None), before_json=json.dumps(before, ensure_ascii=False), after_json=json.dumps({'desc': je.description}, ensure_ascii=False)))
     db.session.commit()
-    flash('تم حفظ التعديل', 'success')
+    flash(_('تم حفظ التعديل'), 'success')
     return _redirect_accounts_hub()
 
 @csrf.exempt
@@ -1696,10 +1697,10 @@ def post_entry(jid):
     if not ok:
         abort(403, err or 'الفترة المالية مغلقة')
     if not _can('journal','edit'):
-        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
         return _redirect_accounts_hub()
     if je.status == 'posted':
-        flash('القيد مرحل مسبقاً', 'warning')
+        flash(_('القيد مرحل مسبقاً'), 'warning')
         return _redirect_accounts_hub()
     total_debit = 0.0
     total_credit = 0.0
@@ -1707,7 +1708,7 @@ def post_entry(jid):
         total_debit += float(ln.debit or 0)
         total_credit += float(ln.credit or 0)
     if round(total_debit,2) != round(total_credit,2) or total_debit <= 0:
-        flash('لا يمكن ترحيل القيد لأن مجموع المدين لا يساوي مجموع الدائن.', 'danger')
+        flash(_('لا يمكن ترحيل القيد لأن مجموع المدين لا يساوي مجموع الدائن.'), 'danger')
         return _redirect_accounts_hub()
     for ln in je.lines:
         acc = ln.account
@@ -1719,14 +1720,14 @@ def post_entry(jid):
     je.posted_by = getattr(current_user,'id',None)
     db.session.add(JournalAudit(journal_id=je.id, action='post', user_id=getattr(current_user,'id',None), before_json=None, after_json=json.dumps({'status': 'posted'}, ensure_ascii=False)))
     db.session.commit()
-    flash('تم ترحيل القيد', 'success')
+    flash(_('تم ترحيل القيد'), 'success')
     return _redirect_accounts_hub()
 
 @bp.route('/<int:jid>/print', methods=['GET'])
 @login_required
 def print_entry(jid):
     if not _can('journal','print'):
-        flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
+        flash(_('You do not have permission / لا تملك صلاحية الوصول'), 'danger')
         return _redirect_accounts_hub()
     je = _journal_with_lines_options(JournalEntry.query).filter_by(id=jid).first_or_404()
     db.session.add(JournalAudit(journal_id=je.id, action='print', user_id=getattr(current_user,'id',None), before_json=None, after_json=None))
@@ -1788,7 +1789,7 @@ def create_capital_entry():
     db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=cash_acc.id, description='Capital Cash', line_date=je.date, debit=amt, credit=0.0))
     db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cap_acc.id, description='Owner Capital', line_date=je.date, debit=0.0, credit=amt))
     db.session.commit()
-    flash('تم إنشاء قيد رأس المال', 'success')
+    flash(_('تم إنشاء قيد رأس المال'), 'success')
     return _redirect_accounts_hub()
 
 @bp.route('/close_period', methods=['POST','GET'])
@@ -1837,7 +1838,7 @@ def close_period():
             db.session.add(JournalLine(journal_id=je.id, line_no=ln_no, account_id=acc_id, description=desc, line_date=end_date, debit=0.0, credit=amt))
         ln_no += 1
     db.session.commit()
-    flash('تم إنشاء قيد إقفال الفترة', 'success')
+    flash(_('تم إنشاء قيد إقفال الفترة'), 'success')
     return _redirect_accounts_hub()
 @bp.route('/api/journals', methods=['GET'])
 def api_journals():

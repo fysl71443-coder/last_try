@@ -1,6 +1,6 @@
 {# قالب طباعة إقرار ضريبة القيمة المضافة — بمواصفات رسمية قريبة من نموذج الهيئة (ZATCA / إقرار ضريبي معتمد) #}
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="{{ get_locale() or 'ar' }}" dir="{{ 'rtl' if (get_locale() or 'ar') == 'ar' else 'ltr' }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

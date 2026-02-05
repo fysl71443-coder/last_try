@@ -23,6 +23,9 @@ class User(db.Model, UserMixin):
     language_pref = db.Column(db.String(10), default='en')
     last_login_at = db.Column(db.DateTime, nullable=True)
     active = db.Column(db.Boolean, default=True)
+    # عزل الفروع: قائمة مفصولة بفاصلة من رموز الفروع المسموح للمستخدم بالوصول إليها (مثلاً china_town,place_india).
+    # فارغ = لا وصول لأي فرع. المدير (admin أو id==1 أو role=='admin') يتجاهل هذا الحقل.
+    allowed_branches = db.Column(db.String(500), nullable=True, default='')
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
@@ -32,6 +35,29 @@ class User(db.Model, UserMixin):
 
     def last_login(self):
         self.last_login_at = get_saudi_now()
+
+    @property
+    def allowed_branches_list(self):
+        """قائمة رموز الفروع المسموح للمستخدم بالوصول إليها. فارغة = لا وصول لأي فرع (لغير المدير)."""
+        s = (self.allowed_branches or '').strip()
+        if not s:
+            return []
+        return [x.strip() for x in s.split(',') if x.strip()]
+
+    def has_branch_access(self, branch_code: str) -> bool:
+        """هل للمستخدم حق الوصول لفرع معين؟ المدير يعتبر له وصول لكل الفروع."""
+        if not branch_code:
+            return True
+        if getattr(self, 'username', '') == 'admin' or getattr(self, 'id', None) == 1:
+            return True
+        if getattr(self, 'role', '') == 'admin':
+            return True
+        bc = (branch_code or '').strip().lower()
+        if bc in ('place', 'palace', 'india', 'palace_india'):
+            bc = 'place_india'
+        if bc in ('china', 'china town', 'chinatown'):
+            bc = 'china_town'
+        return bc in self.allowed_branches_list
 
 class Invoice(db.Model):
     __tablename__ = 'invoices'

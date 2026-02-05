@@ -52,7 +52,7 @@
             <input type="text" name="name" class="form-control form-control-sm" placeholder="{{ _('Name') }}" required/>
           </div>
           <div class="col-md-4">
-            <input type="number" name="display_order" class="form-control form-control-sm" placeholder="# (order)"/>
+            <input type="number" name="display_order" class="form-control form-control-sm" placeholder="{{ _('# (order)') }}"/>
           </div>
           <div class="col-12 d-flex gap-2">
             <button class="btn btn-xs btn-success" style="padding:4px 8px; font-size:12px">{{ _('Add') }}</button>
@@ -91,15 +91,15 @@
 
         {% if current_section %}
         <div class="mb-3 p-3 border rounded bg-light">
-          <h6 class="mb-2">{{ _('Add items to section') }} / إضافة أصناف للقسم المختار</h6>
-          <p class="small text-muted mb-2">{{ _('Select section above, then check the meals to add. Already-in-section items are disabled.') }} اختر القسم ثم حدد الأصناف المطلوبة ثم اضغط «إضافة المحدد».</p>
+          <h6 class="mb-2">{{ _('Add items to section') }}</h6>
+          <p class="small text-muted mb-2">{{ _('Select section above, then check the meals to add. Already-in-section items are disabled.') }}</p>
           <form method="post" action="{{ url_for('main.menu_items_bulk_add') }}" id="bulkAddForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <input type="hidden" name="section_id" value="{{ current_section.id }}"/>
             <div class="d-flex gap-2 mb-2 flex-wrap">
               <button type="button" class="btn btn-sm btn-outline-secondary" id="bulkSelectAvailable">{{ _('Select all (available)') }}</button>
               <button type="button" class="btn btn-sm btn-outline-secondary" id="bulkClearSelection">{{ _('Clear selection') }}</button>
-              <button type="submit" class="btn btn-sm btn-primary"><i class="fa-solid fa-plus me-1"></i>{{ _('Add selected to section') }} / إضافة المحدد للقسم</button>
+              <button type="submit" class="btn btn-sm btn-primary"><i class="fa-solid fa-plus me-1"></i>{{ _('Add selected to section') }}</button>
             </div>
             <div class="border rounded p-2 bg-white" style="max-height:220px; overflow-y: auto;">
               <div class="row g-1 small">
@@ -109,7 +109,7 @@
                   <label class="d-flex align-items-center gap-2 mb-0 py-1 cursor-pointer">
                     <input type="checkbox" name="meal_ids" value="{{ m.id }}" class="form-check-input bulk-meal-cb" {{ 'disabled' if already else '' }} {{ 'data-in-section' if already else '' }}/>
                     <span class="{{ 'text-muted' if already else '' }}">{{ m.name }}{% if m.name_ar %} / {{ m.name_ar }}{% endif %}</span>
-                    {% if already %}<span class="badge bg-secondary ms-1">في القسم</span>{% endif %}
+                    {% if already %}<span class="badge bg-secondary ms-1">{{ _('في القسم') }}</span>{% endif %}
                   </label>
                 </div>
                 {% endfor %}

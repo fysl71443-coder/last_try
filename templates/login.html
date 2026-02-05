@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="{{ get_locale() or 'ar' }}" dir="{{ 'rtl' if (get_locale() or 'ar') == 'ar' else 'ltr' }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,7 +17,7 @@
     </div>
     <div class="login-container">
       <div class="login-card">
-        <p class="company">{{ (settings.company_name if settings and settings.company_name else 'Company') }}</p>
+        <p class="company">{{ (settings.company_name if settings and settings.company_name else _('Company')) }}</p>
         <h2>{{ _('Login') }}</h2>
         <p class="subtitle">{{ _('Please sign in') }}</p>
 
@@ -48,7 +48,7 @@
             </div>
           </div>
           <div class="input-group">
-            <label for="otp">{{ _('2FA Code') }} <span style="opacity:0.75">(اختياري)</span></label>
+            <label for="otp">{{ _('2FA Code') }} <span style="opacity:0.75">({{ _('اختياري') }})</span></label>
             <input type="text" id="otp" name="otp" placeholder="{{ _('2FA Code') }}" inputmode="numeric" autocomplete="one-time-code">
           </div>
           <button type="submit" class="login-btn">{{ _('Login') }}</button>
@@ -60,7 +60,7 @@
         </div>
       </div>
     </div>
-    <img src="{{ url_for('static', filename='images/snowman.png') }}" alt="رجل ثلج" class="snowman"
+    <img src="{{ url_for('static', filename='images/snowman.png') }}" alt="{{ _('رجل ثلج') }}" class="snowman"
          onerror="this.onerror=null; this.src='{{ url_for('static', filename='images/snowman.svg') }}';">
   </div>
   <script src="{{ url_for('static', filename='js/login-misbah.js') }}?v={{ ASSET_VERSION or '1' }}"></script>

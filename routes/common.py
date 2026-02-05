@@ -81,13 +81,22 @@ def _read_user_perms(uid: int, scope: str):
 
 
 def user_can(screen: str, action: str = 'view', branch_scope: str = None) -> bool:
+    """
+    التحقق من صلاحية المستخدم للشاشة/الإجراء و(إن وُجد) للفرع.
+    عزل الفروع: المستخدم غير المدير يجب أن يكون branch_scope ضمن allowed_branches وإلا يُرفض.
+    """
     try:
         if not getattr(current_user, 'is_authenticated', False):
             return False
+        # مدير (admin أو id=1 أو role=admin) له وصول كامل
         if getattr(current_user, 'username', '') == 'admin' or getattr(current_user, 'id', None) == 1:
             return True
         if getattr(current_user, 'role', '') == 'admin':
             return True
+        # طلب مرتبط بفرع: التحقق من أن الفرع مسموح للمستخدم
+        if branch_scope is not None and (branch_scope or '').strip():
+            if not getattr(current_user, 'has_branch_access', lambda _: False)(branch_scope):
+                return False
         return True
     except Exception:
-        return True
+        return False

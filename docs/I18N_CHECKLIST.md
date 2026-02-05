@@ -78,6 +78,56 @@ flash(_('الفترة المالية مغلقة لهذا التاريخ.'), 'dan
 
 ---
 
+## تقرير التنفيذ (Execution Report)
+
+تم تنفيذ إصلاحات i18n وفق فحص فعلي على المستودع:
+
+| البند | الحالة بعد التنفيذ |
+|--------|---------------------|
+| **Flash Messages** | ✅ تم إلزام جميع استدعاءات `flash()` باستخدام `_()` في: `app.py`, `app/routes.py`, `routes/reports.py`, `routes/suppliers.py`, `routes/journal.py`, `routes/inventory.py`, `routes/purchases.py`, `routes/vat.py`, `routes/expenses.py`, `routes/customers.py`, `routes/sales.py`. |
+| **قوالب الطباعة (Print/PDF)** | ✅ تم توحيد `lang` و `dir` في قوالب الطباعة باستخدام `get_locale()` في: `balance_sheet_print.html`, `trial_balance_print.html`, `income_statement_print.html`, `vat_declaration_print.html`, `audit_report_print.html`, `receipt_print.html`, `invoice_print.html`, `order_slip.html`, `report_template.html`, `base_embed.html`, `batch.html`, `receipt_print.html`. وتم تغليف النصوص الظاهرة في بعضها بـ `{{ _('...') }}` (مثل `balance_sheet_print.html`, `report_template.html`). |
+| **قوالب الواجهة (UI)** | ✅ تم تطبيق `{{ _('...') }}` على النصوص الثابتة في: `login.html` (مع `get_locale()` لـ lang/dir), `base.html`, `dashboard.html`, `settings.html`, `menu.html`. قوالب مثل `customers.html`, `invoices.html` كانت تستخدم `_()` مسبقاً. |
+| **ملفات الترجمة (PO)** | ⚠️ الملفات موجودة؛ **يجب** إعادة استخراج وتحديث وتجميع الرسائل بعد إضافة النصوص الجديدة. |
+
+### خطوات إلزامية بعد هذا التحديث
+
+1. **استخراج الرسائل**:  
+   `pybabel extract -F babel.cfg -o messages.pot .`
+2. **تحديث ملفات .po**:  
+   `pybabel update -i messages.pot -d translations`
+3. **إكمال حقول msgstr** في `translations/ar/LC_MESSAGES/messages.po` و `translations/en/LC_MESSAGES/messages.po` للنصوص الجديدة.
+4. **تجميع الترجمة**:  
+   `pybabel compile -d translations` (أو السكربت `compile_translations.py` إن وُجد).
+5. **اختبار**: تغيير اللغة من الواجهة + التحقق من رسائل Flash وصفحات الطباعة.
+
+بعد تنفيذ الخطوات أعلاه يمكن إصدار تقرير اعتماد نهائي وإغلاق بند الترجمة رسمياً.
+
+---
+
+## تحديد القوالب ووضع الترجمة
+
+### قوالب تم تعديلها (نصوص → gettext + lang/dir حيث يلزم)
+
+| القالب | التعديلات |
+|--------|-----------|
+| **login.html** | `lang`/`dir` من `get_locale()`، `_()` للعنوان والـ Company و(اختياري) و alt الصورة، رسائل JS عبر `\| tojson`. |
+| **base.html** | عنوان الصفحة الافتراضي، عناوين روابط اللغة والرجوع والخروج، alt الشعار. |
+| **dashboard.html** | جميع عناوين البطاقات والنص الفرعي و«المحاسبة والتدقيق» مغلفة بـ `{{ _('...') }}`. |
+| **settings.html** | عنوان الصفحة، الإعدادات، General, VAT, China Town, Place India، aria-label إغلاق التنبيه. |
+| **menu.html** | نصوص «إضافة أصناف»، «في القسم»، placeholder ترتيب القسم. |
+| **balance_sheet_print.html** | Company، «المركز المالي / الميزانية العمومية». |
+| **report_template.html** | الترويسة، التاريخ، التقرير، الإجمالي، تذييل الطباعة، زر طباعة. |
+
+### قوالب أخرى (105 ملف HTML)
+
+يُنصح بمراجعة كل قالب وضمان:
+
+- أي **نص ظاهر ثابت** (عناوين، أزرار، تسميات، placeholders، tooltips، alt، aria-label) مغلف بـ `{{ _('...') }}`.
+- قوالب **الطباعة** تحتوي على `lang="{{ get_locale() or 'ar' }}"` و `dir="{{ 'rtl' if (get_locale() or 'ar') == 'ar' else 'ltr' }}"` في `<html>`.
+- النصوص داخل **JavaScript** في القالب تُمرَّر عبر `{{ _('النص') | tojson }}` لتجنب مشاكل الاقتباس.
+
+---
+
 ## مرجع
 - الفحص الشامل للواجهة والترجمة: **docs/I18N_AND_UI_AUDIT.md**
 - جدول التقييم لكل شاشة: داخل نفس الملف (القسم ٧).

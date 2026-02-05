@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask_babel import gettext as _
 from flask_login import login_required
 from sqlalchemy.exc import IntegrityError
 
@@ -45,11 +46,11 @@ def suppliers_edit(sid):
         )
         try:
             db.session.commit()
-            flash('✅ Supplier updated successfully', 'success')
+            flash(_('Supplier updated successfully'), 'success')
             return redirect(url_for('suppliers.suppliers'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error updating supplier: {e}', 'danger')
+            flash(_('Error updating supplier: %(error)s', error=e), 'danger')
     return render_template('supplier_edit.html', supplier=supplier)
 
 
@@ -91,13 +92,13 @@ def suppliers():
             else:
                 db.session.add(s)
                 db.session.commit()
-            flash('Supplier added', 'success')
+            flash(_('Supplier added'), 'success')
         except Exception as e:
             if ext_db is not None:
                 ext_db.session.rollback()
             else:
                 db.session.rollback()
-            flash(f'Could not add supplier: {e}', 'danger')
+            flash(_('Could not add supplier: %(error)s', error=e), 'danger')
         return redirect(url_for('suppliers.suppliers'))
     try:
         q = (request.args.get('q') or '').strip()
@@ -192,20 +193,20 @@ def supplier_toggle(sid):
     try:
         s = Supplier.query.get(sid)
         if not s:
-            flash('Supplier not found', 'warning')
+            flash(_('Supplier not found'), 'warning')
             return redirect(url_for('suppliers.suppliers_list'))
         s.active = not bool(getattr(s, 'active', True))
         if ext_db is not None:
             ext_db.session.commit()
         else:
             db.session.commit()
-        flash('Supplier status updated', 'success')
+        flash(_('Supplier status updated'), 'success')
     except Exception as e:
         if ext_db is not None:
             ext_db.session.rollback()
         else:
             db.session.rollback()
-        flash(f'Error updating supplier: {e}', 'danger')
+        flash(_('Error updating supplier: %(error)s', error=e), 'danger')
     # Preserve query parameters
     q = request.args.get('q', '')
     page = request.args.get('page', '1')
@@ -266,7 +267,7 @@ def suppliers_export():
             headers={'Content-Disposition': 'attachment; filename="suppliers.csv"'},
         )
     except Exception as e:
-        flash(f'Failed to export suppliers: {e}', 'danger')
+        flash(_('Failed to export suppliers: %(error)s', error=e), 'danger')
         return redirect(url_for('suppliers.suppliers'))
 
 
@@ -295,7 +296,7 @@ def supplier_statement(sid=None):
         except (TypeError, ValueError):
             sid = None
     if not sid:
-        flash('Supplier required / المورد مطلوب', 'warning')
+        flash(_('Supplier required / المورد مطلوب'), 'warning')
         return redirect(url_for('suppliers.suppliers_payments_statements'))
     supplier = Supplier.query.get_or_404(sid)
     start_arg = request.args.get('start_date')
@@ -415,7 +416,7 @@ def supplier_delete(sid):
     try:
         s = Supplier.query.get(sid)
         if not s:
-            flash('Supplier not found', 'warning')
+            flash(_('Supplier not found'), 'warning')
         else:
             try:
                 if ext_db is not None:
@@ -424,7 +425,7 @@ def supplier_delete(sid):
                 else:
                     db.session.delete(s)
                     db.session.commit()
-                flash('Supplier deleted', 'success')
+                flash(_('Supplier deleted'), 'success')
             except IntegrityError:
                 if ext_db is not None:
                     ext_db.session.rollback()
@@ -434,13 +435,13 @@ def supplier_delete(sid):
                     db.session.rollback()
                     s.active = False
                     db.session.commit()
-                flash('Supplier has related records; deactivated instead', 'warning')
+                flash(_('Supplier has related records; deactivated instead'), 'warning')
     except Exception as e:
         if ext_db is not None:
             ext_db.session.rollback()
         else:
             db.session.rollback()
-        flash(f'Error deleting supplier: {e}', 'danger')
+        flash(_('Error deleting supplier: %(error)s', error=e), 'danger')
     # Preserve query parameters
     q = request.args.get('q', '')
     page = request.args.get('page', '1')

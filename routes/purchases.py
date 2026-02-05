@@ -7,6 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask_babel import gettext as _
 from flask_login import login_required, current_user
 
 from app import db
@@ -45,7 +46,7 @@ def meals_import():
     from io import TextIOWrapper
     file = request.files.get('file')
     if not file or not file.filename:
-        flash('لم يتم اختيار ملف', 'warning')
+        flash(_('لم يتم اختيار ملف'), 'warning')
         return redirect(url_for('main.menu'))
 
     # إن وُجد قسم حالي مرسل من النموذج نعيد التوجيه إليه بعد الاستيراد
@@ -139,7 +140,7 @@ def meals_import():
             flash(f'تم استيراد {imported} وجبة بنجاح' + (f'، أخطاء: {errors}' if errors else ''), 'success')
         except Exception as e:
             db.session.rollback()
-            flash(f'فشل استيراد CSV: {e}', 'danger')
+            flash(_('فشل استيراد CSV: %(error)s', error=e), 'danger')
         return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
 
     elif ext in ('.xlsx', '.xls'):
@@ -180,14 +181,14 @@ def meals_import():
                 except Exception:
                     errors += 1
             db.session.commit()
-            flash(f'تم استيراد {imported} وجبة من Excel' + (f'، أخطاء: {errors}' if errors else ''), 'success')
+            flash(_('تم استيراد %(n)s وجبة من Excel', n=imported) + (f'، أخطاء: {errors}' if errors else ''), 'success')
         except Exception as e:
             db.session.rollback()
-            flash(f'فشل استيراد Excel: {e}', 'danger')
+            flash(_('فشل استيراد Excel: %(error)s', error=e), 'danger')
         return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
 
     else:
-        flash('صيغة الملف غير مدعومة. الرجاء رفع ملف CSV أو Excel (.xlsx/.xls).', 'warning')
+        flash(_('صيغة الملف غير مدعومة. الرجاء رفع ملف CSV أو Excel (.xlsx/.xls).'), 'warning')
         return redirect(url_for('main.menu', cat_id=cat_id) if cat_id else url_for('main.menu'))
 
 
@@ -262,7 +263,7 @@ def meals():
             return redirect(url_for('purchases.meals'))
         except Exception as e:
             db.session.rollback()
-            flash('فشل حفظ الوجبة', 'danger')
+            flash(_('فشل حفظ الوجبة'), 'danger')
 
     all_meals = Meal.query.filter_by(active=True).all()
     return render_template('meals.html', form=form, meals=all_meals, materials_json=materials_json)
@@ -336,7 +337,7 @@ def raw_materials():
                 if c > 0:
                     m.cost_per_unit = c
             db.session.commit()
-            flash('تم تحديث الكميات بنجاح', 'success')
+            flash(_('تم تحديث الكميات بنجاح'), 'success')
         except Exception:
             db.session.rollback()
             flash('فشل تحديث الكميات', 'danger')
@@ -352,11 +353,11 @@ def raw_materials():
             )
             db.session.add(rm)
             db.session.commit()
-            flash('تم حفظ المادة الخام بنجاح', 'success')
+            flash(_('تم حفظ المادة الخام بنجاح'), 'success')
             return redirect(url_for('purchases.raw_materials'))
         except Exception as e:
             db.session.rollback()
-            flash('فشل حفظ المادة الخام', 'danger')
+            flash(_('فشل حفظ المادة الخام'), 'danger')
     materials = RawMaterial.query.filter_by(active=True).all()
     return render_template('raw_materials.html', form=form, materials=materials, mode=mode)
 
@@ -523,7 +524,7 @@ def purchases():
         from services.gl_truth import can_create_invoice_on_date
         ok, period_err = can_create_invoice_on_date(inv_date)
         if not ok:
-            flash(period_err or 'الفترة المالية مغلقة لهذا التاريخ.', 'danger')
+            flash(period_err or _('الفترة المالية مغلقة لهذا التاريخ.'), 'danger')
             return redirect(url_for('purchases.purchases'))
         inv_type = (request.form.get('invoice_type') or 'VAT').strip().upper()
         supplier_name = (request.form.get('supplier_name') or '').strip() or None
@@ -564,7 +565,7 @@ def purchases():
                 ext_db.session.rollback()
             else:
                 db.session.rollback()
-            flash(f'Could not save purchase invoice: {e}', 'danger')
+            flash(_('Could not save purchase invoice: %(error)s', error=e), 'danger')
             return redirect(url_for('purchases.purchases'))
 
         # Save posted purchase items and update inventory (by item_name + category; find or create RawMaterial)
@@ -675,7 +676,7 @@ def purchases():
                 db.session.rollback()
             except Exception:
                 pass
-            flash(f'Failed to save purchase items: {e}', 'warning')
+            flash(_('Failed to save purchase items: %(error)s', error=e), 'warning')
             return redirect(url_for('purchases.purchases'))
 
         # لا حفظ بدون قيد. إذا مدفوعة فوراً: قيد واحد من حـ مخزون إلى حـ الصندوق (لا ذمة مورد). وإلا ذمة مورد ثم قيد الدفع للجزء المدفوع.
@@ -714,9 +715,9 @@ def purchases():
                 db.session.rollback()
             except Exception:
                 pass
-            flash('فشل حفظ فاتورة المشتريات: لم يُنشأ القيد. ' + str(e), 'danger')
+            flash(_('فشل حفظ فاتورة المشتريات: لم يُنشأ القيد. %(error)s', error=str(e)), 'danger')
             return redirect(url_for('purchases.purchases'))
-        flash('Purchase invoice saved', 'success')
+        flash(_('Purchase invoice saved'), 'success')
         return redirect(url_for('purchases.purchases'))
 
     return render_template('purchases.html', form=form, suppliers_list=suppliers, suppliers_json=suppliers_json, materials_json=materials_json)

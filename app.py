@@ -930,10 +930,10 @@ def settings_currency():
             data = file.read()
             try:
                 settings_sales["currency_png_base64"] = base64.b64encode(data).decode("utf-8")
-                flash("Currency symbol updated from file")
+                flash(_("Currency symbol updated from file"))
                 updated = True
             except Exception:
-                flash("Failed to read file")
+                flash(_("Failed to read file"))
         elif b64:
             if "," in b64:
                 b64 = b64.split(",", 1)[1]
@@ -941,12 +941,12 @@ def settings_currency():
             try:
                 base64.b64decode(b64, validate=True)
                 settings_sales["currency_png_base64"] = b64
-                flash("Currency symbol updated from base64")
+                flash(_("Currency symbol updated from base64"))
                 updated = True
             except Exception:
-                flash("Invalid base64 string")
+                flash(_("Invalid base64 string"))
         else:
-            flash("No file or base64 provided")
+            flash(_("No file or base64 provided"))
         return redirect(url_for("settings_currency"))
     return render_template("settings_currency.html", settings=settings_sales)
 
@@ -1015,7 +1015,7 @@ def preview_receipt(branch_code, table_number):
 def delete_item(branch_code, table_number, item_index):
     password = request.form.get("password")
     if password != "1991":
-        flash("Wrong password!")
+        flash(_("Wrong password!"))
         return redirect(url_for("new_invoice", branch_code=branch_code, table_number=table_number))
     inv = get_invoice_obj(branch_code, table_number)
     if 0 <= item_index < len(inv['items']):
@@ -1029,7 +1029,7 @@ def delete_item(branch_code, table_number, item_index):
 def cancel_invoice(branch_code, table_number):
     password = request.form.get("password")
     if password != "1991":
-        flash("Wrong password!")
+        flash(_("Wrong password!"))
         return redirect(url_for("new_invoice", branch_code=branch_code, table_number=table_number))
     invoices.pop((branch_code, table_number), None)
     table = next((t for t in tables_data[branch_code] if t["number"] == table_number), None)
@@ -1106,7 +1106,7 @@ def confirm_payment(branch_code, table_number):
     invoices.pop((branch_code, table_number), None)
     table = next((t for t in tables_data[branch_code] if t["number"] == table_number), None)
     table["is_busy"] = False
-    flash(f"Payment successful via {payment_method}. Invoice posted.")
+    flash(_("Payment successful via %(method)s. Invoice posted.", method=payment_method))
     return redirect(url_for("tables_view", branch_code=branch_code))
 
 # @app.route("/sales/<branch_code>/table/<int:table_number>/set_customer", methods=["POST"])
@@ -1118,7 +1118,7 @@ def set_customer(branch_code, table_number):
         'phone': request.form.get('phone'),
         'discount': float(request.form.get('discount') or 0)
     }
-    flash("Customer linked to invoice")
+    flash(_("Customer linked to invoice"))
     return redirect(url_for("new_invoice", branch_code=branch_code, table_number=table_number))
 # =========================
 # START OF APP.PY (Top)
@@ -1534,7 +1534,7 @@ def order_invoices_list():
         return render_template('order_invoices.html', orders=orders, totals=totals, items_summary=items_summary)
     except Exception as e:
         current_app.logger.error('Failed to load order invoices: %s', e)
-        flash('Failed to load order invoices', 'danger')
+        flash(_('Failed to load order invoices'), 'danger')
         return render_template('order_invoices.html', orders=[], totals={'subtotal_sum':0,'discount_sum':0,'vat_sum':0,'total_sum':0}, items_summary=[])
 @app.route('/api/pay-and-print', methods=['POST'])
 @csrf_exempt
@@ -2056,7 +2056,7 @@ def login():
             pass
 
         if not username or not password:
-            flash('يرجى ملء جميع الحقول المطلوبة / Please fill all required fields', 'danger')
+            flash(_('يرجى ملء جميع الحقول المطلوبة / Please fill all required fields'), 'danger')
             return render_template('login.html', form=form)
 
         # تحديث بيانات النموذج
@@ -2075,7 +2075,7 @@ def login():
                 print(f"User found: {user is not None}")
             except Exception as db_error:
                 print(f"Database query error: {db_error}")
-                flash('خطأ في قاعدة البيانات / Database error', 'danger')
+                flash(_('خطأ في قاعدة البيانات / Database error'), 'danger')
                 return render_template('login.html', form=form)
 
             if user:
@@ -2104,19 +2104,19 @@ def login():
                         # حتى لو فشل التحديث، نسمح بالدخول
                         return redirect(url_for('dashboard'))
                     else:
-                        flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
+                        flash(_('اسم المستخدم أو كلمة المرور خاطئة'), 'danger')
                 except Exception as bcrypt_error:
                     print(f"Bcrypt error: {bcrypt_error}")
-                    flash('خطأ في التحقق من كلمة المرور / Password verification error', 'danger')
+                    flash(_('خطأ في التحقق من كلمة المرور / Password verification error'), 'danger')
             else:
-                flash('اسم المستخدم أو كلمة المرور خاطئة', 'danger')
+                flash(_('اسم المستخدم أو كلمة المرور خاطئة'), 'danger')
 
         except Exception as e:
             # طباعة الخطأ في سجل الخادم لتعرف السبب
             print(f"Login Error: {e}")
             import traceback
             traceback.print_exc()
-            flash('خطأ في النظام / System error', 'danger')
+            flash(_('خطأ في النظام / System error'), 'danger')
 
     return render_template('login.html', form=form)
 
@@ -2139,7 +2139,7 @@ def logout():
 def sales_branch(branch_code):
     # Unified entry: redirect to tables view; old sales form is deprecated
     if not is_valid_branch(branch_code):
-        flash('Invalid branch', 'danger')
+        flash(_('Invalid branch'), 'danger')
         return redirect(url_for('sales'))
     return redirect(url_for('sales_tables', branch_code=branch_code))
 
@@ -2625,7 +2625,7 @@ def table_manager(branch_code):
     }
     
     if branch_code not in branch_labels:
-        flash('Invalid branch', 'danger')
+        flash(_('Invalid branch'), 'danger')
         return redirect(url_for('table_settings'))
     
     branch_label = branch_labels[branch_code]
@@ -3316,7 +3316,7 @@ def payment_page():
         branch_code = session.get('branch_code', '1')
 
         if not cart:
-            flash('لا توجد أصناف في الفاتورة', 'warning')
+            flash(_('لا توجد أصناف في الفاتورة'), 'warning')
             return redirect(url_for('sales_china_town'))
 
         # Calculate totals
@@ -3339,7 +3339,7 @@ def payment_page():
                              branch_code=branch_code)
 
     except Exception as e:
-        flash(f'خطأ في تحميل صفحة الدفع: {str(e)}', 'danger')
+        flash(_('خطأ في تحميل صفحة الدفع: %(error)s', error=str(e)), 'danger')
         return redirect(url_for('sales_china_town'))
 
 # Confirm payment route
@@ -4096,7 +4096,7 @@ def inject_csrf_token():
 @login_required
 def sales_tables(branch_code):
     if not is_valid_branch(branch_code):
-        flash('Invalid branch', 'danger')
+        flash(_('Invalid branch'), 'danger')
         return redirect(url_for('sales'))
 
     # Get table statuses and draft orders count
@@ -4221,7 +4221,7 @@ def sales_tables(branch_code):
 @login_required
 def table_management(branch_code):
     if not is_valid_branch(branch_code):
-        flash('Invalid branch', 'danger')
+        flash(_('Invalid branch'), 'danger')
         return redirect(url_for('sales'))
 
     branch_icons = {
@@ -4239,7 +4239,7 @@ def table_management(branch_code):
 def sales_table_invoice(branch_code, table_number):
     """Direct access to POS for specific table"""
     if not is_valid_branch(branch_code) or table_number < 1 or table_number > 50:
-        flash('Invalid branch or table number', 'danger')
+        flash(_('Invalid branch or table number'), 'danger')
         return redirect(url_for('sales'))
 
     # Get VAT rate from settings
@@ -4364,7 +4364,7 @@ def sales_table_invoice(branch_code, table_number):
 @login_required
 def sales_table_manage(branch_code, table_number):
     if not is_valid_branch(branch_code) or table_number < 1 or table_number > 50:
-        flash('Invalid branch or table number', 'danger')
+        flash(_('Invalid branch or table number'), 'danger')
         return redirect(url_for('sales'))
 
     from models import DraftOrder, DraftOrderItem
