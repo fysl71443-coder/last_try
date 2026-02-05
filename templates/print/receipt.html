@@ -166,6 +166,8 @@
       {% endif %}
       {% if logo_data_url %}
       <img src="{{ logo_data_url }}" alt="logo" class="logo-img"/>
+      {% elif logo_url and (not settings or settings.receipt_show_logo) %}
+      <img src="{{ logo_url }}" alt="logo" class="logo-img"/>
       {% elif branch_settings is defined and branch_settings and branch_settings.receipt_show_logo and branch_settings.branch_data_url %}
       <img src="{{ branch_settings.branch_data_url }}" alt="logo" class="logo-img"/>
       {% elif branch_settings is defined and branch_settings and branch_settings.receipt_show_logo and branch_settings.logo_url %}
@@ -174,8 +176,6 @@
       <img src="{{ branch_logo_url }}" alt="logo" class="logo-img"/>
       {% elif settings and settings.receipt_show_logo and settings.logo_url %}
       <img src="{{ settings.logo_url }}" alt="logo" class="logo-img"/>
-      {% elif (not settings or settings.receipt_show_logo) and logo_url %}
-      <img src="{{ logo_url }}" alt="logo" class="logo-img"/>
       {% endif %}
       <div class="company-name">{{ settings.company_name if settings else company_name }}</div>
       {% set show_vat = (not settings) or (settings and settings.receipt_show_tax_number) %}

@@ -1,0 +1,178 @@
+{% extends 'base.html' %}
+{% block title %}تقرير التدقيق المحاسبي{% endblock %}
+{% block head %}
+{% include 'partials/report_common_styles.html' %}
+<style>
+  .audit-cover { text-align: center; padding: 3rem 2rem; border: 2px solid var(--report-border); border-radius: 16px; background: linear-gradient(180deg, #f8fafc 0%, #fff 100%); margin-bottom: 2rem; }
+  .audit-cover h1 { font-size: 1.75rem; font-weight: 700; color: var(--report-fg); margin-bottom: 0.5rem; }
+  .audit-cover .sub { font-size: 1rem; color: var(--report-muted); }
+  .audit-cover .meta { margin-top: 1.5rem; font-size: 0.9rem; color: var(--report-muted); }
+  .audit-summary { background: var(--report-card-bg); border: 1px solid var(--report-border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+  .audit-summary h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--report-fg); }
+  .audit-summary p { margin-bottom: 0.5rem; color: var(--report-fg); }
+  .audit-summary .badge-sev { font-size: 0.75rem; }
+  .audit-disclaimer { font-size: 0.85rem; color: var(--report-muted); padding: 1rem 1.25rem; background: #f8fafc; border: 1px solid var(--report-border); border-radius: 8px; margin-top: 2rem; }
+  .audit-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem; }
+  .audit-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  .audit-table th, .audit-table td { padding: 0.6rem 0.75rem; text-align: right; border-bottom: 1px solid var(--report-border); }
+  .audit-table th { background: #f1f5f9; font-weight: 600; color: var(--report-fg); }
+  .audit-table .impact-high { color: #dc3545; font-weight: 600; }
+  .audit-table .impact-medium { color: #fd7e14; }
+  .audit-table .impact-low { color: #198754; }
+  .audit-table .ref-link { color: var(--report-primary); text-decoration: none; font-weight: 500; }
+  .audit-table .ref-link:hover { text-decoration: underline; }
+  .audit-table .diff-details { font-variant-numeric: tabular-nums; direction: ltr; text-align: right; white-space: pre-line; }
+  @media print {
+    .no-print { display: none !important; }
+    .audit-cover { break-inside: avoid; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4 report-wrap" dir="rtl">
+  <div class="audit-actions no-print">
+    <a href="{{ url_for('financials.accounts_hub') }}#tab-journal" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-list me-1"></i>قيود اليومية</a>
+    <a href="{{ url_for('fiscal_years.list_years') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-calendar me-1"></i>السنوات المالية</a>
+    {% if report %}
+    <a href="{{ url_for('journal.audit_pdf', from_date=report.meta.from_date or '', to_date=report.meta.to_date or '') }}" target="_blank" class="btn btn-sm btn-primary"><i class="fa-solid fa-file-pdf me-1"></i>تقرير PDF الرسمي</a>
+    <a href="{{ url_for('journal.audit_print', from_date=report.meta.from_date or '', to_date=report.meta.to_date or '') }}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-print me-1"></i>نسخة طباعة</a>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print();"><i class="fa-solid fa-print me-1"></i>طباعة من الصفحة</button>
+    <a href="{{ url_for('journal.backfill_missing_all') }}" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>ترحيل تلقائي (معالجة فواتير بدون قيد)</a>
+    {% endif %}
+  </div>
+
+  {% if not report %}
+  <div class="report-filter-card" id="audit-form-card">
+    <div class="card-title"><i class="fa-solid fa-magnifying-glass-chart"></i> إجراء تدقيق محاسبي شامل</div>
+    <p class="text-muted small mb-3">يراجع النظام: سلامة القيود، قيود غير متوازنة، ضريبة، مراجع مكسورة، فواتير بدون قيد، اختلالات محاسبية، ومشاكل إقفال.</p>
+    <form method="post" class="row g-3 align-items-end" id="audit-run-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="col-auto">
+        <label class="form-label">من تاريخ (اختياري)</label>
+        <input type="date" name="from_date" class="form-control form-control-sm" id="audit-from-date">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">إلى تاريخ (اختياري)</label>
+        <input type="date" name="to_date" class="form-control form-control-sm" id="audit-to-date">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary" id="audit-submit-btn"><i class="fa-solid fa-play me-1"></i>تشغيل التدقيق</button>
+      </div>
+    </form>
+    <div id="audit-loading" class="mt-2 text-primary small" style="display: none;"><i class="fa-solid fa-spinner fa-spin me-1"></i>جاري التشغيل...</div>
+  </div>
+  <div class="text-center text-muted py-5" id="audit-welcome">
+    <i class="fa-solid fa-clipboard-check fa-3x mb-2"></i>
+    <p>اضغط "تشغيل التدقيق" لبدء المراجعة وعرض التقرير.</p>
+  </div>
+  <script>
+  document.getElementById('audit-run-form') && document.getElementById('audit-run-form').addEventListener('submit', function() {
+    var btn = document.getElementById('audit-submit-btn');
+    var loading = document.getElementById('audit-loading');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>جاري التشغيل...'; }
+    if (loading) loading.style.display = 'block';
+  });
+  </script>
+  {% else %}
+  {# ---- غلاف التقرير ---- #}
+  <div class="audit-cover">
+    <h1>تقرير التدقيق المحاسبي</h1>
+    <p class="sub">{{ report.meta.entity_name }}</p>
+    <p class="meta">
+      تاريخ التدقيق: {{ report.meta.run_at.strftime('%Y-%m-%d %H:%M') if report.meta.run_at else '-' }}<br>
+      {% if report.meta.from_date or report.meta.to_date %}
+      الفترة: {{ report.meta.from_date or '—' }} إلى {{ report.meta.to_date or '—' }}
+      {% else %}
+      نطاق: كامل البيانات
+      {% endif %}
+    </p>
+    <p class="meta mt-2"><strong>تم توليد هذا التقرير آلياً بواسطة النظام</strong></p>
+  </div>
+
+  {# ---- الملخص التنفيذي ---- #}
+  <div class="audit-summary">
+    <h2>الملخص التنفيذي</h2>
+    <p><strong>إجمالي الملاحظات:</strong> {{ report.summary.total }}</p>
+    <p>
+      <span class="badge bg-danger badge-sev me-1">عالي {{ report.summary.high }}</span>
+      <span class="badge bg-warning text-dark badge-sev me-1">متوسط {{ report.summary.medium }}</span>
+      <span class="badge bg-success badge-sev">منخفض {{ report.summary.low }}</span>
+    </p>
+    <p class="mb-0">
+      {% if report.summary.total == 0 %}
+      <strong>توصية عامة:</strong> لم يتم رصد ملاحظات في نطاق الفحص الحالي. يُوصى بإجراء مراجعة دورية وتشغيل التدقيق بعد كل إقفال فترة.
+      {% elif report.summary.high > 0 %}
+      <strong>توصية عامة:</strong> معالجة الملاحظات ذات الخطورة العالية أولاً (قيود غير متوازنة، مراجع مكسورة، اختلالات محاسبية) ثم المتوسطة.
+      {% else %}
+      <strong>توصية عامة:</strong> معالجة الملاحظات الظاهرة في الجدول أدناه وفق أولوية الأثر.
+      {% endif %}
+    </p>
+  </div>
+
+  {# ---- جدول الملاحظات التفصيلي (5 أسئلة قانونية) ---- #}
+  <div class="report-table-card">
+    <div class="report-table-card-header"><i class="fa-solid fa-table-list"></i> جدول الملاحظات التفصيلي</div>
+    <p class="px-3 pt-2 small text-muted mb-0">أين الخلل؟ ما القيد المتأثر؟ أين الاختلاف؟ لماذا حدث؟ كيف يُصحّح؟</p>
+    <div class="report-table-wrap">
+      <table class="audit-table report-table">
+        <thead>
+          <tr>
+            <th>رقم</th>
+            <th>نوع الخلل</th>
+            <th>مكان الخلل</th>
+            <th>رقم القيد</th>
+            <th>تاريخ القيد</th>
+            <th>وصف الخلل</th>
+            <th>تفاصيل الاختلاف</th>
+            <th>سبب الخطأ</th>
+            <th>درجة الخطورة</th>
+            <th>طريقة التصحيح</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in report.findings %}
+          <tr>
+            <td>{{ f.number }}</td>
+            <td>{{ f.issue_type_ar }}</td>
+            <td>{{ f.place_ar }}</td>
+            <td>
+              {% if f.ref_url %}
+              <a href="{{ f.ref_url }}" class="ref-link" target="_blank">{{ f.ref_number }}</a>
+              {% else %}
+              {{ f.ref_number }}
+              {% endif %}
+            </td>
+            <td>{{ f.entry_date }}</td>
+            <td>{{ f.description }}</td>
+            <td class="diff-details">{{ f.difference_details }}</td>
+            <td>{{ f.root_cause_ar }}</td>
+            <td><span class="impact-{{ f.severity }}">{{ f.severity_ar }}</span></td>
+            <td>{{ f.correction_method }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-muted">لا توجد ملاحظات.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ---- إجراءات المعالجة (Flow) ---- #}
+  <div class="report-filter-card no-print mt-3">
+    <div class="card-title"><i class="fa-solid fa-screwdriver-wrench"></i> إجراءات المعالجة</div>
+    <p class="small text-muted mb-2">من التقرير يمكنك فتح القيد من عمود "رقم القيد" لتعديله، أو تشغيل الترحيل التلقائي للفواتير التي بدون قيد.</p>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('financials.accounts_hub') }}#tab-journal" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen-ruler me-1"></i>فتح قيود اليومية</a>
+      <a href="{{ url_for('journal.backfill_missing_all') }}" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>ترحيل تلقائي (Backfill)</a>
+      <a href="{{ url_for('journal.audit') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate me-1"></i>تشغيل تدقيق جديد</a>
+    </div>
+  </div>
+
+  {# ---- خاتمة قانونية ---- #}
+  <div class="audit-disclaimer">
+    <strong>خاتمة قانونية:</strong> هذا التقرير تم توليده آلياً بناءً على البيانات المدخلة في النظام. وهو لا يُغني عن مراجعة محاسب قانوني معتمد ولا يُمثّل رأياً قانونياً أو ضريبياً. يُوصى بالاحتفاظ بنسخة مطبوعة أو PDF مع سجلات الفترة.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

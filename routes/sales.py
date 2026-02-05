@@ -28,6 +28,7 @@ from models import (
     get_saudi_now,
 )
 from routes.common import BRANCH_LABELS, kv_get, kv_set, safe_table_number, user_can
+from services.gl_truth import can_create_invoice_on_date
 from app.routes import (
     _set_table_status_concurrent,
     _pm_account,
@@ -234,6 +235,16 @@ def pos_table(branch_code, table_number):
     init_payment_method = (draft.get('payment_method') or '').strip().upper()
     # Warmup DB (avoid heavy create_all/seed on every request)
     warmup_db_once()
+    # Settings once: for void password (instant POS) and template
+    try:
+        s = Settings.query.first()
+    except Exception:
+        s = None
+    init_void_password = '1991'
+    if s and branch_code == 'china_town':
+        init_void_password = str(getattr(s, 'china_town_void_password', None) or init_void_password)
+    elif s and branch_code == 'place_india':
+        init_void_password = str(getattr(s, 'place_india_void_password', None) or init_void_password)
     # Load categories from DB for UI and provide a name->id map
     try:
 
@@ -288,11 +299,6 @@ def pos_table(branch_code, table_number):
     cat_map_json = json.dumps(cat_map)
     cat_image_map_json = json.dumps(cat_image_map)
     today = get_saudi_now().date().isoformat()
-    # Load settings for currency icon, etc.
-    try:
-        s = Settings.query.first()
-    except Exception:
-        s = None
     return render_template('sales_table_invoice.html',
                            branch_code=branch_code,
                            branch_label=branch_label,
@@ -309,6 +315,7 @@ def pos_table(branch_code, table_number):
                            init_discount_pct=init_discount_pct,
                            init_tax_pct=init_tax_pct,
                            init_payment_method=init_payment_method,
+                           init_void_password=init_void_password,
                            settings=s)
 
 
@@ -470,6 +477,29 @@ def api_tables_status(branch_code):
         items.append({'table_number': i, 'status': status})
     return jsonify(items)
 
+
+
+@bp.route('/api/menu/all-items', methods=['GET'], endpoint='api_menu_all_items')
+@login_required
+def api_menu_all_items():
+    """Return all menu items in one request. POS loads once and filters locally (0ms per category)."""
+    warmup_db_once()
+    try:
+        all_items = MenuItem.query.order_by(MenuItem.category_id, MenuItem.display_order.asc().nulls_last(), MenuItem.name).all()
+        out = []
+        for m in all_items:
+            out.append({
+                'id': m.id,
+                'meal_id': getattr(m, 'meal_id', None) or m.id,
+                'name': m.name or '',
+                'price': float(m.price or 0),
+                'category_id': m.category_id,
+                'image_url': None,
+            })
+        return jsonify({'items': out})
+    except Exception as e:
+        current_app.logger.warning('api_menu_all_items failed: %s', e)
+        return jsonify({'items': []})
 
 
 @bp.route('/api/menu/<cat_id>/items', methods=['GET'], endpoint='api_menu_items')
@@ -938,6 +968,10 @@ def api_draft_checkout():
     draft_data = kv_get(f'draft:{branch}:{table}', {}) or {}
     preview_no = (draft_data.get('preview_invoice_number') or '').strip()
     invoice_number = preview_no if preview_no else f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
+    inv_date = get_saudi_now().date()
+    ok, period_err = can_create_invoice_on_date(inv_date)
+    if not ok:
+        return jsonify({'success': False, 'error': period_err or 'الفترة مغلقة لهذا التاريخ.'}), 403
     try:
         inv = SalesInvoice(
             invoice_number=invoice_number,
@@ -1092,6 +1126,10 @@ def api_sales_checkout():
     total_after = taxable_amount + vat_amount
 
     invoice_number = f"INV-{int(datetime.utcnow().timestamp())}-{branch[:2]}{table}"
+    inv_date = get_saudi_now().date()
+    ok, period_err = can_create_invoice_on_date(inv_date)
+    if not ok:
+        return jsonify({'success': False, 'error': period_err or 'الفترة مغلقة لهذا التاريخ.'}), 403
     inv = None
     try:
         inv = SalesInvoice(
@@ -1548,6 +1586,17 @@ def invoice_print(invoice_id):
             'total_price': line,
         })
 
+    journal_totals = _receipt_totals_from_journal(inv)
+    if journal_totals:
+        total_before_tax = journal_totals['total_before_tax']
+        tax_amount = journal_totals['tax_amount']
+        discount_amount = journal_totals['discount_amount']
+        total_after_tax_discount = journal_totals['total_after_tax_discount']
+    else:
+        total_before_tax = float(inv.total_before_tax or 0.0)
+        tax_amount = float(inv.tax_amount or 0.0)
+        discount_amount = float(inv.discount_amount or 0.0)
+        total_after_tax_discount = float(inv.total_after_tax_discount or 0.0)
     inv_ctx = {
         'invoice_number': inv.invoice_number,
         'table_number': inv.table_number,
@@ -1555,10 +1604,10 @@ def invoice_print(invoice_id):
         'customer_phone': inv.customer_phone,
         'payment_method': inv.payment_method,
         'status': inv.status.upper(),
-        'total_before_tax': float(inv.total_before_tax or 0.0),
-        'tax_amount': float(inv.tax_amount or 0.0),
-        'discount_amount': float(inv.discount_amount or 0.0),
-        'total_after_tax_discount': float(inv.total_after_tax_discount or 0.0),
+        'total_before_tax': total_before_tax,
+        'tax_amount': tax_amount,
+        'discount_amount': discount_amount,
+        'total_after_tax_discount': total_after_tax_discount,
         'branch': getattr(inv, 'branch', None),
         'branch_code': getattr(inv, 'branch', None),
     }
@@ -1933,14 +1982,68 @@ def _logo_path_to_data_url(url, app):
         return None
 
 
+def _receipt_totals_from_journal(inv):
+    """
+    استخراج إجماليات الإيصال من القيود فقط (مصدر الحقيقة).
+    السلسلة: invoice_number → journal_entry_id → journal_lines.
+    لا تعتمد على الجلسة — فقط على الفاتورة والقيود المرتبطة.
+    Returns dict with total_before_tax, tax_amount, discount_amount, total_after_tax_discount,
+    or None if no journal linked (then caller uses invoice row totals).
+    """
+    from models import JournalEntry, JournalLine, Account
+    je_id = getattr(inv, 'journal_entry_id', None)
+    if not je_id:
+        je = JournalEntry.query.filter_by(invoice_id=inv.id, invoice_type='sales').order_by(JournalEntry.id.desc()).first()
+        if not je:
+            return None
+        je_id = je.id
+    lines = db.session.query(JournalLine, Account).join(Account, JournalLine.account_id == Account.id).filter(
+        JournalLine.journal_id == je_id
+    ).all()
+    cash_ar_debit = Decimal('0')
+    vat_credit = Decimal('0')
+    discount_debit = Decimal('0')
+    revenue_credit = Decimal('0')
+    for jl, acc in lines:
+        code = (getattr(acc, 'code', None) or '').strip()
+        if not code:
+            continue
+        debit = Decimal(str(jl.debit or 0))
+        credit = Decimal(str(jl.credit or 0))
+        if code in ('1111', '1121'):
+            cash_ar_debit += debit
+        elif code.startswith('114'):
+            cash_ar_debit += debit
+        elif code == '2141':
+            vat_credit += credit
+        elif code == '5540':
+            discount_debit += debit
+        elif code in ('4111', '4112', '4120'):
+            revenue_credit += credit
+    total_after_tax_discount = float(cash_ar_debit)
+    tax_amount = float(vat_credit)
+    discount_amount = float(discount_debit)
+    total_before_tax = float(revenue_credit) + discount_amount
+    if total_after_tax_discount <= 0 and (revenue_credit + vat_credit) > 0:
+        total_after_tax_discount = float(revenue_credit) + float(vat_credit)
+    return {
+        'total_before_tax': round(total_before_tax, 2),
+        'tax_amount': round(tax_amount, 2),
+        'discount_amount': round(discount_amount, 2),
+        'total_after_tax_discount': round(total_after_tax_discount, 2),
+    }
+
+
 # === Print Routes ===
+# الطباعة تعتمد فقط على: invoice_number → journal_entry_id → journal_lines (لا session)
 @bp.route('/print/receipt/<invoice_number>', methods=['GET'], endpoint='print_receipt')
+@login_required
 def print_receipt(invoice_number):
     inv = SalesInvoice.query.filter_by(invoice_number=invoice_number).first()
     if not inv:
         return 'Invoice not found', 404
     items = SalesInvoiceItem.query.filter_by(invoice_id=inv.id).all()
-    # compute items context and use stored totals
+    # compute items context from DB only (no session)
     items_ctx = []
     for it in items:
         line = float(it.price_before_tax or 0) * float(it.quantity or 0)
@@ -1950,6 +2053,17 @@ def print_receipt(invoice_number):
             'total_price': line,
         })
 
+    journal_totals = _receipt_totals_from_journal(inv)
+    if journal_totals:
+        total_before_tax = journal_totals['total_before_tax']
+        tax_amount = journal_totals['tax_amount']
+        discount_amount = journal_totals['discount_amount']
+        total_after_tax_discount = journal_totals['total_after_tax_discount']
+    else:
+        total_before_tax = float(inv.total_before_tax or 0.0)
+        tax_amount = float(inv.tax_amount or 0.0)
+        discount_amount = float(inv.discount_amount or 0.0)
+        total_after_tax_discount = float(inv.total_after_tax_discount or 0.0)
     inv_ctx = {
         'invoice_number': inv.invoice_number,
         'table_number': inv.table_number,
@@ -1957,10 +2071,10 @@ def print_receipt(invoice_number):
         'customer_phone': inv.customer_phone,
         'payment_method': inv.payment_method,
         'status': 'PAID',
-        'total_before_tax': float(inv.total_before_tax or 0.0),
-        'tax_amount': float(inv.tax_amount or 0.0),
-        'discount_amount': float(inv.discount_amount or 0.0),
-        'total_after_tax_discount': float(inv.total_after_tax_discount or 0.0),
+        'total_before_tax': total_before_tax,
+        'tax_amount': tax_amount,
+        'discount_amount': discount_amount,
+        'total_after_tax_discount': total_after_tax_discount,
         'branch': getattr(inv, 'branch', None),
         'branch_code': getattr(inv, 'branch', None),
     }
@@ -2024,8 +2138,8 @@ def print_receipt(invoice_number):
             dt_str = get_saudi_now().strftime('%H:%M:%S %Y-%m-%d')
     # Prepare embedded logo from branch-specific or global settings for thermal printing
     logo_data_url = None
+    logo_url_to_use = _logo_url or (s and (getattr(s, 'logo_url', None) or '').strip()) or None
     try:
-        logo_url_to_use = _logo_url or (s and (getattr(s, 'logo_url', None) or '').strip()) or None
         if s and getattr(s, 'receipt_show_logo', False) and logo_url_to_use:
             logo_data_url = _logo_path_to_data_url(logo_url_to_use, current_app)
     except Exception:
@@ -2044,6 +2158,7 @@ def print_receipt(invoice_number):
                            display_invoice_number=inv.invoice_number,
                            qr_data_url=qr_data_url,
                            logo_data_url=logo_data_url,
+                           logo_url=logo_url_to_use,
                            paid=True)
 
 
@@ -2051,7 +2166,7 @@ def print_receipt(invoice_number):
 @bp.route('/sales/<int:invoice_id>/print', methods=['GET'], endpoint='sales_receipt_by_id')
 @login_required
 def print_sales_receipt_by_id(invoice_id):
-    """Receipt-style print for a single sales invoice by ID (for invoices list / reports)."""
+    """Receipt-style print for a single sales invoice by ID. Data from invoice_number → journal_entry_id → journal_lines (no session)."""
     inv = SalesInvoice.query.get_or_404(invoice_id)
     items = SalesInvoiceItem.query.filter_by(invoice_id=inv.id).all()
     items_ctx = []
@@ -2062,6 +2177,17 @@ def print_sales_receipt_by_id(invoice_id):
             'quantity': float(it.quantity or 0),
             'total_price': line,
         })
+    journal_totals = _receipt_totals_from_journal(inv)
+    if journal_totals:
+        total_before_tax = journal_totals['total_before_tax']
+        tax_amount = journal_totals['tax_amount']
+        discount_amount = journal_totals['discount_amount']
+        total_after_tax_discount = journal_totals['total_after_tax_discount']
+    else:
+        total_before_tax = float(inv.total_before_tax or 0.0)
+        tax_amount = float(inv.tax_amount or 0.0)
+        discount_amount = float(inv.discount_amount or 0.0)
+        total_after_tax_discount = float(inv.total_after_tax_discount or 0.0)
     inv_ctx = {
         'invoice_number': inv.invoice_number,
         'table_number': getattr(inv, 'table_number', None),
@@ -2069,10 +2195,10 @@ def print_sales_receipt_by_id(invoice_id):
         'customer_phone': getattr(inv, 'customer_phone', '') or '',
         'payment_method': (inv.payment_method or 'CASH').strip().upper(),
         'status': 'PAID',
-        'total_before_tax': float(inv.total_before_tax or 0.0),
-        'tax_amount': float(inv.tax_amount or 0.0),
-        'discount_amount': float(inv.discount_amount or 0.0),
-        'total_after_tax_discount': float(inv.total_after_tax_discount or 0.0),
+        'total_before_tax': total_before_tax,
+        'tax_amount': tax_amount,
+        'discount_amount': discount_amount,
+        'total_after_tax_discount': total_after_tax_discount,
         'branch': getattr(inv, 'branch', None),
         'branch_code': getattr(inv, 'branch', None),
     }
@@ -2086,9 +2212,9 @@ def print_sales_receipt_by_id(invoice_id):
         dt_str = (inv.created_at.strftime('%Y-%m-%d %H:%M:%S') if getattr(inv, 'created_at', None) else get_saudi_now().strftime('%Y-%m-%d %H:%M:%S'))
     except Exception:
         dt_str = get_saudi_now().strftime('%Y-%m-%d %H:%M:%S')
+    logo_url_to_use = _logo_url or (s and (getattr(s, 'logo_url', None) or '').strip()) or None
     logo_data_url = None
     try:
-        logo_url_to_use = _logo_url or (s and (getattr(s, 'logo_url', None) or '').strip()) or None
         if s and getattr(s, 'receipt_show_logo', False) and logo_url_to_use:
             logo_data_url = _logo_path_to_data_url(logo_url_to_use, current_app)
     except Exception:
@@ -2106,6 +2232,7 @@ def print_sales_receipt_by_id(invoice_id):
                            display_invoice_number=inv.invoice_number,
                            qr_data_url=qr_data_url,
                            logo_data_url=logo_data_url,
+                           logo_url=logo_url_to_use,
                            paid=True)
 
 
@@ -2240,9 +2367,9 @@ def print_order_preview(branch, table):
             qr_data_url = 'data:image/png;base64,' + b64
     except Exception:
         qr_data_url = None
+    logo_url_to_use = _logo_url_preview or (s and (getattr(s, 'logo_url', None) or '').strip()) or None
     logo_data_url = None
     try:
-        logo_url_to_use = _logo_url_preview or (s and (getattr(s, 'logo_url', None) or '').strip()) or None
         if s and getattr(s, 'receipt_show_logo', False) and logo_url_to_use:
             logo_data_url = _logo_path_to_data_url(logo_url_to_use, current_app)
     except Exception:
@@ -2253,6 +2380,7 @@ def print_order_preview(branch, table):
                            display_invoice_number=order_no,
                            qr_data_url=qr_data_url,
                            logo_data_url=logo_data_url,
+                           logo_url=logo_url_to_use,
                            paid=False)
 
 

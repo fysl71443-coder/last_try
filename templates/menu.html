@@ -90,6 +90,34 @@
         </div>
 
         {% if current_section %}
+        <div class="mb-3 p-3 border rounded bg-light">
+          <h6 class="mb-2">{{ _('Add items to section') }} / إضافة أصناف للقسم المختار</h6>
+          <p class="small text-muted mb-2">{{ _('Select section above, then check the meals to add. Already-in-section items are disabled.') }} اختر القسم ثم حدد الأصناف المطلوبة ثم اضغط «إضافة المحدد».</p>
+          <form method="post" action="{{ url_for('main.menu_items_bulk_add') }}" id="bulkAddForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="section_id" value="{{ current_section.id }}"/>
+            <div class="d-flex gap-2 mb-2 flex-wrap">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="bulkSelectAvailable">{{ _('Select all (available)') }}</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="bulkClearSelection">{{ _('Clear selection') }}</button>
+              <button type="submit" class="btn btn-sm btn-primary"><i class="fa-solid fa-plus me-1"></i>{{ _('Add selected to section') }} / إضافة المحدد للقسم</button>
+            </div>
+            <div class="border rounded p-2 bg-white" style="max-height:220px; overflow-y: auto;">
+              <div class="row g-1 small">
+                {% for m in meals or [] %}
+                {% set already = (m.id in existing_meal_ids_in_section) if existing_meal_ids_in_section is defined else false %}
+                <div class="col-12 col-md-6 col-lg-4">
+                  <label class="d-flex align-items-center gap-2 mb-0 py-1 cursor-pointer">
+                    <input type="checkbox" name="meal_ids" value="{{ m.id }}" class="form-check-input bulk-meal-cb" {{ 'disabled' if already else '' }} {{ 'data-in-section' if already else '' }}/>
+                    <span class="{{ 'text-muted' if already else '' }}">{{ m.name }}{% if m.name_ar %} / {{ m.name_ar }}{% endif %}</span>
+                    {% if already %}<span class="badge bg-secondary ms-1">في القسم</span>{% endif %}
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </form>
+        </div>
+
         <form method="post" action="{{ url_for('main.menu_item_add') }}" class="row g-2 align-items-end mb-3" id="addItemForm">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <input type="hidden" name="section_id" value="{{ current_section.id }}"/>
@@ -174,6 +202,16 @@
         if(nameInput && nm){ nameInput.value = nm; }
       });
     }
+  })();
+
+  // إضافة أصناف جماعية: تحديد الكل (المتاح فقط) ومسح التحديد
+  (function(){
+    document.getElementById('bulkSelectAvailable')?.addEventListener('click', function(){
+      document.querySelectorAll('#bulkAddForm .bulk-meal-cb:not([disabled])').forEach(function(cb){ cb.checked = true; });
+    });
+    document.getElementById('bulkClearSelection')?.addEventListener('click', function(){
+      document.querySelectorAll('#bulkAddForm .bulk-meal-cb').forEach(function(cb){ cb.checked = false; });
+    });
   })();
 
   // تركيز تلقائي على نموذج إضافة عنصر عند الضغط على "إضافة أصناف" في جدول الأقسام

@@ -7,6 +7,7 @@ from decimal import Decimal
 from datetime import datetime
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask_babel import gettext as _
 from flask_login import login_required, current_user
 
 from app import db
@@ -26,6 +27,10 @@ from app.routes import (
     _create_expense_payment_journal,
     _expense_account_by_code,
     _expense_account_for,
+)
+from services.account_validation import (
+    validate_account_for_transaction,
+    TRANSACTION_TYPE_EXPENSE,
 )
 
 bp = Blueprint('expenses', __name__)
@@ -98,11 +103,11 @@ def expenses():
                 from data.expense_types import get_sub_type_by_ids
                 amt = _parse_decimal(amount_str)
                 if amt <= 0:
-                    flash('Invalid amount', 'danger')
+                    flash(_('Invalid amount'), 'danger')
                     return redirect(url_for('expenses.expenses'))
                 config = get_sub_type_by_ids(expense_type, expense_sub_type)
                 if not config:
-                    flash('Invalid expense type', 'danger')
+                    flash(_('Invalid expense type'), 'danger')
                     return redirect(url_for('expenses.expenses'))
                 is_waste = config.get('is_internal_adjustment') and expense_sub_type == 'spoilage_waste'
                 date_str = request.form.get('date') or get_saudi_now().date().isoformat()
@@ -117,9 +122,16 @@ def expenses():
                     status_val = (request.form.get('status') or 'paid').strip().lower()
                     if status_val not in ('paid', 'partial', 'unpaid'):
                         status_val = 'paid'
+                    # الضريبة تُطبّق فقط عند تفعيل خانة "تطبيق 15% ض.ق.م" — لا نعتمد على default_vat للتصنيف
                     apply_vat = (str(request.form.get('apply_vat') or '').lower() in {'on', 'true', '1', 'yes'})
-                    use_vat = apply_vat if apply_vat else config.get('default_vat', False)
+                    use_vat = bool(apply_vat)
                 desc = (request.form.get('description') or request.form.get('expense_description') or '').strip() or 'Expense'
+                inv_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                from services.gl_truth import can_create_invoice_on_date
+                ok, period_err = can_create_invoice_on_date(inv_date)
+                if not ok:
+                    flash(period_err or _('الفترة المالية مغلقة لهذا التاريخ.'), 'danger')
+                    return redirect(url_for('expenses.expenses'))
                 total_before = float(amt)
                 tax_amt = (total_before * 0.15) if use_vat else 0.0
                 total_inc_tax = round(total_before + tax_amt, 2)
@@ -131,7 +143,7 @@ def expenses():
                     inv_no = f"INV-EXP-{get_saudi_now().strftime('%Y%m%d%H%M%S')}"
                 inv_kw = dict(
                     invoice_number=inv_no,
-                    date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+                    date=inv_date,
                     payment_method=pm,
                     total_before_tax=total_before,
                     tax_amount=tax_amt,
@@ -170,14 +182,14 @@ def expenses():
                         _create_expense_payment_journal(inv.date, float(total_inc_tax), inv.invoice_number, pm or 'CASH', getattr(inv, 'liability_account_code', None))
                     except Exception:
                         pass
-                flash('Expense saved', 'success')
+                flash(_('Expense saved'), 'success')
             except Exception as e:
                 db.session.rollback()
                 try:
                     current_app.logger.exception('Type-driven expense save: %s', e)
                 except Exception:
                     pass
-                flash('Failed to save expense', 'danger')
+                flash(_('Failed to save expense'), 'danger')
             return redirect(url_for('expenses.expenses'))
 
         try:
@@ -234,9 +246,9 @@ def expenses():
                     'account_code': (acc_code or '').strip().upper(),
                 })
                 idx += 1
-            # Check if VAT should be applied on subtotal (Apply 15% VAT checkbox)
-            apply_vat_all_raw = request.form.get('apply_vat_all') or ''
-            apply_vat_all = (str(apply_vat_all_raw).lower() in {'on','true','1','yes'})
+            # الضريبة تُطبّق فقط عند تفعيل خانة "تطبيق 15% ض.ق.م" (اسم الحقل: apply_vat أو apply_vat_all)
+            apply_vat_all_raw = request.form.get('apply_vat_all') or request.form.get('apply_vat') or ''
+            apply_vat_all = (str(apply_vat_all_raw).lower() in {'on', 'true', '1', 'yes'})
             
             # Log for debugging
             try:
@@ -244,13 +256,17 @@ def expenses():
             except Exception:
                 pass
             
-            # If apply_vat_all is checked, calculate VAT on subtotal (after discount)
-            if apply_vat_all and total_before > 0:
-                # Calculate VAT on (total_before - total_disc)
+            # إذا لم يُفعّل المستخدم "تطبيق 15% ض.ق.م" نُصفّر الضريبة ولا نعتمد على أي قيمة ضريبة أُرسلت من الواجهة
+            if not apply_vat_all:
+                total_tax = Decimal('0.00')
+                for item in items_buffer:
+                    item['tax'] = Decimal('0')
+                    item['total_price'] = (item['quantity'] * item['price_before_tax']) - item['discount']
+            elif total_before > 0:
+                # If apply_vat_all is checked, calculate VAT on subtotal (after discount)
                 base_for_vat = total_before - total_disc
                 calculated_vat = base_for_vat * Decimal('0.15')
                 total_tax = calculated_vat
-                # Update tax in items_buffer to reflect calculated VAT proportionally
                 if total_before > 0:
                     vat_ratio = calculated_vat / total_before
                     for item in items_buffer:
@@ -262,7 +278,24 @@ def expenses():
                     current_app.logger.info(f"VAT calculated: base_for_vat={base_for_vat}, calculated_vat={calculated_vat}, total_tax={total_tax}")
                 except Exception:
                     pass
-            
+
+            # Validate each expense item account: must be leaf and EXPENSE/COGS (debit side)
+            for row in items_buffer:
+                ac = (row.get('account_code') or '').strip()
+                if ac:
+                    ok, err = validate_account_for_transaction(
+                        ac, TRANSACTION_TYPE_EXPENSE, role="debit"
+                    )
+                    if not ok:
+                        flash(err or _("الحساب غير صالح للمصروف."), "danger")
+                        return redirect(request.url)
+
+            inv_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            from services.gl_truth import can_create_invoice_on_date
+            ok, period_err = can_create_invoice_on_date(inv_date)
+            if not ok:
+                flash(period_err or 'الفترة المالية مغلقة لهذا التاريخ.', 'danger')
+                return redirect(request.url)
             try:
                 last = ExpenseInvoice.query.order_by(ExpenseInvoice.id.desc()).first()
                 seq = (int(getattr(last, 'id', 0) or 0) + 1) if last else 1
@@ -271,7 +304,7 @@ def expenses():
                 inv_no = f"INV-EXP-{get_saudi_now().strftime('%Y%m%d%H%M%S')}"
             inv = ExpenseInvoice(
                 invoice_number=inv_no,
-                date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+                date=inv_date,
                 payment_method=pm,
                 total_before_tax=float(total_before),
                 tax_amount=float(total_tax),
@@ -314,14 +347,14 @@ def expenses():
                     _create_expense_payment_journal(inv.date, pay_amt, inv.invoice_number, pm or 'CASH')
                 except Exception:
                     pass
-            flash('Expense saved', 'success')
+            flash(_('Expense saved'), 'success')
         except Exception as e:
             db.session.rollback()
             try:
                 current_app.logger.exception('Failed to save expense: %s', e)
             except Exception:
                 pass
-            flash('Failed to save expense', 'danger')
+            flash(_('Failed to save expense'), 'danger')
         return redirect(url_for('expenses.expenses'))
     invs = []
     invs_json_str = '[]'
@@ -422,10 +455,10 @@ def expense_delete(eid):
             pass
         db.session.delete(inv)
         db.session.commit()
-        flash('Expense invoice deleted', 'success')
+        flash(_('Expense invoice deleted'), 'success')
     except Exception:
         db.session.rollback()
-        flash('Failed to delete expense invoice', 'danger')
+        flash(_('Failed to delete expense invoice'), 'danger')
     return redirect(url_for('expenses.expenses'))
 
 

@@ -7,6 +7,7 @@ from datetime import datetime, date, time, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app
+from flask_babel import gettext as _
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_, text
 from sqlalchemy.orm import selectinload
@@ -350,7 +351,6 @@ def reports_sales():
         start_d = end_d = today
     data = _sales_report_data(start_d, end_d, branch)
     # عرض طريقة الدفع حسب لغة النظام (يدعم التبديل الكامل عربي/إنجليزي)
-    from flask_babel import gettext as _
     _pm_display = {'نقدي': _('Cash'), 'بطاقة': _('Card'), 'آجل': _('Credit')}
     for r in (data.get('rows') or []):
         r['payment_method_display'] = _pm_display.get((r.get('payment_method') or '').strip(), _('Credit'))
@@ -456,9 +456,101 @@ def reports_expenses():
         start_d = end_d = today
     data = _expenses_report_data(start_d, end_d, branch)
     header = _report_header_context()
-    branch_label = 'الكل' if not branch or branch == 'all' else BRANCH_LABELS.get(branch, branch)
+    branch_label = _('All') if not branch or branch == 'all' else _(BRANCH_LABELS.get(branch, branch))
     ctx = {**header, "start_date": start_d, "end_date": end_d, "branch": branch, "branch_label": branch_label, "data": data}
     return render_template("reports/expenses_report.html", **ctx)
+
+
+@bp.route('/reports/print/expenses', methods=['GET'], endpoint='reports_print_expenses')
+@login_required
+def reports_print_expenses():
+    """طباعة تقرير المصروفات (ملخص) — قالب موحد مع باقي التقارير."""
+    from datetime import datetime as _dt
+    start_s = (request.args.get('from') or request.args.get('start_date') or '').strip()
+    end_s = (request.args.get('to') or request.args.get('end_date') or '').strip()
+    branch = (request.args.get('branch') or 'all').strip()
+    start_d = end_d = None
+    try:
+        if start_s: start_d = _dt.strptime(start_s, '%Y-%m-%d').date()
+        if end_s: end_d = _dt.strptime(end_s, '%Y-%m-%d').date()
+    except Exception:
+        pass
+    if not start_d and end_d: start_d = end_d
+    if not end_d and start_d: end_d = start_d
+    if not start_d:
+        start_d = end_d = get_saudi_now().date()
+    data = _expenses_report_data(start_d, end_d, branch)
+    branch_label = _('All') if not branch or branch == 'all' else _(BRANCH_LABELS.get(branch, branch))
+    try:
+        settings = Settings.query.first()
+        company_name = (settings.company_name or 'Company').strip() if settings else 'Company'
+        tax_number = (settings.tax_number or '').strip() if settings else ''
+        address = (getattr(settings, 'address', None) or '').strip() if settings else ''
+        logo_url = getattr(settings, 'logo_url', None) if settings else None
+        show_logo = bool(getattr(settings, 'receipt_show_logo', False)) if settings else False
+    except Exception:
+        company_name, tax_number, address, logo_url = 'Company', '', '', None
+        show_logo = False
+    generated_at = get_saudi_now().strftime('%Y-%m-%d %H:%M')
+    return render_template(
+        'reports/expenses_print.html',
+        data=data,
+        company_name=company_name,
+        tax_number=tax_number,
+        address=address,
+        logo_url=logo_url,
+        show_logo=show_logo,
+        start_date=start_d,
+        end_date=end_d,
+        branch_label=branch_label,
+        generated_at=generated_at,
+    )
+
+
+@bp.route('/reports/print/purchases', methods=['GET'], endpoint='reports_print_purchases')
+@login_required
+def reports_print_purchases():
+    """طباعة تقرير المشتريات — قالب موحد مع تقارير المصروفات وكشف الرواتب."""
+    from datetime import datetime as _dt
+    start_s = (request.args.get('from') or request.args.get('start_date') or '').strip()
+    end_s = (request.args.get('to') or request.args.get('end_date') or '').strip()
+    branch = (request.args.get('branch') or 'all').strip()
+    start_d = end_d = None
+    try:
+        if start_s: start_d = _dt.strptime(start_s, '%Y-%m-%d').date()
+        if end_s: end_d = _dt.strptime(end_s, '%Y-%m-%d').date()
+    except Exception:
+        pass
+    if not start_d and end_d: start_d = end_d
+    if not end_d and start_d: end_d = start_d
+    if not start_d:
+        start_d = end_d = get_saudi_now().date()
+    data = _purchases_report_data(start_d, end_d, branch)
+    branch_label = _('All') if not branch or branch == 'all' else _(BRANCH_LABELS.get(branch, branch))
+    try:
+        settings = Settings.query.first()
+        company_name = (settings.company_name or 'Company').strip() if settings else 'Company'
+        tax_number = (settings.tax_number or '').strip() if settings else ''
+        address = (getattr(settings, 'address', None) or '').strip() if settings else ''
+        logo_url = getattr(settings, 'logo_url', None) if settings else None
+        show_logo = bool(getattr(settings, 'receipt_show_logo', False)) if settings else False
+    except Exception:
+        company_name, tax_number, address, logo_url = 'Company', '', '', None
+        show_logo = False
+    generated_at = get_saudi_now().strftime('%Y-%m-%d %H:%M')
+    return render_template(
+        'reports/purchases_print.html',
+        data=data,
+        company_name=company_name,
+        tax_number=tax_number,
+        address=address,
+        logo_url=logo_url,
+        show_logo=show_logo,
+        start_date=start_d,
+        end_date=end_d,
+        branch_label=branch_label,
+        generated_at=generated_at,
+    )
 
 
 @bp.route('/reports/purchases', methods=['GET'], endpoint='reports_purchases')
@@ -481,7 +573,7 @@ def reports_purchases():
         start_d = end_d = today
     data = _purchases_report_data(start_d, end_d, branch)
     header = _report_header_context()
-    branch_label = 'الكل' if not branch or branch == 'all' else BRANCH_LABELS.get(branch, branch)
+    branch_label = _('All') if not branch or branch == 'all' else _(BRANCH_LABELS.get(branch, branch))
     ctx = {**header, "start_date": start_d, "end_date": end_d, "branch": branch, "branch_label": branch_label, "data": data}
     return render_template("reports/purchases_report.html", **ctx)
 
@@ -1820,7 +1912,7 @@ def reports_print_all_invoices_expenses():
     except Exception:
         settings = None
     meta = {
-        'title': 'Expenses — Print',
+        'title': _('Expenses') + ' — ' + _('Print'),
         'payment_method': payment_method or 'all',
         'branch': branch or 'all',
         'start_date': start_date,
@@ -2058,6 +2150,26 @@ def print_payroll():
                     'total': tot,
                 })
 
+        # ترتيب موحد: حسب القسم ثم الاسم (جميع الموظفين في جدول واحد بدون تقسيم صفحات)
+        _dept_order = {'admin': 0, 'hall': 1, 'kitchen': 2}
+        def _sort_key(r):
+            dept = (r.get('department') or '').strip().lower()
+            return (_dept_order.get(dept, 99), (r.get('name') or ''))
+        payroll_table_rows.sort(key=_sort_key)
+
+        # إجماليات للقالب الموحد (صف توديع)
+        payroll_totals = None
+        if payroll_table_rows:
+            payroll_totals = {
+                'basic': sum(r.get('basic') or 0 for r in payroll_table_rows),
+                'extra': sum(r.get('extra') or 0 for r in payroll_table_rows),
+                'absence': sum(r.get('absence') or 0 for r in payroll_table_rows),
+                'incentive': sum(r.get('incentive') or 0 for r in payroll_table_rows),
+                'allowances': sum(r.get('allowances') or 0 for r in payroll_table_rows),
+                'deductions': sum(r.get('deductions') or 0 for r in payroll_table_rows),
+                'total': sum(r.get('total') or 0 for r in payroll_table_rows),
+            }
+
         period_label = f"من {y_from:04d}-{m_from:02d} إلى {y_to:04d}-{m_to:02d}" if (y_from, m_from) != (y_to, m_to) else f"{y_from:04d}-{m_from:02d}"
         return render_template(
             'print/payroll_statement.html',
@@ -2071,6 +2183,7 @@ def print_payroll():
             generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
             employees=employees_ctx,
             payroll_table_rows=payroll_table_rows,
+            payroll_totals=payroll_totals,
             all_employees=all_employees,
             selected_employee_ids=selected_ids,
             **_report_header_context(),

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="{{ lang or 'ar' }}" dir="{{ 'rtl' if (lang or 'ar') == 'ar' else 'ltr' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ labels.report_title if labels else 'تقرير التدقيق المحاسبي' }} — {{ company_name }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --acct-primary: #1d4ed8;
+      --acct-primary-dark: #1e40af;
+      --acct-muted: #6b7280;
+      --acct-fg: #1f2937;
+      --acct-bg: #ffffff;
+      --acct-border: #e2e8f0;
+      --sev-high: #b91c1c;
+      --sev-medium: #c2410c;
+      --sev-low: #15803d;
+      --badge-open: #2563eb;
+      --badge-normal: #15803d;
+      --badge-override: #b45309;
+      --header-h: 72px;
+      --footer-h: 52px;
+    }
+    @page { size: A4; margin: 20mm 18mm 24mm 18mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', 'Tajawal', 'Segoe UI', sans-serif;
+      color: var(--acct-fg);
+      background: var(--acct-bg);
+      padding: 20px 28px;
+      padding-top: calc(var(--header-h) + 16px);
+      padding-bottom: calc(var(--footer-h) + 24px);
+      font-size: 13px;
+      margin: 0;
+      direction: rtl;
+    }
+    body[dir="ltr"] { direction: ltr; text-align: left; }
+    body[dir="ltr"] .cover { text-align: center; }
+    body[dir="ltr"] .exec-table th, body[dir="ltr"] .exec-table td { text-align: left; }
+    body[dir="ltr"] .findings-table th, body[dir="ltr"] .findings-table td { text-align: left; }
+
+    .pdf-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      background: linear-gradient(180deg, #eff6ff 0%, #fff 100%);
+      border-bottom: 2px solid var(--acct-primary);
+      z-index: 1000;
+    }
+    .pdf-header .header-logo { height: 44px; max-width: 140px; object-fit: contain; }
+    .pdf-header .header-title { font-size: 1rem; font-weight: 700; color: var(--acct-primary-dark); }
+    .pdf-header .header-sub { font-size: 0.8rem; color: var(--acct-muted); }
+    .pdf-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--footer-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      background: #f8fafc;
+      border-top: 1px solid var(--acct-border);
+      font-size: 11px;
+      color: var(--acct-muted);
+      z-index: 1000;
+    }
+    .pdf-footer .footer-page { font-variant-numeric: tabular-nums; }
+
+    .print-hint { margin-bottom: 1rem; padding: 0.5rem 1rem; background: #eff6ff; border: 1px solid var(--acct-primary); border-radius: 6px; font-size: 12px; color: var(--acct-primary-dark); }
+    .cover {
+      text-align: center;
+      padding: 2.5rem 1.5rem;
+      background: linear-gradient(180deg, #eff6ff 0%, #fff 100%);
+      border: 2px solid var(--acct-primary);
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+    .cover h1 { font-size: 1.75rem; font-weight: 700; color: var(--acct-primary-dark); margin: 0 0 0.25rem 0; }
+    .cover .vat { font-size: 0.9rem; color: var(--acct-muted); margin-top: 0.25rem; }
+    .cover .sub { font-size: 1.1rem; font-weight: 600; color: var(--acct-fg); margin-top: 1rem; }
+    .cover .meta { margin-top: 1rem; font-size: 0.9rem; color: var(--acct-muted); }
+    .cover .closure-badge { display: inline-block; margin-top: 0.75rem; padding: 0.4rem 0.9rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; }
+    .cover .closure-normal { background: #dcfce7; color: var(--badge-normal); }
+    .cover .closure-override { background: #fef3c7; color: var(--badge-override); }
+    .cover .closure-open { background: #dbeafe; color: var(--badge-open); }
+
+    .section-title { font-size: 1.05rem; font-weight: 700; color: var(--acct-primary-dark); margin: 1rem 0 0.5rem 0; padding-bottom: 0.25rem; border-bottom: 2px solid var(--acct-primary); }
+    .exec-table { width: 100%; max-width: 420px; border-collapse: collapse; margin: 0.5rem 0 1rem 0; font-size: 13px; border: 1px solid var(--acct-border); }
+    .exec-table th, .exec-table td { padding: 0.5rem 0.75rem; text-align: right; border: 1px solid var(--acct-border); }
+    .exec-table th { background: #f1f5f9; font-weight: 600; }
+    .exec-table .num { font-variant-numeric: tabular-nums; }
+    .exec-table .high { color: var(--sev-high); font-weight: 600; }
+    .exec-table .med { color: var(--sev-medium); }
+    .exec-table .low { color: var(--sev-low); }
+
+    .closure-box { padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid var(--acct-border); border-radius: 6px; margin: 0.5rem 0 1rem 0; font-size: 12px; }
+    .closure-box.override { background: #fffbeb; border-color: #f59e0b; }
+    .closure-box.open { background: #eff6ff; border-color: var(--acct-primary); }
+    .closure-box strong { display: block; margin-bottom: 0.25rem; }
+
+    .findings-index { margin: 0.5rem 0 1rem 0; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid var(--acct-border); border-radius: 6px; font-size: 11px; }
+    .findings-index a { color: var(--acct-primary); text-decoration: none; margin-left: 0.5rem; }
+    .findings-index a:hover { text-decoration: underline; }
+    body[dir="ltr"] .findings-index a { margin-left: 0; margin-right: 0.5rem; }
+
+    .findings-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 0.5rem; border: 1px solid var(--acct-border); }
+    .findings-table th, .findings-table td { padding: 4px 6px; border: 1px solid var(--acct-border); text-align: right; }
+    .findings-table th { background: #dbeafe; font-weight: 600; color: var(--acct-primary-dark); }
+    .findings-table tbody tr:nth-child(even) { background: #fafafa; }
+    .findings-table .mono { font-variant-numeric: tabular-nums; direction: ltr; }
+    .findings-table .sev-high { color: var(--sev-high); font-weight: 600; }
+    .findings-table .sev-medium { color: var(--sev-medium); }
+    .findings-table .sev-low { color: var(--sev-low); }
+    .findings-table a.entry-link { color: var(--acct-primary); text-decoration: none; }
+    .findings-table a.entry-link:hover { text-decoration: underline; }
+
+    .stats-badges { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1rem 0; align-items: center; }
+    .stats-badges .badge { padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .stats-badges .badge-high { background: #fef2f2; color: var(--sev-high); }
+    .stats-badges .badge-med { background: #fff7ed; color: var(--sev-medium); }
+    .stats-badges .badge-low { background: #f0fdf4; color: var(--sev-low); }
+    .stats-bar { display: flex; height: 24px; border-radius: 6px; overflow: hidden; margin-top: 0.5rem; max-width: 320px; background: #e2e8f0; }
+    .stats-bar .seg { height: 100%; }
+    .stats-bar .seg-high { background: var(--sev-high); }
+    .stats-bar .seg-med { background: var(--sev-medium); }
+    .stats-bar .seg-low { background: var(--sev-low); }
+
+    .conclusion { margin-top: 1.5rem; padding: 1rem 1.25rem; background: #f1f5f9; border: 1px solid var(--acct-border); border-radius: 6px; font-size: 12px; color: var(--acct-muted); }
+    .seal-signature-row { margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid var(--acct-border); display: flex; justify-content: space-around; flex-wrap: wrap; gap: 2rem; font-size: 12px; }
+    .seal-block, .sig-block { min-width: 160px; text-align: center; }
+    .seal-block .label, .sig-block .label { font-weight: 600; color: var(--acct-fg); display: block; margin-bottom: 0.25rem; }
+    .sig-line, .seal-line { border-bottom: 1px solid var(--acct-fg); margin-top: 6px; height: 28px; }
+    .seal-line { min-height: 40px; }
+
+    @media print {
+      .print-hint { display: none !important; }
+      .pdf-header, .pdf-footer { position: fixed; }
+      .cover { break-after: avoid; }
+      .findings-table thead { display: table-header-group; }
+      .findings-table tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body dir="{{ 'rtl' if (lang or 'ar') == 'ar' else 'ltr' }}">
+
+  <header class="pdf-header" role="banner">
+    <div class="header-brand">
+      {% if show_logo and logo_url %}
+      <img src="{{ logo_url }}" alt="" class="header-logo">
+      {% endif %}
+      <div class="header-title">{{ company_name or (report.meta.entity_name if report and report.meta else '') or 'النظام المحاسبي' }}</div>
+      <div class="header-sub">{{ labels.footer_report if labels else 'تقرير التدقيق' }} — {{ report.meta.run_at.strftime('%Y-%m-%d') if report and report.meta and report.meta.run_at else '' }}</div>
+    </div>
+    <div class="header-sub">{{ labels.report_title if labels else 'تقرير التدقيق المحاسبي' }}</div>
+  </header>
+
+  <footer class="pdf-footer" role="contentinfo">
+    <span>{{ company_name }}</span>
+    <span class="footer-page">{{ labels.page if labels else 'صفحة' }} 1</span>
+  </footer>
+
+  <div class="print-hint">💡 {{ 'لحفظ كـ PDF: استخدم قائمة المتصفح → طباعة → «حفظ كـ PDF»' if (lang or 'ar') == 'ar' else 'To save as PDF: use browser menu → Print → Save as PDF' }}.</div>
+
+  {# 1. الغلاف #}
+  <div class="cover">
+    <h1>{{ company_name or (report.meta.entity_name if report and report.meta else '') or 'النظام المحاسبي' }}</h1>
+    {% if tax_number %}<p class="vat">{{ labels.vat if labels else 'الرقم الضريبي / VAT' }}: {{ tax_number }}</p>{% endif %}
+    <p class="sub">{{ labels.report_title if labels else 'تقرير التدقيق المحاسبي' }}</p>
+    <p class="meta">
+      {{ labels.period if labels else 'الفترة المالية' }}: {{ report.meta.from_date or '—' }} {{ labels.to if labels else 'إلى' }} {{ report.meta.to_date or '—' }}<br>
+      {{ labels.issue_date if labels else 'تاريخ الإصدار' }}: {{ report.meta.run_at.strftime('%Y-%m-%d %H:%M') if report.meta.run_at else '—' }}
+    </p>
+    {% if closure_info %}
+    <span class="closure-badge {% if closure_info.status == 'open' %}closure-open{% elif closure_info.is_override %}closure-override{% else %}closure-normal{% endif %}">
+      {% if closure_info.status == 'open' %}🔵 {{ labels.closure_badge_open if labels else 'سنة مفتوحة' }}{% elif closure_info.is_override %}🟠 {{ labels.closure_badge_override if labels else 'إقفال مع تجاوز' }}{% else %}🟢 {{ labels.closure_badge_normal if labels else 'إقفال نظامي' }}{% endif %}
+    </span>
+    {% else %}
+    <span class="closure-badge closure-open">— {{ labels.closure_na if labels else 'لا يرتبط التقرير بسنة مالية محددة' }}</span>
+    {% endif %}
+  </div>
+
+  {# 2. الملخص التنفيذي #}
+  <h2 class="section-title">{{ labels.exec_summary if labels else 'الملخص التنفيذي' }}{% if (lang or 'ar') == 'ar' %} ({{ labels.exec_summary_en or 'Executive Summary' }}){% endif %}</h2>
+  <table class="exec-table">
+    <thead>
+      <tr><th>{{ labels.item if labels else 'البند' }}</th><th>{{ labels.count if labels else 'العدد' }}</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>{{ labels.total_findings if labels else 'إجمالي الملاحظات' }}</td><td class="num">{{ report.summary.total }}</td></tr>
+      <tr><td class="high">🔴 {{ labels.critical if labels else 'الحرجة' }}</td><td class="num high">{{ report.summary.high }}</td></tr>
+      <tr><td class="med">🟠 {{ labels.medium if labels else 'المتوسطة' }}</td><td class="num med">{{ report.summary.medium }}</td></tr>
+      <tr><td class="low">🟢 {{ labels.low if labels else 'المنخفضة' }}</td><td class="num low">{{ report.summary.low }}</td></tr>
+    </tbody>
+  </table>
+
+  {# 3. حالة الإقفال #}
+  <h2 class="section-title">{{ labels.closure_status if labels else 'حالة الإقفال' }}</h2>
+  <div class="closure-box {% if closure_info and closure_info.is_override %}override{% elif closure_info and closure_info.status == 'open' %}open{% endif %}">
+    {% if closure_info %}
+      {% if closure_info.status == 'open' %}
+      <strong>🔵 {{ labels.year_open if labels else 'سنة مفتوحة' }}</strong>
+      <p>{{ labels.year_open_desc if labels else 'الفترة المالية مفتوحة (لم يتم إقفالها بعد).' }}</p>
+      {% elif closure_info.is_override %}
+      <strong>🟠 {{ labels.closure_badge_override if labels else 'إقفال مع تجاوز' }}</strong>
+      <p><strong>{{ labels.override_reason if labels else 'سبب التجاوز' }}:</strong> {{ closure_info.override_reason or '—' }}</p>
+      <p><strong>{{ labels.closed_by if labels else 'تم بواسطة' }}:</strong> {{ closure_info.closed_by or '—' }} — {{ closure_info.closed_at.strftime('%Y-%m-%d %H:%M') if closure_info.closed_at else '—' }}</p>
+      {% else %}
+      <strong>🟢 {{ labels.normal_closure if labels else 'إقفال نظامي' }}</strong>
+      <p>{{ labels.normal_closure_desc if labels else 'تم إقفال الفترة المالية بشكل عادي (بدون تجاوز).' }}</p>
+      {% if closure_info.closed_by or closure_info.closed_at %}
+      <p><strong>{{ labels.closed_by if labels else 'تم بواسطة' }}:</strong> {{ closure_info.closed_by or '—' }} — {{ closure_info.closed_at.strftime('%Y-%m-%d %H:%M') if closure_info.closed_at else '—' }}</p>
+      {% endif %}
+      {% endif %}
+    {% else %}
+    <strong>—</strong>
+    <p>{{ labels.closure_na_desc if labels else 'حالة الإقفال غير مرتبطة بهذا التقرير.' }}</p>
+    {% endif %}
+  </div>
+
+  {# 4. فهرس الملاحظات (روابط داخلية) + جدول الملاحظات #}
+  <h2 class="section-title">{{ labels.findings_table if labels else 'جدول الملاحظات التفصيلي' }}</h2>
+  {% if report.findings %}
+  <p class="findings-index"><strong>{{ labels.findings_index if labels else 'فهرس الملاحظات (روابط داخلية)' }}:</strong>
+    {% for f in report.findings %}
+    <a href="#finding-{{ f.number }}">{{ f.ref_number }}{% if f.issue_type_ar %} — {{ f.issue_type_ar }}{% endif %}</a>{% if not loop.last %} |{% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+  <table class="findings-table">
+    <thead>
+      <tr>
+        <th>{{ labels.finding_no if labels else '#' }}</th>
+        <th>{{ labels.issue_type if labels else 'نوع الخلل' }}</th>
+        <th>{{ labels.entry_no if labels else 'رقم القيد' }}</th>
+        <th>{{ labels.description if labels else 'الوصف' }}</th>
+        <th>{{ labels.root_cause if labels else 'السبب' }}</th>
+        <th>{{ labels.correction if labels else 'طريقة التصحيح' }}</th>
+        <th>{{ labels.severity if labels else 'الخطورة' }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in report.findings %}
+      <tr id="finding-{{ f.number }}">
+        <td>{{ f.number }}</td>
+        <td>{{ f.issue_type_ar }}</td>
+        <td class="mono"><a href="#finding-{{ f.number }}" class="entry-link">{{ f.ref_number }}</a></td>
+        <td>{{ f.description }}</td>
+        <td>{{ f.root_cause_ar }}</td>
+        <td>{{ f.correction_method }}</td>
+        <td><span class="sev-{{ f.severity }}">{% if lang == 'en' %}{{ f.severity|capitalize }}{% else %}{{ f.severity_ar }}{% endif %}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="text-align: center;">{{ labels.no_findings if labels else 'لا توجد ملاحظات.' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# 5. إحصائيات #}
+  <h2 class="section-title">{{ labels.stats_title if labels else 'توزيع الخطورة' }}</h2>
+  <div class="stats-badges">
+    <span class="badge badge-high">🔴 {{ labels.critical if labels else 'عالية' }}: {{ report.summary.high }}</span>
+    <span class="badge badge-med">🟠 {{ labels.medium if labels else 'متوسطة' }}: {{ report.summary.medium }}</span>
+    <span class="badge badge-low">🟢 {{ labels.low if labels else 'منخفضة' }}: {{ report.summary.low }}</span>
+    <span style="color: var(--acct-muted); font-size: 11px;">— {{ labels.items_count if labels else 'عدد البنود' }}: {{ report.findings|length }}</span>
+  </div>
+  {% if report.summary.total > 0 %}
+  <div class="stats-bar">
+    <div class="seg seg-high" style="width: {{ (report.summary.high / report.summary.total * 100) }}%;"></div>
+    <div class="seg seg-med" style="width: {{ (report.summary.medium / report.summary.total * 100) }}%;"></div>
+    <div class="seg seg-low" style="width: {{ (report.summary.low / report.summary.total * 100) }}%;"></div>
+  </div>
+  {% endif %}
+
+  {# 6. الخاتمة #}
+  <div class="conclusion">
+    <strong>{{ labels.conclusion if labels else 'خاتمة' }}:</strong> {{ labels.conclusion_text if labels else 'تم إعداد هذا التقرير آليًا من النظام المحاسبي، ويعكس نتائج الفحص وفق القواعد المعتمدة بتاريخ' }} {{ report.meta.run_at.strftime('%Y-%m-%d %H:%M') if report.meta.run_at else '—' }}. {{ labels.conclusion_disclaimer if labels else 'وهذا التقرير لا يُغني عن المراجعة البشرية ولا يُمثّل رأياً قانونياً أو ضريبياً. قابل للتوقيع والختم.' }}
+  </div>
+
+  {# 7. ختم إلكتروني + توقيع #}
+  <div class="seal-signature-row">
+    <div class="seal-block">
+      <span class="label">{{ labels.electronic_seal if labels else 'ختم إلكتروني' }}</span>
+      <div class="seal-line"></div>
+    </div>
+    <div class="sig-block">
+      <span class="label">{{ labels.signature if labels else 'توقيع' }}</span>
+      <div class="sig-line"></div>
+    </div>
+    <div class="sig-block">
+      <span class="label">{{ labels.auditor if labels else 'المدقق / المراجع' }}</span>
+      <div class="sig-line"></div>
+    </div>
+    <div class="sig-block">
+      <span class="label">{{ labels.date_stamp if labels else 'التاريخ والختم' }}</span>
+      <div class="sig-line"></div>
+    </div>
+  </div>
+
+</body>
+</html>

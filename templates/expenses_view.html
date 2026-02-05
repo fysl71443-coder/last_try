@@ -34,7 +34,7 @@
                             <td><strong>{{ _('Payment Method') }}:</strong></td>
                             <td>
                                 {% set pm = (invoice.payment_method or '')|lower %}
-                                {% if pm == 'cash' %}{{ _('Cash') }}{% else %}{{ _('Bank') }}{% endif %}
+                                {% if pm == 'cash' %}{{ _('Cash') }}{% elif pm == 'bank' %}{{ _('Bank') }}{% elif pm == 'internal' %}{{ _('Internal') }}{% else %}{{ invoice.payment_method or '-' }}{% endif %}
                             </td>
                         </tr>
                         <tr>
@@ -54,17 +54,17 @@
           <table class="table table-borderless table-sm mb-0">
                         <tr>
                             <td><strong>{{ _('Subtotal') }}:</strong></td>
-                            <td class="text-end">${{ "%.2f"|format(invoice.total_before_tax) }}</td>
+                            <td class="text-end">﷼{{ "%.2f"|format(invoice.total_before_tax) }}</td>
                         </tr>
                         <tr>
                             <td><strong>{{ _('Tax') }}:</strong></td>
-                            <td class="text-end">${{ "%.2f"|format(invoice.tax_amount) }}</td>
+                            <td class="text-end">﷼{{ "%.2f"|format(invoice.tax_amount) }}</td>
                         </tr>
                         <tr>
                             <td><strong>{{ _('Discount') }}:</strong></td>
-                            <td class="text-end text-danger">-${{ "%.2f"|format(invoice.discount_amount) }}</td>
+                            <td class="text-end text-danger">-﷼{{ "%.2f"|format(invoice.discount_amount) }}</td>
                         </tr>
-            <tr class="border-top"><td><strong class="fs-5">{{ _('Total') }}:</strong></td><td class="text-end"><strong class="fs-5">${{ "%.2f"|format(invoice.total_after_tax_discount) }}</strong></td></tr>
+            <tr class="border-top"><td><strong class="fs-5">{{ _('Total') }}:</strong></td><td class="text-end"><strong class="fs-5">﷼{{ "%.2f"|format(invoice.total_after_tax_discount) }}</strong></td></tr>
           </table>
         </div>
       </div>
@@ -92,10 +92,10 @@
                                 <tr>
                                     <td><strong>{{ item.description }}</strong></td>
                                     <td class="text-center">{{ item.quantity }}</td>
-                                    <td class="text-end">${{ "%.2f"|format(item.price_before_tax) }}</td>
-                                    <td class="text-end">${{ "%.2f"|format(item.tax) }}</td>
-                                    <td class="text-end text-danger">-${{ "%.2f"|format(item.discount) }}</td>
-                                    <td class="text-end"><strong>${{ "%.2f"|format(item.total_price) }}</strong></td>
+                                    <td class="text-end">﷼{{ "%.2f"|format(item.price_before_tax) }}</td>
+                                    <td class="text-end">﷼{{ "%.2f"|format(item.tax) }}</td>
+                                    <td class="text-end text-danger">-﷼{{ "%.2f"|format(item.discount) }}</td>
+                                    <td class="text-end"><strong>﷼{{ "%.2f"|format(item.total_price) }}</strong></td>
                                 </tr>
                                 {% endfor %}
           </tbody>

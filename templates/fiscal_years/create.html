@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% set back_url = url_for('fiscal_years.list_years') %}
+{% block title %}{{ _('Create fiscal year') }}{% endblock %}
+{% block content %}
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-calendar-plus"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Create fiscal year') }}</h1>
+      <span class="ops-subtitle">{{ _('Define year, start and end dates') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('fiscal_years.list_years') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-list me-1"></i>{{ _('List') }}</a>
+    </div>
+  </div>
+
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('Year data') }}</div>
+    <div class="ops-form-body">
+      <form method="post" action="{{ url_for('fiscal_years.create') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-bold">{{ _('Year') }} <span class="text-danger">*</span></label>
+            <input type="number" name="year" class="form-control" min="2020" max="2040" value="{{ request.form.get('year') or get_saudi_today().year }}" required placeholder="2025">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-bold">{{ _('Start date') }} <span class="text-danger">*</span></label>
+            <input type="date" name="start_date" class="form-control" value="{{ request.form.get('start_date') }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-bold">{{ _('End date') }} <span class="text-danger">*</span></label>
+            <input type="date" name="end_date" class="form-control" value="{{ request.form.get('end_date') }}" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">{{ _('Notes') }}</label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="{{ _('Optional') }}">{{ request.form.get('notes') }}</textarea>
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save me-1"></i>{{ _('Create') }}</button>
+            <a href="{{ url_for('fiscal_years.list_years') }}" class="btn btn-outline-secondary">{{ _('Cancel') }}</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

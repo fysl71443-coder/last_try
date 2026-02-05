@@ -19,6 +19,7 @@
       <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm" data-partial-links><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
       <a href="{{ url_for('journal.backfill_missing_all') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>{{ _('Backfill period') }}</a>
       <a href="{{ url_for('main.chart_of_accounts') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-sitemap me-1"></i>{{ _('Chart of accounts') }}</a>
+      <a href="{{ url_for('journal.audit') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-magnifying-glass-chart me-1"></i>إجراء تدقيق محاسبي شامل</a>
       <a href="{{ url_for('journal.print_all_pdf') }}?{{ _jparams }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-file-pdf me-1"></i>PDF</a>
       <a href="{{ url_for('journal.export_all') }}?{{ _jparams }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-file-excel me-1"></i>XLS</a>
     </div>
@@ -145,7 +146,7 @@
                   <td>{{ m.get('ref') or '-' }}</td>
                   <td class="text-end">{{ '%.2f'|format(e.total_debit or 0) }}</td>
                   <td class="text-end">{{ '%.2f'|format(e.total_credit or 0) }}</td>
-                  <td><span class="badge {% if e.status=='posted' %}bg-primary{% else %}bg-warning text-dark{% endif %}">{% if e.status=='posted' %}منشورة{% else %}مسودة{% endif %}</span></td>
+                  <td><span class="badge {% if e.status=='posted' %}bg-primary{% else %}bg-warning text-dark{% endif %}">{% if e.status=='posted' %}منشورة{% else %}مسودة{% endif %}</span>{% if m.get('post_reopen') %} <span class="badge bg-info" title="قيد مُدخل بعد إعادة فتح السنة المالية">بعد إعادة الفتح</span>{% endif %}</td>
                   <td>
                     <button type="button" class="btn btn-sm btn-outline-primary journal-btn-view" data-jid="{{ e.id }}">عرض</button>
                   </td>

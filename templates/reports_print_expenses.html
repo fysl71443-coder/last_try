@@ -18,7 +18,7 @@
 </style>
 <div class="container py-4 ops-layout hub-wrap">
   <div class="d-flex align-items-center gap-3 mb-2 no-print">
-    <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary">{{ _('Dashboard') }}</a>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary">{{ _('Dashboard') }}</a>
   </div>
   <div class="d-flex align-items-center gap-3 mb-2">
     {% if settings and settings.receipt_show_logo and settings.logo_url %}

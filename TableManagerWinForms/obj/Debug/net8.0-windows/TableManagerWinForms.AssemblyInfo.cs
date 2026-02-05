@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TableManagerWinForms")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+53e45e388a9b812d5b6b1ace07e7c83e296d8635")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1aa7e4960fe910bc56b362ff5d94712306f65c7c")]
 [assembly: System.Reflection.AssemblyProductAttribute("TableManagerWinForms")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TableManagerWinForms")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

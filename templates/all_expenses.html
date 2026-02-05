@@ -9,7 +9,7 @@
       <span class="ops-subtitle">{{ _('View and export all expense records') }}</span>
     </div>
     <div class="ops-actions">
-      <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
       <a href="{{ url_for('expenses.expenses') }}" class="btn btn-sm btn-outline-primary" data-full-reload><i class="fa-solid fa-list me-1"></i>{{ _('Expenses') }}</a>
     </div>
   </div>
@@ -38,6 +38,19 @@
 
 <script>
 (function(){
+  var I18N = {
+    totalExpenses: "{{ _('Total Expenses') }}",
+    paymentCash: "{{ _('Cash') }}",
+    paymentBank: "{{ _('Bank') }}",
+    paymentInternal: "{{ _('Internal') }}"
+  };
+  function paymentDisplay(pm) {
+    var p = (pm || '').toUpperCase();
+    if (p === 'CASH') return I18N.paymentCash;
+    if (p === 'BANK') return I18N.paymentBank;
+    if (p === 'INTERNAL') return I18N.paymentInternal;
+    return pm || '';
+  }
   function fmt(n){ try{return Number(n||0).toFixed(2);}catch(e){return '0.00';} }
   fetch("/api/all-expenses", {credentials:'same-origin'})
     .then(r=>r.json())
@@ -48,12 +61,12 @@
       body.innerHTML=''; tfoot.innerHTML='';
       (data.expenses||[]).forEach(function(row){
         var tr = document.createElement('tr');
-        tr.innerHTML = '<td>'+(row.date||'')+'</td><td>'+(row.expense_number||'')+'</td><td>'+(row.item||'')+'</td><td>'+fmt(row.amount)+'</td><td>'+(row.payment_method||'')+'</td>';
+        tr.innerHTML = '<td>'+(row.date||'')+'</td><td>'+(row.expense_number||'')+'</td><td>'+(row.item||'')+'</td><td>'+fmt(row.amount)+'</td><td>'+paymentDisplay(row.payment_method)+'</td>';
         body.appendChild(tr);
       });
       var totals = data.overall_totals || {amount:0};
       var trTotal = document.createElement('tr'); trTotal.className='table-secondary fw-bold';
-      trTotal.innerHTML = '<td colspan="3" class="text-end">Total Expenses:</td><td>'+fmt(totals.amount)+'</td><td></td>';
+      trTotal.innerHTML = '<td colspan="3" class="text-end">'+I18N.totalExpenses+':</td><td>'+fmt(totals.amount)+'</td><td></td>';
       tfoot.appendChild(trTotal);
     })
     .catch(function(err){ console.error('Failed to load expenses', err); });

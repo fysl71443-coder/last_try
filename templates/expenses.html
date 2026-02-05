@@ -122,6 +122,18 @@
                                             <label class="form-label fw-bold">{{ _('Description') }}</label>
                                             <input type="text" name="description" id="expense-description" class="form-control" placeholder="{{ _('Optional') }}">
                                         </div>
+                                        <div class="col-12" id="expense-account-vat-info" style="display:none;">
+                                            <div class="alert alert-light border py-2 mb-0 small">
+                                                <strong><i class="fa-solid fa-link me-1"></i>{{ _('Linked account') }}:</strong> <code id="expense-account-code-display"></code>
+                                                <span class="ms-2"><strong>{{ _('VAT') }}:</strong> <span id="expense-vat-display"></span></span>
+                                            </div>
+                                        </div>
+                                        <div class="col-12" id="expense-journal-preview" style="display:none;">
+                                            <div class="card border-primary">
+                                                <div class="card-header py-1 small fw-bold"><i class="fa-solid fa-book me-1"></i>{{ _('Journal preview') }} ({{ _('before save') }})</div>
+                                                <div class="card-body py-2 small" id="expense-journal-preview-body"></div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -202,6 +214,50 @@
 </div>
 
 <script>
+    // دعم التبديل الكامل للغة — تعرض من القالب حسب get_locale()
+    var CURRENT_LOCALE = "{{ get_locale() or 'ar' }}";
+    var I18N_EXPENSES = {
+      selectSubType: "{{ _('Select sub-type') }}",
+      invoiceNo: "{{ _('Invoice No') }}",
+      date: "{{ _('Date') }}",
+      payment: "{{ _('Payment') }}",
+      status: "{{ _('Status') }}",
+      total: "{{ _('Total') }}",
+      description: "{{ _('Description') }}",
+      quantity: "{{ _('Quantity') }}",
+      unitPrice: "{{ _('Unit Price') }}",
+      discount: "{{ _('Discount') }}",
+      tax: "{{ _('Tax') }}",
+      paymentCash: "{{ _('Cash') }}",
+      paymentBank: "{{ _('Bank') }}",
+      paymentInternal: "{{ _('Internal') }}",
+      statusPaid: "{{ _('Paid') }}",
+      statusPartial: "{{ _('Partial') }}",
+      statusUnpaid: "{{ _('Unpaid') }}",
+      statusPosted: "{{ _('Posted') }}",
+      csvInvoiceNo: "{{ _('Invoice No') }}",
+      csvDate: "{{ _('Date') }}",
+      csvPaymentMethod: "{{ _('Payment Method') }}",
+      csvTotal: "{{ _('Total') }}",
+      csvStatus: "{{ _('Status') }}",
+      csvItems: "{{ _('Items') }}",
+      vatAppliedDefault: "{{ _('VAT applied by default for this type') }}"
+    };
+    function paymentLabel(pm) {
+      var p = (pm || '').toUpperCase();
+      if (p === 'CASH') return I18N_EXPENSES.paymentCash;
+      if (p === 'BANK') return I18N_EXPENSES.paymentBank;
+      if (p === 'INTERNAL') return I18N_EXPENSES.paymentInternal;
+      return p || '-';
+    }
+    function statusLabel(s) {
+      var v = (s || '').toLowerCase();
+      if (v === 'paid') return I18N_EXPENSES.statusPaid;
+      if (v === 'partial') return I18N_EXPENSES.statusPartial;
+      if (v === 'unpaid') return I18N_EXPENSES.statusUnpaid;
+      if (v === 'posted') return I18N_EXPENSES.statusPosted;
+      return s || '-';
+    }
     // SocketIO optional (server may not have SocketIO; avoid 404 noise)
     try {
         if (typeof io === 'function') {
@@ -229,7 +285,7 @@
         expenseTypeEl.value = '';
         if (typeCardsEl) typeCardsEl.querySelectorAll('.expense-type-card').forEach(c => c.classList.remove('active', 'border-primary'));
         step2Box.style.display = 'none';
-        subTypeSelect.innerHTML = '<option value="">{{ _("Select sub-type") }}</option>';
+        subTypeSelect.innerHTML = '<option value="">' + I18N_EXPENSES.selectSubType + '</option>';
         subTypeSelect.value = '';
         expenseFormEl.style.display = 'none';
         expenseTypeSubmit.value = '';
@@ -249,19 +305,22 @@
                     card.className = 'btn btn-outline-secondary expense-type-card text-start col-md-4 col-lg-3';
                     card.dataset.categoryId = cat.id;
                     const icon = (cat.icon && cat.icon.startsWith('fa-')) ? cat.icon : 'fa-tag';
-                    card.innerHTML = '<i class="fa-solid ' + icon + ' me-2"></i><span>' + (cat.label_ar || cat.label_en || cat.id) + '</span>';
+                    var catLabel = (CURRENT_LOCALE === 'ar' ? (cat.label_ar || cat.label_en) : (cat.label_en || cat.label_ar)) || cat.id;
+                    card.innerHTML = '<i class="fa-solid ' + icon + ' me-2"></i><span>' + catLabel + '</span>';
                     card.addEventListener('click', function() {
                         typeCardsEl.querySelectorAll('.expense-type-card').forEach(c => c.classList.remove('active', 'border-primary'));
                         this.classList.add('active', 'border-primary');
                         expenseTypeEl.value = cat.id;
                         step2Box.style.display = 'block';
-                        subTypeSelect.innerHTML = '<option value="">Select sub-type</option>';
+                        subTypeSelect.innerHTML = '<option value="">' + I18N_EXPENSES.selectSubType + '</option>';
                         (cat.sub_types || []).forEach(st => {
                             const opt = document.createElement('option');
                             opt.value = st.id;
-                            opt.textContent = (st.label_ar || st.label_en || st.id);
+                            var stLabel = (CURRENT_LOCALE === 'ar' ? (st.label_ar || st.label_en) : (st.label_en || st.label_ar)) || st.id;
+                            opt.textContent = stLabel;
                             opt.dataset.defaultVat = (st.default_vat === true || st.default_vat === '1') ? '1' : '0';
                             opt.dataset.isWaste = (st.is_internal_adjustment === true && st.id === 'spoilage_waste') ? '1' : '0';
+                            opt.dataset.accountCode = st.account_code || '';
                             subTypeSelect.appendChild(opt);
                         });
                         expenseFormEl.style.display = 'none';
@@ -288,6 +347,50 @@
             if (st) st.value = 'posted';
         }
     }
+    function updateExpenseAccountVatDisplay() {
+        const opt = subTypeSelect && subTypeSelect.selectedOptions[0];
+        const infoEl = document.getElementById('expense-account-vat-info');
+        const codeEl = document.getElementById('expense-account-code-display');
+        const vatEl = document.getElementById('expense-vat-display');
+        if (!opt || !opt.value) {
+            if (infoEl) infoEl.style.display = 'none';
+            return;
+        }
+        const accountCode = opt.dataset.accountCode || '';
+        const vatYes = (opt.dataset.defaultVat === '1' && !document.getElementById('expense-waste-hint')?.style.display) || (expenseVatCheck && expenseVatCheck.checked);
+        if (infoEl) infoEl.style.display = 'block';
+        if (codeEl) codeEl.textContent = accountCode || '—';
+        if (vatEl) vatEl.textContent = vatYes ? '{{ _("Yes") }}' : '{{ _("No") }}';
+    }
+    function updateExpenseJournalPreview() {
+        const amountEl = document.getElementById('expense-amount');
+        const amount = parseFloat(amountEl && amountEl.value) || 0;
+        const opt = subTypeSelect && subTypeSelect.selectedOptions[0];
+        const accountCode = opt ? (opt.dataset.accountCode || '') : '';
+        const applyVat = expenseVatCheck && expenseVatCheck.checked;
+        const pm = document.getElementById('expense-payment-method');
+        const paymentMethod = (pm && pm.value) || 'CASH';
+        const previewEl = document.getElementById('expense-journal-preview');
+        const bodyEl = document.getElementById('expense-journal-preview-body');
+        if (!bodyEl || !previewEl) return;
+        if (!accountCode || amount <= 0) {
+            previewEl.style.display = 'none';
+            return;
+        }
+        previewEl.style.display = 'block';
+        const vatRate = 0.15;
+        const net = applyVat ? (amount / (1 + vatRate)) : amount;
+        const vatAmt = applyVat ? (amount - net) : 0;
+        let lines = [];
+        lines.push('من ح/ ' + accountCode + ' (مصروف) مدين ' + net.toFixed(2) + ' ﷼');
+        if (paymentMethod === 'BANK') lines.push('إلى ح/ 1120 (بنك) دائن ' + net.toFixed(2) + ' ﷼');
+        else lines.push('إلى ح/ 1110 (صندوق) دائن ' + net.toFixed(2) + ' ﷼');
+        if (vatAmt > 0) {
+            lines.push('من ح/ 1170 (ضريبة مدخلات) مدين ' + vatAmt.toFixed(2) + ' ﷼');
+            lines.push('إلى ح/ 1120/1110 دائن ' + vatAmt.toFixed(2) + ' ﷼');
+        }
+        bodyEl.innerHTML = lines.map(l => '<div class="mb-1">' + l + '</div>').join('');
+    }
     if (subTypeSelect) {
         subTypeSelect.addEventListener('change', function() {
             const val = this.value;
@@ -301,15 +404,24 @@
                 if (opt && expenseVatCheck && !isWaste) {
                     const defaultVat = opt.dataset.defaultVat === '1';
                     expenseVatCheck.checked = defaultVat;
-                    if (expenseVatHint) expenseVatHint.textContent = defaultVat ? '{{ _("VAT applied by default for this type") }}' : '';
+                    if (expenseVatHint) expenseVatHint.textContent = defaultVat ? I18N_EXPENSES.vatAppliedDefault : '';
                 }
                 if (isWaste && expenseVatCheck) expenseVatCheck.checked = false;
+                updateExpenseAccountVatDisplay();
+                updateExpenseJournalPreview();
             } else {
                 expenseFormEl.style.display = 'none';
                 toggleWasteUI(false);
+                document.getElementById('expense-account-vat-info') && (document.getElementById('expense-account-vat-info').style.display = 'none');
+                document.getElementById('expense-journal-preview') && (document.getElementById('expense-journal-preview').style.display = 'none');
             }
         });
     }
+    ['expense-amount','expense-apply-vat','expense-payment-method'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateExpenseJournalPreview);
+        if (el) el.addEventListener('change', function(){ updateExpenseAccountVatDisplay(); updateExpenseJournalPreview(); });
+    });
 
     document.getElementById('expense-type-driven-reset')?.addEventListener('click', expenseTypeReset);
 
@@ -344,8 +456,8 @@
         const rows = [];
         const tableRows = document.querySelectorAll('#invoicesTableBody tr');
         
-        // Add header
-        rows.push(['Invoice No', 'Date', 'Payment Method', 'Total', 'Status', 'Items']);
+        // Add header (مترجم حسب اللغة)
+        rows.push([I18N_EXPENSES.csvInvoiceNo, I18N_EXPENSES.csvDate, I18N_EXPENSES.csvPaymentMethod, I18N_EXPENSES.csvTotal, I18N_EXPENSES.csvStatus, I18N_EXPENSES.csvItems]);
         
         // Add data rows
         tableRows.forEach(row => {
@@ -394,21 +506,21 @@
             <td class="text-end">﷼${(it.total_price||0).toFixed(2)}</td>
           </tr>`).join('');
         modalBody.innerHTML = `
-          <div class="mb-2"><strong>{{ _('Invoice No') }}:</strong> ${inv.invoice_number||'-'}</div>
-          <div class="mb-2"><strong>{{ _('Date') }}:</strong> ${inv.date||'-'}</div>
-          <div class="mb-2"><strong>{{ _('Payment') }}:</strong> ${(inv.payment_method||'-').toUpperCase()}</div>
-          <div class="mb-2"><strong>{{ _('Status') }}:</strong> ${(inv.status||'-').toUpperCase()}</div>
-          <div class="mb-2"><strong>{{ _('Total') }}:</strong> ﷼${(inv.total||0).toFixed(2)}</div>
+          <div class="mb-2"><strong>${I18N_EXPENSES.invoiceNo}:</strong> ${inv.invoice_number||'-'}</div>
+          <div class="mb-2"><strong>${I18N_EXPENSES.date}:</strong> ${inv.date||'-'}</div>
+          <div class="mb-2"><strong>${I18N_EXPENSES.payment}:</strong> ${paymentLabel(inv.payment_method)}</div>
+          <div class="mb-2"><strong>${I18N_EXPENSES.status}:</strong> ${statusLabel(inv.status)}</div>
+          <div class="mb-2"><strong>${I18N_EXPENSES.total}:</strong> ﷼${(inv.total||0).toFixed(2)}</div>
           <div class="table-responsive">
             <table class="table table-sm table-bordered align-middle mb-0">
               <thead class="table-light">
                 <tr>
-                  <th>{{ _('Description') }}</th>
-                  <th class="text-end">{{ _('Quantity') }}</th>
-                  <th class="text-end">{{ _('Unit Price') }}</th>
-                  <th class="text-end">{{ _('Discount') }}</th>
-                  <th class="text-end">{{ _('Tax') }}</th>
-                  <th class="text-end">{{ _('Total') }}</th>
+                  <th>${I18N_EXPENSES.description}</th>
+                  <th class="text-end">${I18N_EXPENSES.quantity}</th>
+                  <th class="text-end">${I18N_EXPENSES.unitPrice}</th>
+                  <th class="text-end">${I18N_EXPENSES.discount}</th>
+                  <th class="text-end">${I18N_EXPENSES.tax}</th>
+                  <th class="text-end">${I18N_EXPENSES.total}</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
@@ -479,7 +591,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">{{ _('Expense Details') }}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
       </div>
       <div class="modal-body" id="expenseModalBody"></div>
     </div>

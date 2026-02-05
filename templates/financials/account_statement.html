@@ -65,17 +65,14 @@
           </tr>
         </thead>
         <tbody>
-          {% set running = (opening_balance|float) %}
-          {% for ln, entry_number, desc in entries %}
-          {% set change = ((ln.debit - ln.credit) if acc.type != 'LIABILITY' else (ln.credit - ln.debit))|float %}
-          {% set running = running + change %}
+          {% for ln, entry_number, desc, running_balance in entries %}
           <tr>
             <td>{{ ln.line_date }}</td>
             <td>{{ entry_number }}</td>
             <td>{{ desc }}</td>
             <td class="text-end">{{ '%.2f' % (ln.debit or 0) }}</td>
             <td class="text-end">{{ '%.2f' % (ln.credit or 0) }}</td>
-            <td class="text-end">{{ '%.2f' % running }}</td>
+            <td class="text-end">{{ '%.2f' % running_balance }}</td>
           </tr>
           {% endfor %}
         </tbody>

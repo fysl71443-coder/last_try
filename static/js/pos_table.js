@@ -9,10 +9,14 @@
   let CURRENT_DRAFT_ID = null;
   let items = [];
   let CAT_MAP = {};
-  let MENU_CACHE = {};
+  let MENU_CACHE = {};       // category_id -> [items]; filled once from all-items or preload
+  let ALL_ITEMS_LOADED = false;
+  const POS_CACHE_KEY = 'pos_menu_items';
+  const POS_CACHE_TTL_MS = 5 * 60 * 1000;  // 5 min
   let PREFETCH_IN_PROGRESS = false;
   let INVOICE_LOCKED = false;
   let SAVE_TIMER = null;
+  let SCREEN_READY = false;
   function scheduleSave(opts){
     if(SAVE_TIMER){ clearTimeout(SAVE_TIMER); }
     SAVE_TIMER = setTimeout(()=>{ SAVE_TIMER=null; saveDraftOrder(opts); }, 250);
@@ -30,7 +34,7 @@
       const payload = {
         items: items.map(x=>({ id:x.meal_id, name:x.name, price:x.unit, quantity:x.qty })),
         customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' },
-        discount_pct: number(qs('#discountPct')?.value || 0),
+        discount_pct: effectiveDiscountPct(),
         tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
         payment_method: (qs('#payMethod')?.value || '')
       };
@@ -64,18 +68,64 @@
   // Expose function to reload settings (called when settings are updated)
   window.reloadBranchSettings = loadBranchSettings;
 
+  /** Load draft from API and apply to state + form. Call on screen entry, independent of customer. */
+  async function loadDraftFromAPI(){
+    if(!BRANCH || !TABLE_NO) return;
+    const resp = await fetch(`/api/draft/${BRANCH}/${TABLE_NO}`, { credentials:'same-origin' });
+    if(!resp.ok) return;
+    const j = await resp.json().catch(()=>({}));
+    const rec = (j.draft !== undefined && j.draft !== null) ? j.draft : (j.items ? { items: j.items, draft_id: j.draft_id, customer: j.customer || {}, discount_pct: j.discount_pct, tax_pct: j.tax_pct, payment_method: j.payment_method || '' } : {});
+    const draftItems = rec.items || [];
+    if(Array.isArray(draftItems) && draftItems.length > 0){
+      items.length = 0;
+      draftItems.forEach(function(d){
+        items.push({
+          meal_id: d.meal_id || d.id,
+          name: d.name || '',
+          unit: number(d.price || d.unit),
+          qty: number(d.quantity || d.qty || 1)
+        });
+      });
+    }
+    if(rec.draft_id){ CURRENT_DRAFT_ID = String(rec.draft_id).trim() || null; }
+    const customer = rec.customer || {};
+    const name = (customer.name||'').trim();
+    const phone = (customer.phone||'').trim();
+    const disc = rec.discount_pct;
+    const tax = rec.tax_pct;
+    const pay = (rec.payment_method||'').toString().trim().toUpperCase();
+    const custNameEl = qs('#custName'); if(custNameEl) custNameEl.value = name || custNameEl.value || '';
+    const custPhoneEl = qs('#custPhone'); if(custPhoneEl) custPhoneEl.value = phone || custPhoneEl.value || '';
+    // Restore draft values in full; do not overwrite saved discount
+    if(typeof disc !== 'undefined' && disc !== null){ const el = qs('#discountPct'); if(el) el.value = String(number(disc)); }
+    if(typeof tax !== 'undefined' && tax !== null){ const el = qs('#taxPct'); if(el) el.value = String(number(tax)); }
+    if(pay){ const el = qs('#payMethod'); if(el) el.value = pay; }
+    const custIdEl = qs('#custId');
+    var hasRegisteredCustomer = custIdEl && (custIdEl.value||'').trim().length > 0;
+    // Only force 0% and readonly when no registered customer AND draft did not provide a discount (preserve saved discount)
+    if(!hasRegisteredCustomer && (typeof disc === 'undefined' || disc === null)){
+      const dp = qs('#discountPct'); if(dp){ dp.value = '0'; dp.setAttribute('readonly',''); dp.classList.add('bg-light'); dp.title = 'لا خصم — عميل غير مسجل'; }
+    }
+    setTotals();
+  }
+
   // --- DOM Helpers ---
   function qs(sel, ctx=document){ return ctx.querySelector(sel); }
   function qsa(sel, ctx=document){ return Array.from(ctx.querySelectorAll(sel)); }
 
   function number(v, def=0){ const n = parseFloat(v); return isNaN(n) ? def : n; }
+  /** Effective discount: value from field (so saved draft discount is preserved and used for save/totals). */
+  function effectiveDiscountPct(){
+    return number(qs('#discountPct')?.value || 0, 0);
+  }
   function showToast(msg){ try{ let el = document.createElement('div'); el.textContent = msg; el.style.position = 'fixed'; el.style.top = '12px'; el.style.left = '50%'; el.style.transform = 'translateX(-50%)'; el.style.background = '#000'; el.style.color = '#fff'; el.style.padding = '10px 14px'; el.style.borderRadius = '8px'; el.style.zIndex = '2000'; el.style.fontWeight = '700'; document.body.appendChild(el); setTimeout(()=>{ try{ el.remove(); }catch(_e){} }, 2500); }catch(_e){} }
 
+  /** Recompute totals from in-memory items only (no API). Single pass: subtotal += item.unit*item.qty. */
   function setTotals(){
     const taxPct = number(qs('#taxPct')?.value || VAT_RATE);
     const discountPct = number(qs('#discountPct')?.value || 0);
     let subtotal = 0;
-    items.forEach(it=>{ const sub=it.unit*it.qty; subtotal+=sub; });
+    items.forEach(it=>{ subtotal += it.unit * it.qty; });
     const discountVal = subtotal * (discountPct/100);
     const discountedSubtotal = subtotal - discountVal;
     const taxOnDiscounted = discountedSubtotal * (taxPct/100);
@@ -157,11 +207,13 @@
     renderItems(); scheduleSave();
   }
 
+  /** Show items for category: from memory (MENU_CACHE). If not loaded yet, ensure load runs once then show. */
   async function openCategory(catId, catName){
+    if(!SCREEN_READY){ showToast('جاري التحميل... / Loading...'); return; }
     const modalEl = qs('#catModal'); const modalTitle = qs('#catModalTitle'); const grid = qs('#catGrid'); const empty = qs('#catEmpty');
     if(!modalEl || !grid) return;
     modalTitle && (modalTitle.textContent = catName || 'Items');
-    grid.innerHTML = ''; if(empty){ empty.textContent = 'Loading...'; empty.classList.remove('d-none'); }
+    grid.innerHTML = ''; if(empty){ empty.textContent = ''; empty.classList.remove('d-none'); }
     if(window.bootstrap && bootstrap.Modal){
       if(!window.__catModalInstance){ window.__catModalInstance = new bootstrap.Modal(modalEl, { backdrop:true, keyboard:true }); }
       window.__catModalInstance.show();
@@ -170,7 +222,7 @@
     if(!catId){ data = []; }
     else if(MENU_CACHE[catId]){ data = MENU_CACHE[catId]; }
     else {
-      try{ const resp = await fetch(`/api/menu/${catId}/items`, {credentials:'same-origin'}); data = resp.ok ? (await resp.json()) : []; MENU_CACHE[catId] = data; }catch(e){ data = []; }
+      try{ await loadAllMenuItemsOnce(); data = MENU_CACHE[catId] || []; }catch(_e){ data = []; }
     }
     grid.innerHTML = '';
     if(data.length === 0){ if(empty){ empty.textContent = 'No items in this category yet'; empty.classList.remove('d-none'); } return; } else { empty && empty.classList.add('d-none'); }
@@ -226,7 +278,74 @@
     }catch(_e){}
   }
 
-  async function preloadMenuItems(){
+  /** Try sessionStorage cache first; then one request for all items. Build MENU_CACHE by category. No per-click requests. */
+  function readMenuFromCache(){
+    try{
+      const raw = sessionStorage.getItem(POS_CACHE_KEY);
+      if(!raw) return false;
+      const obj = JSON.parse(raw);
+      const ts = obj.timestamp || 0;
+      if(Date.now() - ts > POS_CACHE_TTL_MS) return false;
+      const list = obj.items || obj;
+      if(!Array.isArray(list) || list.length === 0) return false;
+      const byCat = {};
+      list.forEach(function(it){
+        const cid = it.category_id != null ? String(it.category_id) : (it.categoryId != null ? String(it.categoryId) : '');
+        if(!byCat[cid]) byCat[cid] = [];
+        byCat[cid].push({ id: it.id, meal_id: it.meal_id || it.id, name: it.name || '', price: number(it.price), image_url: it.image_url || '' });
+      });
+      Object.keys(byCat).forEach(function(cid){ MENU_CACHE[cid] = byCat[cid]; });
+      return true;
+    }catch(e){ return false; }
+  }
+  function writeMenuToCache(){
+    try{
+      const flat = [];
+      Object.keys(MENU_CACHE).forEach(function(cid){
+        (MENU_CACHE[cid] || []).forEach(function(it){
+          flat.push({ id: it.id, meal_id: it.meal_id, name: it.name, price: it.price, category_id: cid });
+        });
+      });
+      sessionStorage.setItem(POS_CACHE_KEY, JSON.stringify({ items: flat, timestamp: Date.now() }));
+    }catch(_e){}
+  }
+
+  /** Load once: use cache or GET /api/menu/all-items (with timeout), then filter locally. No request per category. */
+  async function loadAllMenuItemsOnce(){
+    if(ALL_ITEMS_LOADED) return;
+    if(readMenuFromCache()){ ALL_ITEMS_LOADED = true; return; }
+    const FETCH_TIMEOUT_MS = 12000;
+    var timeoutId = null;
+    try{
+      var resp;
+      if(typeof AbortController !== 'undefined'){
+        var controller = new AbortController();
+        timeoutId = setTimeout(function(){ controller.abort(); }, FETCH_TIMEOUT_MS);
+        resp = await fetch('/api/menu/all-items', { credentials:'same-origin', signal: controller.signal });
+      } else {
+        resp = await fetch('/api/menu/all-items', { credentials:'same-origin' });
+      }
+      if(timeoutId){ clearTimeout(timeoutId); timeoutId = null; }
+      const j = await resp.json().catch(()=>({}));
+      const list = j.items || [];
+      if(list.length === 0){ await preloadMenuItemsFallback(); return; }
+      const byCat = {};
+      list.forEach(function(it){
+        const cid = it.category_id != null ? String(it.category_id) : '';
+        if(!byCat[cid]) byCat[cid] = [];
+        byCat[cid].push({ id: it.id, meal_id: it.meal_id || it.id, name: it.name || '', price: number(it.price), image_url: it.image_url || '' });
+      });
+      Object.keys(byCat).forEach(function(cid){ MENU_CACHE[cid] = byCat[cid]; });
+      writeMenuToCache();
+      ALL_ITEMS_LOADED = true;
+    }catch(_e){
+      if(timeoutId){ clearTimeout(timeoutId); }
+      await preloadMenuItemsFallback();
+    }
+  }
+
+  /** Fallback: fetch per category in parallel (when all-items not available). */
+  async function preloadMenuItemsFallback(){
     if(PREFETCH_IN_PROGRESS) return;
     PREFETCH_IN_PROGRESS = true;
     try{
@@ -247,14 +366,19 @@
           try{
             const resp = await fetch(`/api/menu/${cid}/items`, { credentials:'same-origin' });
             const data = resp.ok ? (await resp.json()) : [];
-            MENU_CACHE[cid] = data;
+            MENU_CACHE[cid] = Array.isArray(data) ? data : [];
           }catch(_e){ MENU_CACHE[cid] = []; }
         }
       }
-      const concurrency = 4;
-      await Promise.all(Array(concurrency).fill(0).map(()=>worker()));
+      await Promise.all(Array(4).fill(0).map(()=>worker()));
+      writeMenuToCache();
+      ALL_ITEMS_LOADED = true;
     }catch(_e){}
     PREFETCH_IN_PROGRESS = false;
+  }
+
+  async function preloadMenuItems(){
+    await loadAllMenuItemsOnce();
   }
 
   async function saveDraftOrder(opts){
@@ -278,7 +402,7 @@
           body: JSON.stringify({
             items: items.map(x=>({ id:x.meal_id, name:x.name, price:x.unit, quantity:x.qty })),
             customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' },
-            discount_pct: number(qs('#discountPct')?.value || 0),
+            discount_pct: effectiveDiscountPct(),
             tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
             payment_method: (qs('#payMethod')?.value || '')
           })
@@ -296,7 +420,7 @@
             customer_name: qs('#custName')?.value || '',
             customer_phone: qs('#custPhone')?.value || '',
             payment_method: (qs('#payMethod')?.value || ''),
-            discount_pct: number(qs('#discountPct')?.value || 0),
+            discount_pct: effectiveDiscountPct(),
             tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
             supervisor_password: opts && opts.supervisor_password ? opts.supervisor_password : undefined
           })
@@ -326,7 +450,7 @@
           body: JSON.stringify({
             items: items.map(x=>({ id:x.meal_id, name:x.name, price:x.unit, quantity:x.qty })),
             customer: { name: qs('#custName')?.value || '', phone: qs('#custPhone')?.value || '' },
-            discount_pct: number(qs('#discountPct')?.value || 0),
+            discount_pct: effectiveDiscountPct(),
             tax_pct: number(qs('#taxPct')?.value || VAT_RATE),
             payment_method: pm
           })
@@ -447,8 +571,8 @@
 
     if(!(pm==='CASH' || pm==='CARD' || pm==='CREDIT')){ await window.showAlert('يرجى اختيار طريقة الدفع (CASH أو CARD أو آجل) / Please choose payment method (CASH, CARD or Credit)'); return; }
 
-    // Validate discount/tax
-    const disc = number(qs('#discountPct')?.value || 0);
+    // Validate discount/tax (effective discount is 0 when no registered customer)
+    const disc = effectiveDiscountPct();
     const tax = number(qs('#taxPct')?.value || VAT_RATE);
     if(disc < 0 || disc > 100){ await window.showAlert('نسبة الخصم يجب أن تكون بين 0 و 100 / Discount must be between 0 and 100'); return; }
     if(tax < 0 || tax > 100){ await window.showAlert('نسبة الضريبة يجب أن تكون بين 0 و 100 / Tax must be between 0 and 100'); return; }
@@ -514,81 +638,73 @@
   window.payAndPrint = payAndPrint;
   window.voidInvoice = voidInvoice;
 
-  // --- Init ---
-  window.addEventListener('DOMContentLoaded', function(){
-    // Read init data
-    const init = qs('#pos-init');
-    BRANCH = init?.getAttribute('data-branch') || document.body.dataset.branch || '';
-    TABLE_NO = init?.getAttribute('data-table') || document.body.dataset.table || '';
-    VAT_RATE = number(init?.getAttribute('data-vat') || 0);
-    
-    // Load branch-specific settings
-    loadBranchSettings();
-    const draftRaw = init?.getAttribute('data-draft') || '[]';
-    try{
-      const draft = JSON.parse(draftRaw);
-      (draft||[]).forEach(d=> items.push({ meal_id: d.meal_id, name: d.name, unit: number(d.price), qty: number(d.quantity||d.qty||1) }));
-    }catch(e){ /* ignore */ }
-    CURRENT_DRAFT_ID = (init?.getAttribute('data-draft-id') || '').trim() || null;
-    try{
-      const initCustName = init?.getAttribute('data-cust-name') || '';
-      const initCustPhone = init?.getAttribute('data-cust-phone') || '';
-      const initDisc = init?.getAttribute('data-disc') || '';
-      const initTax = init?.getAttribute('data-tax') || '';
-      const initPay = init?.getAttribute('data-pay') || '';
-      if(initCustName){ const el = qs('#custName'); if(el) el.value = initCustName; }
-      if(initCustPhone){ const el = qs('#custPhone'); if(el) el.value = initCustPhone; }
-      if(initDisc){ const el = qs('#discountPct'); if(el) el.value = String(number(initDisc)); }
-      if(initTax){ const el = qs('#taxPct'); if(el) el.value = String(number(initTax)); }
-      if(initPay){ const el = qs('#payMethod'); if(el) el.value = initPay.toUpperCase(); }
-    }catch(_e){}
-    renderItems();
-    setTotals();
-    if(typeof updatePaymentMethodFromCustomer === 'function') updatePaymentMethodFromCustomer();
+  // --- POS Lifecycle (Gate pattern) ---
+  // 1. isReady = false → Loading overlay visible, screen gated (no interaction).
+  // 2. init: loadBranchSettings → loadDraftFromAPI → loadAllMenuItemsOnce (await all) → render + bind.
+  // 3. setScreenReady() ONLY after step 2 completes. No other place must hide overlay or ungate.
+  // 4. Category click = local filter from MENU_CACHE only; no API calls.
+  function setScreenReady(){
+    SCREEN_READY = true;
+    var overlay = document.getElementById('pos-loading-overlay');
+    if(overlay){ overlay.style.display = 'none'; overlay.setAttribute('aria-hidden', 'true'); }
+    try{ document.body.classList.add('pos-screen-ready'); }catch(_){}
+    var screenEl = document.getElementById('pos-screen');
+    if(screenEl){ screenEl.classList.remove('pos-gated'); screenEl.classList.add('pos-ready'); }
+  }
 
-    // Always fetch latest draft from API on load so cached HTML still shows current draft
+  window.addEventListener('DOMContentLoaded', function(){
+    var init = qs('#pos-init');
+    BRANCH = (init && init.getAttribute('data-branch')) || (document.body && document.body.dataset.branch) || '';
+    TABLE_NO = (init && init.getAttribute('data-table')) || (document.body && document.body.dataset.table) || '';
+    VAT_RATE = number((init && init.getAttribute('data-vat')) || 0);
+    VOID_PASSWORD = ((init && init.getAttribute('data-void-password')) || '').trim() || '1991';
+
+    // Optional server-rendered draft (may be overwritten by loadDraftFromAPI)
+    try {
+      var draftRaw = (init && init.getAttribute('data-draft')) || '[]';
+      var draft = JSON.parse(draftRaw);
+      if(Array.isArray(draft)) draft.forEach(function(d){ items.push({ meal_id: d.meal_id || d.id, name: d.name || '', unit: number(d.price || d.unit), qty: number(d.quantity || d.qty || 1) }); });
+    }catch(e){}
+    CURRENT_DRAFT_ID = ((init && init.getAttribute('data-draft-id')) || '').trim() || null;
+    try{
+      var initCustName = (init && init.getAttribute('data-cust-name')) || '';
+      var initCustPhone = (init && init.getAttribute('data-cust-phone')) || '';
+      var initDisc = (init && init.getAttribute('data-disc')) || '';
+      var initTax = (init && init.getAttribute('data-tax')) || '';
+      var initPay = (init && init.getAttribute('data-pay')) || '';
+      var el = qs('#custName'); if(el) el.value = initCustName;
+      el = qs('#custPhone'); if(el) el.value = initCustPhone;
+      el = qs('#discountPct'); if(el) el.value = String(number(initDisc));
+      el = qs('#taxPct'); if(el) el.value = String(number(initTax));
+      el = qs('#payMethod'); if(el) el.value = (initPay || '').toString().toUpperCase();
+      var custIdEl = qs('#custId');
+      if(!custIdEl || !(custIdEl.value||'').trim()){
+        el = qs('#discountPct'); if(el){ el.value = '0'; el.setAttribute('readonly',''); el.classList.add('bg-light'); el.title = 'لا خصم — عميل غير مسجل'; }
+      }
+    }catch(_e){}
+
+    try{ CAT_MAP = JSON.parse((init && init.getAttribute('data-cat-map')) || '{}') || {}; }catch(e){ CAT_MAP = {}; }
+    var CAT_IMAGES = {};
+    try{ CAT_IMAGES = JSON.parse((init && init.getAttribute('data-cat-images')) || '{}') || {}; }catch(_e){}
+
+    // Blocking init: load all data first, then bind UI, then allow interaction
     (async function(){
-      try{
-        if(!BRANCH || !TABLE_NO) return;
-        const resp = await fetch(`/api/draft/${BRANCH}/${TABLE_NO}`, { credentials:'same-origin' });
-        if(!resp.ok) return;
-        const j = await resp.json().catch(()=>({}));
-        const rec = j.draft || {};
-        const draftItems = rec.items || [];
-        if(Array.isArray(draftItems) && draftItems.length > 0){
-          items.length = 0;
-          draftItems.forEach(function(d){
-            items.push({
-              meal_id: d.meal_id || d.id,
-              name: d.name || '',
-              unit: number(d.price || d.unit),
-              qty: number(d.quantity || d.qty || 1)
-            });
-          });
-        }
-        if(rec.draft_id){ CURRENT_DRAFT_ID = String(rec.draft_id).trim() || null; }
-        const customer = rec.customer || {};
-        const name = (customer.name||'').trim();
-        const phone = (customer.phone||'').trim();
-        const disc = rec.discount_pct;
-        const tax = rec.tax_pct;
-        const pay = (rec.payment_method||'').toString().trim().toUpperCase();
-        if(name){ const el = qs('#custName'); if(el) el.value = name; }
-        if(phone){ const el = qs('#custPhone'); if(el) el.value = phone; }
-        if(typeof disc !== 'undefined' && disc !== null){ const el = qs('#discountPct'); if(el) el.value = String(number(disc)); }
-        if(typeof tax !== 'undefined' && tax !== null){ const el = qs('#taxPct'); if(el) el.value = String(number(tax)); }
-        if(pay){ const el = qs('#payMethod'); if(el) el.value = pay; }
+      try {
+        await loadBranchSettings();
+        await loadDraftFromAPI();
+        await loadAllMenuItemsOnce();
+      } catch(e) {
+        console.warn('POS init load warning', e);
+        if(!ALL_ITEMS_LOADED) ALL_ITEMS_LOADED = true;
+      }
+      try {
         renderItems();
         setTotals();
-        if(typeof updatePaymentMethodFromCustomer === 'function') updatePaymentMethodFromCustomer();
-      }catch(_e){}
-    })();
-    const catMapRaw = init?.getAttribute('data-cat-map') || '{}';
-    try{ CAT_MAP = JSON.parse(catMapRaw) || {}; }catch(e){ CAT_MAP = {}; }
-    let CAT_IMAGES = {};
+      } catch(_e) {}
 
-    // Bind category cards (no inline)
-    qsa('.cat-card').forEach(card=>{
+      try {
+      (function bindUI(){
+      qsa('.cat-card').forEach(card=>{
       card.setAttribute('tabindex','0');
       const name = card.textContent.trim();
       const idAttr = card.getAttribute('data-cat-id');
@@ -624,9 +740,7 @@
       }catch(_e){}
     });
 
-    preloadMenuItems();
-
-    // Bind primary buttons
+      // Bind primary buttons
     qs('#btnGenerateInvoice')?.addEventListener('click', generateInvoice);
     qs('#btnVoidInvoice')?.addEventListener('click', voidInvoice);
 
@@ -695,20 +809,28 @@
     function updatePaymentMethodFromCustomer(){
       const paySel = qs('#payMethod'); if(!paySel) return;
       const custIdEl = qs('#custId');
+      const hasRegisteredCustomer = custIdEl && (custIdEl.value || '').trim().length > 0;
+      if(!hasRegisteredCustomer){
+        setDiscountFieldForCustomer(false, 0);
+        paySel.innerHTML = '<option value="">-- اختر طريقة الدفع --</option><option value="CASH">CASH</option><option value="CARD">CARD</option>';
+        if((paySel.value || '').toUpperCase() === 'CREDIT') paySel.value = 'CASH';
+        scheduleSave();
+        return;
+      }
       const custNameVal = (custInput?.value || '').trim().toLowerCase();
-      const customerType = custIdEl?.getAttribute('data-customer-type') || '';
+      const customerType = custIdEl.getAttribute('data-customer-type') || '';
       const isCredit = (customerType === 'credit') || (custNameVal.indexOf('keeta') !== -1) || (custNameVal.indexOf('hunger') !== -1);
       const cur = (paySel.value || '').toUpperCase();
       const dp = qs('#discountPct');
       if(isCredit){
         paySel.innerHTML = '<option value="">-- اختر --</option><option value="CREDIT">Credit / آجل</option>';
         paySel.value = 'CREDIT';
-        if(dp && dp.hasAttribute('readonly')){ try{ dp.removeAttribute('readonly'); dp.classList.remove('bg-light'); }catch(_e){} }
+        if(dp){ try{ dp.removeAttribute('readonly'); dp.classList.remove('bg-light'); dp.title = 'قابل للتعديل — عميل آجل'; }catch(_e){} }
       } else {
         paySel.innerHTML = '<option value="">-- اختر طريقة الدفع --</option><option value="CASH">CASH</option><option value="CARD">CARD</option>';
         if(cur === 'CREDIT') paySel.value = 'CASH';
         else if(cur && cur !== 'CASH' && cur !== 'CARD') paySel.value = 'CASH';
-        const currentPct = (custIdEl && custIdEl.value) ? number(dp?.value || 0, 0) : 0;
+        const currentPct = number(dp?.value || 0, 0);
         setDiscountFieldForCustomer(false, currentPct);
       }
       scheduleSave();
@@ -719,7 +841,19 @@
         const resp = await fetch(`/api/customers/search?q=${encodeURIComponent(q)}`, { credentials:'same-origin' });
         if(!resp.ok) return [];
         const j = await resp.json().catch(()=>({results:[]}));
-        return Array.isArray(j.results) ? j.results : [];
+        // API may return { results: [...] } or a raw array; normalize customer_type/discount_percent
+        let list = Array.isArray(j.results) ? j.results : (Array.isArray(j) ? j : []);
+        return list.map(function(r){
+          var t = (r.customer_type || 'cash').toString().toLowerCase();
+          if(t === 'آجل') t = 'credit';
+          return {
+            id: r.id,
+            name: r.name || '',
+            phone: r.phone || '',
+            discount_percent: typeof r.discount_percent !== 'undefined' ? number(r.discount_percent, 0) : number(r.discount, 0),
+            customer_type: t === 'credit' ? 'credit' : 'cash'
+          };
+        });
       }catch(e){ return []; }
     }
 
@@ -753,17 +887,17 @@
     async function handleCustInput(){
       const val = (custInput?.value || '').trim();
       const custIdEl = qs('#custId');
-      if(!val && custIdEl){ custIdEl.value = ''; if(custIdEl.removeAttribute) custIdEl.removeAttribute('data-customer-type'); updatePaymentMethodFromCustomer(); }
+      if(!val){ if(custIdEl){ custIdEl.value = ''; custIdEl.removeAttribute('data-customer-type'); } updatePaymentMethodFromCustomer(); hideCustList(); return; }
       const up = val.toUpperCase();
       if(up === 'KEETA' || up === 'HUNGER'){
         const dp = qs('#discountPct');
         if(dp){ try{ dp.removeAttribute('readonly'); dp.classList.remove('bg-light'); dp.title = 'Special discount for KEETA/HUNGER'; }catch(_e){} }
         const p = await (window.showPrompt ? window.showPrompt('أدخل نسبة خصم خاصة % / Enter special discount %') : Promise.resolve(prompt('أدخل نسبة خصم خاصة % / Enter special discount %')));
-        if(p!==null){ const n = number(p, 0); if(dp){ dp.value = String(n); } setTotals(); saveDraftOrder(); }
+        if(p!==null){ const n = number(p, 0); if(dp){ dp.value = String(n); } setTotals(); scheduleSave(); }
       }
       else {
-        const dp = qs('#discountPct');
-        if(dp){ try{ dp.setAttribute('readonly',''); dp.classList.add('bg-light'); dp.title = 'Auto from customer; editable only for KEETA/HUNGER'; }catch(_e){} }
+        if(!custIdEl || !(custIdEl.value||'').trim()){ setDiscountFieldForCustomer(false, 0); }
+        else { updatePaymentMethodFromCustomer(); }
       }
       clearTimeout(custFetchTimer);
       if(!val){ hideCustList(); return; }
@@ -796,7 +930,7 @@
           custList.appendChild(a);
         });
         if(results.length){ showCustList(); } else { hideCustList(); }
-      }, 250);
+      }, 80);
     }
 
     custInput?.addEventListener('input', handleCustInput);
@@ -833,8 +967,11 @@
     document.addEventListener('click', (e)=>{ if(!custList) return; if(!custList.contains(e.target) && e.target !== custInput){ hideCustList(); } });
     updatePaymentMethodFromCustomer();
 
-    // Initial render
     renderItems();
+    })();
+      } catch(e) { console.error('POS bindUI error', e); }
+      setScreenReady();
+    })();
 
     // Persist drafts when the tab loses visibility or the page is unloading
     document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'hidden'){ try{ flushPendingSave(); saveDraftBeacon(); }catch(_e){} } });

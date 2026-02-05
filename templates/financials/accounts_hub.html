@@ -223,7 +223,7 @@
             <div class="col-md-3 toolbar"><button class="btn btn-secondary" id="tb-load">عرض</button><button class="btn btn-outline-primary" id="tb-print">طباعة</button><button class="btn btn-outline-secondary" id="tb-export">تصدير CSV</button></div>
           </div>
           <table class="table table-sm" id="tb-table">
-            <thead><tr><th style="width:2rem"></th><th>رقم الحساب</th><th>اسم الحساب</th><th class="text-end">مدين</th><th class="text-end">دائن</th><th class="text-end">الرصيد</th></tr></thead>
+            <thead><tr><th style="width:2rem"></th><th>رقم الحساب</th><th>اسم الحساب</th><th class="text-end">مدين</th><th class="text-end">دائن</th><th class="text-end">الرصيد (طبيعة)</th></tr></thead>
             <tbody></tbody>
           </table>
           <div class="d-flex justify-content-end"><span class="me-3">الإجمالي مدين: <strong id="tb-td">0.00</strong></span><span>الإجمالي دائن: <strong id="tb-tc">0.00</strong></span></div>
@@ -442,7 +442,8 @@
         const creditCls=parseFloat(r.credit||0)>0?'text-credit':'';
         const debitVal=num(r.debit||0);
         const creditVal=num(r.credit||0);
-        const balVal=num(r.balance||0);
+        const bal=parseFloat(r.balance)||0;
+        const balVal=bal>=0 ? num(bal)+' مدين' : num(-bal)+' دائن';
         tr.dataset.debit=debitVal;
         tr.dataset.credit=creditVal;
         tr.dataset.balance=balVal;

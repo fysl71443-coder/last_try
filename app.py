@@ -1781,29 +1781,84 @@ def get_locale():
         pass
     return request.accept_languages.best_match(['ar', 'en']) or 'ar'
 
-# Alias for POS customer search used by POS templates
+# Alias for POS customer search — must return { results: [...] } with customer_type and discount_percent
 @app.route('/api/customers/search')
 @login_required
 def customers_search_alias():
     try:
         q = (request.args.get('q') or '').strip()
         from models import Customer
+        limit = 20
         if not q:
-            return jsonify([])
-        # search by name or phone prefix
-        customers = Customer.query.filter(
-            (Customer.name.ilike(f"%{q}%")) | (Customer.phone.ilike(f"%{q}%"))
-        ).order_by(Customer.name.asc()).limit(10).all()
-        return jsonify([
-            {
-                'id': c.id,
-                'name': c.name,
-                'phone': c.phone,
-                'discount': float(getattr(c, 'discount', 0.0) or 0.0)
-            } for c in customers
-        ])
-    except Exception:
-        return jsonify([])
+            # empty query: return recent active customers
+            customers = Customer.query.filter(db.or_(Customer.active == True, Customer.active.is_(None))).order_by(Customer.name.asc()).limit(min(limit, 10)).all()
+        else:
+            like = f"%{q}%"
+            from sqlalchemy import or_
+            customers = Customer.query.filter(
+                db.or_(Customer.active == True, Customer.active.is_(None)),
+                or_(Customer.name.ilike(like), Customer.phone.ilike(like))
+            ).order_by(Customer.name.asc()).limit(limit).all()
+        # Normalize customer_type to 'cash' or 'credit' for frontend
+        def _ctype(c):
+            t = (getattr(c, 'customer_type', '') or 'cash').strip().lower()
+            if t in ('credit', 'آجل'):
+                return 'credit'
+            return 'cash'
+        data = [{
+            'id': c.id,
+            'name': c.name,
+            'phone': c.phone or '',
+            'discount_percent': float(getattr(c, 'discount_percent', 0) or getattr(c, 'discount', 0) or 0),
+            'customer_type': _ctype(c),
+        } for c in customers]
+        return jsonify({'results': data})
+    except Exception as e:
+        try:
+            current_app.logger.warning('customers_search_alias: %s', e)
+        except Exception:
+            pass
+        return jsonify({'results': []})
+
+
+@app.route('/api/customers/check-credit')
+@login_required
+def api_customers_check_credit():
+    """هل العميل المدخل مسجل كعميل آجل؟ نفس تنسيق الـ blueprint للواجهة."""
+    try:
+        q = (request.args.get('q') or request.args.get('name') or '').strip()
+        phone = (request.args.get('phone') or '').strip() or None
+        if not q:
+            return jsonify({'found': False})
+        from models import Customer
+        from sqlalchemy import or_
+        like = f"%{q}%"
+        query = Customer.query.filter(db.or_(Customer.active == True, Customer.active.is_(None)), Customer.name.ilike(like))
+        if phone:
+            query = query.filter(Customer.phone.ilike(f"%{phone}%"))
+        c = query.order_by(Customer.name.asc()).first()
+        if not c:
+            return jsonify({'found': False})
+        ctype = (getattr(c, 'customer_type', '') or 'cash').strip().lower()
+        if ctype in ('آجل',):
+            ctype = 'credit'
+        is_credit = ctype == 'credit'
+        return jsonify({
+            'found': True,
+            'is_credit': is_credit,
+            'id': c.id,
+            'name': c.name,
+            'phone': c.phone or '',
+            'discount_percent': float(getattr(c, 'discount_percent', 0) or getattr(c, 'discount', 0) or 0),
+            'customer_type': ctype,
+        })
+    except Exception as e:
+        try:
+            current_app.logger.warning('api_customers_check_credit: %s', e)
+        except Exception:
+            pass
+        return jsonify({'found': False})
+
 
 # Expose get_locale to Jinja templates
 @app.context_processor
@@ -1881,6 +1936,7 @@ try:
             except Exception:
                 return '#'
     app.jinja_env.globals['url_for'] = url_for_safe
+    app.jinja_env.globals['hasattr'] = hasattr
 except Exception:
     pass
 
@@ -1959,6 +2015,18 @@ except Exception:
 try:
     from routes.journal import bp as journal_bp
     app.register_blueprint(journal_bp)
+except Exception:
+    pass
+# Register expenses blueprint (شاشة المصروفات)
+try:
+    from routes.expenses import bp as expenses_bp
+    app.register_blueprint(expenses_bp)
+except Exception:
+    pass
+# Register suppliers blueprint (شاشة الموردين)
+try:
+    from routes.suppliers import bp as suppliers_bp
+    app.register_blueprint(suppliers_bp)
 except Exception:
     pass
 @app.route('/login', methods=['GET', 'POST'])
@@ -2206,6 +2274,47 @@ def api_draft_order(branch_code, table_number):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/draft/<branch_code>/<table_number>', methods=['GET'])
+@login_required
+def api_draft_get_alias(branch_code, table_number):
+    """GET draft in the shape the POS frontend expects: { draft: { items, draft_id, customer, discount_pct, tax_pct, payment_method } }."""
+    try:
+        from models import DraftOrder, DraftOrderItem
+        table_number = str(table_number)
+        draft_order = DraftOrder.query.filter_by(
+            branch_code=branch_code,
+            table_number=table_number,
+            status='draft'
+        ).order_by(DraftOrder.created_at.desc()).first()
+        if not draft_order:
+            return jsonify({'success': True, 'draft': {'items': [], 'draft_id': None, 'customer': {}, 'discount_pct': 0, 'tax_pct': 0, 'payment_method': ''}})
+        items = [{
+            'meal_id': it.meal_id,
+            'id': it.meal_id,
+            'name': it.product_name or '',
+            'price': float(it.price_before_tax or 0),
+            'unit': float(it.price_before_tax or 0),
+            'quantity': float(it.quantity or 0),
+            'qty': float(it.quantity or 0)
+        } for it in draft_order.items]
+        rec = {
+            'items': items,
+            'draft_id': draft_order.id,
+            'customer': {},
+            'discount_pct': 0,
+            'tax_pct': 0,
+            'payment_method': ''
+        }
+        return jsonify({'success': True, 'draft': rec})
+    except Exception as e:
+        try:
+            current_app.logger.warning('api_draft_get_alias: %s', e)
+        except Exception:
+            pass
+        return jsonify({'success': False, 'draft': {'items': [], 'draft_id': None, 'customer': {}, 'discount_pct': 0, 'tax_pct': 0, 'payment_method': ''}}), 200
+
 
 # API: Save draft order
 @csrf_exempt
@@ -4282,6 +4391,29 @@ def sales_table_manage(branch_code, table_number):
 # POS alias route to table invoice (back-compat for tests)
 # In-memory open invoices map for quick table occupancy (branch:table -> data)
 OPEN_INVOICES_MEM = {}
+
+
+# API: all menu items in one request (POS: load once, filter locally)
+@app.route('/api/menu/all-items')
+@login_required
+def api_menu_all_items():
+    from models import MenuItem
+    try:
+        items = MenuItem.query.order_by(MenuItem.category_id, MenuItem.display_order.asc().nulls_last()).all()
+        out = []
+        for it in items:
+            price = float(it.price_override) if it.price_override is not None else (float(getattr(it.meal, 'selling_price', None) or 0) if getattr(it, 'meal', None) else float(it.price or 0))
+            out.append({
+                'id': it.id,
+                'meal_id': getattr(it, 'meal_id', None) or it.id,
+                'name': getattr(it.meal, 'display_name', None) or getattr(it, 'name', None) or '',
+                'price': price,
+                'category_id': it.category_id,
+            })
+        return jsonify({'items': out})
+    except Exception as e:
+        current_app.logger.warning('api_menu_all_items failed: %s', e)
+        return jsonify({'items': []})
 
 
 # API: items by category

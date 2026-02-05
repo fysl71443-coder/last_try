@@ -8,6 +8,28 @@
   var LOADING_CLASS = 'app-partial-loading';
   var PARTIAL_ATTR = 'data-partial';
 
+  /** Routes that must do full page load: partial swap only replaces HTML and does not run <script>s, so event handlers and data would never load until refresh. */
+  function requiresFullLoad(pathname) {
+    var p = (pathname || '').replace(/\/+$/, '');
+    if (/\/pos\//i.test(p)) return true;
+    if (/\/sales\//i.test(p)) return true;
+    if (/\/expenses\/?/i.test(p)) return true;
+    if (/\/financials\/?/i.test(p)) return true;
+    if (/\/purchases\/?/i.test(p)) return true;
+    if (/\/menu\/?/i.test(p)) return true;
+    if (/\/journal\/?/i.test(p)) return true;
+    if (/\/customers\/?/i.test(p)) return true;
+    if (/\/suppliers\/?/i.test(p)) return true;
+    if (/\/payments\/?/i.test(p)) return true;
+    if (/\/employees\/?/i.test(p)) return true;
+    if (/\/users\/?/i.test(p)) return true;
+    if (/\/settings\/?/i.test(p)) return true;
+    if (/\/invoices\/?/i.test(p)) return true;
+    if (/\/archive\/?/i.test(p)) return true;
+    if (/\/tables\/?/i.test(p)) return true;
+    return false;
+  }
+
   function isPartialLink(a) {
     if (!a || a.tagName !== 'A') return false;
     var h = a.getAttribute('href');
@@ -19,6 +41,7 @@
       var p = u.pathname || '/';
       if (/\/login\/?$/i.test(p) || /\/logout\/?$/i.test(p)) return false;
       if (u.pathname === location.pathname && (u.hash || '').length > 0) return false;
+      if (requiresFullLoad(p)) return false;
     } catch (e) { return false; }
     return a.hasAttribute(PARTIAL_ATTR) || a.closest('[data-partial-links]') !== null;
   }
@@ -56,6 +79,13 @@
   }
 
   function loadPartial(url, push) {
+    try {
+      var path = new URL(url, location.origin).pathname || '';
+      if (requiresFullLoad(path)) {
+        window.location.href = url;
+        return;
+      }
+    } catch (e) {}
     setLoading(true);
     fetch(url, {
       method: 'GET',

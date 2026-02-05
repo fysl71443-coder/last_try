@@ -63,7 +63,7 @@
   </div>
   <div class="pr-actions no-print">
     <a href="{{ url_for('reports.reports') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-right me-1"></i>{{ _('Back to reports') }}</a>
-    <a href="{{ url_for('reports.reports_print_all_invoices_purchases') }}?start_date={{ start_date.isoformat() if start_date else '' }}&end_date={{ end_date.isoformat() if end_date else '' }}&branch={{ branch or 'all' }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+    <a href="{{ url_for('reports.reports_print_purchases') }}?from={{ start_date.isoformat() if start_date else '' }}&to={{ end_date.isoformat() if end_date else '' }}&branch={{ branch or 'all' }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
   </div>
   <div class="pr-cards">
     <div class="pr-card"><div class="label">{{ _('Invoices count') }}</div><div class="value">{{ data.count or 0 }}</div></div>

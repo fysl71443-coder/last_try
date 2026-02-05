@@ -59,6 +59,9 @@
   [dir="rtl"] .premium-ui .form-label{ text-align:right; }
   .btn-outline-danger{ border-radius: 12px; }
   .row.g-2 .col-6, .row.g-2 .col-md-4, .row.g-2 .col-lg-3{ will-change: transform; }
+  /* Gate: no interaction until initPOS sets pos-ready */
+  #pos-screen.pos-gated { pointer-events: none; user-select: none; }
+  #pos-screen.pos-ready { pointer-events: auto; user-select: auto; }
 </style>
 <style>
   /* Print only the injected invoice container */
@@ -78,6 +81,19 @@
   {% set currency_src = settings.currency %}
 {% endif %}
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Overlay hidden only when pos_table.js calls setScreenReady(); do not hide from here */
+  body.pos-screen-ready #pos-loading-overlay { display: none !important; }
+</style>
+<div id="pos-loading-overlay" class="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style="background: rgba(14,18,32,0.85); z-index: 9999; transition: opacity 0.15s ease;" aria-hidden="false" aria-live="polite">
+  <div class="text-center text-white">
+    <div class="spinner-border text-light mb-2" role="status" style="width:3rem;height:3rem;"><span class="visually-hidden">Loading</span></div>
+    <div class="fw-bold">جاري تحميل الشاشة...</div>
+    <div class="small opacity-75">Loading screen...</div>
+  </div>
+</div>
+<!-- Gate: no interaction until pos_table.js finishes init (load data → bind events → setScreenReady) -->
+<div id="pos-screen" class="pos-screen pos-gated">
 <div class="container-fluid py-3 premium-ui">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
@@ -128,14 +144,14 @@
               <label class="form-label">Invoice No.</label>
               <input id="invNo" type="text" class="form-control" placeholder="Auto" readonly>
             </div>
-            <div class="col-md-8">
+            <div class="col-md-8 position-relative">
               <div class="d-flex align-items-center justify-content-between">
                 <label class="form-label mb-0">Customer</label>
                 <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAddCustomerModalTable()">➕ {{ _('New Customer') }}</button>
               </div>
               <input type="hidden" id="custId" value="">
               <input id="custName" type="text" class="form-control mt-1" placeholder="Type name or phone...">
-              <div id="custList" class="list-group position-absolute w-50" style="z-index:10; display:none;"></div>
+              <div id="custList" class="list-group position-absolute start-0 mt-0 w-100" style="z-index:1050; display:none; max-height:220px; overflow-y:auto;"></div>
             </div>
             <div class="col-md-4">
               <label class="form-label">Customer Phone</label>
@@ -246,6 +262,7 @@
 
   </div>
 </div>
+</div><!-- /#pos-screen: gate removed by JS when initPOS completes -->
 
 <div id="pos-init" style="display:none"
      data-branch="{{ branch_code }}"
@@ -259,7 +276,8 @@
      data-cust-phone="{{ init_cust_phone }}"
      data-disc="{{ init_discount_pct }}"
      data-tax="{{ init_tax_pct }}"
-     data-pay="{{ init_payment_method }}">
+     data-pay="{{ init_payment_method }}"
+     data-void-password="{{ init_void_password }}">
 </div>
 
 <!-- Add Customer Modal (Table Invoice) -->
@@ -317,8 +335,10 @@
     const discount = parseFloat(document.getElementById('tblNewCustDisc').value||'0')||0;
     if(!name){ alert('Name is required / الاسم مطلوب'); return; }
     try{
-      const res = await fetch('{{ url_for('main.api_customers_create') }}', {
-        method:'POST', headers:{'Content-Type':'application/json'},
+      const headers = {'Content-Type':'application/json'};
+      var csrf = document.querySelector('meta[name="csrf-token"]'); if(csrf && csrf.content) headers['X-CSRFToken'] = csrf.content;
+      const res = await fetch('/api/customers', {
+        method:'POST', headers: headers, credentials:'same-origin',
         body: JSON.stringify({
           name: name,
           phone: phone,
@@ -326,7 +346,15 @@
           discount_percent: discount
         })
       });
-      const j = await res.json();
+      var j;
+      var ct = (res.headers.get('Content-Type')||'').toLowerCase();
+      if (ct.indexOf('application/json') !== -1) {
+        j = await res.json();
+      } else {
+        var text = await res.text();
+        if (text && text.trim().startsWith('<')) throw new Error('Server returned HTML instead of JSON. Check login and API URL.');
+        try { j = JSON.parse(text); } catch(_) { throw new Error(text || 'Request failed'); }
+      }
       if(!res.ok || !j || j.ok !== true){ throw new Error((j && j.error) || 'Failed'); }
       const c = j.customer || {};
       const nameInput = document.getElementById('custName');

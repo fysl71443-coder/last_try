@@ -242,6 +242,7 @@ def create_app(config_class=None):
                         return '/api/sales/mark-platform-unpaid'
                     return '#'
         app.jinja_env.globals['url_for'] = url_for_safe
+        app.jinja_env.globals['hasattr'] = hasattr
     except Exception:
         pass
     try:
@@ -296,6 +297,11 @@ def create_app(config_class=None):
     try:
         from routes.sales import bp as sales_bp
         app.register_blueprint(sales_bp)
+    except Exception:
+        pass
+    try:
+        from routes.fiscal_years import bp as fiscal_years_bp
+        app.register_blueprint(fiscal_years_bp)
     except Exception:
         pass
 
@@ -428,6 +434,15 @@ def create_app(config_class=None):
     try:
         from logging_setup import setup_logging
         setup_logging(app)
+    except Exception:
+        pass
+
+    # في التطوير: طباعة مسار SQLite ليتأكد المستخدم من الربط الفعلي
+    try:
+        uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()
+        if uri.startswith('sqlite:///') and ':memory:' not in uri:
+            path = uri.replace('sqlite:///', '').replace('/', os.sep)
+            print('Database (SQLite):', path)
     except Exception:
         pass
 

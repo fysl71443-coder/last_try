@@ -11,14 +11,14 @@
 # ---------------------------------------------------------------------------
 
 import logging
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for
 from datetime import datetime, timedelta
 from models import get_saudi_now
 
 logger = logging.getLogger(__name__)
 from sqlalchemy import func, or_, and_, text
 from extensions import db, cache
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from types import SimpleNamespace
 
 # Cache TTL for trial balance and income statement (5 min)
@@ -49,6 +49,15 @@ def _new_coa_codes():
             return [r[0] for r in NEW_COA_TREE]
         except Exception:
             return []
+
+
+def _leaf_coa_codes():
+    """رموز الحسابات الورقية فقط (بدون حسابات تجميعية) – لأرقام المدين/الدائن في التقارير. القاعدة: الحساب الذي له أبناء لا يحمل أرقاماً."""
+    try:
+        from data.coa_new_tree import LEAF_CODES
+        return list(LEAF_CODES) if LEAF_CODES else _new_coa_codes()
+    except Exception:
+        return _new_coa_codes()
 
 
 def _normalize_short_aliases():
@@ -402,6 +411,10 @@ def _jl_sum_by_code(codes, credit_minus_debit, start_date, end_date, branch):
 
 @bp.route('/income_statement')
 def income_statement():
+    # فتح قالب الطباعة مباشرة دون توجيه المستخدم لشاشة أخرى
+    if not request.args.get('embed'):
+        qs = request.query_string.decode() if request.query_string else ''
+        return redirect(url_for('financials.print_income_statement') + ('?' + qs if qs else ''))
     period = request.args.get('period', 'this_month')
     start_arg = request.args.get('start_date')
     end_arg = request.args.get('end_date')
@@ -707,6 +720,10 @@ def _tb_show(row, exclude=None, hide_zero_balance=False):
 
 @bp.route('/balance_sheet')
 def balance_sheet():
+    # فتح قالب الطباعة مباشرة دون توجيه المستخدم لشاشة أخرى
+    if not request.args.get('embed'):
+        qs = request.query_string.decode() if request.query_string else ''
+        return redirect(url_for('financials.print_balance_sheet') + ('?' + qs if qs else ''))
     asof_str = request.args.get('date')
     branch = (request.args.get('branch') or 'all').strip()
     today = get_saudi_now().date()
@@ -845,6 +862,10 @@ def _trial_balance_from_cache(cached):
 
 @bp.route('/trial_balance')
 def trial_balance():
+    # فتح قالب الطباعة مباشرة دون توجيه المستخدم لشاشة أخرى
+    if not request.args.get('embed'):
+        qs = request.query_string.decode() if request.query_string else ''
+        return redirect(url_for('financials.print_trial_balance') + ('?' + qs if qs else ''))
     asof_str = request.args.get('date')
     today = get_saudi_now().date()
     try:
@@ -861,18 +882,19 @@ def trial_balance():
                 return render_template('financials/trial_balance_embed.html', data=tb_data)
             return render_template('financials/trial_balance.html', data=tb_data)
 
-    new_codes = _new_coa_codes()
+    # فقط الحسابات الورقية (Leaf) — الحساب التجميعي لا يظهر له مدين/دائن/رصيد
+    leaf_codes = _leaf_coa_codes()
     q = db.session.query(
         Account.code.label('code'),
-        Account.name.label('name'),
-        Account.type.label('type'),
+        func.max(Account.name).label('name'),
+        func.max(Account.type).label('type'),
         func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
         func.coalesce(func.sum(JournalLine.credit), 0).label('credit'),
     ).outerjoin(JournalLine, JournalLine.account_id == Account.id) \
      .outerjoin(JournalEntry, JournalLine.journal_id == JournalEntry.id) \
      .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted'))) \
-     .filter(Account.code.in_(new_codes))
-    raw = q.group_by(Account.id).order_by(Account.type.asc(), Account.code.asc()).all()
+     .filter(Account.code.in_(leaf_codes))
+    raw = q.group_by(Account.code).order_by(func.max(Account.type).asc(), Account.code.asc()).all()
     rows = [r for r in raw if _tb_show(r, hide_zero_balance=hide_zero)]
 
     total_debit = float(sum([float(r.debit or 0) for r in rows]))
@@ -981,18 +1003,18 @@ def print_trial_balance():
     except Exception:
         asof = today
     hide_zero = (request.args.get('hide_zero') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
-    new_codes = _new_coa_codes()
+    leaf_codes = _leaf_coa_codes()
     q = db.session.query(
         Account.code.label('code'),
-        Account.name.label('name'),
-        Account.type.label('type'),
+        func.max(Account.name).label('name'),
+        func.max(Account.type).label('type'),
         func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
         func.coalesce(func.sum(JournalLine.credit), 0).label('credit'),
     ).join(JournalLine, JournalLine.account_id == Account.id) \
      .join(JournalEntry, JournalLine.journal_id == JournalEntry.id) \
      .filter(JournalLine.line_date <= asof, JournalEntry.status == 'posted') \
-     .filter(Account.code.in_(new_codes))
-    rows = q.group_by(Account.id).order_by(Account.code.asc()).all()
+     .filter(Account.code.in_(leaf_codes))
+    rows = q.group_by(Account.code).order_by(Account.code.asc()).all()
 
     from data.coa_new_tree import get_account_display_name
     columns = ["Code", "Account", "Debit", "Credit"]
@@ -1015,17 +1037,32 @@ def print_trial_balance():
     totals = {"Debit": total_debit, "Credit": total_credit}
 
     from datetime import datetime as _dt
+    try:
+        settings = Settings.query.first()
+        company_name = (settings.company_name or 'Company').strip() if settings else 'Company'
+        tax_number = (settings.tax_number or '').strip() if settings else ''
+        address = (getattr(settings, 'address', None) or '').strip() if settings else ''
+        logo_url = getattr(settings, 'logo_url', None) if settings else None
+        show_logo = bool(getattr(settings, 'receipt_show_logo', False)) if settings else False
+    except Exception:
+        company_name = 'Company'
+        tax_number = address = ''
+        logo_url = None
+        show_logo = False
     return render_template(
-        'print_report.html',
-        report_title="Trial Balance",
-        columns=columns,
-        data=data,
-        totals=totals,
-        totals_columns=["Debit", "Credit"],
-        totals_colspan=2,
-        start_date=asof,
-        end_date=asof,
-        generated_at=_dt.now().strftime('%Y-%m-%d %H:%M')
+        'financials/trial_balance_print.html',
+        report_title='Trial Balance',
+        report_title_ar='ميزان المراجعة',
+        company_name=company_name,
+        tax_number=tax_number,
+        address=address,
+        logo_url=logo_url,
+        show_logo=show_logo,
+        generated_at=_dt.now().strftime('%Y-%m-%d %H:%M'),
+        asof_date=asof.strftime('%Y-%m-%d') if asof else '',
+        rows=data,
+        total_debit=total_debit,
+        total_credit=total_credit,
     )
 
 
@@ -1095,17 +1132,29 @@ def print_income_statement():
     data = [{"Line": k, "Amount": float(v or 0)} for k, v in lines]
 
     from datetime import datetime as _dt
+    try:
+        settings = Settings.query.first()
+        company_name = (settings.company_name or 'Company').strip() if settings else 'Company'
+        tax_number = (settings.tax_number or '').strip() if settings else ''
+        address = (getattr(settings, 'address', None) or '').strip() if settings else ''
+        logo_url = getattr(settings, 'logo_url', None) if settings else None
+        show_logo = bool(getattr(settings, 'receipt_show_logo', False)) if settings else False
+    except Exception:
+        company_name, tax_number, address, logo_url = 'Company', '', '', None
+        show_logo = False
     return render_template(
-        'print_report.html',
-        report_title="Income Statement",
-        columns=columns,
-        data=data,
-        totals={"Amount": float(net_profit_after_tax or 0)},
-        totals_columns=["Amount"],
-        totals_colspan=1,
-        start_date=start_date,
-        end_date=end_date,
-        generated_at=_dt.now().strftime('%Y-%m-%d %H:%M')
+        'financials/income_statement_print.html',
+        report_title='Income Statement',
+        company_name=company_name,
+        tax_number=tax_number,
+        address=address,
+        logo_url=logo_url,
+        show_logo=show_logo,
+        rows=data,
+        total_net=float(net_profit_after_tax or 0),
+        start_date=start_date.strftime('%Y-%m-%d') if start_date else '',
+        end_date=end_date.strftime('%Y-%m-%d') if end_date else '',
+        generated_at=_dt.now().strftime('%Y-%m-%d %H:%M'),
     )
 
 @bp.route('/export/trial_balance')
@@ -1117,18 +1166,18 @@ def export_trial_balance():
     except Exception:
         asof = today
     hide_zero = (request.args.get('hide_zero') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
-    new_codes = _new_coa_codes()
+    leaf_codes = _leaf_coa_codes()
     q = db.session.query(
         Account.code.label('code'),
-        Account.name.label('name'),
-        Account.type.label('type'),
+        func.max(Account.name).label('name'),
+        func.max(Account.type).label('type'),
         func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
         func.coalesce(func.sum(JournalLine.credit), 0).label('credit'),
     ).outerjoin(JournalLine, JournalLine.account_id == Account.id) \
      .outerjoin(JournalEntry, JournalLine.journal_id == JournalEntry.id) \
      .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted'))) \
-     .filter(Account.code.in_(new_codes))
-    rows = q.group_by(Account.id).order_by(Account.code.asc()).all()
+     .filter(Account.code.in_(leaf_codes))
+    rows = q.group_by(Account.code).order_by(Account.code.asc()).all()
     from data.coa_new_tree import get_account_display_name
     import csv
     from io import StringIO
@@ -1241,7 +1290,6 @@ def print_balance_sheet():
     liabilities = current_liabilities + noncurrent_liabilities
     equity = assets - liabilities
 
-    columns = ["Section", "Current", "Non-current", "Total"]
     data = [
         {"Section": "Assets", "Current": current_assets, "Non-current": noncurrent_assets, "Total": assets},
         {"Section": "Liabilities", "Current": current_liabilities, "Non-current": noncurrent_liabilities, "Total": liabilities},
@@ -1249,17 +1297,27 @@ def print_balance_sheet():
     ]
 
     from datetime import datetime as _dt
+    try:
+        settings = Settings.query.first()
+        company_name = (settings.company_name or 'Company').strip() if settings else 'Company'
+        tax_number = (settings.tax_number or '').strip() if settings else ''
+        address = (getattr(settings, 'address', None) or '').strip() if settings else ''
+        logo_url = getattr(settings, 'logo_url', None) if settings else None
+        show_logo = bool(getattr(settings, 'receipt_show_logo', False)) if settings else False
+    except Exception:
+        company_name, tax_number, address, logo_url = 'Company', '', '', None
+        show_logo = False
     return render_template(
-        'print_report.html',
-        report_title="Balance Sheet",
-        columns=columns,
-        data=data,
-        totals=None,
-        totals_columns=None,
-        totals_colspan=1,
-        start_date=asof,
-        end_date=asof,
-        generated_at=_dt.now().strftime('%Y-%m-%d %H:%M')
+        'financials/balance_sheet_print.html',
+        report_title='Balance Sheet',
+        company_name=company_name,
+        tax_number=tax_number,
+        address=address,
+        logo_url=logo_url,
+        show_logo=show_logo,
+        rows=data,
+        asof_date=asof.strftime('%Y-%m-%d') if asof else '',
+        generated_at=_dt.now().strftime('%Y-%m-%d %H:%M'),
     )
 
 
@@ -1320,23 +1378,62 @@ def accounts():
         start_date = datetime(2025,10,1).date()
         end_date = today
 
-    # استخدام الحسابات من الشجرة الجديدة فقط
+    # فقط الحسابات الورقية — الحساب التجميعي لا يظهر له أرقام
     from data.coa_new_tree import build_coa_dict
     new_coa = build_coa_dict()
-    new_codes = list(new_coa.keys())
-    
+    leaf_codes = _leaf_coa_codes()
+
     raw = db.session.query(
         Account.id.label('id'), Account.code.label('code'), Account.name.label('name'), Account.type.label('type'),
+        getattr(Account, 'active', True), getattr(Account, 'allow_posting', True),
         func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
         func.coalesce(func.sum(JournalLine.credit), 0).label('credit')
     ).outerjoin(JournalLine, JournalLine.account_id == Account.id) \
      .outerjoin(JournalEntry, JournalLine.journal_id == JournalEntry.id) \
-     .filter(Account.code.in_(new_codes)) \
+     .filter(Account.code.in_(leaf_codes)) \
      .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date.between(start_date, end_date), JournalEntry.status == 'posted'))) \
-     .group_by(Account.id) \
+     .group_by(Account.id, Account.code, Account.name, Account.type, Account.active, Account.allow_posting) \
      .order_by(Account.code.asc()).all()
+    last_used = {}
+    try:
+        from sqlalchemy import and_
+        last_q = db.session.query(
+            JournalLine.account_id,
+            func.max(JournalLine.line_date).label('last_date')
+        ).join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(
+            JournalEntry.status == 'posted'
+        ).group_by(JournalLine.account_id).all()
+        last_used = {r.account_id: r.last_date for r in last_q}
+    except Exception:
+        pass
+    try:
+        from services.gl_truth import get_fiscal_year_for_date
+    except Exception:
+        get_fiscal_year_for_date = None
     from data.coa_new_tree import get_account_display_name
-    rows = [{'id': r.id, 'code': r.code, 'name': get_account_display_name(r.code, r.name), 'type': r.type, 'debit': r.debit, 'credit': r.credit} for r in raw]
+    section_order = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE', 'COGS', 'TAX']
+    rows = []
+    for r in raw:
+        acc_type = (r.type or (new_coa.get(r.code) or {}).get('type') or 'EXPENSE')
+        active = getattr(r, 'active', True) if hasattr(r, 'active') else True
+        allow_posting = getattr(r, 'allow_posting', True) if hasattr(r, 'allow_posting') else True
+        status_ar = 'نشط' if (active and allow_posting) else 'متوقف'
+        last_date = last_used.get(r.id) if r.id else None
+        last_fiscal = None
+        if get_fiscal_year_for_date and last_date:
+            try:
+                fy = get_fiscal_year_for_date(last_date)
+                last_fiscal = str(fy.year) if fy and getattr(fy, 'year', None) else (last_date.strftime('%Y-%m-%d') if last_date else None)
+            except Exception:
+                last_fiscal = last_date.strftime('%Y-%m-%d') if last_date else None
+        elif last_date:
+            last_fiscal = last_date.strftime('%Y-%m-%d')
+        rows.append({
+            'id': r.id, 'code': r.code, 'name': get_account_display_name(r.code, r.name), 'type': acc_type,
+            'debit': r.debit, 'credit': r.credit,
+            'status_ar': status_ar, 'last_used_date': last_date, 'last_fiscal_period': last_fiscal
+        })
+    rows.sort(key=lambda x: (section_order.index(x['type']) if x['type'] in section_order else 999, str(x.get('code') or '')))
 
     return render_template('financials/accounts.html', rows=rows, start_date=start_date, end_date=end_date)
 
@@ -1484,29 +1581,10 @@ def backfill_journals():
         db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=ap_acc.id, debit=0, credit=total_inc_tax, description=f"Accounts Payable", line_date=inv.date))
         db.session.commit(); created += 1
     return render_template('financials/backfill_result.html', created=created, start_date=start_date, end_date=end_date)
-@bp.route('/cash_flow')
-def cash_flow():
-    from datetime import datetime
-    from sqlalchemy.exc import OperationalError, ProgrammingError
-
-    period = request.args.get('period', 'custom')
-    start_arg = request.args.get('start_date')
-    end_arg = request.args.get('end_date')
-    start_date, end_date = period_range(period)
-    try:
-        if (period or '') == 'custom':
-            if start_arg and end_arg:
-                start_date = datetime.strptime(start_arg, '%Y-%m-%d').date()
-                end_date = datetime.strptime(end_arg, '%Y-%m-%d').date()
-            else:
-                start_date = datetime(2025,10,1).date(); end_date = get_saudi_now().date()
-    except Exception:
-        pass
-
-    # مصدر البيانات: جدول cashflow_summary إن وُجد، وإلا من قيود اليومية (حسابات النقد 1111,1112,1121,1122,1123)
+def _build_cash_flow_data(start_date, end_date):
+    """يبني بيانات التدفق النقدي (صفوف، inflow، outflow، net) من قيود اليومية أو cashflow_summary."""
     rows_from_summary = None
     try:
-        # دعم أعمدة: account_code, account_name, و line_date أو date، و debit، credit
         for date_col in ('line_date', 'date'):
             try:
                 q = text(
@@ -1524,8 +1602,6 @@ def cash_flow():
     CASH_CODES = ['1111', '1112', '1121', '1122', '1123']
 
     def _opening_balances():
-        """رصيد افتتاحي لكل حساب نقدي حتى اليوم السابق لبداية الفترة."""
-        from datetime import timedelta
         before_start = start_date - timedelta(days=1) if hasattr(start_date, '__sub__') else start_date
         q = db.session.query(
             Account.code,
@@ -1546,11 +1622,9 @@ def cash_flow():
         return out
 
     def _add_running_balance(rows_list):
-        """ترتيب الحركات بالتاريخ ثم إضافة الرصيد المتراكم بعد كل حركة (لكل حساب صندوق/بنك)."""
         opening = _opening_balances()
         for r in rows_list:
             r['running_balance'] = None
-        # ترتيب: تاريخ ثم كود الحساب
         def _sort_key(r):
             d = r.get('date')
             if hasattr(d, 'isoformat'):
@@ -1566,7 +1640,8 @@ def cash_flow():
             r['running_balance'] = round(balance_by_code[code], 2)
         return rows_list
 
-    if rows_from_summary is not None and len(rows_from_summary) >= 0:
+    # استخدم cashflow_summary فقط إن وُجدت صفوف فيه؛ وإلا مصدر الحقيقة = قيود اليومية (حتى لا يظهر التدفق صفراً عند جدول فارغ)
+    if rows_from_summary is not None and len(rows_from_summary) > 0:
         def _num(v):
             try:
                 return float(v) if v is not None else 0.0
@@ -1587,7 +1662,7 @@ def cash_flow():
             outflow += credit
         net = round(inflow - outflow, 2)
         rows_list = _add_running_balance(rows_list)
-        data = {'title': 'Cash Flow', 'start_date': start_date, 'end_date': end_date, 'inflow': inflow, 'outflow': outflow, 'net': net, 'rows': rows_list, 'source': 'cashflow_summary'}
+        return {'title': 'Cash Flow', 'start_date': start_date, 'end_date': end_date, 'inflow': inflow, 'outflow': outflow, 'net': net, 'rows': rows_list, 'source': 'cashflow_summary'}
     else:
         rows = db.session.query(JournalLine).join(Account, JournalLine.account_id == Account.id).join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(Account.code.in_(CASH_CODES), JournalLine.line_date.between(start_date, end_date), JournalEntry.status == 'posted').order_by(JournalLine.line_date.asc(), Account.code.asc()).all()
         inflow = float(sum([float(r.debit or 0) for r in rows]))
@@ -1595,7 +1670,26 @@ def cash_flow():
         net = round(inflow - outflow, 2)
         rows_list = [{'code': r.account.code, 'name': r.account.name, 'debit': float(r.debit or 0), 'credit': float(r.credit or 0), 'date': r.line_date} for r in rows]
         rows_list = _add_running_balance(rows_list)
-        data = {'title': 'Cash Flow', 'start_date': start_date, 'end_date': end_date, 'inflow': inflow, 'outflow': outflow, 'net': net, 'rows': rows_list, 'source': 'journal'}
+        return {'title': 'Cash Flow', 'start_date': start_date, 'end_date': end_date, 'inflow': inflow, 'outflow': outflow, 'net': net, 'rows': rows_list, 'source': 'journal'}
+
+
+@bp.route('/cash_flow')
+def cash_flow():
+    period = request.args.get('period', 'custom')
+    start_arg = request.args.get('start_date')
+    end_arg = request.args.get('end_date')
+    start_date, end_date = period_range(period)
+    try:
+        if (period or '') == 'custom':
+            if start_arg and end_arg:
+                start_date = datetime.strptime(start_arg, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_arg, '%Y-%m-%d').date()
+            else:
+                start_date = datetime(2025,10,1).date(); end_date = get_saudi_now().date()
+    except Exception:
+        pass
+
+    data = _build_cash_flow_data(start_date, end_date)
 
     # ترقيم الصفحات: عرض 50 صف في الصفحة؛ عند الطباعة (print=1) عرض حتى 500 صف لظهورها في التقرير
     default_per = 500 if request.args.get('print') else 50
@@ -1620,6 +1714,43 @@ def cash_flow():
     if request.args.get('embed'):
         return render_template('financials/cash_flow_embed.html', data=data)
     return render_template('financials/cash_flow.html', data=data)
+
+
+@bp.route('/print/cash_flow')
+def print_cash_flow():
+    """صفحة طباعة التدفق النقدي — تفتح نافذة الطباعة مباشرة وتوحيد الشكل مع باقي التقارير."""
+    start_arg = request.args.get('start_date')
+    end_arg = request.args.get('end_date')
+    try:
+        start_date = datetime.strptime(start_arg, '%Y-%m-%d').date() if start_arg else datetime(2025, 10, 1).date()
+        end_date = datetime.strptime(end_arg, '%Y-%m-%d').date() if end_arg else get_saudi_now().date()
+    except Exception:
+        start_date = datetime(2025, 10, 1).date()
+        end_date = get_saudi_now().date()
+    data = _build_cash_flow_data(start_date, end_date)
+    data['rows'] = data['rows'][:500]
+    try:
+        settings = Settings.query.first()
+        company_name = (settings.company_name or 'Company').strip() if settings else 'Company'
+        tax_number = (settings.tax_number or '').strip() if settings else ''
+        address = (getattr(settings, 'address', None) or '').strip() if settings else ''
+        logo_url = getattr(settings, 'logo_url', None) if settings else None
+        show_logo = bool(getattr(settings, 'receipt_show_logo', False)) if settings else False
+    except Exception:
+        company_name, tax_number, address, logo_url = 'Company', '', '', None
+        show_logo = False
+    from datetime import datetime as _dt
+    return render_template(
+        'financials/cash_flow_print.html',
+        data=data,
+        company_name=company_name,
+        tax_number=tax_number,
+        address=address,
+        logo_url=logo_url,
+        show_logo=show_logo,
+        generated_at=_dt.now().strftime('%Y-%m-%d %H:%M'),
+    )
+
 
 @bp.route('/statements')
 def statements_hub():
@@ -1646,26 +1777,26 @@ def api_trial_balance_json():
     except Exception:
         asof = today
     hide_zero = (request.args.get('hide_zero') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
-    new_codes = _new_coa_codes()
     try:
-        from data.coa_new_tree import OLD_TO_NEW_MAP
-        new_codes = list(set(new_codes) | set(OLD_TO_NEW_MAP.keys()))
+        from data.coa_new_tree import build_coa_dict, LEAF_CODES
+        coa = build_coa_dict()
+        LEAF_CODES = set(LEAF_CODES) if LEAF_CODES else set(coa.keys())
     except Exception:
-        pass
-    # Leaf balances from JournalLine
+        coa = {}
+        LEAF_CODES = set()
+    leaf_codes = list(LEAF_CODES) if LEAF_CODES else _new_coa_codes()
+    # فقط الحسابات الورقية تحمل أرقاماً — التجميعية تُجمّع من الأبناء فقط
     q = db.session.query(
         Account.code.label('code'),
-        Account.name.label('name'),
-        getattr(Account, 'name_ar', Account.name).label('name_ar'),
-        getattr(Account, 'name_en', Account.name).label('name_en'),
+        func.max(Account.name).label('name'),
         Account.type.label('type'),
         func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
         func.coalesce(func.sum(JournalLine.credit), 0).label('credit')
     ).outerjoin(JournalLine, JournalLine.account_id == Account.id) \
      .outerjoin(JournalEntry, JournalLine.journal_id == JournalEntry.id) \
      .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted'))) \
-     .filter(Account.code.in_(new_codes))
-    rows = q.group_by(Account.id).order_by(Account.type.asc(), Account.code.asc()).all()
+     .filter(Account.code.in_(leaf_codes))
+    rows = q.group_by(Account.code, Account.type).order_by(Account.type.asc(), Account.code.asc()).all()
     leaf_balances = {}
     try:
         from data.coa_new_tree import OLD_TO_NEW_MAP
@@ -1675,11 +1806,12 @@ def api_trial_balance_json():
         def _norm_code(c):
             return str(c)
     for r in rows:
+        code_norm = _norm_code(r.code)
+        if code_norm not in LEAF_CODES:
+            continue
         t = (getattr(r, 'type', None) or '').upper()
         d = float(r.debit or 0)
         c = float(r.credit or 0)
-        bal = (d - c) if t not in ('LIABILITY', 'EQUITY') else (c - d)
-        code_norm = _norm_code(r.code)
         if code_norm in leaf_balances:
             leaf_balances[code_norm]['debit'] += d
             leaf_balances[code_norm]['credit'] += c
@@ -1688,13 +1820,9 @@ def api_trial_balance_json():
         b = leaf_balances[code_norm]
         bt = (b.get('type') or t or 'ASSET').upper()
         b['balance'] = (b['debit'] - b['credit']) if bt not in ('LIABILITY', 'EQUITY') else (b['credit'] - b['debit'])
-    # Build hierarchy and aggregate group balances from coa_new_tree
     try:
-        from data.coa_new_tree import build_coa_dict, NEW_COA_TREE, LEAF_CODES
-        coa = build_coa_dict()
+        from data.coa_new_tree import NEW_COA_TREE
     except Exception:
-        coa = {}
-        LEAF_CODES = set()
         NEW_COA_TREE = []
     # Aggregate: group balance = sum of all descendant leaf balances
     def descendants(code):
@@ -1734,10 +1862,12 @@ def api_trial_balance_json():
         data = agg_balance(code)
         leaves = all_descendant_leaves(code)
         has_children = len(leaves) > 0 if code not in LEAF_CODES else False
-        # If group with no leaves, check direct children
         if not has_children and code not in LEAF_CODES:
             direct = [c for c, inf in coa.items() if inf.get('parent_account_code') == code]
             has_children = len(direct) > 0
+        # الحساب الذي له أبناء → لا يحمل أرقاماً (عرض عنوان فقط)
+        if has_children:
+            data = {'debit': 0, 'credit': 0, 'balance': 0}
         row = {
             'code': code, 'name': name, 'debit': data['debit'], 'credit': data['credit'],
             'balance': data['balance'], 'type': t, 'parent': parent_code, 'level': level,

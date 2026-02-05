@@ -36,8 +36,9 @@
                             <div class="col-md-4">
                                 <label class="form-label fw-bold">{{ _('Payment Method') }}</label>
                                 <select name="payment_method" class="form-select" required>
-                                    <option value="cash" {% if invoice.payment_method == 'cash' %}selected{% endif %}>{{ _('Cash') }}</option>
-                                    <option value="bank" {% if invoice.payment_method == 'bank' %}selected{% endif %}>{{ _('Bank') }}</option>
+                                    <option value="cash" {% if (invoice.payment_method or '')|lower == 'cash' %}selected{% endif %}>{{ _('Cash') }}</option>
+                                    <option value="bank" {% if (invoice.payment_method or '')|lower == 'bank' %}selected{% endif %}>{{ _('Bank') }}</option>
+                                    <option value="internal" {% if (invoice.payment_method or '')|lower == 'internal' %}selected{% endif %}>{{ _('Internal') }}</option>
                                 </select>
                             </div>
                         </div>
@@ -49,12 +50,13 @@
                                     <option value="paid" {% if invoice.status == 'paid' %}selected{% endif %}>{{ _('Paid') }}</option>
                                     <option value="partial" {% if invoice.status == 'partial' %}selected{% endif %}>{{ _('Partial') }}</option>
                                     <option value="unpaid" {% if invoice.status == 'unpaid' %}selected{% endif %}>{{ _('Unpaid') }}</option>
+                                    <option value="posted" {% if invoice.status == 'posted' %}selected{% endif %}>{{ _('Posted') }}</option>
                                 </select>
                             </div>
                             
                             <div class="col-md-4">
                                 <label class="form-label fw-bold">{{ _('Total Amount') }}</label>
-                                <input type="text" class="form-control" value="${{ "%.2f"|format(invoice.total_after_tax_discount) }}" readonly>
+                                <input type="text" class="form-control" value="﷼{{ "%.2f"|format(invoice.total_after_tax_discount) }}" readonly>
                                 <small class="form-text text-muted">{{ _('Total cannot be changed here') }}</small>
                             </div>
                             
@@ -85,9 +87,9 @@
                                             <tr>
                                                 <td>{{ item.description }}</td>
                                                 <td class="text-center">{{ item.quantity }}</td>
-                                                <td class="text-end">${{ "%.2f"|format(item.price_before_tax) }}</td>
-                                                <td class="text-end">${{ "%.2f"|format(item.tax) }}</td>
-                                                <td class="text-end">${{ "%.2f"|format(item.total_price) }}</td>
+                                                <td class="text-end">﷼{{ "%.2f"|format(item.price_before_tax) }}</td>
+                                                <td class="text-end">﷼{{ "%.2f"|format(item.tax) }}</td>
+                                                <td class="text-end">﷼{{ "%.2f"|format(item.total_price) }}</td>
                                             </tr>
                                             {% endfor %}
                                         </tbody>

@@ -4,9 +4,14 @@
 {% block title %}{{ _('Purchases') }}{% endblock %}
 {% block content %}
 
-<style>.stock-info{ font-size:0.8rem; color:var(--muted); } .status-unpaid{ background:rgba(253,203,110,.3); color:#856404; } .status-partial{ background:rgba(255,193,7,.25); color:#856404; } .status-paid{ background:rgba(39,174,96,.2); color:#27ae60; }</style>
-
-<div class="container py-4 ops-layout hub-wrap">
+<style>
+.stock-info{ font-size:0.8rem; color:var(--muted); }
+.status-unpaid{ background:rgba(253,203,110,.3); color:#856404; }
+.status-partial{ background:rgba(255,193,7,.25); color:#856404; }
+.status-paid{ background:rgba(39,174,96,.2); color:#27ae60; }
+.purchases-hub .ops-form-card:first-of-type .ops-form-head { border-left: 4px solid var(--primary); }
+</style>
+<div class="container py-4 ops-layout hub-wrap purchases-hub">
     <div class="ops-header-bar">
         <span class="ops-icon"><i class="fa-solid fa-cart-shopping"></i></span>
         <div>
@@ -44,9 +49,15 @@
                     <select name="supplier_name" id="supplier_select" class="form-select">
                       <option value="">{{ _('Select Supplier') }}</option>
                       {% for s in suppliers_list or [] %}
-                        <option value="{{ s.name }}" data-id="{{ s.id }}">{{ s.name }}</option>
+                        {% set sj = (suppliers_json|selectattr('id', 'equalto', s.id)|list)|first %}
+                        <option value="{{ s.name }}" data-id="{{ s.id }}" data-balance="{% if sj %}{{ "%.2f"|format(sj.balance|default(0)|float) }}{% else %}0.00{% endif %}">{{ s.name }}</option>
                       {% endfor %}
                     </select>
+                  </div>
+                  <div class="col-md-3 align-self-end" id="supplier-balance-wrap" style="display:none;">
+                    <div class="alert alert-light border small mb-0 py-2">
+                      <strong>{{ _('Current balance') }}:</strong> <span id="supplier-balance-value" class="fw-bold">0.00</span> ﷼
+                    </div>
                   </div>
                   <div class="col-md-3" id="supplier_free_box" style="display:none;">
                     <label class="form-label">{{ _('Supplier') }}</label>
@@ -162,6 +173,38 @@
                   </div>
                 </div>
                 {% endfor %}
+                <!-- Hidden template for adding rows when JS clones (same structure, index placeholder) -->
+                <div id="purchase-item-row-template" class="screen-item-row item-row d-flex align-items-end gap-2 mb-2" style="display:none !important;">
+                  <div class="row g-3 align-items-end flex-grow-1 mb-0">
+                    <div class="col-md-2">
+                      <label class="form-label">{{ _('Category / الفئة') }}</label>
+                      <select name="items-__idx__-category" class="form-select category-select">{% for v, l in form.items[0].category.choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">{{ _('Item Name / اسم الصنف') }}</label>
+                      <input name="items-__idx__-item_name" class="form-control" placeholder="{{ _('Item name or description') }}" type="text">
+                    </div>
+                    <div class="col-md-2">
+                      <label class="form-label">{{ _('Quantity / الكمية') }}</label>
+                      <input name="items-__idx__-quantity" class="form-control" step="0.01" type="text" inputmode="decimal" dir="ltr" value="">
+                    </div>
+                    <div class="col-md-2">
+                      <label class="form-label">{{ _('Unit Price / سعر الوحدة') }}</label>
+                      <input name="items-__idx__-price_before_tax" class="form-control" step="0.01" type="text" inputmode="decimal" dir="ltr" value="">
+                    </div>
+                    <div class="col-md-2" style="display:none;">
+                      <label class="form-label">{{ _('Discount %%') }}</label>
+                      <input name="items-__idx__-discount" class="form-control" step="0.01" value="0">
+                    </div>
+                    <div class="col-md-1" style="display:none;">
+                      <label class="form-label">VAT %</label>
+                      <input type="number" step="0.01" class="form-control" name="items-__idx__-tax_pct" value="0">
+                    </div>
+                  </div>
+                  <div class="mb-0">
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-item-btn" title="{{ _('Remove row') }}" aria-label="{{ _('Remove') }}"><i class="fa-solid fa-trash-can"></i></button>
+                  </div>
+                </div>
                 <div class="d-flex justify-content-end">
                   <button type="button" class="btn btn-outline-success" id="add-item-btn">{{ _('Add Item') }}</button>
                 </div>
@@ -251,46 +294,56 @@
     (function(){
       const container = document.getElementById('items-container');
       const addBtn = document.getElementById('add-item-btn');
-      function nextIndex(){ return container.querySelectorAll('.item-row').length; }
-      function cloneLast(){
-        const rows = container.querySelectorAll('.item-row');
-        if (rows.length===0) return;
-        const last = rows[rows.length-1];
-        const clone = last.cloneNode(true);
-        const idx = nextIndex();
-        clone.querySelectorAll('select, input').forEach(el=>{
+      const templateRow = document.getElementById('purchase-item-row-template');
+      function getVisibleItemRows(){ return Array.from(container.querySelectorAll('.item-row')).filter(r => r.id !== 'purchase-item-row-template' && r.style.display !== 'none'); }
+      function nextIndex(){ return getVisibleItemRows().length; }
+      function setRowNames(row, idx){
+        row.querySelectorAll('select, input').forEach(el=>{
           const n = el.getAttribute('name');
-          if(n && n.startsWith('items-')){
-            const parts = n.split('-'); parts[1] = String(idx); el.setAttribute('name', parts.join('-'));
-          }
-          if(el.tagName==='SELECT') el.selectedIndex=0; else el.value='';
+          if(n && (n.startsWith('items-') || n.includes('__idx__')))
+            el.setAttribute('name', n.replace(/^items-\d+-/, 'items-'+idx+'-').replace(/items-__idx__-/g, 'items-'+idx+'-'));
+          if(el.tagName==='SELECT') el.selectedIndex=0; else if(el.type!=='hidden') el.value='';
         });
+      }
+      function cloneLast(){
+        const rows = getVisibleItemRows();
+        const source = (templateRow && rows.length === 0) ? templateRow : (rows.length ? rows[rows.length-1] : null);
+        if(!source) return;
+        const clone = source.cloneNode(true);
+        clone.id = '';
+        clone.style.display = '';
+        const idx = nextIndex();
+        setRowNames(clone, idx);
         clone.querySelectorAll('.remove-item-btn').forEach(btn=>{ btn.onclick = removeRow; });
-        container.insertBefore(clone, addBtn.parentElement);
+        const insertBefore = addBtn && addBtn.parentElement ? addBtn.parentElement : container.lastElementChild;
+        container.insertBefore(clone, insertBefore);
         updateRemoveButtonsVisibility();
+        calculateTotals();
       }
       function removeRow(ev){
         const btn = ev && ev.target ? ev.target.closest('.remove-item-btn') : null;
         const row = btn && btn.closest('.item-row');
-        if(!row) return;
-        const rows = container.querySelectorAll('.item-row');
+        if(!row || row.id === 'purchase-item-row-template') return;
+        const rows = getVisibleItemRows();
         if(rows.length <= 1) return;
         row.remove();
         calculateTotals();
         updateRemoveButtonsVisibility();
       }
       function updateRemoveButtonsVisibility(){
-        const rows = container.querySelectorAll('.item-row');
-        rows.forEach((r, i)=>{
+        const rows = getVisibleItemRows();
+        rows.forEach(r=>{
           const btn = r.querySelector('.remove-item-btn');
           if(btn){ btn.style.visibility = rows.length > 1 ? 'visible' : 'hidden'; btn.disabled = rows.length <= 1; }
         });
       }
-      container.addEventListener('click', function(ev){
-        if(ev.target && ev.target.closest('.remove-item-btn')) removeRow(ev);
-      });
-      addBtn?.addEventListener('click', function(){ cloneLast(); calculateTotals(); });
-      updateRemoveButtonsVisibility();
+      if(container){
+        container.addEventListener('click', function(ev){
+          if(ev.target && ev.target.closest('.remove-item-btn')) removeRow(ev);
+        });
+        if(addBtn) addBtn.addEventListener('click', function(){ cloneLast(); });
+        updateRemoveButtonsVisibility();
+      }
       calculateTotals();
     })();
 
@@ -336,8 +389,22 @@
     return SUPPLIERS.find(s => (s.name||'').toLowerCase() === n) || null;
   }
 
+  const balanceWrap = document.getElementById('supplier-balance-wrap');
+  const balanceVal = document.getElementById('supplier-balance-value');
+  function updateSupplierBalance(){
+    const opt = input && input.selectedOptions && input.selectedOptions[0];
+    const bal = opt && opt.getAttribute('data-balance');
+    if(balanceWrap && balanceVal){
+      if(bal !== null && bal !== undefined && opt && opt.value){
+        balanceWrap.style.display = 'block';
+        balanceVal.textContent = parseFloat(bal).toFixed(2);
+      } else {
+        balanceWrap.style.display = 'none';
+      }
+    }
+  }
   if(input){
-    const update = ()=>{ renderSupplier(matchSupplierByName(input.value)); };
+    const update = ()=>{ renderSupplier(matchSupplierByName(input.value)); updateSupplierBalance(); };
     input.addEventListener('change', update);
     input.addEventListener('blur', update);
     update();

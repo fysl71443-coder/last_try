@@ -15,7 +15,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from app import app, db
-from models import Employee, Salary, JournalEntry, ExpenseInvoice
+from models import Employee, Salary, JournalEntry, ExpenseInvoice, FiscalYear, User
 
 
 def _login(client):
@@ -28,6 +28,7 @@ def app_and_db():
     app.config['TESTING'] = True
     app.config['WTF_CSRF_ENABLED'] = False
     import tempfile
+    from datetime import date
     fd, db_path = tempfile.mkstemp(prefix='test_real_', suffix='.sqlite')
     os.close(fd)
     uri = f"sqlite:///{db_path}"
@@ -36,6 +37,17 @@ def app_and_db():
     with app.app_context():
         db.drop_all()
         db.create_all()
+        # سنة مالية مفتوحة لتاريخ اليوم حتى تمرّ التحققات (can_create_invoice_on_date)
+        start = date(date.today().year, 1, 1)
+        end = date(date.today().year, 12, 31)
+        fy = FiscalYear(year=date.today().year, start_date=start, end_date=end, status='open')
+        db.session.add(fy)
+        u = User.query.filter_by(username='admin').first()
+        if not u:
+            u = User(username='admin', email='admin@test.com', role='admin', active=True)
+            u.set_password('admin123')
+            db.session.add(u)
+        db.session.commit()
     try:
         yield app, db_path
     finally:

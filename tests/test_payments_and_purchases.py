@@ -1,6 +1,6 @@
 import os, sys
 import json
-from datetime import datetime
+from datetime import datetime, date
 
 # Ensure project root on path
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -9,7 +9,7 @@ if ROOT not in sys.path:
 
 import pytest
 from app import app, db
-from models import User, Meal, SalesInvoice, PurchaseInvoice, Payment, RawMaterial
+from models import User, Meal, SalesInvoice, PurchaseInvoice, Payment, RawMaterial, FiscalYear
 
 
 @pytest.fixture()
@@ -20,6 +20,19 @@ def mk_client(client):
             u = User(username='admin', email='admin@example.com', role='admin', active=True)
             u.set_password('admin123')
             db.session.add(u)
+            db.session.commit()
+        # سنة مالية مفتوحة تغطي اليوم (مطلوبة لـ can_create_invoice_on_date في المشتريات/المصروفات)
+        today = date.today()
+        fy = db.session.query(FiscalYear).filter(
+            FiscalYear.start_date <= today,
+            FiscalYear.end_date >= today,
+            FiscalYear.status == 'open'
+        ).first()
+        if not fy:
+            start = date(today.year, 1, 1)
+            end = date(today.year, 12, 31)
+            fy = FiscalYear(year=today.year, start_date=start, end_date=end, status='open')
+            db.session.add(fy)
             db.session.commit()
         m = Meal.query.filter_by(active=True).first()
         if not m:

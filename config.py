@@ -22,8 +22,12 @@ if ENV == "production":
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     _database_uri = DATABASE_URL
 else:
-    # تطوير: SQLite في instance/ (مسار واحد فقط هنا؛ غيّر LOCAL_SQLITE_PATH إن شئت)
+    # تطوير: SQLite في instance/ — دائماً ملف فعلي (لا :memory:)؛ غيّر LOCAL_SQLITE_PATH إن شئت
     _sqlite_path = os.getenv("LOCAL_SQLITE_PATH") or os.path.join(_instance_dir, "accounting_app.db")
+    _sqlite_path = os.path.abspath(_sqlite_path)
+    if ":memory:" in _sqlite_path or not _sqlite_path.strip():
+        _sqlite_path = os.path.join(_instance_dir, "accounting_app.db")
+        _sqlite_path = os.path.abspath(_sqlite_path)
     _database_uri = "sqlite:///" + _sqlite_path.replace("\\", "/")
 
 # للمساعدات والسكربتات فقط (قراءة المسار المحلي عند التطوير)

@@ -381,6 +381,22 @@ def purchases():
                     suppliers = Supplier.query.order_by(Supplier.name.asc()).all()
     except Exception:
         suppliers = []
+    supplier_balances = {}
+    try:
+        from sqlalchemy import func
+        for s in suppliers:
+            total_inv = db.session.query(func.coalesce(func.sum(PurchaseInvoice.total_after_tax_discount), 0)).filter(
+                PurchaseInvoice.supplier_id == s.id
+            ).scalar() or 0
+            inv_ids = [r[0] for r in db.session.query(PurchaseInvoice.id).filter(PurchaseInvoice.supplier_id == s.id).all()]
+            total_paid = 0
+            if inv_ids:
+                total_paid = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                    Payment.invoice_type == 'purchase', Payment.invoice_id.in_(inv_ids)
+                ).scalar() or 0)
+            supplier_balances[s.id] = float(total_inv) - total_paid
+    except Exception:
+        pass
     suppliers_json = []
     for s in suppliers:
         cr = getattr(s, 'cr_number', None)
@@ -406,6 +422,7 @@ def purchases():
             'cr_number': cr,
             'iban': iban,
             'active': getattr(s, 'active', True),
+            'balance': supplier_balances.get(s.id, 0),
         })
     # Ensure RawMaterial table contains bilingual items from purchase_categories
     try:
@@ -502,6 +519,12 @@ def purchases():
     if request.method == 'POST':
         pm = (request.form.get('payment_method') or 'cash').strip().lower()
         date_str = request.form.get('date') or get_saudi_now().date().isoformat()
+        inv_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        from services.gl_truth import can_create_invoice_on_date
+        ok, period_err = can_create_invoice_on_date(inv_date)
+        if not ok:
+            flash(period_err or 'الفترة المالية مغلقة لهذا التاريخ.', 'danger')
+            return redirect(url_for('purchases.purchases'))
         inv_type = (request.form.get('invoice_type') or 'VAT').strip().upper()
         supplier_name = (request.form.get('supplier_name') or '').strip() or None
         supplier_free = (request.form.get('supplier_name_free') or '').strip()
@@ -513,7 +536,7 @@ def purchases():
         try:
             inv = PurchaseInvoice(
                 invoice_number=f"INV-PUR-{get_saudi_now().year}-{(PurchaseInvoice.query.count()+1):04d}",
-                date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+                date=inv_date,
                 supplier_name=supplier_name,
                 supplier_id=supplier_id,
                 payment_method=pm,
@@ -672,6 +695,18 @@ def purchases():
                     _create_supplier_payment_journal(inv.date, amt, inv.invoice_number, pm or 'CASH', bank_fee=fee if fee > 0 else 0)
                 except Exception:
                     pass
+        # تحديث الحالة من إجمالي المدفوع فعلياً (مدفوع كامل = paid، جزء = partial، غير مدفوع = unpaid)
+        if total_amt > 0:
+            from sqlalchemy import func
+            paid_sum = float(db.session.query(func.coalesce(func.sum(Payment.amount_paid), 0)).filter(
+                Payment.invoice_type == 'purchase', Payment.invoice_id == inv.id
+            ).scalar() or 0)
+            if paid_sum >= total_amt - 0.01:
+                inv.status = 'paid'
+            elif paid_sum > 0:
+                inv.status = 'partial'
+            else:
+                inv.status = 'unpaid'
         try:
             _create_purchase_journal(inv)
         except Exception as e:

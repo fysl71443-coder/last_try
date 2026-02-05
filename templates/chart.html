@@ -1,5 +1,21 @@
 {% extends 'base.html' %}
 {% block title %}شجرة الحسابات{% endblock %}
+{% block head %}
+{{ super() }}
+<style>
+.coa-tree-section { font-weight: 700; font-size: 0.95rem; padding: 0.5rem 0.75rem; margin: 0.5rem 0 0.25rem 0; border-radius: 8px; }
+.coa-tree-section.asset { background: rgba(21, 101, 192, 0.12); color: var(--secondary); }
+.coa-tree-section.liability { background: rgba(57, 73, 171, 0.12); color: #3949ab; }
+.coa-tree-section.equity { background: rgba(0, 105, 92, 0.12); color: #00695c; }
+.coa-tree-section.revenue { background: rgba(46, 125, 50, 0.12); color: #2e7d32; }
+.coa-tree-section.expense { background: rgba(230, 81, 0, 0.12); color: #e65100; }
+.coa-tree-section.tax { background: rgba(78, 52, 46, 0.12); color: #4e342e; }
+.badge-coa-system { font-size: 0.65rem; background: rgba(21, 101, 192, 0.2); color: var(--primary); }
+.badge-coa-movable { font-size: 0.65rem; background: rgba(39, 174, 96, 0.2); color: var(--success); }
+#tree li { margin-bottom: 0.35rem; }
+#tree li .acc-type-badge { font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 4px; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="container py-4 ops-layout hub-wrap">
   <div class="ops-header-bar">
@@ -9,7 +25,7 @@
       <span class="ops-subtitle">إدارة وإضافة وتفعيل/تعطيل الحسابات والربط بالأب والرصيد الافتتاحي</span>
     </div>
     <div class="ops-actions">
-      <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary me-1"><i class="fa-solid fa-house me-1"></i>لوحة التحكم</a>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary me-1"><i class="fa-solid fa-house me-1"></i>لوحة التحكم</a>
       <button class="btn btn-sm btn-outline-secondary me-1" id="btnRefresh"><i class="fa-solid fa-arrows-rotate me-1"></i>تحديث الشجرة</button>
       <button class="btn btn-sm btn-outline-primary me-1" id="btnOpening"><i class="fa-solid fa-wallet me-1"></i>إضافة رصيد افتتاحي</button>
       <button class="btn btn-sm btn-primary" id="btnAdd"><i class="fa-solid fa-plus me-1"></i>إضافة حساب جديد</button>
@@ -206,27 +222,39 @@ function balanceInfo(code, type){ const b=BAL[code]||{debit_total:0,credit_total
   return { current: cur, label, debit: Number(b.debit_total||0), credit: Number(b.credit_total||0), net: Number(b.net||0) };
 }
 function byCode(code){ return (ALL||[]).find(it=> String(it.code)===String(code)); }
+const SECTION_LABELS = {'1000':'الأصول (Assets)','2000':'الالتزامات (Liabilities)','3000':'حقوق الملكية (Equity)','4000':'الإيرادات (Revenue)','5000':'المصروفات (Expenses)','0006':'الضريبة (Tax)'};
 function buildTree(parent){
   const ul = document.createElement('ul'); ul.className='list-unstyled ms-3';
   const children = (ALL||[]).filter(a=> String(a.parent||'')===String(parent||''));
   children.sort((a,b)=> String(a.code).localeCompare(String(b.code)));
   children.forEach(a=>{
+    if(parent==='' && SECTION_LABELS[a.code]){
+      const sec = document.createElement('div');
+      sec.className = 'coa-tree-section ' + (a.type||'').toLowerCase();
+      sec.textContent = SECTION_LABELS[a.code];
+      ul.appendChild(sec);
+    }
     const li = document.createElement('li');
+    const chevron = document.createElement('button'); chevron.className='btn btn-sm btn-outline-secondary'; chevron.textContent='▸';
+    li.appendChild(chevron);
     const span = document.createElement('span'); span.className = (a.type||'')+' fw-semibold'; span.textContent = `${a.code} · ${a.name}`;
     span.style.cursor='pointer'; span.onclick = ()=>showDetails(a.code);
+    li.appendChild(span);
+    const badges = document.createElement('span'); badges.className='ms-2';
+    if(a.system) { const b=document.createElement('span'); b.className='badge badge-coa-system'; b.textContent='🔒 نظامي'; badges.appendChild(b); }
+    const hasKids = (ALL||[]).some(c=> String(c.parent||'')===String(a.code));
+    if(!hasKids) { const b=document.createElement('span'); b.className='badge badge-coa-movable'; b.textContent='✔ قابل للحركة'; badges.appendChild(b); }
+    li.appendChild(badges);
     const controls = document.createElement('div'); controls.className='d-inline-flex gap-2 ms-2 align-items-center';
-    const toggleBtn = document.createElement('button'); toggleBtn.className='btn btn-sm btn-outline-primary'; toggleBtn.textContent='Toggle'; toggleBtn.onclick=()=>toggle(a.code);
-    const enabledBadge = document.createElement('span'); enabledBadge.className = 'badge '+(a.enabled?'bg-success':'bg-secondary'); enabledBadge.textContent = a.enabled?'Enabled':'Disabled';
+    const toggleBtn = document.createElement('button'); toggleBtn.className='btn btn-sm btn-outline-primary'; toggleBtn.textContent='تفعيل/إيقاف'; toggleBtn.onclick=()=>toggle(a.code);
+    const enabledBadge = document.createElement('span'); enabledBadge.className = 'badge '+(a.enabled?'bg-success':'bg-secondary'); enabledBadge.textContent = a.enabled?'مفعّل':'معطّل';
     const bi = balanceInfo(a.code, a.type);
     const balBadge = document.createElement('span');
     const positive = bi.current >= 0;
     balBadge.className='badge '+(positive? (nature(a.type)==='debit'?'bg-success':'bg-primary') : 'bg-danger');
-    balBadge.textContent = `رصيد ${bi.label} ${Math.abs(bi.current).toFixed(2)} · D ${bi.debit.toFixed(2)} · C ${bi.credit.toFixed(2)}`;
+    balBadge.textContent = `رصيد ${bi.label} ${Math.abs(bi.current).toFixed(2)}`;
     controls.appendChild(toggleBtn); controls.appendChild(enabledBadge); controls.appendChild(balBadge);
-    const chevron = document.createElement('button'); chevron.className='btn btn-sm btn-outline-secondary'; chevron.textContent='▸';
-    li.appendChild(chevron);
-    li.appendChild(span); li.appendChild(controls);
-    const hasKids = (ALL||[]).some(c=> String(c.parent||'')===String(a.code));
+    li.appendChild(controls);
     if(hasKids){
       const child = buildTree(a.code);
       child.style.display = 'none';
@@ -249,13 +277,17 @@ function showDetails(code){
   const a = byCode(code); if(!a) return;
   const bi = balanceInfo(a.code, a.type);
   const el = document.getElementById('accountDetails');
-  el.innerHTML = `<div class="mb-2"><strong>اسم الحساب:</strong> ${a.name}</div>
-    <div class="mb-2"><strong>النوع:</strong> ${a.type||''}</div>
-    <div class="mb-2"><strong>الكود:</strong> ${a.code}</div>
-    <div class="mb-2"><strong>الحساب الأب:</strong> ${a.parent||'لا يوجد'}</div>
+  const sysBadge = a.system ? '<span class="badge badge-coa-system">حساب نظامي 🔒</span>' : '<span class="badge bg-secondary">حساب مخصص</span>';
+  const leaf = !(ALL||[]).some(c=> String(c.parent||'')===String(a.code));
+  const movBadge = leaf ? '<span class="badge badge-coa-movable">قابل للحركة ✔</span>' : '';
+  el.innerHTML = `<div class="mb-2">${sysBadge} ${movBadge}</div>
+    <div class="mb-2"><strong>اسم الحساب:</strong> ${a.name}</div>
+    <div class="mb-2"><strong>النوع:</strong> <span class="badge coa-tree-section ${(a.type||'').toLowerCase()}">${a.type||''}</span></div>
+    <div class="mb-2"><strong>الكود:</strong> <code>${a.code}</code></div>
+    <div class="mb-2"><strong>الحساب الأب:</strong> ${a.parent||'—'}</div>
     <div class="mb-2"><strong>رصيد افتتاحي:</strong> ${Number(a.balance||0).toFixed(2)}</div>
-    <div class="mb-2"><strong>الرصيد الحالي:</strong> ${bi.label} ${Math.abs(bi.current).toFixed(2)} (D ${bi.debit.toFixed(2)} · C ${bi.credit.toFixed(2)})</div>
-    <div class="mb-2"><strong>ملاحظات:</strong> ${a.notes||''}</div>`;
+    <div class="mb-2"><strong>الرصيد الحالي:</strong> ${bi.label} ${Math.abs(bi.current).toFixed(2)} (مدين ${bi.debit.toFixed(2)} · دائن ${bi.credit.toFixed(2)})</div>
+    <div class="mb-2"><strong>ملاحظات:</strong> ${a.notes||'—'}</div>`;
 }
 function load(){
   fetch('/api/chart/list', {credentials:'same-origin'}).then(r=>r.json()).then(j=>{ if(j && j.ok){ ALL = j.items||[]; }}).then(()=>{

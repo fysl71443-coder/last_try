@@ -3,31 +3,33 @@
 {% block content %}
 
 <style>
-body { background: var(--bg, #f8fafc); }
+/* Sales: design only – aligned with design system (Tajawal, --primary, docs/DESIGN_SYSTEM.md) */
+body { background: var(--bg); }
 .branch-badge {
   padding: 0.25rem 0.75rem;
-  border-radius: 20px;
+  border-radius: 8px;
   font-size: 0.8rem;
-  font-weight: bold;
+  font-weight: 600;
 }
-.branch-place-india { background: #74b9ff; color: white; }
-.branch-china-town { background: #fd79a8; color: white; }
+.branch-place-india { background: var(--primary); color: white; }
+.branch-china-town { background: var(--secondary); color: white; }
 .status-badge {
   padding: 0.25rem 0.75rem;
-  border-radius: 20px;
+  border-radius: 8px;
   font-size: 0.8rem;
-  font-weight: bold;
+  font-weight: 600;
 }
-.status-unpaid { background: #ffeaa7; color: #2d3436; }
-.status-partial { background: #fab1a0; color: #2d3436; }
-.status-paid { background: #00b894; color: white; }
+.status-unpaid { background: rgba(243,156,18,.2); color: #856404; }
+.status-partial { background: rgba(255,193,7,.25); color: #856404; }
+.status-paid { background: rgba(39,174,96,.2); color: var(--success); }
 .item-row {
-  border: 1px solid #e9ecef;
+  border: 1px solid rgba(0,0,0,.06);
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 0.5rem;
-  background: #f8f9fa;
+  background: rgba(0,0,0,.02);
 }
+.item-row:hover { background: var(--ops-blue-light, #e3f2fd); border-color: rgba(21,101,192,.15); }
 </style>
 
 <div class="container py-4 ops-layout hub-wrap">

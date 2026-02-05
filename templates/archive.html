@@ -14,7 +14,7 @@
   </div>
 
   <div class="ops-form-card mt-0">
-    <div class="ops-form-head">{{ _('Filters') }}</div>
+    <div class="ops-form-head"><i class="fa-solid fa-filter me-2"></i>{{ _('Filters') }} — {{ _('Document') }} / {{ _('Period') }} / {{ _('Branch') }}</div>
     <div class="ops-form-body">
       <form onsubmit="return false;">
         <div class="row g-3 align-items-end mb-3">
@@ -99,7 +99,7 @@
               <th>{{ _('Total') }}</th>
               <th>{{ _('Branch') }}</th>
               <th>{{ _('Preview') }}</th>
-              <th>{{ _('PDF') }}</th>
+              <th class="text-center">{{ _('Open PDF') }}</th>
             </tr>
           </thead>
           <tbody></tbody>

@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% set back_url = url_for('fiscal_years.detail', id=fy.id) %}
+{% block title %}{{ _('Import journal') }} — {{ fy.year }}{% endblock %}
+{% block content %}
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-file-import"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Import journal entries') }}</h1>
+      <span class="ops-subtitle">{{ _('Fiscal year') }} {{ fy.year }} — {{ _('CSV / Excel → Preview → Validate → Approve') }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('fiscal_years.detail', id=fy.id) }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>{{ _('Back') }}</a>
+    </div>
+  </div>
+
+  <div class="ops-form-card">
+    <div class="ops-form-head">{{ _('Upload file') }}</div>
+    <div class="ops-form-body">
+      <p class="text-muted small">{{ _('Supported formats: CSV, Excel. Columns: date, account_code, description, debit, credit (optional: cost_center).') }}</p>
+      <form method="post" enctype="multipart/form-data" action="{{ url_for('fiscal_years.import_journal', id=fy.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="mb-3">
+          <label class="form-label">{{ _('File') }}</label>
+          <input type="file" name="file" class="form-control" accept=".csv,.xlsx,.xls">
+        </div>
+        <button type="submit" class="btn btn-primary" disabled title="{{ _('Implementation: validate file, show preview, then approve to post.') }}"><i class="fa-solid fa-upload me-1"></i>{{ _('Upload & preview') }}</button>
+      </form>
+      <div class="alert alert-info mt-3 small">
+        <strong>{{ _('Coming soon') }}:</strong> {{ _('Full flow: upload CSV/Excel → preview lines → validate (dates in range, balanced) → approve to create journal entries. All imports are logged in audit.') }}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

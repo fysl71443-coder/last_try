@@ -32,7 +32,7 @@
 </style>
 {% endblock %}
 {% block content %}
-<div class="container py-4 ops-layout hub-wrap er-wrap" dir="rtl">
+<div class="container py-4 ops-layout hub-wrap er-wrap" dir="{{ 'rtl' if (get_locale() or 'ar') == 'ar' else 'ltr' }}">
   <div class="ops-header-bar mb-3 no-print">
     <span class="ops-icon"><i class="fa-solid fa-file-invoice-dollar"></i></span>
     <div>
@@ -48,7 +48,7 @@
   <div class="er-title-wrap no-print">
     <hr><h2 class="er-title">{{ _('Expenses Report') }}</h2><hr>
   </div>
-  <div class="er-meta">
+  <div class="er-meta mb-2">
     <span>{{ _('From') }}: {{ start_date.strftime('%Y/%m/%d') if start_date else '—' }}</span>
     <span>{{ _('To') }}: {{ end_date.strftime('%Y/%m/%d') if end_date else '—' }}</span>
     <span>{{ _('Branch') }}: {{ branch_label }}</span>
@@ -63,7 +63,7 @@
   </div>
   <div class="er-actions no-print">
     <a href="{{ url_for('reports.reports') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-right me-1"></i>{{ _('Back to reports') }}</a>
-    <a href="{{ url_for('reports.reports_print_all_invoices_expenses') }}?start_date={{ start_date.isoformat() if start_date else '' }}&end_date={{ end_date.isoformat() if end_date else '' }}&branch={{ branch or 'all' }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+    <a href="{{ url_for('reports.reports_print_expenses', start_date=start_date.isoformat() if start_date else '', end_date=end_date.isoformat() if end_date else '', branch=branch or 'all') }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
   </div>
   <div class="er-cards">
     <div class="er-card"><div class="label">{{ _('Invoices count') }}</div><div class="value">{{ data.count or 0 }}</div></div>
@@ -80,7 +80,7 @@
           <td>{{ r.date }}</td>
           <td>{{ r.invoice_number }}</td>
           <td>{{ r.description }}</td>
-          <td>{{ r.payment_method }}</td>
+          <td>{% set pm = (r.payment_method or '')|upper %}{% if pm == 'CASH' %}{{ _('Cash') }}{% elif pm == 'BANK' %}{{ _('Bank') }}{% elif pm == 'INTERNAL' %}{{ _('Internal') }}{% else %}{{ r.payment_method }}{% endif %}</td>
           <td>{{ '{:,.2f}'.format(r.total or 0) }}</td>
         </tr>
         {% endfor %}

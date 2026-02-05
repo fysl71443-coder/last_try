@@ -1,112 +1,120 @@
 {% extends 'base.html' %}
 {% block title %}{{ _('Trial balance') }}{% endblock %}
-
 {% block head %}
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+{% include 'partials/report_common_styles.html' %}
 <style>
-  .tb-report { font-family: 'Cairo', 'Tajawal', sans-serif; --tb-text: #1F2937; --tb-heading: #111827; --tb-border: #E5E7EB; --tb-bg: #F9FAFB; --tb-card: #fff; --tb-muted: #6B7280; --tb-primary: #2563EB; color: var(--tb-text); background: var(--tb-bg); }
-  .tb-report .tb-header { background: var(--tb-card); border: 1px solid var(--tb-border); border-radius: 10px; padding: 1.5rem 1.75rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-  .tb-report .tb-company { font-size: 1.15rem; font-weight: 700; color: var(--tb-heading); margin: 0 0 0.25rem 0; }
-  .tb-report .tb-title { font-size: 1rem; font-weight: 500; color: var(--tb-muted); margin: 0 0 0.5rem 0; }
-  .tb-report .tb-meta { font-size: 0.9rem; color: var(--tb-muted); display: flex; flex-wrap: wrap; gap: 1rem; }
-  .tb-report .tb-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid var(--tb-border); border-radius: 8px; margin-bottom: 1.5rem; }
-  .tb-report .tb-actions .btn { font-size: 0.9rem; }
-  .tb-report .tb-badges { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-bottom: 1.5rem; }
-  .tb-report .tb-badges .badge { font-size: 0.95rem; padding: 0.4rem 0.75rem; }
-  .tb-report .tb-panel { background: var(--tb-card); border: 1px solid var(--tb-border); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06); margin-bottom: 1.5rem; }
-  .tb-report .tb-section { border-bottom: 1px solid var(--tb-border); }
-  .tb-report .tb-section:last-child { border-bottom: none; }
-  .tb-report .tb-section-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.6rem 1rem; font-weight: 600; font-size: 0.95rem; background: #f8fafc; transition: background .15s; }
-  .tb-report .tb-section-toggle:hover { background: #f1f5f9; }
-  .tb-report .tb-section-toggle .chevron { transition: transform .2s; color: var(--tb-muted); }
-  .tb-report .tb-section-toggle.collapsed .chevron { transform: rotate(-90deg); }
-  .tb-report .tb-section-toggle .nums { font-variant-numeric: tabular-nums; direction: ltr; }
-  .tb-report .tb-section-detail { padding: 0 1rem 0.75rem; background: #fff; }
-  .tb-report .tb-section-detail.collapsed { display: none; }
-  .tb-report .tb-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  .tb-report .tb-table th, .tb-report .tb-table td { padding: 0.35rem 0.5rem; text-align: right; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-  .tb-report .tb-table td:nth-child(3), .tb-report .tb-table td:nth-child(4) { font-variant-numeric: tabular-nums; direction: ltr; }
-  .tb-report .tb-link { color: var(--tb-primary); text-decoration: none; }
-  .tb-report .tb-link:hover { text-decoration: underline; }
-  .tb-report .tb-type-totals { background: var(--tb-card); border: 1px solid var(--tb-border); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-  .tb-report .tb-type-totals .tb-type-head { font-size: 1rem; font-weight: 700; padding: 0.75rem 1rem; background: #f8fafc; border-bottom: 1px solid var(--tb-border); }
-  .tb-report .tb-type-totals .tb-type-body { padding: 1rem; }
-  .tb-report .tb-type-totals table { width: 100%; border-collapse: collapse; }
-  .tb-report .tb-type-totals th, .tb-report .tb-type-totals td { padding: 0.4rem 0.5rem; text-align: right; }
-  .tb-report .tb-type-totals td:last-child, .tb-report .tb-type-totals th:last-child { text-align: left; font-variant-numeric: tabular-nums; direction: ltr; }
+  .tb-section-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.65rem 1rem; font-weight: 600; font-size: 0.9rem; background: var(--report-bg); border-bottom: 1px solid var(--report-border); transition: background .15s; }
+  .tb-section-toggle:hover { background: #e2e8f0; }
+  .tb-section-toggle .chevron { transition: transform .2s; color: var(--report-muted); }
+  .tb-section-toggle.collapsed .chevron { transform: rotate(-90deg); }
+  .tb-section-toggle .nums { font-variant-numeric: tabular-nums; direction: ltr; }
+  .tb-section-detail { padding: 0 1rem 0.75rem; background: #fff; }
+  .tb-section-detail.collapsed { display: none; }
+  .tb-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .tb-table th, .tb-table td { padding: 0.4rem 0.75rem; text-align: right; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .tb-table td:nth-child(3), .tb-table td:nth-child(4) { font-variant-numeric: tabular-nums; direction: ltr; }
+  .tb-link { color: var(--report-primary); text-decoration: none; }
+  .tb-link:hover { text-decoration: underline; }
   @media print {
-    .tb-report .tb-actions, .no-print { display: none !important; }
-    .tb-report .tb-section-detail.collapsed { display: block !important; }
-    .tb-report .tb-section-toggle { cursor: default; }
-    body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .tb-report .tb-title, .tb-report .tb-meta { color: #000 !important; }
-    .tb-report .tb-table th, .tb-report .tb-table td { border-color: #333 !important; }
-    .tb-report .tb-table thead th { background: #e8e8e8 !important; color: #000 !important; }
+    .tb-section-detail.collapsed { display: block !important; }
+    .tb-section-toggle { cursor: default; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container py-4 tb-report" dir="rtl">
-  <div class="tb-header">
-    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
-      <div>
-        <h1 class="tb-company">{{ data.company_name }}</h1>
-        <p class="tb-title">{{ _('Trial balance') }}</p>
-        <div class="tb-meta">
-          <span><i class="fa-solid fa-calendar-days"></i> {{ _('As of') }} {{ data.date.strftime('%Y-%m-%d') }}</span>
-        </div>
-      </div>
+<div class="container py-4 report-wrap" dir="rtl">
+  <div class="ops-header-bar no-print mb-3">
+    <span class="ops-icon"><i class="fa-solid fa-scale-balanced"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Trial balance') }}</h1>
+      <span class="ops-subtitle">{{ _('As of date') }} — {{ data.company_name or 'Company' }}</span>
+    </div>
+    <div class="ops-actions">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Home') }}</a>
+      <a href="{{ url_for('financials.accounts_hub') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-book me-1"></i>{{ _('Accounts Hub') }}</a>
+      <a href="{{ url_for('financials.income_statement') }}" class="btn btn-sm btn-outline-primary">{{ _('Income Statement') }}</a>
+      <a href="{{ url_for('financials.balance_sheet') }}" class="btn btn-sm btn-outline-primary">{{ _('Balance sheet') }}</a>
+      <a target="_blank" href="{{ url_for('financials.print_trial_balance', date=data.date, hide_zero=1 if data.hide_zero else 0) }}" class="btn btn-sm btn-primary"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+      <a target="_blank" href="{{ url_for('financials.export_trial_balance', date=data.date, hide_zero=1 if data.hide_zero else 0) }}" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-file-excel me-1"></i>{{ _('Export CSV') }}</a>
     </div>
   </div>
+  {% include 'partials/report_header.html' %}
 
-  <div class="tb-actions no-print">
-    <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
-    <a href="{{ url_for('financials.income_statement') }}" class="btn btn-sm btn-outline-primary">{{ _('Income Statement') }}</a>
-    <a href="{{ url_for('financials.balance_sheet') }}" class="btn btn-sm btn-outline-primary">{{ _('Balance sheet') }}</a>
-    <a target="_blank" href="{{ url_for('financials.print_trial_balance', date=data.date, hide_zero=1 if data.hide_zero else 0) }}" class="btn btn-sm btn-primary"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
-    <a target="_blank" href="{{ url_for('financials.export_trial_balance', date=data.date, hide_zero=1 if data.hide_zero else 0) }}" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-file-excel me-1"></i>{{ _('Export CSV') }}</a>
-    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
-      <form method="get" class="d-flex flex-wrap align-items-center gap-2">
-        <label class="mb-0 small text-muted">{{ _('As of date') }}</label>
-        <input type="date" name="date" class="form-control form-control-sm" value="{{ data.date }}" style="max-width: 11rem;">
-        <label class="mb-0 small text-muted d-flex align-items-center gap-1">
+  <div class="report-filter-card no-print">
+    <div class="card-title"><i class="fa-solid fa-filter"></i> {{ _('Filter') }}</div>
+    <form method="get" class="row g-3 align-items-end flex-wrap">
+      <div class="col-auto">
+        <label class="form-label">{{ _('As of date') }}</label>
+        <input type="date" name="date" class="form-control form-control-sm" value="{{ data.date }}" style="min-width: 150px;">
+      </div>
+      <div class="col-auto d-flex align-items-center gap-2">
+        <label class="form-label mb-0 d-flex align-items-center gap-1">
           <input type="checkbox" name="hide_zero" value="1" {% if data.hide_zero %}checked{% endif %} class="form-check-input">
-          إخفاء الحسابات الصفرية
+          {{ _('Hide zero balances') }}
         </label>
         <input type="hidden" name="hide_zero" value="0">
-        <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-filter me-1"></i>{{ _('Show') }}</button>
-      </form>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('Show') }}</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="report-actions no-print">
+    <a href="{{ url_for('financials.accounts_hub') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-right me-1"></i>{{ _('Accounts Hub') }}</a>
+    <a target="_blank" href="{{ url_for('financials.print_trial_balance', date=data.date, hide_zero=1 if data.hide_zero else 0) }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</a>
+  </div>
+
+  <div class="report-period-bar">
+    <span><strong>{{ _('As of') }}:</strong> {{ data.date.strftime('%Y-%m-%d') if data.date else '—' }}</span>
+    <span><strong>{{ _('Hide zero') }}:</strong> {{ _('Yes') if data.hide_zero else _('No') }}</span>
+  </div>
+
+  {% set diff = (data.total_debit or 0) - (data.total_credit or 0) %}
+  <div class="report-kpi-section">
+    <div class="report-kpi-section-title"><i class="fa-solid fa-chart-pie me-1"></i> {{ _('Summary') }}</div>
+    <div class="report-cards">
+      <div class="report-card report-card-primary">
+        <div class="label">{{ _('Total Debit') }} ﷼</div>
+        <div class="value mono">{{ '{:,.2f}'.format(data.total_debit or 0) }}</div>
+      </div>
+      <div class="report-card report-card-primary">
+        <div class="label">{{ _('Total Credit') }} ﷼</div>
+        <div class="value mono">{{ '{:,.2f}'.format(data.total_credit or 0) }}</div>
+      </div>
+      {% if diff|round(2) != 0 %}
+      <div class="report-card report-card-danger">
+        <div class="label">{{ _('Difference') }} ({{ _('unbalanced') }})</div>
+        <div class="value mono">{{ '{:,.2f}'.format(diff) }}</div>
+      </div>
+      {% else %}
+      <div class="report-card report-card-accent">
+        <div class="label">{{ _('Balance') }}</div>
+        <div class="value mono text-success">✓ {{ _('Balanced') }}</div>
+      </div>
+      {% endif %}
     </div>
   </div>
 
-  <div class="tb-badges">
-    <span class="badge bg-light text-dark border">{{ _('Debit') }}: {{ '{:,.2f}'.format(data.total_debit or 0) }}</span>
-    <span class="badge bg-light text-dark border">{{ _('Credit') }}: {{ '{:,.2f}'.format(data.total_credit or 0) }}</span>
-    {% set diff = (data.total_debit or 0) - (data.total_credit or 0) %}
-    {% if diff|round(2) != 0 %}
-    <div class="alert alert-warning py-1 px-2 mb-0">{{ _('Warning: Trial balance is not balanced') }} ({{ _('diff') }}: {{ '{:,.2f}'.format(diff) }})</div>
-    {% endif %}
-  </div>
-
-  <div class="tb-panel">
-    <div class="tb-panel-head" style="font-size:1rem; font-weight:700; padding:0.75rem 1rem; background:#f8fafc; border-bottom:1px solid var(--tb-border);">{{ _('Trial balance — accounts with movement only (expandable)') }}</div>
+  <div class="report-table-card">
+    <div class="report-table-card-header"><i class="fa-solid fa-list"></i> {{ _('Trial balance — accounts with movement (expandable)') }}</div>
     {% for g in (data.tb_groups or []) %}
     <div class="tb-section">
-      <div class="tb-section-toggle" data-target="tb-detail-{{ g.group_key }}">
+      <div class="tb-section-toggle collapsed" data-target="tb-detail-{{ g.group_key }}">
         <span>{{ g.group_name }} <span class="text-muted small">({{ (g.accounts or [])|length }} {{ _('accounts') }})</span></span>
         <span class="nums">{{ _('Debit') }} {{ '{:,.2f}'.format(g.debit or 0) }} · {{ _('Credit') }} {{ '{:,.2f}'.format(g.credit or 0) }} <i class="fa-solid fa-chevron-down chevron ms-1"></i></span>
       </div>
       <div class="tb-section-detail collapsed" id="tb-detail-{{ g.group_key }}">
         <table class="tb-table">
-          <thead><tr><th>{{ _('Code') }}</th><th>{{ _('Account') }}</th><th>{{ _('Debit') }}</th><th>{{ _('Credit') }}</th></tr></thead>
+          <thead><tr><th>{{ _('Code') }}</th><th>{{ _('Account') }}</th><th class="text-end">{{ _('Debit') }}</th><th class="text-end">{{ _('Credit') }}</th></tr></thead>
           <tbody>
             {% for a in (g.accounts or []) %}
             <tr>
               <td><a href="{{ url_for('financials.account_statement') }}?code={{ a.code }}&start_date=2025-01-01&end_date={{ data.date }}" class="tb-link">{{ a.code }}</a></td>
               <td><a href="{{ url_for('financials.account_statement') }}?code={{ a.code }}&start_date=2025-01-01&end_date={{ data.date }}" class="tb-link">{{ a.name }}</a></td>
-              <td>{{ '{:,.2f}'.format(a.debit or 0) }}</td>
-              <td>{{ '{:,.2f}'.format(a.credit or 0) }}</td>
+              <td class="text-end mono">{{ '{:,.2f}'.format(a.debit or 0) }}</td>
+              <td class="text-end mono">{{ '{:,.2f}'.format(a.credit or 0) }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -115,13 +123,13 @@
     </div>
     {% endfor %}
     {% if not (data.tb_groups or []) %}
-    <div class="p-4 text-center text-muted">{{ _('No accounts with movement.') }}</div>
+    <div class="text-center text-muted py-5 px-3">{{ _('No accounts with movement.') }}</div>
     {% endif %}
   </div>
 
-  <div class="tb-type-totals">
-    <div class="tb-type-head">{{ _('Totals by Type') }}</div>
-    <div class="tb-type-body">
+  <div class="report-table-card">
+    <div class="report-table-card-header"><i class="fa-solid fa-calculator"></i> {{ _('Totals by Type') }}</div>
+    <div class="p-3">
       <table class="tb-table">
         <thead><tr><th>{{ _('Type') }}</th><th class="text-end">{{ _('Debit') }}</th><th class="text-end">{{ _('Credit') }}</th></tr></thead>
         <tbody>
@@ -129,8 +137,8 @@
           {% set s = (data.type_totals or {}).get(t, {}) %}
           <tr>
             <td>{{ t }}</td>
-            <td class="text-end" style="font-variant-numeric: tabular-nums; direction: ltr;">{{ '{:,.2f}'.format(s.debit or 0) }}</td>
-            <td class="text-end" style="font-variant-numeric: tabular-nums; direction: ltr;">{{ '{:,.2f}'.format(s.credit or 0) }}</td>
+            <td class="text-end mono">{{ '{:,.2f}'.format(s.debit or 0) }}</td>
+            <td class="text-end mono">{{ '{:,.2f}'.format(s.credit or 0) }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -145,8 +153,6 @@ document.addEventListener('DOMContentLoaded', function(){
     var id = tog.getAttribute('data-target');
     var detail = id ? document.getElementById(id) : null;
     if (!detail) return;
-    tog.classList.add('collapsed');
-    detail.classList.add('collapsed');
     tog.addEventListener('click', function(){
       detail.classList.toggle('collapsed');
       tog.classList.toggle('collapsed');

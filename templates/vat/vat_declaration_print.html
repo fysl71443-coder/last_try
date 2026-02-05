@@ -1,0 +1,197 @@
+{# قالب طباعة إقرار ضريبة القيمة المضافة — بمواصفات رسمية قريبة من نموذج الهيئة (ZATCA / إقرار ضريبي معتمد) #}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>إقرار ضريبة القيمة المضافة — {{ period_label }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --vat-primary: #0d47a1;
+      --vat-border: #333;
+      --vat-bg: #f8fafc;
+      --vat-cell-bg: #fff;
+    }
+    @page { size: A4; margin: 15mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', 'Tajawal', 'Traditional Arabic', Tahoma, sans-serif;
+      font-size: 14px;
+      color: #1a1a1a;
+      margin: 0;
+      padding: 20px 24px;
+      background: #fff;
+      direction: rtl;
+    }
+    .no-print { display: none; }
+    @media print {
+      .no-print { display: none !important; }
+      body { padding: 12px 18px; }
+      body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .declaration-table th, .declaration-table td { border-color: #333 !important; }
+      .declaration-table th { background: #e8e8e8 !important; }
+      .header-block { border-color: #333 !important; }
+      @page { margin: 15mm; size: A4; }
+    }
+
+    .header-block {
+      border: 2px solid var(--vat-primary);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      background: linear-gradient(180deg, #e3f2fd 0%, #fff 100%);
+    }
+    .header-block .company-name { font-size: 1.35rem; font-weight: 700; color: var(--vat-primary); margin: 0 0 6px 0; }
+    .header-block .tax-line { font-size: 0.95rem; color: #333; margin: 2px 0; }
+    .header-block .address { font-size: 0.9rem; color: #555; margin-top: 4px; }
+    .header-logo { height: 52px; max-width: 160px; object-fit: contain; display: block; margin-bottom: 8px; }
+
+    .declaration-title {
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--vat-primary);
+      margin: 0 0 8px 0;
+      padding-bottom: 10px;
+      border-bottom: 3px solid var(--vat-primary);
+    }
+    .declaration-subtitle { text-align: center; font-size: 0.95rem; color: #555; margin-bottom: 20px; }
+
+    .period-box {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      background: var(--vat-bg);
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .period-box span { font-weight: 600; }
+
+    .declaration-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-size: 14px;
+      border: 1px solid var(--vat-border);
+    }
+    .declaration-table th,
+    .declaration-table td {
+      border: 1px solid var(--vat-border);
+      padding: 12px 14px;
+      text-align: right;
+      background: var(--vat-cell-bg);
+    }
+    .declaration-table th {
+      background: #e3f2fd;
+      color: var(--vat-primary);
+      font-weight: 700;
+      width: 55%;
+    }
+    .declaration-table td.amount { font-variant-numeric: tabular-nums; text-align: left; direction: ltr; width: 45%; font-weight: 600; }
+    .declaration-table tr.section-row th { background: #bbdefb; font-size: 0.95rem; }
+    .declaration-table tr.total-row th,
+    .declaration-table tr.total-row td { background: #fffde7; font-weight: 700; border-top: 2px solid var(--vat-border); }
+    .declaration-table tr.net-row th,
+    .declaration-table tr.net-row td { background: #e8f5e9; font-weight: 700; font-size: 1.05rem; border-top: 2px solid var(--vat-border); }
+
+    .footer-block {
+      margin-top: 28px;
+      padding-top: 14px;
+      border-top: 1px solid #999;
+      font-size: 12px;
+      color: #555;
+      text-align: center;
+    }
+    .footer-block .disclaimer { margin-top: 8px; font-size: 11px; color: #777; }
+  </style>
+</head>
+<body>
+
+  <div class="header-block">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div>
+        {% if settings and getattr(settings, 'receipt_show_logo', True) and getattr(settings, 'logo_url', None) %}
+          <img src="{{ settings.logo_url }}" alt="" class="header-logo">
+        {% endif %}
+        <h1 class="company-name">{{ company_name or 'اسم المنشأة' }}</h1>
+        <div class="tax-line"><strong>الرقم الضريبي / VAT:</strong> {{ tax_number or '—' }}</div>
+        {% if address %}<div class="address">{{ address }}</div>{% endif %}
+        {% if currency %}<div class="tax-line">{{ currency }}</div>{% endif %}
+      </div>
+      <div class="tax-line" style="text-align: left;">تاريخ الطباعة: {{ generated_at or '' }}</div>
+    </div>
+  </div>
+
+  <h2 class="declaration-title">إقرار ضريبة القيمة المضافة</h2>
+  <p class="declaration-subtitle">VAT Return — وفقاً لنظام ضريبة القيمة المضافة</p>
+
+  <div class="period-box">
+    <span>الفترة: {{ start_date }} — {{ end_date }}</span>
+    <span>{{ period_label }}</span>
+    {% if branch and branch != 'all' %}<span>الفرع: {{ branch }}</span>{% endif %}
+  </div>
+
+  <table class="declaration-table">
+    <thead>
+      <tr>
+        <th>البيان</th>
+        <th class="amount">المبلغ ({{ currency or 'ر.س' }})</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="section-row">
+        <th colspan="2">المبيعات والمخرجات</th>
+      </tr>
+      <tr>
+        <th>قيمة المبيعات الخاضعة للضريبة (قاعدة ضريبية)</th>
+        <td class="amount">{{ "%.2f"|format(sales_total) }}</td>
+      </tr>
+      <tr>
+        <th>ضريبة المخرجات (نسبة {{ (vat_rate * 100)|int }}%)</th>
+        <td class="amount">{{ "%.2f"|format(output_vat) }}</td>
+      </tr>
+      <tr class="section-row">
+        <th colspan="2">المشتريات والمدخلات</th>
+      </tr>
+      <tr>
+        <th>قيمة المشتريات الخاضعة للضريبة</th>
+        <td class="amount">{{ "%.2f"|format(purchases_total) }}</td>
+      </tr>
+      <tr>
+        <th>قيمة المصروفات الخاضعة للضريبة</th>
+        <td class="amount">{{ "%.2f"|format(expenses_total) }}</td>
+      </tr>
+      <tr>
+        <th>ضريبة المدخلات</th>
+        <td class="amount">{{ "%.2f"|format(input_vat) }}</td>
+      </tr>
+      <tr class="total-row">
+        <th>صافي ضريبة القيمة المضافة (مستحقة / مستردة)</th>
+        <td class="amount">{{ "%.2f"|format(net_vat) }}</td>
+      </tr>
+      <tr class="net-row">
+        <th>صافي الضريبة المستحقة على المنشأة (إن كانت موجبة)</th>
+        <td class="amount">{% if net_vat >= 0 %}{{ "%.2f"|format(net_vat) }}{% else %}0.00{% endif %}</td>
+      </tr>
+      <tr class="net-row">
+        <th>صافي الضريبة المستردة للمنشأة (إن كانت سالبة)</th>
+        <td class="amount">{% if net_vat < 0 %}{{ "%.2f"|format(-net_vat) }}{% else %}0.00{% endif %}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer-block">
+    <div>تم إعداد هذا الإقرار من النظام المحاسبي — غير رسمي حتى التقديم عبر بوابة الهيئة.</div>
+    <div class="disclaimer">هذا المستند للمراجعة الداخلية والاحتفاظ بالسجلات. التقديم الرسمي يتم عبر بوابة زاتكا / الهيئة العامة للزكاة والضريبة والجمارك.</div>
+  </div>
+
+  <div class="no-print" style="margin-top: 20px;">
+    <button type="button" onclick="window.print()" style="padding: 10px 24px; cursor: pointer; font-size: 14px;">طباعة الإقرار</button>
+  </div>
+
+</body>
+</html>

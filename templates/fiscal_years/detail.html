@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% set back_url = url_for('fiscal_years.list_years') %}
+{% block title %}{{ _('Fiscal year') }} {{ fy.year }}{% endblock %}
+{% block content %}
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-calendar-days"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Fiscal year') }} {{ fy.year }}</h1>
+      <span class="ops-subtitle">{{ fy.start_date.strftime('%Y-%m-%d') }} — {{ fy.end_date.strftime('%Y-%m-%d') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2">
+      <a href="{{ url_for('journal.audit', run=1, from_date=fy.start_date.strftime('%Y-%m-%d'), to_date=fy.end_date.strftime('%Y-%m-%d'), fiscal_year_id=fy.id) }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-magnifying-glass-chart me-1"></i>🔍 تدقيق الفترة المالية</a>
+      <a href="{{ url_for('journal.audit_pdf', from_date=fy.start_date.strftime('%Y-%m-%d'), to_date=fy.end_date.strftime('%Y-%m-%d'), fiscal_year_id=fy.id) }}" target="_blank" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-file-pdf me-1"></i>تقرير PDF الرسمي</a>
+      <a href="{{ url_for('fiscal_years.import_journal', id=fy.id) }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-file-import me-1"></i>{{ _('Import journal') }}</a>
+      <a href="{{ url_for('fiscal_years.list_years') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-list me-1"></i>{{ _('List') }}</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      {% if closure_audit_status %}
+      <div class="ops-form-card border-{{ 'danger' if closure_audit_status.has_critical else 'success' }}">
+        <div class="ops-form-head"><i class="fa-solid fa-shield-halved me-1"></i>حالة التدقيق للإقفال</div>
+        <div class="ops-form-body">
+          {% if closure_audit_status.no_snapshot_yet %}
+          <p class="mb-2 text-muted"><strong>لم يُجرَ تدقيق بعد.</strong> <a href="{{ url_for('journal.audit', run=1, from_date=fy.start_date.strftime('%Y-%m-%d'), to_date=fy.end_date.strftime('%Y-%m-%d'), fiscal_year_id=fy.id) }}">تدقيق الفترة المالية</a> لتحديث الحالة. عند الإقفال سيتم تشغيل التدقيق تلقائياً.</p>
+          {% elif closure_audit_status.has_critical %}
+          <p class="mb-2 text-danger"><strong>❌ لا يمكن إقفال السنة — توجد {{ closure_audit_status.critical_count }} ملاحظة حرجة.</strong> عالجها من تقرير التدقيق أو أدخل مبرر التجاوز أدناه.</p>
+          <form method="post" action="{{ url_for('fiscal_years.close', id=fy.id) }}" class="mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <label class="form-label small">سبب التجاوز (إلزامي)</label>
+            <textarea name="override_reason" class="form-control form-control-sm" rows="2" placeholder="مثال: معتمد من الإدارة — سيتم المعالجة لاحقاً (20 حرفاً على الأقل)" minlength="20" required></textarea>
+            <button type="submit" class="btn btn-warning btn-sm mt-2"><i class="fa-solid fa-lock me-1"></i>إقفال مع التجاوز</button>
+          </form>
+          {% else %}
+          <p class="mb-2 text-success"><strong>✔ جاهز للإقفال</strong> — لا توجد ملاحظات حرجة (عالي).</p>
+          {% endif %}
+          {% if not closure_audit_status.no_snapshot_yet and closure_audit_status.snapshot and closure_audit_status.snapshot.summary %}
+          <p class="small text-muted mb-0">آخر تدقيق: إجمالي {{ closure_audit_status.snapshot.summary.total }} — عالي: {{ closure_audit_status.snapshot.summary.high }} | متوسط: {{ closure_audit_status.snapshot.summary.medium }} | منخفض: {{ closure_audit_status.snapshot.summary.low }}</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Status') }}</div>
+        <div class="ops-form-body">
+          {% if fy.status == 'open' %}
+          <p class="mb-2"><span class="badge bg-success fs-6">🟢 {{ _('Open') }}</span> — {{ _('Invoices and journal entries allowed') }}</p>
+          {% if reopen_details and reopen_details.get('reopen_reason') %}
+          <p class="small text-muted mb-2">آخر إعادة فتح: {{ reopen_details.reopen_reason }}{% if reopen_details.get('reopened_by_username') %} — {{ reopen_details.reopened_by_username }}{% endif %}</p>
+          {% endif %}
+          {% if not closure_audit_status or closure_audit_status.no_snapshot_yet or not closure_audit_status.has_critical %}
+          <form method="post" action="{{ url_for('fiscal_years.close', id=fy.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-warning btn-sm"><i class="fa-solid fa-lock me-1"></i>{{ _('Close year') }}</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('fiscal_years.partial_close', id=fy.id) }}" class="d-inline-block ms-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="date" name="closed_until" class="form-control form-control-sm d-inline-block w-auto" required>
+            <input type="text" name="override_reason" class="form-control form-control-sm d-inline-block ms-1" style="width: 14rem;" placeholder="{{ _('Override reason') }} (20+ إذا توجد ملاحظات حرجة)" minlength="20">
+            <button type="submit" class="btn btn-outline-warning btn-sm ms-1">{{ _('Partial close until') }}</button>
+          </form>
+          {% elif fy.status == 'closed' %}
+          <p class="mb-2"><span class="badge bg-secondary fs-6">🔒 {{ _('Closed') }}</span> — {{ _('No new invoices or entries; viewing and reports allowed') }}</p>
+          {% if closure_log and closure_log.action == 'close_override' and closure_details and closure_details.get('override_reason') %}
+          <p class="small text-warning mb-2">تم الإقفال مع التجاوز — السبب: {{ closure_details.override_reason }}</p>
+          {% endif %}
+          {% if closure_details and closure_details.get('audit_snapshot') %}
+          <p class="small text-muted mb-2">لقطة التدقيق عند الإقفال: إجمالي {{ closure_details.audit_snapshot.summary.total }} (عالي: {{ closure_details.audit_snapshot.summary.high }} | متوسط: {{ closure_details.audit_snapshot.summary.medium }} | منخفض: {{ closure_details.audit_snapshot.summary.low }})</p>
+          {% endif %}
+          <form method="post" action="{{ url_for('fiscal_years.reopen', id=fy.id) }}" class="mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <label class="form-label small">سبب إعادة الفتح (إلزامي — 20 حرفاً على الأقل)</label>
+            <textarea name="reopen_reason" class="form-control form-control-sm" rows="2" placeholder="مثال: استيراد قيود أو تصحيح أخطاء — معتمد من الإدارة" minlength="20" required></textarea>
+            <button type="submit" class="btn btn-outline-success btn-sm mt-1"><i class="fa-solid fa-lock-open me-1"></i>{{ _('Reopen') }}</button>
+          </form>
+          {% else %}
+          <p class="mb-2"><span class="badge bg-warning text-dark fs-6">⚠ {{ _('Partially closed') }}</span> {% if fy.closed_until %}{{ _('until') }} {{ fy.closed_until.strftime('%Y-%m-%d') }}{% endif %}</p>
+          <form method="post" action="{{ url_for('fiscal_years.close', id=fy.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-warning btn-sm">{{ _('Close fully') }}</button>
+          </form>
+          <form method="post" action="{{ url_for('fiscal_years.reopen', id=fy.id) }}" class="d-inline ms-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="text" name="reopen_reason" class="form-control form-control-sm d-inline-block ms-1" style="width: 12rem;" placeholder="{{ _('Reason') }} (20+)" minlength="20" required>
+            <button type="submit" class="btn btn-outline-success btn-sm">{{ _('Reopen') }}</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Open exceptional period') }}</div>
+        <div class="ops-form-body">
+          <p class="small text-muted mb-2">{{ _('For importing entries or corrections; full audit log required.') }}</p>
+          <form method="post" action="{{ url_for('fiscal_years.add_exceptional_period', id=fy.id) }}" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="col-md-4"><label class="form-label small">{{ _('From') }}</label><input type="date" name="start_date" class="form-control form-control-sm" required></div>
+            <div class="col-md-4"><label class="form-label small">{{ _('To') }}</label><input type="date" name="end_date" class="form-control form-control-sm" required></div>
+            <div class="col-md-4"><label class="form-label small">{{ _('Reason') }}</label><input type="text" name="reason" class="form-control form-control-sm" placeholder="{{ _('e.g. Import / Correction') }}"></div>
+            <div class="col-12"><button type="submit" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-calendar-plus me-1"></i>{{ _('Add period') }}</button></div>
+          </form>
+        </div>
+      </div>
+
+      {% if fy.exceptional_periods %}
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Exceptional periods') }}</div>
+        <div class="ops-form-body p-0">
+          <ul class="list-group list-group-flush">
+            {% for ep in fy.exceptional_periods %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>{{ ep.start_date.strftime('%Y-%m-%d') }} — {{ ep.end_date.strftime('%Y-%m-%d') }}{% if ep.reason %} ({{ ep.reason }}){% endif %}</span>
+              <small class="text-muted">{{ ep.created_at.strftime('%Y-%m-%d %H:%M') if ep.created_at else '' }}</small>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="col-lg-6">
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Audit log') }}</div>
+        <div class="ops-form-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>{{ _('Date') }}</th><th>{{ _('Action') }}</th></tr></thead>
+              <tbody>
+                {% for log in audit_logs_page or [] %}
+                <tr>
+                  <td class="small">{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '—' }}</td>
+                  <td>
+                    {% if log.action == 'close' %}<span class="badge bg-secondary">إقفال</span>
+                    {% elif log.action == 'close_override' %}<span class="badge bg-warning text-dark">إقفال مع التجاوز</span>
+                    {% elif log.action == 'reopen' %}<span class="badge bg-info">إعادة فتح</span>
+                    {% elif log.action == 'partial_close' %}<span class="badge bg-light text-dark">إقفال جزئي</span>
+                    {% else %}<span class="badge bg-light text-dark">{{ log.action }}</span>{% endif %}
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="2" class="text-muted small">{{ _('No audit entries yet') }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {% if fy.notes %}
+      <div class="ops-form-card">
+        <div class="ops-form-head">{{ _('Notes') }}</div>
+        <div class="ops-form-body"><p class="mb-0 small">{{ fy.notes }}</p></div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

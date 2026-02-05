@@ -1,5 +1,18 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Accounts') }}{% endblock %}
+{% block head %}
+<style>
+.coa-section-header { font-weight: 700; font-size: 0.95rem; padding: 0.6rem 1rem; margin: 0 -1rem; margin-bottom: 0.5rem; border-radius: 8px; }
+.coa-section-asset { background: rgba(21, 101, 192, 0.12); color: var(--secondary); }
+.coa-section-liability { background: rgba(57, 73, 171, 0.12); color: #3949ab; }
+.coa-section-equity { background: rgba(0, 105, 92, 0.12); color: #00695c; }
+.coa-section-revenue { background: rgba(46, 125, 50, 0.12); color: #2e7d32; }
+.coa-section-expense { background: rgba(230, 81, 0, 0.12); color: #e65100; }
+.coa-section-cogs { background: rgba(249, 168, 37, 0.2); color: #f9a825; }
+.coa-section-tax { background: rgba(78, 52, 46, 0.12); color: #4e342e; }
+.badge-type { font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 6px; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="container py-4 ops-layout hub-wrap">
   <div class="ops-header-bar">
@@ -10,7 +23,8 @@
     </div>
     <div class="ops-actions">
       <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
-      <a href="{{ url_for('financials.accounts_hub') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-sitemap me-1"></i>{{ _('Accounts Hub') }}</a>
+      <a href="{{ url_for('main.chart_of_accounts') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-sitemap me-1"></i>{{ _('Chart of Accounts') }}</a>
+      <a href="{{ url_for('financials.accounts_hub') }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-th-large me-1"></i>{{ _('Accounts Hub') }}</a>
     </div>
   </div>
 
@@ -34,7 +48,7 @@
   </div>
 
   <div class="screen-section">
-    <div class="screen-section-title">{{ _('Account list') }}</div>
+    <div class="screen-section-title">{{ _('Account list') }} — {{ _('Assets') }} / {{ _('Liabilities') }} / {{ _('Equity') }}</div>
     <div class="screen-section-body">
       <div class="screen-table-wrap">
         <table class="table screen-table">
@@ -46,21 +60,39 @@
               <th class="text-end">{{ _('Debit') }}</th>
               <th class="text-end">{{ _('Credit') }}</th>
               <th class="text-end">{{ _('Balance') }}</th>
+              <th>{{ _('Status') }}</th>
+              <th>{{ _('Last used') }}</th>
+              <th>{{ _('Last fiscal period') }}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
+            {% set section_order = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE', 'COGS', 'TAX'] %}
+            {% set section_labels = {'ASSET': _('Assets'), 'LIABILITY': _('Liabilities'), 'EQUITY': _('Equity'), 'REVENUE': _('Revenue'), 'EXPENSE': _('Expenses'), 'COGS': _('COGS'), 'TAX': _('Tax')} %}
+            {% set ns = namespace(prev_type=none) %}
             {% for r in rows %}
-            {% set bal = (r.debit - r.credit) if r.type != 'LIABILITY' else (r.credit - r.debit) %}
-            <tr>
-              <td>{{ r.code }}</td>
-              <td>{{ r.name }}</td>
-              <td>{{ r.type }}</td>
-              <td class="text-end">{{ '%.2f' % (r.debit or 0) }}</td>
-              <td class="text-end">{{ '%.2f' % (r.credit or 0) }}</td>
-              <td class="text-end">{{ '%.2f' % bal }}</td>
-              <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('financials.account_statement', code=r.code, start_date=start_date, end_date=end_date) }}">{{ _('Details') }}</a></td>
-            </tr>
+              {% if r.type != ns.prev_type %}
+              <tr class="coa-section-row">
+                <td colspan="10" class="py-2">
+                  <span class="coa-section-header coa-section-{{ (r.type or 'expense')|lower }}">{{ section_labels.get(r.type, r.type or _('Other')) }}</span>
+                </td>
+                <td></td>
+              </tr>
+              {% set ns.prev_type = r.type %}
+              {% endif %}
+              {% set bal = (r.debit - r.credit) if r.type not in ['LIABILITY','EQUITY','REVENUE'] else (r.credit - r.debit) %}
+              <tr>
+                <td><code>{{ r.code }}</code></td>
+                <td>{{ r.name }}</td>
+                <td><span class="badge badge-type coa-section-{{ (r.type or 'expense')|lower }}">{{ r.type or '—' }}</span></td>
+                <td class="text-end">{{ '%.2f' % (r.debit or 0) }}</td>
+                <td class="text-end">{{ '%.2f' % (r.credit or 0) }}</td>
+                <td class="text-end fw-semibold">{{ '%.2f' % bal }}</td>
+                <td><span class="badge {{ 'bg-success' if (r.status_ar == 'نشط') else 'bg-secondary' }}">{{ r.status_ar or 'نشط' }}</span></td>
+                <td>{{ r.last_used_date.strftime('%Y-%m-%d') if r.last_used_date else '—' }}</td>
+                <td>{{ r.last_fiscal_period or '—' }}</td>
+                <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('financials.account_statement', code=r.code, start_date=start_date, end_date=end_date) }}">{{ _('Details') }}</a></td>
+              </tr>
             {% endfor %}
           </tbody>
         </table>

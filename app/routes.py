@@ -779,7 +779,6 @@ def home():
     # Redirect authenticated users to dashboard for main control screen
     return redirect(url_for('main.dashboard'))
 
-@csrf.exempt
 @main.route('/login', methods=['GET', 'POST'])
 def login():
     # Ensure DB tables exist on first local run to avoid 'no such table: user'
@@ -859,7 +858,8 @@ def login():
                 except Exception:
                     flash('حدث خطأ في التحقق الثنائي', 'danger')
                     return render_template('login.html')
-            login_user(user)
+            remember = request.form.get('remember') in ('on', '1', 'true', 'yes')
+            login_user(user, remember=remember)
             return redirect(url_for('main.dashboard'))
         else:
             flash('خطأ في اسم المستخدم أو كلمة المرور', 'danger')
@@ -2423,18 +2423,14 @@ def api_payroll():
     except Exception:
         payrolls = []
     try:
-        from models import JournalEntry, LedgerEntry, Account
-        from sqlalchemy import func as _func
+        from models import JournalEntry, Account
+        from services.gl_truth import get_account_debit_credit_from_gl
         journal_count = int(JournalEntry.query.filter(JournalEntry.date.between(date(year, month, 1), get_saudi_now().date())).count() or 0)
         adv_code = SHORT_TO_NUMERIC.get('EMP_ADV', ('1151',))[0]
         acc = Account.query.filter(Account.code == adv_code).first()
         if acc:
-            row = db.session.query(
-                _func.coalesce(_func.sum(LedgerEntry.debit), 0),
-                _func.coalesce(_func.sum(LedgerEntry.credit), 0)
-            ).filter(LedgerEntry.account_id == acc.id).first()
-            dsum, csum = row or (0, 0)
-            emp_adv_total = max(0.0, float(dsum or 0) - float(csum or 0))
+            dsum, csum = get_account_debit_credit_from_gl(acc.id, get_saudi_now().date())
+            emp_adv_total = max(0.0, dsum - csum)
     except Exception:
         pass
     totals = {'basic': sum(r['basic'] for r in payrolls), 'allowances': sum(r['allowances'] for r in payrolls),
@@ -3417,7 +3413,13 @@ def menu():
         meals = []
     # counts per category
     item_counts = {c.id: MenuItem.query.filter_by(category_id=c.id).count() for c in cats}
-    return render_template('menu.html', sections=cats, current_section=current, items=items, item_counts=item_counts, meals=meals)
+    # meal_ids already in current section (for bulk-add UI: disable already-added)
+    existing_meal_ids_in_section = set()
+    if current:
+        for it in items:
+            if getattr(it, 'meal_id', None) is not None:
+                existing_meal_ids_in_section.add(int(it.meal_id))
+    return render_template('menu.html', sections=cats, current_section=current, items=items, item_counts=item_counts, meals=meals, existing_meal_ids_in_section=existing_meal_ids_in_section)
 
 
 @main.route('/menu/category/add', methods=['POST'], endpoint='menu_category_add')
@@ -3474,6 +3476,12 @@ def menu_item_add():
         flash('Missing category', 'danger')
         return redirect(url_for('main.menu'))
     try:
+        # Avoid UNIQUE (category_id, meal_id): skip if already linked
+        if meal_id:
+            existing = MenuItem.query.filter_by(category_id=int(cat_id), meal_id=int(meal_id)).first()
+            if existing:
+                flash('الصنف مضاف مسبقاً لهذا القسم / Item already in this section', 'info')
+                return redirect(url_for('main.menu', cat_id=cat_id))
         # Resolve meal if provided
         meal = db.session.get(Meal, int(meal_id)) if meal_id else None
         if meal:
@@ -3490,11 +3498,56 @@ def menu_item_add():
         it = MenuItem(name=final_name, price=final_price, category_id=int(cat_id), meal_id=(meal.id if meal else None))
         db.session.add(it)
         db.session.commit()
+        flash('تمت إضافة الصنف / Item added', 'success')
         return redirect(url_for('main.menu', cat_id=cat_id))
     except Exception as e:
         db.session.rollback()
         flash(f'Error creating item: {e}', 'danger')
         return redirect(url_for('main.menu', cat_id=cat_id))
+
+
+@main.route('/menu/items/bulk-add', methods=['POST'], endpoint='menu_items_bulk_add')
+@login_required
+def menu_items_bulk_add():
+    """Add multiple meals to the selected section. Skips (category_id, meal_id) duplicates."""
+    warmup_db_once()
+    cat_id = request.form.get('section_id', type=int)
+    meal_ids = request.form.getlist('meal_ids[]') or request.form.getlist('meal_ids')
+    if not cat_id:
+        flash('Missing section', 'danger')
+        return redirect(url_for('main.menu'))
+    if not meal_ids:
+        flash('لم تحدد أي أصناف / No meals selected', 'warning')
+        return redirect(url_for('main.menu', cat_id=cat_id))
+    added = 0
+    skipped = 0
+    try:
+        for mid in meal_ids:
+            try:
+                meal_id = int(mid)
+            except (TypeError, ValueError):
+                continue
+            existing = MenuItem.query.filter_by(category_id=cat_id, meal_id=meal_id).first()
+            if existing:
+                skipped += 1
+                continue
+            meal = db.session.get(Meal, meal_id)
+            if not meal:
+                continue
+            name = f"{meal.name} / {meal.name_ar}" if getattr(meal, 'name_ar', None) else (meal.name or '')
+            price = float(meal.selling_price or 0.0)
+            it = MenuItem(name=(name or '')[:150], price=price, category_id=cat_id, meal_id=meal_id)
+            db.session.add(it)
+            added += 1
+        db.session.commit()
+        if skipped:
+            flash(f'تمت إضافة {added} صنف، وتخطي {skipped} (مضاف مسبقاً) / Added {added}, skipped {skipped} (already in section)', 'success')
+        else:
+            flash(f'تمت إضافة {added} صنف للقسم / Added {added} item(s)', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {e}', 'danger')
+    return redirect(url_for('main.menu', cat_id=cat_id))
 
 
 @main.route('/menu/item/<int:item_id>/update', methods=['POST'], endpoint='menu_item_update')
@@ -4328,40 +4381,52 @@ def vat_print():
         input_vat = float((purchases_total or 0) + (expenses_total or 0)) * vat_rate
     net_vat = output_vat - input_vat
 
-    # Render unified print report (support CSV export)
-    report_title = f"VAT Report — Q{quarter} {year}"
-    if branch and branch != 'all':
-        report_title += f" — {branch}"
-    columns = ['Metric', 'Amount']
-    data_rows = [
-        {'Metric': 'Sales (Net Base)', 'Amount': float(sales_total or 0.0)},
-        {'Metric': 'Purchases', 'Amount': float(purchases_total or 0.0)},
-        {'Metric': 'Expenses', 'Amount': float(expenses_total or 0.0)},
-        {'Metric': 'Output VAT', 'Amount': float(output_vat or 0.0)},
-        {'Metric': 'Input VAT', 'Amount': float(input_vat or 0.0)},
-        {'Metric': 'Net VAT', 'Amount': float(net_vat or 0.0)},
-    ]
-    totals = {'Amount': float(net_vat or 0.0)}
+    # CSV export
     fmt = (request.args.get('format') or '').strip().lower()
     if fmt == 'csv':
         try:
             import io, csv
             output = io.StringIO()
             writer = csv.writer(output)
-            writer.writerow(['Metric','Amount'])
-            for r in data_rows:
-                writer.writerow([r.get('Metric',''), r.get('Amount',0.0)])
+            writer.writerow(['Metric', 'Amount'])
+            writer.writerow(['Sales (Net Base)', float(sales_total or 0.0)])
+            writer.writerow(['Purchases', float(purchases_total or 0.0)])
+            writer.writerow(['Expenses', float(expenses_total or 0.0)])
+            writer.writerow(['Output VAT', float(output_vat or 0.0)])
+            writer.writerow(['Input VAT', float(input_vat or 0.0)])
+            writer.writerow(['Net VAT', float(net_vat or 0.0)])
             from flask import Response
             return Response(output.getvalue(), mimetype='text/csv',
                             headers={'Content-Disposition': f'attachment; filename="vat_q{quarter}_{year}.csv"'})
         except Exception:
             pass
-    return render_template('print_report.html', report_title=report_title, settings=s,
-                           generated_at=get_saudi_now().strftime('%Y-%m-%d %H:%M'),
-                           start_date=start_date.isoformat(), end_date=end_date.isoformat(),
-                           payment_method=None, branch=branch or 'all',
-                           columns=columns, data=data_rows, totals=totals, totals_columns=['Amount'],
-                           totals_colspan=1, payment_totals=None)
+
+    # إقرار ضريبي رسمي للطباعة (مواصفات قريبة من نموذج الهيئة)
+    company_name = (getattr(s, 'company_name', None) or 'Company').strip() if s else 'Company'
+    tax_number = (getattr(s, 'tax_number', None) or '').strip() if s else ''
+    address = (getattr(s, 'address', None) or '').strip() if s else ''
+    currency = (getattr(s, 'currency', None) or 'SAR').strip() if s else 'SAR'
+    period_label = f"الربع {quarter} سنة {year}"
+    return render_template(
+        'vat/vat_declaration_print.html',
+        settings=s,
+        company_name=company_name,
+        tax_number=tax_number,
+        address=address,
+        currency=currency,
+        generated_at=get_saudi_now().strftime('%d-%m-%Y %H:%M'),
+        start_date=start_date.strftime('%d-%m-%Y') if hasattr(start_date, 'strftime') else start_date,
+        end_date=end_date.strftime('%d-%m-%Y') if hasattr(end_date, 'strftime') else end_date,
+        period_label=period_label,
+        branch=branch or 'all',
+        vat_rate=vat_rate,
+        sales_total=float(sales_total or 0.0),
+        purchases_total=float(purchases_total or 0.0),
+        expenses_total=float(expenses_total or 0.0),
+        output_vat=float(output_vat or 0.0),
+        input_vat=float(input_vat or 0.0),
+        net_vat=float(net_vat or 0.0),
+    )
 
 # ---------- Financials blueprint ----------
 financials = Blueprint('financials', __name__, url_prefix='/financials')
@@ -4450,52 +4515,44 @@ def income_statement():
     tax = 0.0
     net_profit_after_tax = net_profit_before_tax - tax
 
+    vat_out = vat_in = rev_pi = rev_ct = 0.0
     try:
-        vat_out = float(db.session.query(func.coalesce(func.sum(LedgerEntry.credit - LedgerEntry.debit), 0))
-            .join(Account, LedgerEntry.account_id == Account.id)
-            .filter(Account.code == '2141')
-            .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
+        from models import JournalLine, JournalEntry
+        _base_cred_minus_deb = db.session.query(Account.code, func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0).label('amt')).join(
+            JournalLine, JournalLine.account_id == Account.id
+        ).join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(
+            JournalLine.line_date >= start_date, JournalLine.line_date <= end_date, JournalEntry.status == 'posted'
+        ).group_by(Account.id, Account.code)
+        _by_code_cred = {r.code: float(r.amt or 0) for r in _base_cred_minus_deb.all() if getattr(r, 'code', None)}
+        _base_deb_minus_cred = db.session.query(Account.id, Account.code, func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0).label('amt')).join(
+            JournalLine, JournalLine.account_id == Account.id
+        ).join(JournalEntry, JournalLine.journal_id == JournalEntry.id).filter(
+            JournalLine.line_date >= start_date, JournalLine.line_date <= end_date, JournalEntry.status == 'posted'
+        ).group_by(Account.id, Account.code)
+        _by_code_deb = {r.code: float(r.amt or 0) for r in _base_deb_minus_cred.all() if getattr(r, 'code', None)}
+        vat_out = _by_code_cred.get('2141', 0.0)
+        vat_in = _by_code_deb.get('1170', 0.0)
+        rev_pi = _by_code_cred.get('4112', 0.0)
+        rev_ct = _by_code_cred.get('4111', 0.0)
     except Exception:
-        vat_out = 0.0
-    try:
-        vat_in = float(db.session.query(func.coalesce(func.sum(LedgerEntry.debit - LedgerEntry.credit), 0))
-            .join(Account, LedgerEntry.account_id == Account.id)
-            .filter(Account.code.in_(['1170']))
-            .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
-    except Exception:
-        vat_in = 0.0
-    try:
-        rev_pi = float(db.session.query(func.coalesce(func.sum(LedgerEntry.credit - LedgerEntry.debit), 0))
-            .join(Account, LedgerEntry.account_id == Account.id)
-            .filter(Account.code == '4112')
-            .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
-    except Exception:
-        rev_pi = 0.0
-    try:
-        rev_ct = float(db.session.query(func.coalesce(func.sum(LedgerEntry.credit - LedgerEntry.debit), 0))
-            .join(Account, LedgerEntry.account_id == Account.id)
-            .filter(Account.code == '4111')
-            .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
-    except Exception:
-        rev_ct = 0.0
+        pass
 
     pl_types = ['REVENUE','OTHER_INCOME','EXPENSE','OTHER_EXPENSE','COGS','TAX']
     type_totals = {}
     for t in pl_types:
         try:
-            if t in ['REVENUE','OTHER_INCOME']:
-                amt = float(db.session.query(func.coalesce(func.sum(LedgerEntry.credit - LedgerEntry.debit), 0))
-                    .join(Account, LedgerEntry.account_id == Account.id)
-                    .filter(Account.type == t)
-                    .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
-            else:
-                amt = float(db.session.query(func.coalesce(func.sum(LedgerEntry.debit - LedgerEntry.credit), 0))
-                    .join(Account, LedgerEntry.account_id == Account.id)
-                    .filter(Account.type == t)
-                    .filter(LedgerEntry.date.between(start_date, end_date)).scalar() or 0.0)
+            from models import JournalLine, JournalEntry
+            q = db.session.query(func.coalesce(func.sum(JournalLine.credit - JournalLine.debit), 0) if t in ['REVENUE','OTHER_INCOME'] else func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0)).join(
+                JournalEntry, JournalLine.journal_id == JournalEntry.id
+            ).join(Account, JournalLine.account_id == Account.id).filter(
+                Account.type == t,
+                JournalLine.line_date >= start_date,
+                JournalLine.line_date <= end_date,
+                JournalEntry.status == 'posted'
+            ).scalar() or 0.0
+            type_totals[t] = float(q)
         except Exception:
-            amt = 0.0
-        type_totals[t] = amt
+            type_totals[t] = 0.0
 
 
     data = {
@@ -4650,14 +4707,17 @@ def balance_sheet():
     except Exception:
         asof = get_saudi_now().date()
 
+    from models import JournalLine, JournalEntry
+    from sqlalchemy import or_, and_
     rows = db.session.query(
         Account.code.label('code'),
         Account.name.label('name'),
         Account.type.label('type'),
-        func.coalesce(func.sum(LedgerEntry.debit), 0).label('debit'),
-        func.coalesce(func.sum(LedgerEntry.credit), 0).label('credit'),
-    ).outerjoin(LedgerEntry, LedgerEntry.account_id == Account.id) \
-     .filter((LedgerEntry.date <= asof) | (LedgerEntry.id == None)) \
+        func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
+        func.coalesce(func.sum(JournalLine.credit), 0).label('credit'),
+    ).outerjoin(JournalLine, JournalLine.account_id == Account.id) \
+     .outerjoin(JournalEntry, JournalLine.journal_id == JournalEntry.id) \
+     .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted'))) \
      .group_by(Account.id) \
      .order_by(Account.type.asc(), Account.code.asc()).all()
 
@@ -4720,27 +4780,21 @@ def trial_balance():
         asof = datetime.strptime(d_str, '%Y-%m-%d').date()
     except Exception:
         asof = get_saudi_now().date()
+    from models import JournalLine, JournalEntry
+    from sqlalchemy import or_, and_
     rows = db.session.query(
         Account.code.label('code'),
         Account.name.label('name'),
         Account.type.label('type'),
-        func.coalesce(func.sum(LedgerEntry.debit), 0).label('debit'),
-        func.coalesce(func.sum(LedgerEntry.credit), 0).label('credit'),
-    ).outerjoin(LedgerEntry, LedgerEntry.account_id == Account.id) \
-     .filter((LedgerEntry.date <= asof) | (LedgerEntry.id == None)) \
+        func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
+        func.coalesce(func.sum(JournalLine.credit), 0).label('credit'),
+    ).outerjoin(JournalLine, JournalLine.account_id == Account.id) \
+     .outerjoin(JournalEntry, JournalLine.journal_id == JournalEntry.id) \
+     .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted'))) \
      .group_by(Account.id) \
      .order_by(Account.type.asc(), Account.code.asc()).all()
     if not rows:
-        rev = float(db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)).filter(SalesInvoice.date <= asof).scalar() or 0.0)
-        cgs = float(db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.price_before_tax * PurchaseInvoiceItem.quantity), 0))
-            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id)
-            .filter(PurchaseInvoice.date <= asof).scalar() or 0.0)
-        opex = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0)).filter(ExpenseInvoice.date <= asof).scalar() or 0.0)
-        rows = [
-            type('R', (), {'code': 'REV', 'name': 'Revenue', 'debit': 0.0, 'credit': rev}),
-            type('R', (), {'code': 'COGS', 'name': 'COGS', 'debit': cgs, 'credit': 0.0}),
-            type('R', (), {'code': 'EXP', 'name': 'Operating Expenses', 'debit': opex, 'credit': 0.0}),
-        ]
+        rows = []
     total_debit = float(sum([float(getattr(r, 'debit', 0) or 0) for r in rows]))
     total_credit = float(sum([float(getattr(r, 'credit', 0) or 0) for r in rows]))
     type_totals = {}
@@ -4902,13 +4956,16 @@ def print_trial_balance():
         asof = datetime.strptime(d_str, '%Y-%m-%d').date()
     except Exception:
         asof = get_saudi_now().date()
+    from models import JournalLine, JournalEntry
+    from sqlalchemy import or_, and_
     rows_q = db.session.query(
         Account.code.label('code'),
         Account.name.label('name'),
-        func.coalesce(func.sum(LedgerEntry.debit), 0).label('debit'),
-        func.coalesce(func.sum(LedgerEntry.credit), 0).label('credit'),
-    ).outerjoin(LedgerEntry, LedgerEntry.account_id == Account.id) \
-     .filter((LedgerEntry.date <= asof) | (LedgerEntry.id == None)) \
+        func.coalesce(func.sum(JournalLine.debit), 0).label('debit'),
+        func.coalesce(func.sum(JournalLine.credit), 0).label('credit'),
+    ).outerjoin(JournalLine, JournalLine.account_id == Account.id) \
+     .outerjoin(JournalEntry, JournalLine.journal_id == JournalEntry.id) \
+     .filter(or_(JournalLine.id.is_(None), and_(JournalLine.line_date <= asof, JournalEntry.status == 'posted'))) \
      .group_by(Account.id) \
      .order_by(Account.code.asc()).all()
     rows = []
@@ -4919,17 +4976,6 @@ def print_trial_balance():
             get_account_display_name = lambda code, name: name or code
         for r in rows_q:
             rows.append({'Code': r.code, 'Account': get_account_display_name(r.code, r.name), 'Debit': float(r.debit or 0.0), 'Credit': float(r.credit or 0.0)})
-    else:
-        rev = float(db.session.query(func.coalesce(func.sum(SalesInvoice.total_before_tax), 0)).filter(SalesInvoice.date <= asof).scalar() or 0.0)
-        cgs = float(db.session.query(func.coalesce(func.sum(PurchaseInvoiceItem.price_before_tax * PurchaseInvoiceItem.quantity), 0))
-            .join(PurchaseInvoice, PurchaseInvoiceItem.invoice_id == PurchaseInvoice.id)
-            .filter(PurchaseInvoice.date <= asof).scalar() or 0.0)
-        opex = float(db.session.query(func.coalesce(func.sum(ExpenseInvoice.total_after_tax_discount), 0)).filter(ExpenseInvoice.date <= asof).scalar() or 0.0)
-        rows = [
-            {'Code': 'REV', 'Account': 'Revenue', 'Debit': 0.0, 'Credit': rev},
-            {'Code': 'COGS', 'Account': 'COGS', 'Debit': cgs, 'Credit': 0.0},
-            {'Code': 'EXP', 'Account': 'Operating Expenses', 'Debit': opex, 'Credit': 0.0},
-        ]
     total_debit = float(sum([float(r.get('Debit') or 0.0) for r in rows]))
     total_credit = float(sum([float(r.get('Credit') or 0.0) for r in rows]))
     try:
@@ -5470,6 +5516,7 @@ def api_archive_list():
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @main.route('/archive/open/<invoice_number>', methods=['GET'], endpoint='archive_open')
+@login_required
 def archive_open(invoice_number):
     try:
         meta = kv_get(f"pdf_path:sales:{invoice_number}", {}) or {}
@@ -5481,6 +5528,7 @@ def archive_open(invoice_number):
         return f'Error: {e}', 500
 
 @main.route('/archive', methods=['GET'], endpoint='archive')
+@login_required
 def archive_page():
     try:
         return render_template('archive.html', now=get_saudi_now(), branches=BRANCH_LABELS)
@@ -5488,6 +5536,7 @@ def archive_page():
         return f'Error loading archive: {e}', 500
 
 @main.route('/archive/download', methods=['GET'], endpoint='archive_download')
+@login_required
 def archive_download():
     try:
         import io, zipfile, csv
@@ -5522,6 +5571,11 @@ def archive_download():
         if year and month and day:
             start_date = datetime(year, month, day)
             end_date = start_date + timedelta(days=1) - timedelta(seconds=1)
+        # فقط الفواتير المرتبطة بقيود (مصدر الحقيقة) — لا مجرد PDF مخزن
+        with_journal = db.session.query(JournalEntry.invoice_id).filter(
+            JournalEntry.invoice_type == 'sales',
+            JournalEntry.invoice_id.isnot(None)
+        ).distinct()
         q = db.session.query(
             SalesInvoice.invoice_number,
             SalesInvoice.created_at,
@@ -5529,7 +5583,7 @@ def archive_download():
             SalesInvoice.payment_method,
             SalesInvoice.total_after_tax_discount,
             SalesInvoice.branch
-        ).filter((SalesInvoice.status == 'paid'))
+        ).filter((SalesInvoice.status == 'paid'), SalesInvoice.id.in_(with_journal))
         if branch:
             q = q.filter(SalesInvoice.branch == branch)
         if start_date and end_date:
@@ -5778,6 +5832,7 @@ def _create_sale_journal(inv):
             ln += 1
         if vat_acc and tax_amt > 0:
             db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=vat_acc.id, debit=0.0, credit=round(tax_amt, 2), description=f"VAT Output {inv.invoice_number}", line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+        inv.journal_entry_id = je.id
         db.session.commit()
     except Exception:
         try:
@@ -5877,6 +5932,11 @@ def _create_expense_journal(inv):
         if credit_acc:
             desc_credit = "المخزون" if is_waste else ("صندوق/بنك" if paid_at_creation else "موردون/ذمم دائنة")
             db.session.add(JournalLine(journal_id=je.id, line_no=ln, account_id=credit_acc.id, debit=0.0, credit=total_inc_tax, description=desc_credit, line_date=(getattr(inv,'date',None) or get_saudi_now().date())))
+        try:
+            from services.gl_truth import sync_ledger_from_journal
+            sync_ledger_from_journal(je)
+        except Exception:
+            pass
         db.session.commit()
     except Exception:
         try:
@@ -5906,6 +5966,11 @@ def _create_receipt_journal(date_val, amount, inv_num, ar_code, payment_method, 
         db.session.add(je); db.session.flush()
         db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ca.id, debit=amt, credit=0.0, description=f"Receipt {inv_num}", line_date=date_val))
         db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ar_acc.id, debit=0.0, credit=amt, description=f"Clear AR {inv_num}", line_date=date_val))
+        try:
+            from services.gl_truth import sync_ledger_from_journal
+            sync_ledger_from_journal(je)
+        except Exception:
+            pass
         db.session.commit()
     except Exception:
         try: db.session.rollback()
@@ -5932,6 +5997,11 @@ def _create_supplier_payment_journal(date_val, amount, inv_num, payment_method, 
         db.session.add(je); db.session.flush()
         db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ap_acc.id, debit=amt, credit=0.0, description=f"Pay AP {inv_num}", line_date=date_val))
         db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ca.id, debit=0.0, credit=amt, description=f"Payment {inv_num}", line_date=date_val))
+        try:
+            from services.gl_truth import sync_ledger_from_journal
+            sync_ledger_from_journal(je)
+        except Exception:
+            pass
         db.session.commit()
         fee = float(bank_fee or 0)
         if fee > 0 and ca:
@@ -5946,6 +6016,11 @@ def _create_supplier_payment_journal(date_val, amount, inv_num, payment_method, 
                 db.session.add(fee_je); db.session.flush()
                 db.session.add(JournalLine(journal_id=fee_je.id, line_no=1, account_id=fee_acc.id, debit=fee, credit=0.0, description=f"Bank Fee {inv_num}", line_date=date_val))
                 db.session.add(JournalLine(journal_id=fee_je.id, line_no=2, account_id=ca.id, debit=0.0, credit=fee, description=f"Bank Fee {inv_num}", line_date=date_val))
+                try:
+                    from services.gl_truth import sync_ledger_from_journal
+                    sync_ledger_from_journal(fee_je)
+                except Exception:
+                    pass
                 db.session.commit()
     except Exception:
         try: db.session.rollback()
@@ -5973,6 +6048,11 @@ def _create_supplier_direct_payment_journal(date_val, amount, ref_text, payment_
         db.session.add(je); db.session.flush()
         db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ap_acc.id, debit=amt, credit=0.0, description=ref_text[:500] if ref_text else 'Pay AP', line_date=date_val))
         db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ca.id, debit=0.0, credit=amt, description='Payment', line_date=date_val))
+        try:
+            from services.gl_truth import sync_ledger_from_journal
+            sync_ledger_from_journal(je)
+        except Exception:
+            pass
         db.session.commit()
     except Exception:
         try: db.session.rollback()
@@ -6001,6 +6081,11 @@ def _create_expense_payment_journal(date_val, amount, inv_num, payment_method, l
         db.session.add(je); db.session.flush()
         db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ap_acc.id, debit=amt, credit=0.0, description=f"Pay AP {inv_num}", line_date=date_val))
         db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=ca.id, debit=0.0, credit=amt, description=f"Payment {inv_num}", line_date=date_val))
+        try:
+            from services.gl_truth import sync_ledger_from_journal
+            sync_ledger_from_journal(je)
+        except Exception:
+            pass
         db.session.commit()
     except Exception:
         try: db.session.rollback()
@@ -7648,7 +7733,8 @@ def api_chart_list():
                 'enabled': bool((overrides.get(code) or {}).get('enabled', True)),
                 'parent': parent_code,
                 'balance': 0.0,
-                'notes': ''
+                'notes': '',
+                'system': True,
             })
         for e in extra:
             out.append({
@@ -7658,7 +7744,8 @@ def api_chart_list():
                 'enabled': bool(e.get('enabled', True)),
                 'parent': e.get('parent') or '',
                 'balance': float(e.get('balance') or 0.0),
-                'notes': e.get('notes') or ''
+                'notes': e.get('notes') or '',
+                'system': False,
             })
         try:
             from models import Account
@@ -7675,7 +7762,8 @@ def api_chart_list():
                     'enabled': True,
                     'parent': ({'ASSET':'1000','LIABILITY':'2000','EQUITY':'3000','REVENUE':'4000','EXPENSE':'5000','TAX':'0006','COGS':'5000'}).get((a.type or '').upper(), ''),
                     'balance': 0.0,
-                    'notes': ''
+                    'notes': '',
+                    'system': False,
                 })
         except Exception:
             pass

@@ -3,28 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ _('Payroll Statement') }} — {{ company_name }}</title>
+  <title>{{ _('Payroll Statement') }} — {{ company_name or 'Company' }}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     @page { size: A4; margin: 12mm; }
-    body { font-family: 'Cairo', 'Tajawal', sans-serif; color: #1f2937; }
+    :root { --fg-muted:#666; --border-strong:#333; }
+    body { color: #1f2937; }
     @media print {
-      .no-print { display: none !important; }
+      .no-print,
+      .print-hide,
+      #payroll-filters-block,
+      #ps-filter-form,
+      .d-print-none { display: none !important; visibility: hidden !important; }
       body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .table-ps th, .table-ps td { border-color: #333 !important; }
-      .table-ps thead th { background: #f0f0f0 !important; color: #000 !important; }
+      .table-print th, .table-print td { border-color: #333 !important; }
+      .table-print thead th { background: #e8e8e8 !important; color: #000 !important; }
+      .table-print tfoot td { background: #e8e8e8 !important; font-weight: 700 !important; }
       tr { page-break-inside: avoid; }
+      thead { display: table-header-group; }
+      .report-header { page-break-after: avoid; }
+      .payroll-unified-block { page-break-inside: avoid; }
+      /* إظهار المحتوى الاحترافي فقط: رأس التقرير + الفترة النصية + الجدول */
+      .report-header .chip { display: inline-block !important; visibility: visible !important; }
     }
-    .ps-header { border-bottom: 2px solid #333; padding-bottom: 0.75rem; margin-bottom: 1rem; }
-    .ps-title { font-size: 1.25rem; font-weight: 700; margin: 0; }
-    .ps-meta { font-size: 0.9rem; color: #666; margin-top: 0.25rem; }
+    .report-title { font-weight: 700; margin-bottom: 6px; }
+    .report-header { border-bottom: 2px solid var(--border-strong); margin-bottom: 12px; padding-bottom: 8px; }
+    .header-card { border: 1px solid #ddd; border-radius: 6px; padding: 10px 12px; background: #fff; }
+    .report-logo { height: 50px; max-width: 160px; object-fit: contain; }
+    .chip { display: inline-block; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 0.8rem; margin: 2px 6px 2px 0; background: #f7f7f7; }
+    .monospace-numbers { font-variant-numeric: tabular-nums; }
+    .table-print { font-size: 0.9rem; width: 100%; border-collapse: collapse; }
+    .table-print th, .table-print td { padding: 6px 8px; border: 1px solid #ddd; }
+    .table-print thead th { background: #e8e8e8; font-weight: 600; }
+    .table-print .mono { font-variant-numeric: tabular-nums; }
     .ps-emp { margin-bottom: 1.5rem; }
     .ps-emp-name { font-weight: 700; font-size: 1rem; margin-bottom: 0.5rem; padding: 0.35rem 0.5rem; background: #f5f5f5; border-radius: 6px; }
-    .table-ps { font-size: 0.9rem; width: 100%; border-collapse: collapse; }
-    .table-ps th, .table-ps td { padding: 0.4rem 0.5rem; border: 1px solid #ddd; text-align: right; }
-    .table-ps th { background: #e9ecef; font-weight: 600; }
-    .table-ps .mono { font-variant-numeric: tabular-nums; }
     .st-paid { color: #0d6efd; }
     .st-partial { color: #fd7e14; }
     .st-due { color: #dc3545; }
@@ -33,14 +46,31 @@
 </head>
 <body class="p-4">
 
-  <div class="ps-header">
-    {% include 'partials/report_header.html' %}
-    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mt-2">
-      <div>
-        <h2 class="ps-title mb-1">{{ _('Payroll Statement') }}</h2>
-        <div class="ps-meta">{{ _('Period') }}: {{ period_label }} · {{ generated_at }}</div>
+  <div class="container py-3">
+    <div class="header-card mb-3">
+      <div class="row g-2 align-items-center">
+        <div class="col-auto">
+          {% if show_logo and logo_url %}
+            <img src="{{ logo_url }}" alt="logo" class="report-logo" />
+          {% endif %}
+        </div>
+        <div class="col">
+          <div class="h5 mb-1">{{ company_name or 'Company' }}</div>
+          <div class="small text-muted">VAT: {{ tax_number or '-' }}{% if address %} | {{ address }}{% endif %}</div>
+        </div>
+        <div class="col-auto text-end">
+          <div class="small text-muted">{{ _('Printed') }}: {{ generated_at or '' }}</div>
+          <button type="button" class="btn btn-sm btn-outline-secondary no-print mt-1" onclick="window.print()">{{ _('Print') }}</button>
+        </div>
       </div>
-      <div class="no-print">
+    </div>
+
+    <div class="report-header payroll-unified-block">
+      <h4 class="report-title mb-1">{{ _('Payroll Statement') }} / كشف الرواتب</h4>
+      <div class="mt-1">
+        <span class="chip">{{ _('Period') }}: {{ period_label }} · {{ generated_at or '' }}</span>
+      </div>
+      <div class="no-print print-hide mt-2" id="payroll-filters-block">
         <form method="get" action="{{ url_for('reports.print_payroll') }}" id="ps-filter-form" class="border rounded p-3 mb-2 bg-light">
           <div class="row g-2 align-items-end flex-wrap">
             <div class="col-auto">
@@ -84,13 +114,12 @@
         </form>
       </div>
     </div>
-  </div>
 
-  {# جدول واحد رسمي: اسم الموظف، أساسي، إضافي، غياب، حافز، بدلات، استقطاعات، إجمالي، القسم، التوقيع #}
+  {# تقرير واحد موحد — جدول واحد لجميع الأقسام (admin, hall, kitchen) بدون تقسيم صفحات #}
   {% if payroll_table_rows %}
-  <div class="table-responsive mb-4">
-    <table class="table-ps">
-      <thead>
+  <div class="table-responsive mb-4 payroll-unified-block">
+    <table class="table table-bordered table-sm align-middle table-print">
+      <thead class="table-light">
         <tr>
           <th>{{ _('Employee name') }}</th>
           <th class="text-end mono">{{ _('Basic') }}</th>
@@ -108,18 +137,33 @@
         {% for row in payroll_table_rows %}
         <tr>
           <td>{{ row.name or '—' }}</td>
-          <td class="mono">{{ '{:,.2f}'.format(row.basic or 0) }}</td>
-          <td class="mono">{{ '{:,.2f}'.format(row.extra or 0) }}</td>
-          <td class="mono">{{ '{:,.2f}'.format(row.absence or 0) }}</td>
-          <td class="mono">{{ '{:,.2f}'.format(row.incentive or 0) }}</td>
-          <td class="mono">{{ '{:,.2f}'.format(row.allowances or 0) }}</td>
-          <td class="mono">{{ '{:,.2f}'.format(row.deductions or 0) }}</td>
-          <td class="mono">{{ '{:,.2f}'.format(row.total or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(row.basic or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(row.extra or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(row.absence or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(row.incentive or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(row.allowances or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(row.deductions or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(row.total or 0) }}</td>
           <td>{{ row.department or '—' }}</td>
           <td></td>
         </tr>
         {% endfor %}
       </tbody>
+      {% if payroll_totals %}
+      <tfoot>
+        <tr class="table-secondary">
+          <th class="text-end">{{ _('Total') }}</th>
+          <td class="text-end mono">{{ '{:,.2f}'.format(payroll_totals.basic or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(payroll_totals.extra or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(payroll_totals.absence or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(payroll_totals.incentive or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(payroll_totals.allowances or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(payroll_totals.deductions or 0) }}</td>
+          <td class="text-end mono">{{ '{:,.2f}'.format(payroll_totals.total or 0) }}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+      {% endif %}
     </table>
   </div>
   {% endif %}
@@ -128,8 +172,8 @@
   <div class="ps-emp no-print">
     <div class="ps-emp-name">{{ emp.name or '—' }}</div>
     <div class="table-responsive">
-      <table class="table-ps">
-        <thead>
+      <table class="table table-bordered table-sm table-print">
+        <thead class="table-light">
           <tr>
             <th>{{ _('Month') }}</th>
             <th>{{ _('Basic') }}</th>
@@ -180,6 +224,8 @@
   {% if not employees and not payroll_table_rows %}
   <p class="text-muted">{{ _('No employees or payroll data for the selected period.') }}</p>
   {% endif %}
+
+  </div><!-- .container -->
 
   <script>
     (function() {

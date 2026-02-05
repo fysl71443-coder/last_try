@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% set back_url = url_for('main.dashboard') %}
+{% block title %}{{ _('Fiscal Years') }}{% endblock %}
+{% block content %}
+<div class="container py-4 ops-layout hub-wrap">
+  <div class="ops-header-bar">
+    <span class="ops-icon"><i class="fa-solid fa-calendar-days"></i></span>
+    <div>
+      <h1 class="ops-title mb-0">{{ _('Fiscal Years') }}</h1>
+      <span class="ops-subtitle">{{ _('Accounting time control: create, close, and open exceptional periods') }}</span>
+    </div>
+    <div class="ops-actions d-flex flex-wrap gap-2">
+      <a href="{{ url_for('fiscal_years.create') }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-plus me-1"></i>{{ _('Create fiscal year') }}</a>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-house me-1"></i>{{ _('Dashboard') }}</a>
+    </div>
+  </div>
+
+  <div class="screen-section">
+    <div class="screen-section-title">{{ _('Years list') }}</div>
+    <div class="screen-section-body">
+      <div class="table-responsive screen-table-wrap">
+        <table class="table screen-table mb-0">
+          <thead>
+            <tr>
+              <th>{{ _('Year') }}</th>
+              <th>{{ _('Start') }}</th>
+              <th>{{ _('End') }}</th>
+              <th>{{ _('Status') }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fy in years %}
+            <tr>
+              <td><strong>{{ fy.year }}</strong></td>
+              <td>{{ fy.start_date.strftime('%Y-%m-%d') }}</td>
+              <td>{{ fy.end_date.strftime('%Y-%m-%d') }}</td>
+              <td>
+                {% if fy.status == 'open' %}
+                <span class="badge bg-success">🟢 {{ _('Open') }}</span>
+                {% elif fy.status == 'closed' %}
+                <span class="badge bg-secondary">🔒 {{ _('Closed') }}</span>
+                {% else %}
+                <span class="badge bg-warning text-dark">⚠ {{ _('Partial') }} {% if fy.closed_until %}({{ _('until') }} {{ fy.closed_until.strftime('%Y-%m-%d') }}){% endif %}</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{{ url_for('fiscal_years.detail', id=fy.id) }}" class="btn btn-sm btn-outline-primary">{{ _('Details') }}</a>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-4">{{ _('No fiscal years yet. Create one to start.') }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-light border mt-3 small">
+    <strong>{{ _('Note') }}:</strong> {{ _('Closing a year prevents new invoices and journal entries for that period. Reports and viewing remain allowed. Any exceptional period opening is fully audited.') }}
+  </div>
+</div>
+{% endblock %}

@@ -973,3 +973,90 @@ class JournalAudit(db.Model):
     ts = db.Column(db.DateTime, default=get_saudi_now)
     before_json = db.Column(db.Text, nullable=True)
     after_json = db.Column(db.Text, nullable=True)
+
+
+# ---- السنوات المالية (Fiscal Years) ----
+class FiscalYear(db.Model):
+    """سنة مالية: الحارس الأعلى للنظام — منع فواتير/قيود بعد الإغلاق، فتح فترات استثنائية."""
+    __tablename__ = 'fiscal_years'
+    id = db.Column(db.Integer, primary_key=True)
+    year = db.Column(db.Integer, nullable=False, index=True)  # 2024, 2025
+    year_name = db.Column(db.String(50), nullable=True, index=True)  # اسم السنة، مثلاً "2024-2025"
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(20), default='open', nullable=False, index=True)  # open | closed | partial | locked
+    closed_until = db.Column(db.Date, nullable=True)  # عند partial: مقفل حتى هذا التاريخ
+    closed_at = db.Column(db.DateTime, nullable=True)  # وقت الإغلاق
+    closed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # من أغلق
+    reopened_at = db.Column(db.DateTime, nullable=True)  # آخر إعادة فتح (لتمييز القيود بعد إعادة الفتح)
+    reopened_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # من أعاد الفتح
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+    updated_at = db.Column(db.DateTime, default=get_saudi_now, onupdate=get_saudi_now)
+
+    def __repr__(self):
+        return f'<FiscalYear {self.year} {self.status}>'
+
+
+class FiscalYearExceptionalPeriod(db.Model):
+    """فترة استثنائية مفتوحة ضمن سنة مغلقة (استيراد قيود / تصحيح أخطاء) — مع سجل تدقيق إلزامي."""
+    __tablename__ = 'fiscal_year_exceptional_periods'
+    id = db.Column(db.Integer, primary_key=True)
+    fiscal_year_id = db.Column(db.Integer, db.ForeignKey('fiscal_years.id'), nullable=False, index=True)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    reason = db.Column(db.String(500), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+
+    fiscal_year = db.relationship('FiscalYear', backref='exceptional_periods')
+
+
+class FiscalYearAuditLog(db.Model):
+    """سجل تدقيق لكل عملية على السنة المالية (إنشاء، إغلاق، فتح استثنائي، استيراد قيود)."""
+    __tablename__ = 'fiscal_year_audit_log'
+    id = db.Column(db.Integer, primary_key=True)
+    fiscal_year_id = db.Column(db.Integer, db.ForeignKey('fiscal_years.id'), nullable=False, index=True)
+    action = db.Column(db.String(50), nullable=False)  # create, close, partial_close, open_exceptional, lock, import_approve
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    details_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=get_saudi_now)
+
+    fiscal_year = db.relationship('FiscalYear', backref='audit_logs')
+
+
+class AuditFinding(db.Model):
+    """ملاحظة تدقيق محاسبي — مرتبطة بقيد أو بسنة مالية، لتاريخ تدقيق وتقرير."""
+    __tablename__ = 'audit_findings'
+    id = db.Column(db.Integer, primary_key=True)
+    fiscal_year_id = db.Column(db.Integer, db.ForeignKey('fiscal_years.id'), nullable=True, index=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entries.id'), nullable=True, index=True)
+    entry_number = db.Column(db.String(80), nullable=True)
+    issue_type_ar = db.Column(db.String(100), nullable=False)
+    place_ar = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    difference_details = db.Column(db.Text, nullable=True)
+    root_cause_ar = db.Column(db.String(150), nullable=True)
+    severity = db.Column(db.String(20), nullable=False, default='medium')  # high, medium, low
+    correction_method = db.Column(db.String(300), nullable=True)
+    entry_date = db.Column(db.Date, nullable=True)
+    audit_run_from = db.Column(db.Date, nullable=True)
+    audit_run_to = db.Column(db.Date, nullable=True)
+    audit_run_at = db.Column(db.DateTime, default=get_saudi_now)
+
+    fiscal_year = db.relationship('FiscalYear', backref='audit_findings')
+    journal_entry = db.relationship('JournalEntry', backref='audit_findings')
+
+
+class AuditSnapshot(db.Model):
+    """كاش لقطة تدقيق — شاشة السنة تقرأ سطراً واحداً بدل تشغيل المحرك."""
+    __tablename__ = 'audit_snapshots'
+    id = db.Column(db.Integer, primary_key=True)
+    fiscal_year_id = db.Column(db.Integer, db.ForeignKey('fiscal_years.id'), nullable=False, index=True)
+    total = db.Column(db.Integer, nullable=False, default=0)
+    high = db.Column(db.Integer, nullable=False, default=0)
+    medium = db.Column(db.Integer, nullable=False, default=0)
+    low = db.Column(db.Integer, nullable=False, default=0)
+    run_at = db.Column(db.DateTime, nullable=False, default=get_saudi_now, index=True)
+
+    fiscal_year = db.relationship('FiscalYear', backref='audit_snapshots')

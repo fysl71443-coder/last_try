@@ -336,29 +336,7 @@ def supplier_statement(sid=None):
             paid = round(float(leg), 2)
         paid_per_inv[inv.id] = paid
 
-    # تخصيص مدفوعات القيود القديمة (سطر 2111 مدين بدون invoice_id) للفواتير FIFO
-    if acc_2111:
-        unalloc = db.session.query(func.coalesce(func.sum(JournalLine.debit), 0)).join(
-            JournalEntry, JournalLine.journal_id == JournalEntry.id
-        ).filter(
-            JournalLine.account_id == acc_2111.id,
-            JournalLine.debit > 0,
-            JournalLine.invoice_id.is_(None),
-            JournalEntry.status == 'posted'
-        ).scalar() or 0
-        unalloc = round(float(unalloc), 2)
-        if unalloc >= 0.01:
-            for inv in sorted(invs, key=lambda i: (i.date or __import__('datetime').date(1900, 1, 1), i.id)):
-                if unalloc <= 0:
-                    break
-                tot = float(inv.total_after_tax_discount or 0)
-                already = paid_per_inv.get(inv.id, 0)
-                rem_inv = max(0.0, tot - already)
-                if rem_inv < 0.01:
-                    continue
-                alloc = min(unalloc, rem_inv)
-                paid_per_inv[inv.id] = already + alloc
-                unalloc -= alloc
+    # لا نخصص قيوداً قديمة (2111 بدون invoice_id) لهذا المورد — قد تكون لمورد آخر وتُظهر مدفوعات زائدة.
 
     invoices_ctx = []
     total_inv = 0.0
@@ -369,58 +347,37 @@ def supplier_statement(sid=None):
         rem = max(0.0, tot - paid)
         total_inv += tot
         total_paid += paid
+        # الحالة من الرصيد الفعلي: مدفوع كامل = paid، جزء = partial، لا شيء = unpaid
+        status = 'paid' if rem <= 0.01 else ('partial' if paid > 0 else 'unpaid')
         invoices_ctx.append({
             'invoice_number': inv.invoice_number,
             'date': inv.date,
             'total': tot,
             'paid': paid,
             'remaining': rem,
-            'status': inv.status or ('paid' if rem <= 0.01 else ('partial' if paid > 0 else 'unpaid'))
+            'status': status,
         })
 
     inv_ids = [int(inv.id) for inv in invs]
-    # قائمة الدفعات: كل دفعة (سطر قيد) منفصلة — من القيود المنشورة (سطور 2111 مرتبطة بفاتورة) + قيود 2111 مدين بدون invoice_id (قديمة)
+    # قائمة الدفعات: فقط الدفعات المرتبطة بفواتير هذا المورد (لا قيود قديمة غير مربوطة)
     pay_rows = []
-    if acc_2111:
-        je_ids = []
-        if inv_ids:
-            je_ids = db.session.query(JournalEntry.id).join(
-                JournalLine, JournalLine.journal_id == JournalEntry.id
-            ).filter(
-                JournalLine.account_id == acc_2111.id,
-                JournalLine.invoice_id.in_(inv_ids),
-                JournalLine.invoice_type == 'purchase',
-                JournalEntry.status == 'posted'
-            ).distinct().all()
-            je_ids = [r[0] for r in je_ids]
-        # قيود سداد قديمة: سطر 2111 مدين بدون invoice_id — ندمجها مع الجديدة لظهور كل الدفعات
-        je_ids_legacy = db.session.query(JournalEntry.id).join(
-            JournalLine, JournalLine.journal_id == JournalEntry.id
+    if acc_2111 and inv_ids:
+        lines = db.session.query(JournalLine, JournalEntry).join(
+            JournalEntry, JournalLine.journal_id == JournalEntry.id
         ).filter(
             JournalLine.account_id == acc_2111.id,
+            JournalLine.invoice_id.in_(inv_ids),
+            JournalLine.invoice_type == 'purchase',
             JournalLine.debit > 0,
-            JournalLine.invoice_id.is_(None),
             JournalEntry.status == 'posted'
-        ).distinct().all()
-        je_ids_legacy = [r[0] for r in je_ids_legacy]
-        all_je_ids = list(set(je_ids) | set(je_ids_legacy))
-        if all_je_ids:
-            # صف واحد لكل سطر قيد (دفعة) مع التوقيت الفعلي إن وُجد
-            lines = db.session.query(JournalLine, JournalEntry).join(
-                JournalEntry, JournalLine.journal_id == JournalEntry.id
-            ).filter(
-                JournalLine.journal_id.in_(all_je_ids),
-                JournalLine.account_id == acc_2111.id,
-                JournalLine.debit > 0
-            ).order_by(JournalEntry.date.asc(), JournalEntry.id.asc(), JournalLine.id.asc()).all()
-            for jl, je in lines:
-                dt = getattr(je, 'created_at', None) or getattr(je, 'date', None)
-                pay_rows.append((
-                    dt,
-                    float(jl.debit or 0),
-                    getattr(je, 'payment_method', None) or ''
-                ))
-    # استكمال من جدول الدفعات للقيود القديمة
+        ).order_by(JournalEntry.date.asc(), JournalEntry.id.asc(), JournalLine.id.asc()).all()
+        for jl, je in lines:
+            dt = getattr(je, 'created_at', None) or getattr(je, 'date', None)
+            pay_rows.append((
+                dt,
+                float(jl.debit or 0),
+                getattr(je, 'payment_method', None) or ''
+            ))
     if not pay_rows and inv_ids:
         leg_pays = db.session.query(Payment.payment_date, Payment.amount_paid, Payment.payment_method).filter(
             Payment.invoice_type == 'purchase',

@@ -106,12 +106,8 @@ document.getElementById('btnNewRep')?.addEventListener('click', function(){
   const m=(document.getElementById('fMonth').value||'').trim();
   let y=(new Date()).getFullYear(); let mo=(new Date()).getMonth()+1;
   if(/^\d{4}-\d{2}$/.test(m)){ const parts=m.split('-'); y=parseInt(parts[0],10)||y; mo=parseInt(parts[1],10)||mo; }
-  const u=new URL('/reports/payroll/report', location.origin);
-  u.searchParams.set('year_from', String(y));
-  u.searchParams.set('month_from', String(mo));
-  u.searchParams.set('year_to', String(y));
-  u.searchParams.set('month_to', String(mo));
-  u.searchParams.set('print', '1');
+  const u=new URL('{{ url_for("reports.print_payroll") }}', location.origin);
+  u.searchParams.set('month', String(y) + '-' + String(mo).padStart(2, '0'));
   window.open(u.toString(), '_blank');
 });
 </script>

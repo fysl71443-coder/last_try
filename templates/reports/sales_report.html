@@ -3,27 +3,56 @@
 {% block head %}
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  .sr-wrap { font-family: 'Cairo', 'Tajawal', sans-serif; --sr-fg: #1f2937; --sr-muted: #6b7280; --sr-primary: #1565c0; --sr-border: #e5e7eb; --sr-bg: #f8fafc; }
-  .sr-title-wrap { text-align: center; margin: 1rem 0 1rem; }
-  .sr-title-wrap hr { margin: 0.5rem 0; border-color: var(--sr-primary); opacity: 0.4; }
-  .sr-title { font-size: 1.35rem; font-weight: 700; color: var(--sr-primary); margin: 0; }
-  .sr-meta { font-size: 0.9rem; color: var(--sr-muted); display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; }
-  .sr-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem; }
-  .sr-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
-  .sr-card { background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); color: #fff; border-radius: 10px; padding: 0.85rem 1rem; text-align: center; }
-  .sr-card .label { font-size: 0.8rem; opacity: 0.9; margin-bottom: 0.25rem; }
-  .sr-card .value { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .sr-table-wrap { overflow-x: auto; max-height: 70vh; overflow-y: auto; border: 1px solid var(--sr-border); border-radius: 10px; }
+  .sr-wrap { font-family: 'Cairo', 'Tajawal', sans-serif; --sr-fg: #1e293b; --sr-muted: #64748b; --sr-primary: #0f766e; --sr-border: #e2e8f0; --sr-bg: #f8fafc; --sr-card-bg: #fff; --sr-radius: 12px; --sr-shadow: 0 1px 3px rgba(0,0,0,.08); --sr-shadow-lg: 0 4px 12px rgba(0,0,0,.08); }
+  .sr-page-title { font-size: 1.1rem; font-weight: 600; color: var(--sr-fg); margin: 0; }
+  .sr-page-sub { font-size: 0.85rem; color: var(--sr-muted); margin-top: 2px; }
+
+  /* بطاقة الفلتر */
+  .sr-filter-card { background: var(--sr-card-bg); border: 1px solid var(--sr-border); border-radius: var(--sr-radius); padding: 1rem 1.25rem; margin-bottom: 1.25rem; box-shadow: var(--sr-shadow); }
+  .sr-filter-card .card-title { font-size: 0.9rem; font-weight: 600; color: var(--sr-fg); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+  .sr-filter-card .card-title i { color: var(--sr-primary); }
+  .sr-filter-card .form-label { font-size: 0.8rem; font-weight: 500; color: var(--sr-muted); margin-bottom: 0.25rem; }
+  .sr-filter-card .form-control, .sr-filter-card .form-select { font-size: 0.9rem; border-radius: 8px; }
+  .sr-filter-note { font-size: 0.8rem; color: var(--sr-muted); margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--sr-border); }
+
+  /* شريط الفترة المعروضة */
+  .sr-period-bar { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; font-size: 0.9rem; color: var(--sr-muted); margin-bottom: 1rem; }
+  .sr-period-bar span { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .sr-period-bar strong { color: var(--sr-fg); font-weight: 600; }
+
+  /* بطاقات المؤشرات (KPI) */
+  .sr-kpi-section { margin-bottom: 1.5rem; }
+  .sr-kpi-section-title { font-size: 0.9rem; font-weight: 600; color: var(--sr-fg); margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--sr-border); }
+  .sr-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+  .sr-card { background: var(--sr-card-bg); border: 1px solid var(--sr-border); border-radius: var(--sr-radius); padding: 1rem 1.1rem; box-shadow: var(--sr-shadow); transition: box-shadow .2s, border-color .2s; }
+  .sr-card:hover { box-shadow: var(--sr-shadow-lg); border-color: #cbd5e1; }
+  .sr-card .label { font-size: 0.8rem; color: var(--sr-muted); margin-bottom: 0.35rem; line-height: 1.3; }
+  .sr-card .value { font-size: 1.35rem; font-weight: 700; color: var(--sr-fg); font-variant-numeric: tabular-nums; }
+  .sr-card.sr-card-primary { border-color: rgba(15, 118, 110, 0.35); background: linear-gradient(135deg, #f0fdfa 0%, #fff 100%); }
+  .sr-card.sr-card-primary .value { color: #0f766e; }
+  .sr-card.sr-card-accent { border-right: 4px solid var(--sr-primary); }
+
+  /* بطاقة الجدول */
+  .sr-table-card { background: var(--sr-card-bg); border: 1px solid var(--sr-border); border-radius: var(--sr-radius); overflow: hidden; box-shadow: var(--sr-shadow); margin-bottom: 1.5rem; }
+  .sr-table-card-header { padding: 0.85rem 1.25rem; background: var(--sr-bg); border-bottom: 1px solid var(--sr-border); font-size: 0.95rem; font-weight: 600; color: var(--sr-fg); display: flex; align-items: center; gap: 0.5rem; }
+  .sr-table-card-header i { color: var(--sr-primary); }
+  .sr-table-wrap { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
   .sr-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-  .sr-table th { position: sticky; top: 0; z-index: 1; background: var(--sr-primary); color: #fff; padding: 0.6rem 0.75rem; text-align: right; font-weight: 600; box-shadow: 0 1px 0 rgba(0,0,0,0.1); }
-  .sr-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--sr-border); text-align: right; }
+  .sr-table th { position: sticky; top: 0; z-index: 1; background: #f1f5f9; color: var(--sr-fg); padding: 0.65rem 1rem; text-align: right; font-weight: 600; font-size: 0.8rem; border-bottom: 1px solid var(--sr-border); }
+  .sr-table td { padding: 0.6rem 1rem; border-bottom: 1px solid var(--sr-border); text-align: right; color: var(--sr-fg); }
   .sr-table tbody tr:hover { background: var(--sr-bg); }
-  .sr-table tfoot tr { background: #e3f2fd; font-weight: 700; border-top: 2px solid var(--sr-primary); }
-  .sr-table tfoot td { padding: 0.6rem 0.75rem; }
-  /* طباعة موحدة: لون خط واحد وتصميم واضح */
+  .sr-table tfoot tr { background: #f1f5f9; font-weight: 700; border-top: 2px solid var(--sr-border); }
+  .sr-table tfoot td { padding: 0.75rem 1rem; color: var(--sr-fg); }
+  .sr-table .mono { font-variant-numeric: tabular-nums; }
+
+  /* أزرار */
+  .sr-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+  .sr-title-print { display: none; }
+
+  /* طباعة */
   @media print {
     .no-print { display: none !important; }
-    .sr-actions { display: none !important; }
+    .sr-actions, .sr-filter-card { display: none !important; }
     body { background: #fff !important; color: #000 !important; }
     .sr-wrap, .sr-wrap * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .navbar { display: none !important; }
@@ -32,13 +61,16 @@
     .report-print-header .text-muted { color: #333 !important; }
     .report-print-header { border-bottom-color: #333 !important; padding-bottom: 0.75rem; margin-bottom: 1rem; }
     .sr-title-print { display: block !important; text-align: center; font-size: 1.25rem; font-weight: 700; margin: 1rem 0 0.75rem; padding-bottom: 0.5rem; border-bottom: 2px solid #000; color: #000 !important; }
-    .sr-meta { color: #000 !important; margin-bottom: 1rem; }
-    .sr-cards { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
-    .sr-card { background: #fff !important; color: #000 !important; border: 1px solid #333 !important; box-shadow: none !important; }
-    .sr-card .label { color: #333 !important; opacity: 1; }
+    .sr-period-bar { color: #000 !important; margin-bottom: 1rem; }
+    .sr-period-bar strong { color: #000 !important; }
+    .sr-kpi-section-title { color: #000 !important; border-bottom-color: #333 !important; }
+    .sr-cards { grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+    .sr-card { background: #fff !important; border: 1px solid #333 !important; box-shadow: none !important; }
+    .sr-card .label { color: #333 !important; }
     .sr-card .value { color: #000 !important; }
-    .sr-table-wrap { border: 1px solid #333 !important; }
-    .sr-table th { background: #333 !important; color: #fff !important; border: 1px solid #333 !important; }
+    .sr-table-card { border: 1px solid #333 !important; box-shadow: none !important; }
+    .sr-table-card-header { background: #e8e8e8 !important; color: #000 !important; border-bottom-color: #333 !important; }
+    .sr-table th { background: #e8e8e8 !important; color: #000 !important; border: 1px solid #333 !important; }
     .sr-table td { border: 1px solid #333 !important; color: #000 !important; }
     .sr-table tfoot tr { background: #e8e8e8 !important; color: #000 !important; border-top: 2px solid #333 !important; }
     .sr-table tfoot td { color: #000 !important; border: 1px solid #333 !important; }
@@ -65,28 +97,33 @@
   </div>
   {% include 'partials/report_header.html' %}
 
-  <div class="sr-title-print" style="display: none;">{{ _('Sales Report') }}</div>
+  <div class="sr-title-print">{{ _('Sales Report') }}</div>
 
-  <div class="sr-title-wrap no-print">
-    <hr>
-    <h2 class="sr-title">{{ _('Sales Report') }}</h2>
-    <hr>
-  </div>
-
-  <div class="sr-meta">
-    <span>{{ _('From') }}: {{ start_date.strftime('%Y/%m/%d') if start_date else '—' }}</span>
-    <span>{{ _('To') }}: {{ end_date.strftime('%Y/%m/%d') if end_date else '—' }}</span>
-    <span>{{ _('Branch') }}: {{ branch_label }}</span>
-  </div>
-
-  <div class="no-print mb-3">
-    <form method="get" action="{{ url_for('reports.reports_sales') }}" class="row g-2 align-items-end">
-      <div class="col-auto"><label class="form-label small">{{ _('From') }}</label><input type="date" name="from" class="form-control form-control-sm" value="{{ start_date.isoformat() if start_date else '' }}"></div>
-      <div class="col-auto"><label class="form-label small">{{ _('To') }}</label><input type="date" name="to" class="form-control form-control-sm" value="{{ end_date.isoformat() if end_date else '' }}"></div>
-      <div class="col-auto"><label class="form-label small">{{ _('Branch') }}</label><select name="branch" class="form-select form-select-sm"><option value="all" {{ 'selected' if branch == 'all' or not branch else '' }}>{{ _('All') }}</option><option value="china_town" {{ 'selected' if branch == 'china_town' else '' }}>China Town</option><option value="place_india" {{ 'selected' if branch == 'place_india' else '' }}>Place India</option></select></div>
-      <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</button></div>
+  <!-- فلتر الفترة والفرع -->
+  <div class="sr-filter-card no-print">
+    <div class="card-title"><i class="fa-solid fa-filter"></i> {{ _('Filter') }}</div>
+    <form method="get" action="{{ url_for('reports.reports_sales') }}" class="row g-3 align-items-end">
+      <div class="col-auto">
+        <label class="form-label">{{ _('From') }}</label>
+        <input type="date" name="from" class="form-control form-control-sm" value="{{ start_date.isoformat() if start_date else '' }}" style="min-width: 150px;">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">{{ _('To') }}</label>
+        <input type="date" name="to" class="form-control form-control-sm" value="{{ end_date.isoformat() if end_date else '' }}" style="min-width: 150px;">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">{{ _('Branch') }}</label>
+        <select name="branch" class="form-select form-select-sm" style="min-width: 140px;">
+          <option value="all" {{ 'selected' if branch == 'all' or not branch else '' }}>{{ _('All') }}</option>
+          <option value="china_town" {{ 'selected' if branch == 'china_town' else '' }}>China Town</option>
+          <option value="place_india" {{ 'selected' if branch == 'place_india' else '' }}>Place India</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-eye me-1"></i>{{ _('View') }}</button>
+      </div>
     </form>
-    <p class="small text-muted mt-1 mb-0">{{ _('Sales day: 10 AM → 2 AM next day.') }}</p>
+    <p class="sr-filter-note mb-0"><i class="fa-solid fa-clock me-1"></i>{{ _('Sales day: 10 AM → 2 AM next day.') }}</p>
   </div>
 
   <div class="sr-actions no-print">
@@ -94,75 +131,91 @@
     <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="fa-solid fa-print me-1"></i>{{ _('Print') }}</button>
   </div>
 
-  <div class="sr-cards">
-    <div class="sr-card">
-      <div class="label">{{ _('Total Cash') }} SAR</div>
-      <div class="value">{{ '{:,.2f}'.format(data.total_cash or 0) }}</div>
-    </div>
-    <div class="sr-card">
-      <div class="label">{{ _('Total Card') }} SAR</div>
-      <div class="value">{{ '{:,.2f}'.format(data.total_card or 0) }}</div>
-    </div>
-    <div class="sr-card">
-      <div class="label">{{ _('Total Credit') }} SAR</div>
-      <div class="value">{{ '{:,.2f}'.format(data.total_credit or 0) }}</div>
-    </div>
-    <div class="sr-card">
-      <div class="label">{{ _('Invoices count') }}</div>
-      <div class="value">{{ data.count or 0 }}</div>
-    </div>
-    <div class="sr-card">
-      <div class="label">{{ _('Total before tax') }}</div>
-      <div class="value">{{ '{:,.2f}'.format(data.total_before_tax or 0) }}</div>
-    </div>
-    <div class="sr-card">
-      <div class="label">{{ _('Discount granted') }} SAR</div>
-      <div class="value">{{ '{:,.2f}'.format(data.total_discount or 0) }}</div>
-    </div>
-    <div class="sr-card">
-      <div class="label">{{ _('Total (after VAT)') }}</div>
-      <div class="value">{{ '{:,.2f}'.format(data.total_after or 0) }}</div>
+  <!-- شريط الفترة المعروضة -->
+  <div class="sr-period-bar">
+    <span><strong>{{ _('From') }}:</strong> {{ start_date.strftime('%Y/%m/%d') if start_date else '—' }}</span>
+    <span><strong>{{ _('To') }}:</strong> {{ end_date.strftime('%Y/%m/%d') if end_date else '—' }}</span>
+    <span><strong>{{ _('Branch') }}:</strong> {{ branch_label }}</span>
+  </div>
+
+  <!-- بطاقات المؤشرات -->
+  <div class="sr-kpi-section">
+    <div class="sr-kpi-section-title"><i class="fa-solid fa-chart-pie me-1"></i> {{ _('Summary') }}</div>
+    <div class="sr-cards">
+      <div class="sr-card sr-card-primary">
+        <div class="label">{{ _('Total Cash') }} SAR</div>
+        <div class="value mono">{{ '{:,.2f}'.format(data.total_cash or 0) }}</div>
+      </div>
+      <div class="sr-card sr-card-primary">
+        <div class="label">{{ _('Total Card') }} SAR</div>
+        <div class="value mono">{{ '{:,.2f}'.format(data.total_card or 0) }}</div>
+      </div>
+      <div class="sr-card sr-card-primary">
+        <div class="label">{{ _('Total Credit') }} SAR</div>
+        <div class="value mono">{{ '{:,.2f}'.format(data.total_credit or 0) }}</div>
+      </div>
+      <div class="sr-card sr-card-accent">
+        <div class="label">{{ _('Invoices count') }}</div>
+        <div class="value mono">{{ data.count or 0 }}</div>
+      </div>
+      <div class="sr-card">
+        <div class="label">{{ _('Total before tax') }}</div>
+        <div class="value mono">{{ '{:,.2f}'.format(data.total_before_tax or 0) }}</div>
+      </div>
+      <div class="sr-card">
+        <div class="label">{{ _('Discount granted') }} SAR</div>
+        <div class="value mono">{{ '{:,.2f}'.format(data.total_discount or 0) }}</div>
+      </div>
+      <div class="sr-card sr-card-accent">
+        <div class="label">{{ _('Total (after VAT)') }}</div>
+        <div class="value mono">{{ '{:,.2f}'.format(data.total_after or 0) }}</div>
+      </div>
     </div>
   </div>
 
-  <div class="sr-table-wrap">
-    <table class="sr-table">
-      <thead>
-        <tr>
-          <th>{{ _('Branch') }}</th>
-          <th>{{ _('Amount') }}</th>
-          <th>{{ _('VAT') }}</th>
-          <th>{{ _('Discount') }}</th>
-          <th>{{ _('Total') }}</th>
-          <th>{{ _('Payment method') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in (data.rows or []) %}
-        <tr>
-          <td>{{ r.branch }}</td>
-          <td>{{ '{:,.2f}'.format(r.amount or 0) }}</td>
-          <td>{{ '{:,.2f}'.format(r.tax or 0) }}</td>
-          <td>{{ '{:,.2f}'.format(r.discount or 0) }}</td>
-          <td>{{ '{:,.2f}'.format(r.total or 0) }}</td>
-          <td>{{ r.payment_method_display | default(r.payment_method) }}</td>
-        </tr>
-        {% endfor %}
-        {% if not (data.rows or []) %}
-        <tr><td colspan="6" class="text-center text-muted py-4">{{ _('No data for the selected period.') }}</td></tr>
-        {% endif %}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td>{{ data.count or 0 }}</td>
-          <td>{{ '{:,.2f}'.format(data.total_before_tax or 0) }}</td>
-          <td>{{ '{:,.2f}'.format(data.total_tax or 0) }}</td>
-          <td>{{ '{:,.2f}'.format(data.total_discount or 0) }}</td>
-          <td>{{ '{:,.2f}'.format(data.total_after or 0) }}</td>
-          <td>—</td>
-        </tr>
-      </tfoot>
-    </table>
+  <!-- جدول التفاصيل داخل بطاقة -->
+  <div class="sr-table-card">
+    <div class="sr-table-card-header no-print"><i class="fa-solid fa-table-list"></i> {{ _('Details by branch and payment') }}</div>
+    <div class="sr-table-card-header sr-title-print" style="display: none;">{{ _('Details') }}</div>
+    <div class="sr-table-wrap">
+      <table class="sr-table">
+        <thead>
+          <tr>
+            <th>{{ _('Branch') }}</th>
+            <th class="mono">{{ _('Amount') }}</th>
+            <th class="mono">{{ _('VAT') }}</th>
+            <th class="mono">{{ _('Discount') }}</th>
+            <th class="mono">{{ _('Total') }}</th>
+            <th>{{ _('Payment method') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in (data.rows or []) %}
+          <tr>
+            <td>{{ r.branch }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(r.amount or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(r.tax or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(r.discount or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(r.total or 0) }}</td>
+            <td>{{ r.payment_method_display | default(r.payment_method) }}</td>
+          </tr>
+          {% endfor %}
+          {% if not (data.rows or []) %}
+          <tr><td colspan="6" class="text-center text-muted py-5">{{ _('No data for the selected period.') }}</td></tr>
+          {% endif %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>{{ _('Total') }} ({{ data.count or 0 }})</td>
+            <td class="mono">{{ '{:,.2f}'.format(data.total_before_tax or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(data.total_tax or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(data.total_discount or 0) }}</td>
+            <td class="mono">{{ '{:,.2f}'.format(data.total_after or 0) }}</td>
+            <td>—</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
   </div>
 </div>
 {% endblock %}

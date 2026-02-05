@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>تقرير التدقيق المحاسبي — {{ report.meta.entity_name or 'النظام المحاسبي' }}</title>
+  {% include 'partials/accounting_print_styles.html' %}
+  <style>
+    .audit-print-cover { text-align: center; padding: 2rem 1.5rem; background: var(--acct-head-bg); border: 1px solid var(--acct-border); border-bottom: 2px solid var(--acct-primary); margin-bottom: 1rem; border-radius: 6px; }
+    .audit-print-cover h1 { margin: 0 0 0.25rem 0; font-size: 22px; font-weight: 700; color: var(--acct-primary-dark); }
+    .audit-print-cover .sub { font-size: 14px; color: var(--acct-muted); }
+    .audit-print-cover .meta { margin-top: 1rem; font-size: 13px; color: var(--acct-muted); }
+    .audit-print-summary { padding: 1rem 1.25rem; background: #fafafa; border: 1px solid var(--acct-border); margin-bottom: 1rem; border-radius: 6px; font-size: 13px; }
+    .audit-print-summary h2 { margin: 0 0 0.5rem 0; font-size: 15px; font-weight: 600; color: var(--acct-primary-dark); }
+    .audit-print-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 0.5rem; border: 1px solid var(--acct-border); }
+    .audit-print-table th, .audit-print-table td { padding: 5px 6px; border: 1px solid var(--acct-border-light); text-align: right; }
+    .audit-print-table th { background: var(--acct-thead-bg); font-weight: 600; color: var(--acct-primary-dark); }
+    .audit-print-table tbody tr:nth-child(even) { background: #fafafa; }
+    .audit-print-table .mono { font-variant-numeric: tabular-nums; direction: ltr; }
+    .audit-print-table .sev-high { color: #b91c1c; font-weight: 600; }
+    .audit-print-table .sev-medium { color: #c2410c; }
+    .audit-print-table .sev-low { color: #15803d; }
+    .audit-print-disclaimer { margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border: 1px solid var(--acct-border); border-radius: 6px; font-size: 12px; color: var(--acct-muted); }
+    .audit-print-signature { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed var(--acct-border); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2rem; font-size: 12px; color: var(--acct-muted); }
+    .audit-print-signature .sig-block { min-width: 140px; }
+    .audit-print-signature .sig-line { border-bottom: 1px solid var(--acct-fg); margin-top: 4px; height: 22px; }
+    @media print {
+      .audit-print-cover { break-after: avoid; }
+      .audit-print-table thead { display: table-header-group; }
+      .audit-print-table tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="acct-print-toolbar print-hide no-print">
+    <button type="button" class="acct-print-btn acct-print-btn-primary" onclick="window.print();">طباعة / حفظ PDF</button>
+    <button type="button" class="acct-print-btn acct-print-btn-secondary" onclick="window.close();">إغلاق</button>
+  </div>
+
+  <div class="acct-print-header">
+    <div class="acct-print-company">
+      <h1>{{ company_name or report.meta.entity_name or 'النظام المحاسبي' }}</h1>
+      <small>تقرير التدقيق المحاسبي الشامل</small>
+    </div>
+    <div class="acct-print-report-title">
+      <h2>تقرير التدقيق المحاسبي</h2>
+      <small>Audit Report — تم توليده آلياً بواسطة النظام</small>
+    </div>
+  </div>
+
+  <div class="acct-print-meta">
+    <span>تاريخ التدقيق: {{ report.meta.run_at.strftime('%Y-%m-%d %H:%M') if report.meta.run_at else '-' }}</span>
+    <span>{% if report.meta.from_date or report.meta.to_date %}الفترة: {{ report.meta.from_date or '—' }} إلى {{ report.meta.to_date or '—' }}{% else %}نطاق: كامل البيانات{% endif %}</span>
+  </div>
+
+  <div class="audit-print-summary">
+    <h2>الملخص التنفيذي</h2>
+    <p><strong>إجمالي الملاحظات:</strong> {{ report.summary.total }} — عالية: {{ report.summary.high }} | متوسطة: {{ report.summary.medium }} | منخفضة: {{ report.summary.low }}</p>
+    <p class="mb-0">{% if report.summary.total == 0 %}لم يتم رصد ملاحظات في نطاق الفحص. يُوصى بمراجعة دورية.{% elif report.summary.high > 0 %}معالجة الملاحظات ذات الخطورة العالية أولاً ثم المتوسطة.{% else %}معالجة الملاحظات وفق أولوية الأثر.{% endif %}</p>
+  </div>
+
+  <p style="font-size: 12px; color: var(--acct-muted); margin-bottom: 0.5rem;">جدول الملاحظات التفصيلي — أين الخلل؟ ما القيد المتأثر؟ أين الاختلاف؟ لماذا حدث؟ كيف يُصحّح؟</p>
+  <table class="acct-print-table audit-print-table">
+    <thead>
+      <tr>
+        <th>رقم</th>
+        <th>نوع الخلل</th>
+        <th>مكان الخلل</th>
+        <th>رقم القيد</th>
+        <th>تاريخ القيد</th>
+        <th>وصف الخلل</th>
+        <th>تفاصيل الاختلاف</th>
+        <th>سبب الخطأ</th>
+        <th>درجة الخطورة</th>
+        <th>طريقة التصحيح</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in report.findings %}
+      <tr>
+        <td>{{ f.number }}</td>
+        <td>{{ f.issue_type_ar }}</td>
+        <td>{{ f.place_ar }}</td>
+        <td class="mono">{{ f.ref_number }}</td>
+        <td>{{ f.entry_date }}</td>
+        <td>{{ f.description }}</td>
+        <td class="mono">{{ f.difference_details }}</td>
+        <td>{{ f.root_cause_ar }}</td>
+        <td><span class="sev-{{ f.severity }}">{{ f.severity_ar }}</span></td>
+        <td>{{ f.correction_method }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" style="text-align: center;">لا توجد ملاحظات.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="audit-print-disclaimer">
+    <strong>خاتمة قانونية:</strong> هذا التقرير تم توليده آلياً بناءً على البيانات المدخلة في النظام. وهو لا يُغني عن مراجعة محاسب قانوني معتمد ولا يُمثّل رأياً قانونياً أو ضريبياً. يُوصى بالاحتفاظ بنسخة مطبوعة أو PDF مع سجلات الفترة.
+  </div>
+
+  <div class="audit-print-signature">
+    <div class="sig-block"><span>المدقق / المراجع</span><div class="sig-line"></div></div>
+    <div class="sig-block"><span>التاريخ والختم</span><div class="sig-line"></div></div>
+  </div>
+
+  <div class="acct-print-footer acct-print-pageno">صفحة 1 — {{ report.meta.run_at.strftime('%Y-%m-%d %H:%M') if report.meta.run_at else '' }}</div>
+
+</body>
+</html>

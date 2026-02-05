@@ -4,11 +4,13 @@
 import os
 import json
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
 from flask_login import login_required, current_user
 from sqlalchemy.orm import selectinload, joinedload
 from extensions import db, csrf
 from models import Account, LedgerEntry, Employee, JournalEntry, JournalLine, JournalAudit, get_saudi_now
+from services.gl_truth import is_period_open_for_date, can_mutate_journal, validate_journal_gates
+from services.account_validation import is_leaf_account
 
 def _journal_with_lines_options(q):
     """Eager-load lines and account to avoid N+1 in print/export/templates."""
@@ -86,10 +88,37 @@ def _journal_list_entry_meta(entries):
             meta[eid] = {'ref': getattr(inv, 'invoice_number', None) or '-', 'op_type_ar': 'مصروف', 'op_type': 'expense', 'payment_method': _pm(getattr(inv, 'payment_method', None)), 'source': 'Expense', 'tax_amount': float(getattr(inv, 'tax_amount', 0) or 0), 'discount_amount': float(getattr(inv, 'discount_amount', 0) or 0), 'branch': br}
         else:
             meta[eid] = {'ref': '-', 'op_type_ar': 'مصروف', 'op_type': 'expense', 'payment_method': '-', 'source': 'Expense', 'tax_amount': 0, 'discount_amount': 0, 'branch': br}
+    # تمييز القيود المُدخلة بعد إعادة فتح سنة مالية
+    try:
+        from models import FiscalYear
+        reopened_fys = [fy for fy in FiscalYear.query.filter(FiscalYear.reopened_at.isnot(None)).all() if getattr(fy, 'reopened_at')]
+        for e in entries:
+            m = meta.get(e.id)
+            if m is None:
+                continue
+            m['post_reopen'] = False
+            ed = getattr(e, 'date', None)
+            ec = getattr(e, 'created_at', None)
+            if not ed or not ec:
+                continue
+            for fy in reopened_fys:
+                if fy.start_date <= ed <= fy.end_date and ec >= fy.reopened_at:
+                    m['post_reopen'] = True
+                    break
+    except Exception:
+        for e in entries:
+            if meta.get(e.id) is not None:
+                meta[e.id]['post_reopen'] = False
     return meta
 
 
 bp = Blueprint('journal', __name__, url_prefix='/journal')
+
+
+def _redirect_accounts_hub():
+    """التوجيه إلى شاشة الحسابات المتكاملة — تبويب قيود اليومية (الشاشة المعتمدة الوحيدة للقيود)."""
+    return redirect(url_for('financials.accounts_hub') + '#tab-journal')
+
 
 def _can(screen, perm, branch_scope=None):
     try:
@@ -351,6 +380,11 @@ def create_missing_journal_entries():
             inv_num = getattr(inv, 'invoice_number', None)
             if _has_journal(inv.id, 'sales', inv_num):
                 continue
+            entry_date = inv.date or get_saudi_now().date()
+            ok, period_msg = is_period_open_for_date(entry_date)
+            if not ok:
+                errors.append(f"sales:{inv.id}:{inv_num}:{period_msg or 'الفترة مغلقة'}")
+                continue
             try:
                 total_before = float(inv.total_before_tax or 0)
                 discount_amt = float(inv.discount_amount or 0)
@@ -385,14 +419,16 @@ def create_missing_journal_entries():
                     invoice_type='sales'
                 )
                 db.session.add(je); db.session.flush()
-                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ar_acc.id, debit=total_inc_tax, credit=0, description=f"AR {inv_num}", line_date=(inv.date or get_saudi_now().date())))
+                _lid, _lty = inv.id, 'sales'
+                _d = inv.date or get_saudi_now().date()
+                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ar_acc.id, debit=total_inc_tax, credit=0, description=f"AR {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if net_rev > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=rev_acc.id, debit=0, credit=net_rev, description=f"Revenue {inv_num}", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=rev_acc.id, debit=0, credit=net_rev, description=f"Revenue {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if tax_amt > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=vat_out_acc.id, debit=0, credit=tax_amt, description=f"VAT Output {inv_num}", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=vat_out_acc.id, debit=0, credit=tax_amt, description=f"VAT Output {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if cash_acc:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=cash_acc.id, debit=total_inc_tax, credit=0, description=f"Receipt {inv_num}", line_date=(inv.date or get_saudi_now().date())))
-                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=ar_acc.id, debit=0, credit=total_inc_tax, description=f"Clear AR {inv_num}", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=cash_acc.id, debit=total_inc_tax, credit=0, description=f"Receipt {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=ar_acc.id, debit=0, credit=total_inc_tax, description=f"Clear AR {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 created.append(f"sales:{inv.id}:{inv_num}")
             except Exception as e:
                 errors.append(f"sales:{inv.id}:{inv_num}:{str(e)}")
@@ -404,6 +440,11 @@ def create_missing_journal_entries():
         for inv in purchases:
             inv_num = getattr(inv, 'invoice_number', None)
             if _has_journal(inv.id, 'purchase', inv_num):
+                continue
+            entry_date = inv.date or get_saudi_now().date()
+            ok, period_msg = is_period_open_for_date(entry_date)
+            if not ok:
+                errors.append(f"purchase:{inv.id}:{inv_num}:{period_msg or 'الفترة مغلقة'}")
                 continue
             try:
                 total_before = float(inv.total_before_tax or 0)
@@ -427,14 +468,16 @@ def create_missing_journal_entries():
                     invoice_type='purchase'
                 )
                 db.session.add(je); db.session.flush()
+                _lid, _lty = inv.id, 'purchase'
+                _d = inv.date or get_saudi_now().date()
                 if total_before > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total_before, credit=0, description="Purchase", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total_before, credit=0, description="Purchase", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if tax_amt > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=vat_in_acc.id, debit=tax_amt, credit=0, description="VAT Input", line_date=(inv.date or get_saudi_now().date())))
-                db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=ap_acc.id, debit=0, credit=total_inc_tax, description="Accounts Payable", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=vat_in_acc.id, debit=tax_amt, credit=0, description="VAT Input", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=ap_acc.id, debit=0, credit=total_inc_tax, description="Accounts Payable", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if cash_acc:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=ap_acc.id, debit=total_inc_tax, credit=0, description="Pay AP", line_date=(inv.date or get_saudi_now().date())))
-                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=cash_acc.id, debit=0, credit=total_inc_tax, description="Cash/Bank", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=ap_acc.id, debit=total_inc_tax, credit=0, description="Pay AP", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=cash_acc.id, debit=0, credit=total_inc_tax, description="Cash/Bank", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 created.append(f"purchase:{inv.id}:{inv_num}")
             except Exception as e:
                 errors.append(f"purchase:{inv.id}:{inv_num}:{str(e)}")
@@ -446,6 +489,11 @@ def create_missing_journal_entries():
         for inv in expenses:
             inv_num = getattr(inv, 'invoice_number', None)
             if _has_journal(inv.id, 'expense', inv_num):
+                continue
+            entry_date = inv.date or get_saudi_now().date()
+            ok, period_msg = is_period_open_for_date(entry_date)
+            if not ok:
+                errors.append(f"expense:{inv.id}:{inv_num}:{period_msg or 'الفترة مغلقة'}")
                 continue
             try:
                 total_before = float(inv.total_before_tax or 0)
@@ -469,14 +517,16 @@ def create_missing_journal_entries():
                     invoice_type='expense'
                 )
                 db.session.add(je); db.session.flush()
+                _lid, _lty = inv.id, 'expense'
+                _d = inv.date or get_saudi_now().date()
                 if total_before > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total_before, credit=0, description="Expense", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total_before, credit=0, description="Expense", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if tax_amt > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=vat_in_acc.id, debit=tax_amt, credit=0, description="VAT Input", line_date=(inv.date or get_saudi_now().date())))
-                db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=ap_acc.id, debit=0, credit=total_inc_tax, description="Accounts Payable", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=vat_in_acc.id, debit=tax_amt, credit=0, description="VAT Input", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=ap_acc.id, debit=0, credit=total_inc_tax, description="Accounts Payable", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if cash_acc:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=ap_acc.id, debit=total_inc_tax, credit=0, description="Pay AP", line_date=(inv.date or get_saudi_now().date())))
-                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=cash_acc.id, debit=0, credit=total_inc_tax, description="Cash/Bank", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=ap_acc.id, debit=total_inc_tax, credit=0, description="Pay AP", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=cash_acc.id, debit=0, credit=total_inc_tax, description="Cash/Bank", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 created.append(f"expense:{inv.id}:{inv_num}")
             except Exception as e:
                 errors.append(f"expense:{inv.id}:{inv_num}:{str(e)}")
@@ -587,6 +637,11 @@ def create_missing_journal_entries_for(kind: str):
             inv_num = getattr(inv, 'invoice_number', None)
             if _has_journal(inv.id, 'sales', inv_num):
                 continue
+            entry_date = inv.date or get_saudi_now().date()
+            ok, period_msg = is_period_open_for_date(entry_date)
+            if not ok:
+                errors.append(f"sales:{inv.id}:{inv_num}:{period_msg or 'الفترة مغلقة'}")
+                continue
             try:
                 total_before = float(inv.total_before_tax or 0)
                 discount_amt = float(inv.discount_amount or 0)
@@ -607,17 +662,17 @@ def create_missing_journal_entries_for(kind: str):
                 rev_acc = _acc_by_code(rev_code)
                 vat_out_acc = _acc_by_code('2141')
                 cash_acc = None if grp in ('keeta','hunger') else _cash_or_bank(inv.payment_method)
-                je = JournalEntry(entry_number=f"JE-SAL-{inv_num}", date=(inv.date or get_saudi_now().date()), branch_code=getattr(inv, 'branch', None), description=f"Sales {inv_num}", status='posted', total_debit=total_inc_tax * 2 if cash_acc else total_inc_tax, total_credit=total_inc_tax * 2 if cash_acc else total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=int(inv.id), invoice_type='sales')
+                je = JournalEntry(entry_number=f"JE-SAL-{inv_num}", date=entry_date, branch_code=getattr(inv, 'branch', None), description=f"Sales {inv_num}", status='posted', total_debit=total_inc_tax * 2 if cash_acc else total_inc_tax, total_credit=total_inc_tax * 2 if cash_acc else total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=int(inv.id), invoice_type='sales')
                 db.session.add(je); db.session.flush()
-                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ar_acc.id, debit=total_inc_tax, credit=0, description=f"AR {inv_num}", line_date=(inv.date or get_saudi_now().date())))
+                _lid, _lty, _d = inv.id, 'sales', inv.date or get_saudi_now().date()
+                db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=ar_acc.id, debit=total_inc_tax, credit=0, description=f"AR {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if net_rev > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=rev_acc.id, debit=0, credit=net_rev, description=f"Revenue {inv_num}", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=rev_acc.id, debit=0, credit=net_rev, description=f"Revenue {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if tax_amt > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=vat_out_acc.id, debit=0, credit=tax_amt, description=f"VAT Output {inv_num}", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=vat_out_acc.id, debit=0, credit=tax_amt, description=f"VAT Output {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if cash_acc:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=cash_acc.id, debit=total_inc_tax, credit=0, description=f"Receipt {inv_num}", line_date=(inv.date or get_saudi_now().date())))
-                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=ar_acc.id, debit=0, credit=total_inc_tax, description=f"Clear AR {inv_num}", line_date=(inv.date or get_saudi_now().date())))
-
+                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=cash_acc.id, debit=total_inc_tax, credit=0, description=f"Receipt {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=ar_acc.id, debit=0, credit=total_inc_tax, description=f"Clear AR {inv_num}", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 created.append(f"sales:{inv.id}:{inv_num}")
             except Exception as e:
                 errors.append(f"sales:{inv.id}:{inv_num}:{str(e)}")
@@ -632,6 +687,11 @@ def create_missing_journal_entries_for(kind: str):
             inv_num = getattr(inv, 'invoice_number', None)
             if _has_journal(inv.id, 'purchase', inv_num):
                 continue
+            entry_date = inv.date or get_saudi_now().date()
+            ok, period_msg = is_period_open_for_date(entry_date)
+            if not ok:
+                errors.append(f"purchase:{inv.id}:{inv_num}:{period_msg or 'الفترة مغلقة'}")
+                continue
             try:
                 total_before, tax_amt, total_inc_tax = inv.get_effective_totals()
                 exp_acc = _acc_by_code('1161')
@@ -640,14 +700,15 @@ def create_missing_journal_entries_for(kind: str):
                 cash_acc = _cash_or_bank(inv.payment_method)
                 je = JournalEntry(entry_number=f"JE-PUR-{inv_num}", date=(inv.date or get_saudi_now().date()), branch_code=None, description=f"Purchase {inv_num}", status='posted', total_debit=total_inc_tax * 2 if cash_acc else total_inc_tax, total_credit=total_inc_tax * 2 if cash_acc else total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=int(inv.id), invoice_type='purchase')
                 db.session.add(je); db.session.flush()
+                _lid, _lty, _d = inv.id, 'purchase', inv.date or get_saudi_now().date()
                 if total_before > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total_before, credit=0, description="Purchase", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total_before, credit=0, description="Purchase", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if tax_amt > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=vat_in_acc.id, debit=tax_amt, credit=0, description="VAT Input", line_date=(inv.date or get_saudi_now().date())))
-                db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=ap_acc.id, debit=0, credit=total_inc_tax, description="Accounts Payable", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=vat_in_acc.id, debit=tax_amt, credit=0, description="VAT Input", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=ap_acc.id, debit=0, credit=total_inc_tax, description="Accounts Payable", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if cash_acc:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=ap_acc.id, debit=total_inc_tax, credit=0, description="Pay AP", line_date=(inv.date or get_saudi_now().date())))
-                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=cash_acc.id, debit=0, credit=total_inc_tax, description="Cash/Bank", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=ap_acc.id, debit=total_inc_tax, credit=0, description="Pay AP", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=cash_acc.id, debit=0, credit=total_inc_tax, description="Cash/Bank", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 created.append(f"purchase:{inv.id}:{inv_num}")
             except Exception as e:
                 errors.append(f"purchase:{inv.id}:{inv_num}:{str(e)}")
@@ -662,6 +723,11 @@ def create_missing_journal_entries_for(kind: str):
             inv_num = getattr(inv, 'invoice_number', None)
             if _has_journal(inv.id, 'expense', inv_num):
                 continue
+            entry_date = inv.date or get_saudi_now().date()
+            ok, period_msg = is_period_open_for_date(entry_date)
+            if not ok:
+                errors.append(f"expense:{inv.id}:{inv_num}:{period_msg or 'الفترة مغلقة'}")
+                continue
             try:
                 total_before = float(inv.total_before_tax or 0)
                 tax_amt = float(inv.tax_amount or 0)
@@ -672,14 +738,15 @@ def create_missing_journal_entries_for(kind: str):
                 cash_acc = _cash_or_bank(inv.payment_method)
                 je = JournalEntry(entry_number=f"JE-EXP-{inv_num}", date=(inv.date or get_saudi_now().date()), branch_code=None, description=f"Expense {inv_num}", status='posted', total_debit=total_inc_tax * 2 if cash_acc else total_inc_tax, total_credit=total_inc_tax * 2 if cash_acc else total_inc_tax, created_by=getattr(current_user,'id',None), posted_by=getattr(current_user,'id',None), invoice_id=int(inv.id), invoice_type='expense')
                 db.session.add(je); db.session.flush()
+                _lid, _lty, _d = inv.id, 'expense', inv.date or get_saudi_now().date()
                 if total_before > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total_before, credit=0, description="Expense", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=1, account_id=exp_acc.id, debit=total_before, credit=0, description="Expense", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if tax_amt > 0:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=vat_in_acc.id, debit=tax_amt, credit=0, description="VAT Input", line_date=(inv.date or get_saudi_now().date())))
-                db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=ap_acc.id, debit=0, credit=total_inc_tax, description="Accounts Payable", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=vat_in_acc.id, debit=tax_amt, credit=0, description="VAT Input", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                db.session.add(JournalLine(journal_id=je.id, line_no=3, account_id=ap_acc.id, debit=0, credit=total_inc_tax, description="Accounts Payable", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 if cash_acc:
-                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=ap_acc.id, debit=total_inc_tax, credit=0, description="Pay AP", line_date=(inv.date or get_saudi_now().date())))
-                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=cash_acc.id, debit=0, credit=total_inc_tax, description="Cash/Bank", line_date=(inv.date or get_saudi_now().date())))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=4, account_id=ap_acc.id, debit=total_inc_tax, credit=0, description="Pay AP", line_date=_d, invoice_id=_lid, invoice_type=_lty))
+                    db.session.add(JournalLine(journal_id=je.id, line_no=5, account_id=cash_acc.id, debit=0, credit=total_inc_tax, description="Cash/Bank", line_date=_d, invoice_id=_lid, invoice_type=_lty))
                 created.append(f"expense:{inv.id}:{inv_num}")
             except Exception as e:
                 errors.append(f"expense:{inv.id}:{inv_num}:{str(e)}")
@@ -815,7 +882,7 @@ def backfill_missing_all():
         except Exception:
             pass
         flash(str(e) or 'Backfill failed', 'danger')
-    return redirect(url_for('journal.list_entries'))
+    return _redirect_accounts_hub()
 
 @csrf.exempt
 @bp.route('/remap_sales_channels', methods=['POST','GET'])
@@ -868,281 +935,377 @@ def remap_sales_channels():
         except Exception:
             pass
         flash(str(e) or 'Remap failed', 'danger')
-    return redirect(url_for('journal.list_entries'))
+    return _redirect_accounts_hub()
 
-@csrf.exempt
+
+def _parse_audit_dates_from_request():
+    """استخراج from_date و to_date من request.form أو request.args."""
+    from datetime import datetime as _dt
+    from_date = to_date = None
+    src = request.args if request.method == 'GET' else request.form
+    if src.get('from_date'):
+        try:
+            from_date = _dt.strptime(src.get('from_date'), '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            pass
+    if src.get('to_date'):
+        try:
+            to_date = _dt.strptime(src.get('to_date'), '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            pass
+    return from_date, to_date
+
+
+@bp.route('/audit', methods=['GET', 'POST'])
+@login_required
+def audit():
+    """إجراء تدقيق محاسبي شامل — يشغّل محرك التدقيق ويعرض التقرير."""
+    if not _can('journal', 'view'):
+        flash('لا تملك صلاحية الوصول', 'danger')
+        return _redirect_accounts_hub()
+    from modules.audit import run_audit as run_audit_engine
+    report = None
+    if request.method == 'POST':
+        from_date, to_date = _parse_audit_dates_from_request()
+        report = run_audit_engine(from_date=from_date, to_date=to_date, persist_findings=False)
+        _audit_report_with_ref_urls(report)
+    elif request.args.get('run'):
+        # تشغيل من شاشة السنوات المالية: ?run=1&from_date=...&to_date=...&fiscal_year_id=...
+        from_date, to_date = _parse_audit_dates_from_request()
+        fiscal_year_id = request.args.get('fiscal_year_id', type=int)
+        if from_date and to_date:
+            report = run_audit_engine(
+                from_date=from_date,
+                to_date=to_date,
+                fiscal_year_id=fiscal_year_id,
+                persist_findings=bool(fiscal_year_id),
+            )
+            _audit_report_with_ref_urls(report)
+            if report and fiscal_year_id:
+                try:
+                    from services.audit_snapshot_cache import save_audit_snapshot
+                    save_audit_snapshot(fiscal_year_id, report.get("summary") or {}, report.get("meta", {}).get("run_at"))
+                except Exception:
+                    pass
+    if report and report.get("findings"):
+        for f in report["findings"]:
+            if f.get("ref_type") == "journal" and f.get("ref_id"):
+                f["ref_url"] = url_for("journal.edit_entry", jid=f["ref_id"])
+            else:
+                f["ref_url"] = None
+    return render_template('audit_report.html', report=report)
+
+
+def _audit_report_with_ref_urls(report):
+    """إثراء التقرير بروابط فتح القيد."""
+    if not report or not report.get("findings"):
+        return report
+    for f in report["findings"]:
+        if f.get("ref_type") == "journal" and f.get("ref_id"):
+            f["ref_url"] = url_for("journal.edit_entry", jid=f["ref_id"])
+        else:
+            f["ref_url"] = None
+    return report
+
+
+@bp.route('/audit/print')
+@login_required
+def audit_print():
+    """نسخة التقرير الجاهزة للطباعة / PDF (بدون إطار التطبيق)."""
+    if not _can('journal', 'view'):
+        flash('لا تملك صلاحية الوصول', 'danger')
+        return _redirect_accounts_hub()
+    from services.audit_engine import run_audit
+    from datetime import datetime as _dt
+    from models import Settings
+    from_date = to_date = None
+    if request.args.get('from_date'):
+        try:
+            from_date = _dt.strptime(request.args.get('from_date'), '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    if request.args.get('to_date'):
+        try:
+            to_date = _dt.strptime(request.args.get('to_date'), '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    report = run_audit(from_date=from_date, to_date=to_date)
+    _audit_report_with_ref_urls(report)
+    try:
+        settings = Settings.query.first()
+        company_name = (getattr(settings, 'company_name', None) or 'Company').strip() if settings else 'Company'
+    except Exception:
+        company_name = 'Company'
+    return render_template('audit_report_print.html', report=report, company_name=company_name)
+
+
+def _closure_info_for_pdf(fiscal_year_id):
+    """بناء closure_info لعرض تقرير PDF: is_override, override_reason, closed_by_username, closed_at."""
+    try:
+        from models import FiscalYear, FiscalYearAuditLog
+    except ImportError:
+        return None
+    fy = FiscalYear.query.get(fiscal_year_id)
+    if not fy or fy.status != 'closed':
+        return None
+    # آخر سجل إقفال (close أو close_override)
+    log = None
+    if getattr(fy, "audit_logs", None):
+        for entry in sorted(fy.audit_logs, key=lambda x: (x.created_at or x.id or 0), reverse=True):
+            if entry.action in ("close", "close_override"):
+                log = entry
+                break
+    details = {}
+    if log and getattr(log, "details_json", None):
+        try:
+            details = json.loads(log.details_json) or {}
+        except (ValueError, TypeError):
+            pass
+    closed_at = fy.closed_at if getattr(fy, "closed_at", None) else (log.created_at if log else None)
+    closed_at_str = closed_at.strftime('%Y-%m-%d %H:%M') if closed_at else '—'
+    username = details.get("closed_by_username") or None
+    if not username and getattr(fy, "closed_by", None):
+        u = None
+        try:
+            from models import User
+            u = User.query.get(fy.closed_by)
+        except Exception:
+            pass
+        if u:
+            username = getattr(u, "username", None)
+    return {
+        "is_override": log and getattr(log, "action", None) == "close_override",
+        "override_reason": details.get("override_reason") or None,
+        "closed_by_username": username or "—",
+        "closed_at": closed_at_str,
+    }
+
+
+@bp.route('/audit/pdf')
+@login_required
+def audit_pdf():
+    """تقرير التدقيق PDF (رسمي واحترافي). استخدم WeasyPrint إن وُجد، وإلا HTML للطباعة من المتصفح."""
+    if not _can('journal', 'view'):
+        flash('لا تملك صلاحية الوصول', 'danger')
+        return _redirect_accounts_hub()
+    from modules.audit.engine import run_audit
+    from datetime import datetime as _dt
+    from models import Settings
+    from_date, to_date = _parse_audit_dates_from_request()
+    fiscal_year_id = request.args.get('fiscal_year_id', type=int)
+    # عند وجود سنة مالية نستخدم حدودها إن لم تُحدد تواريخ
+    if fiscal_year_id and (not from_date or not to_date):
+        try:
+            from models import FiscalYear
+            fy = FiscalYear.query.get(fiscal_year_id)
+            if fy:
+                from_date = from_date or fy.start_date
+                to_date = to_date or fy.end_date
+        except Exception:
+            pass
+    if not from_date or not to_date:
+        flash('يجب تحديد من تاريخ وإلى تاريخ (أو سنة مالية) لتوليد التقرير.', 'warning')
+        return redirect(url_for('journal.audit'))
+    report = run_audit(from_date=from_date, to_date=to_date, fiscal_year_id=fiscal_year_id, persist_findings=False)
+    _audit_report_with_ref_urls(report)
+    try:
+        settings = Settings.query.first()
+        company_name = (getattr(settings, 'company_name', None) or 'Company').strip() if settings else 'Company'
+        tax_number = (getattr(settings, 'tax_number', None) or '').strip() if settings else ''
+        logo_url = (getattr(settings, 'logo_url', None) or '').strip() if settings else ''
+        show_logo = getattr(settings, 'receipt_show_logo', True) if settings else True
+    except Exception:
+        company_name = 'Company'
+        tax_number = ''
+        logo_url = ''
+        show_logo = True
+    closure_info = _closure_info_for_pdf(fiscal_year_id) if fiscal_year_id else None
+    # لغة التقرير بحسب لغة النظام (جلسة / مستخدم / طلب)
+    try:
+        from flask import session
+        lang = (session.get('locale') or getattr(current_user, 'language_pref', None) or request.args.get('lang') or 'ar')
+        lang = (lang or 'ar').strip().lower()[:2]
+        if lang not in ('ar', 'en'):
+            lang = 'ar'
+    except Exception:
+        lang = 'ar'
+    # تسميات عربي/إنجليزي للقالب
+    labels_ar = {
+        "report_title": "تقرير التدقيق المحاسبي",
+        "vat": "الرقم الضريبي / VAT",
+        "period": "الفترة المالية",
+        "to": "إلى",
+        "issue_date": "تاريخ الإصدار",
+        "closure_badge_open": "سنة مفتوحة",
+        "closure_badge_normal": "إقفال نظامي",
+        "closure_badge_override": "إقفال مع تجاوز",
+        "closure_na": "لا يرتبط التقرير بسنة مالية محددة",
+        "exec_summary": "الملخص التنفيذي",
+        "exec_summary_en": "Executive Summary",
+        "item": "البند",
+        "count": "العدد",
+        "total_findings": "إجمالي الملاحظات",
+        "critical": "الحرجة (عالية الخطورة)",
+        "medium": "المتوسطة",
+        "low": "المنخفضة",
+        "closure_status": "حالة الإقفال",
+        "year_open": "سنة مفتوحة",
+        "year_open_desc": "الفترة المالية مفتوحة (لم يتم إقفالها بعد).",
+        "override_reason": "سبب التجاوز",
+        "closed_by": "تم بواسطة",
+        "normal_closure": "إقفال نظامي",
+        "normal_closure_desc": "تم إقفال الفترة المالية بشكل عادي (بدون تجاوز).",
+        "closure_na_desc": "حالة الإقفال غير مرتبطة بهذا التقرير (لم يُحدد سنة مالية).",
+        "findings_table": "جدول الملاحظات التفصيلي",
+        "findings_index": "فهرس الملاحظات (روابط داخلية)",
+        "no_findings": "لا توجد ملاحظات.",
+        "finding_no": "#",
+        "issue_type": "نوع الخلل",
+        "entry_no": "رقم القيد",
+        "description": "الوصف",
+        "root_cause": "السبب",
+        "correction": "طريقة التصحيح",
+        "severity": "الخطورة",
+        "stats_title": "توزيع الخطورة",
+        "items_count": "عدد البنود",
+        "conclusion": "خاتمة",
+        "conclusion_text": "تم إعداد هذا التقرير آليًا من النظام المحاسبي، ويعكس نتائج الفحص وفق القواعد المعتمدة بتاريخ",
+        "conclusion_disclaimer": "وهذا التقرير لا يُغني عن المراجعة البشرية ولا يُمثّل رأياً قانونياً أو ضريبياً. يُوصى بالاحتفاظ بنسخة مطبوعة أو PDF مع سجلات الفترة. قابل للتوقيع والختم.",
+        "auditor": "المدقق / المراجع",
+        "date_stamp": "التاريخ والختم",
+        "electronic_seal": "ختم إلكتروني",
+        "signature": "توقيع",
+        "footer_report": "تقرير التدقيق",
+        "page": "صفحة",
+    }
+    labels_en = {
+        "report_title": "Audit Report",
+        "vat": "VAT / Tax ID",
+        "period": "Fiscal Period",
+        "to": "to",
+        "issue_date": "Issue Date",
+        "closure_badge_open": "Open Year",
+        "closure_badge_normal": "Normal Closure",
+        "closure_badge_override": "Closure with Override",
+        "closure_na": "Report not linked to a fiscal year",
+        "exec_summary": "Executive Summary",
+        "exec_summary_en": "",
+        "item": "Item",
+        "count": "Count",
+        "total_findings": "Total Findings",
+        "critical": "Critical (High)",
+        "medium": "Medium",
+        "low": "Low",
+        "closure_status": "Closure Status",
+        "year_open": "Open Year",
+        "year_open_desc": "Fiscal period is open (not yet closed).",
+        "override_reason": "Override Reason",
+        "closed_by": "Closed By",
+        "normal_closure": "Normal Closure",
+        "normal_closure_desc": "Fiscal period was closed normally (no override).",
+        "closure_na_desc": "Closure status not linked to this report.",
+        "findings_table": "Detailed Findings Table",
+        "findings_index": "Findings Index (internal links)",
+        "no_findings": "No findings.",
+        "finding_no": "#",
+        "issue_type": "Issue Type",
+        "entry_no": "Entry No.",
+        "description": "Description",
+        "root_cause": "Root Cause",
+        "correction": "Correction Method",
+        "severity": "Severity",
+        "stats_title": "Severity Distribution",
+        "items_count": "Items",
+        "conclusion": "Conclusion",
+        "conclusion_text": "This report was prepared automatically by the accounting system and reflects the results of the examination in accordance with the rules in effect as of",
+        "conclusion_disclaimer": "This report does not replace human review and does not constitute legal or tax advice. Retain a printed or PDF copy with period records. Ready for signature and stamp.",
+        "auditor": "Auditor / Reviewer",
+        "date_stamp": "Date & Stamp",
+        "electronic_seal": "Electronic Seal",
+        "signature": "Signature",
+        "footer_report": "Audit Report",
+        "page": "Page",
+    }
+    labels = labels_en if lang == 'en' else labels_ar
+    html_content = render_template(
+        'audit_report_pdf.html',
+        report=report,
+        company_name=company_name,
+        tax_number=tax_number,
+        closure_info=closure_info,
+        logo_url=logo_url or None,
+        show_logo=show_logo,
+        lang=lang,
+        labels=labels,
+    )
+    # محاولة توليد PDF بـ WeasyPrint
+    try:
+        from weasyprint import HTML
+        from io import BytesIO
+        pdf_io = BytesIO()
+        HTML(string=html_content).write_pdf(pdf_io)
+        pdf_io.seek(0)
+        return Response(
+            pdf_io.getvalue(),
+            mimetype='application/pdf',
+            headers={'Content-Disposition': 'inline; filename=audit_report.pdf'},
+        )
+    except ImportError:
+        pass
+    except Exception:
+        pass
+    # عرض HTML للطباعة من المتصفح (Print → Save as PDF)
+    return Response(html_content, mimetype='text/html; charset=utf-8')
+
+
 @bp.route('/', methods=['GET'])
 @login_required
+def journal_index():
+    """لا توجد شاشة عند /journal/ — التوجيه إلى لوحة التحكم."""
+    try:
+        return redirect(url_for('main.dashboard'))
+    except Exception:
+        return redirect('/dashboard')
+
+
+@bp.route('/entries', methods=['GET'])
+@login_required
 def list_entries():
-    if not _can('journal','view'):
+    """لا توجد شاشة قيود مستقلة — التوجيه إلى الحسابات المتكاملة (تبويب قيود اليومية)."""
+    if not _can('journal', 'view'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
         return redirect(url_for('main.dashboard'))
-    _ensure_journal_link_columns()
-    _ensure_accounts()
-    q = (request.args.get('q') or '').strip()
-    branch = (request.args.get('branch') or '').strip() or 'all'
-    entry_number = (request.args.get('entry_number') or '').strip()
-    sd = (request.args.get('start_date') or '').strip()
-    ed = (request.args.get('end_date') or '').strip()
-    user_id = request.args.get('user_id', type=int)
-    emp_id = request.args.get('emp_id', type=int)
-    type_f = (request.args.get('type') or '').strip().lower()
-    status_f = (request.args.get('status') or '').strip().lower()
-    page = int(request.args.get('page') or 1)
-    per_page_arg = (request.args.get('per_page') or '').strip()
-    if per_page_arg.lower() == 'all':
-        per_page = 2000
-    else:
-        try:
-            per_page = int(per_page_arg or 50)
-        except Exception:
-            per_page = 50
-        per_page = max(1, min(500, per_page))
-    query = JournalEntry.query.order_by(JournalEntry.date.desc(), JournalEntry.id.desc())
-    if branch and branch != 'all':
-        query = query.filter(JournalEntry.branch_code == branch)
-    if q:
-        query = query.filter(JournalEntry.description.ilike(f"%{q}%"))
-    if entry_number:
-        query = query.filter(JournalEntry.entry_number.ilike(f"%{entry_number}%"))
-    if type_f in ('sales','purchase','expense','salary'):
-        query = query.filter(JournalEntry.invoice_type == type_f)
-    if status_f in ('posted','draft'):
-        query = query.filter(JournalEntry.status == status_f)
-    if sd:
-        from datetime import datetime as _dt
-        try:
-            sdt = _dt.strptime(sd, '%Y-%m-%d').date()
-            query = query.filter(JournalEntry.date >= sdt)
-        except Exception:
-            pass
-    if ed:
-        from datetime import datetime as _dt
-        try:
-            edt = _dt.strptime(ed, '%Y-%m-%d').date()
-            query = query.filter(JournalEntry.date <= edt)
-        except Exception:
-            pass
-    if user_id:
-        query = query.filter((JournalEntry.created_by == user_id) | (JournalEntry.posted_by == user_id) | (JournalEntry.updated_by == user_id))
-    if emp_id:
-        from sqlalchemy import distinct
-        query = query.join(JournalLine, JournalLine.journal_id == JournalEntry.id).filter(JournalLine.employee_id == int(emp_id)).group_by(JournalEntry.id)
-    query = query.options(selectinload(JournalEntry.lines))
-    pag = query.paginate(page=page, per_page=per_page, error_out=False)
-    employees = Employee.query.order_by(Employee.full_name).limit(500).all()
-    entry_meta = _journal_list_entry_meta(pag.items)
-    return render_template('journal_entries.html', entries=pag.items, page=pag.page, pages=pag.pages, total=pag.total, accounts=[], employees=employees, branch=branch, mode='list', entry_meta=entry_meta)
+    return _redirect_accounts_hub()
 
 @bp.route('/print/all', methods=['GET'])
 @login_required
 def print_all():
-    if not _can('journal','print'):
+    """لا شاشة طباعة قيود مستقلة — التوجيه إلى الحسابات المتكاملة."""
+    if not _can('journal', 'print'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-        return redirect(url_for('journal.list_entries'))
-    _ensure_journal_link_columns()
-    _ensure_accounts()
-    q = (request.args.get('q') or '').strip()
-    branch = (request.args.get('branch') or '').strip() or 'all'
-    sd = (request.args.get('start_date') or '').strip()
-    ed = (request.args.get('end_date') or '').strip()
-    user_id = request.args.get('user_id', type=int)
-    query = JournalEntry.query.order_by(JournalEntry.date.asc(), JournalEntry.id.asc())
-    if branch and branch != 'all':
-        query = query.filter(JournalEntry.branch_code == branch)
-    if q:
-        query = query.filter(JournalEntry.description.ilike(f"%{q}%"))
-    if sd:
-        try:
-            sdt = datetime.strptime(sd, '%Y-%m-%d').date()
-            query = query.filter(JournalEntry.date >= sdt)
-        except Exception:
-            pass
-    if ed:
-        try:
-            edt = datetime.strptime(ed, '%Y-%m-%d').date()
-            query = query.filter(JournalEntry.date <= edt)
-        except Exception:
-            pass
-    if user_id:
-        query = query.filter((JournalEntry.created_by == user_id) | (JournalEntry.posted_by == user_id) | (JournalEntry.updated_by == user_id))
-    query = _journal_with_lines_options(query)
-    entries = query.limit(2000).all()
-    return render_template('journal_print_all.html', entries=entries, branch=branch, q=q, sd=sd, ed=ed)
+        return redirect(url_for('main.dashboard'))
+    return _redirect_accounts_hub()
+
 
 @bp.route('/print/all/pdf', methods=['GET'])
 @login_required
 def print_all_pdf():
-    if not _can('journal','print'):
+    """لا شاشة PDF قيود مستقلة — التوجيه إلى الحسابات المتكاملة."""
+    if not _can('journal', 'print'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-        return redirect(url_for('journal.list_entries'))
-    _ensure_journal_link_columns()
-    _ensure_accounts()
-    q = (request.args.get('q') or '').strip()
-    branch = (request.args.get('branch') or '').strip() or 'all'
-    sd = (request.args.get('start_date') or '').strip()
-    ed = (request.args.get('end_date') or '').strip()
-    user_id = request.args.get('user_id', type=int)
-    limit_arg = (request.args.get('limit') or '').strip().lower()
-    query = JournalEntry.query.order_by(JournalEntry.date.asc(), JournalEntry.id.asc())
-    if branch and branch != 'all':
-        query = query.filter(JournalEntry.branch_code == branch)
-    if q:
-        query = query.filter(JournalEntry.description.ilike(f"%{q}%"))
-    if sd:
-        try:
-            sdt = datetime.strptime(sd, '%Y-%m-%d').date()
-            query = query.filter(JournalEntry.date >= sdt)
-        except Exception:
-            pass
-    if ed:
-        try:
-            edt = datetime.strptime(ed, '%Y-%m-%d').date()
-            query = query.filter(JournalEntry.date <= edt)
-        except Exception:
-            pass
-    if user_id:
-        query = query.filter((JournalEntry.created_by == user_id) | (JournalEntry.posted_by == user_id) | (JournalEntry.updated_by == user_id))
-    query = _journal_with_lines_options(query)
-    if limit_arg and limit_arg != 'all':
-        try:
-            query = query.limit(int(limit_arg))
-        except Exception:
-            query = query.limit(200)
-    else:
-        query = query.limit(200)  # افتراضي لتسريع الطباعة
-    entries = query.all()
-    try:
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, KeepTogether
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        import io
+        return redirect(url_for('main.dashboard'))
+    return _redirect_accounts_hub()
 
-        def _register_ar_font():
-            try:
-                from reportlab.pdfbase import pdfmetrics
-                from reportlab.pdfbase.ttfonts import TTFont
-                candidates = [
-                    os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'Fonts', 'trado.ttf'),
-                    os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'Fonts', 'arial.ttf'),
-                    os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'Fonts', 'Tahoma.ttf'),
-                    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-                    '/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf',
-                ]
-                for fp in candidates:
-                    if os.path.exists(fp):
-                        pdfmetrics.registerFont(TTFont('JournalArabic', fp))
-                        return 'JournalArabic'
-            except Exception:
-                pass
-            return None
 
-        ar_font = _register_ar_font()
-        styles = getSampleStyleSheet()
-        if ar_font:
-            styles.add(ParagraphStyle(name='JournalTitle', fontName=ar_font, fontSize=16, spaceAfter=6))
-            styles.add(ParagraphStyle(name='JournalNormal', fontName=ar_font, fontSize=10, spaceAfter=4))
-            styles.add(ParagraphStyle(name='JournalHeading', fontName=ar_font, fontSize=12, spaceAfter=4))
-            style_title, style_norm, style_h3 = 'JournalTitle', 'JournalNormal', 'JournalHeading'
-        else:
-            style_title, style_norm, style_h3 = 'Title', 'Normal', 'Heading3'
-
-        buf = io.BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=A4, title="Journal Entries")
-        elements = []
-        elements.append(Paragraph("قيود اليومية", styles[style_title]))
-        meta = []
-        meta.append(f"الفرع: {branch}")
-        if q: meta.append(f"بحث: {q}")
-        if sd: meta.append(f"من: {sd}")
-        if ed: meta.append(f"إلى: {ed}")
-        elements.append(Paragraph(" ".join(meta), styles[style_norm]))
-        elements.append(Spacer(1, 6))
-        table_font = ar_font or 'Helvetica'
-        table_style_list = [
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('FONTNAME', (0, 0), (-1, -1), table_font),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ALIGN', (5, 1), (6, -1), 'RIGHT'),
-        ]
-        for je in entries:
-            block = []
-            block.append(Paragraph(f"رقم القيد: {je.entry_number}", styles[style_h3]))
-            block.append(Paragraph(f"التاريخ: {je.date}", styles[style_norm]))
-            block.append(Paragraph(f"الفرع: {je.branch_code or '-'}", styles[style_norm]))
-            block.append(Paragraph(f"الحالة: {je.status}", styles[style_norm]))
-            block.append(Paragraph(f"الوصف: {je.description}", styles[style_norm]))
-            data = [["#", "الحساب", "الوصف", "مركز تكلفة", "تاريخ السطر", "مدين", "دائن"]]
-            for ln in je.lines:
-                try:
-                    acc_label = f"{ln.account.code} – {ln.account.name}"
-                except Exception:
-                    acc_label = str(getattr(ln, 'account_id', ''))
-                data.append([
-                    str(ln.line_no),
-                    acc_label,
-                    ln.description or '',
-                    ln.cost_center or '-',
-                    str(ln.line_date),
-                    f"{float(ln.debit or 0):.2f}",
-                    f"{float(ln.credit or 0):.2f}"
-                ])
-            tbl = Table(data, repeatRows=1)
-            tbl.setStyle(TableStyle(table_style_list))
-            block.append(tbl)
-            block.append(Spacer(1, 6))
-            block.append(Paragraph(f"الإجمالي مدين: {float(je.total_debit or 0):.2f} — الإجمالي دائن: {float(je.total_credit or 0):.2f}", styles[style_norm]))
-            elements.append(KeepTogether(block))
-            elements.append(Spacer(1, 10))
-        doc.build(elements)
-        buf.seek(0)
-        from flask import send_file
-        return send_file(buf, as_attachment=True, download_name="journal_entries.pdf", mimetype='application/pdf')
-    except Exception as e:
-        flash(f"PDF generation failed: {e}", 'danger')
-        return redirect(url_for('journal.list_entries'))
 @bp.route('/export/all', methods=['GET'])
 @login_required
 def export_all():
-    if not _can('journal','print'):
+    """لا شاشة تصدير قيود مستقلة — التوجيه إلى الحسابات المتكاملة."""
+    if not _can('journal', 'print'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-        return redirect(url_for('journal.list_entries'))
-    _ensure_journal_link_columns()
-    _ensure_accounts()
-    q = (request.args.get('q') or '').strip()
-    branch = (request.args.get('branch') or '').strip() or 'all'
-    sd = (request.args.get('start_date') or '').strip()
-    ed = (request.args.get('end_date') or '').strip()
-    user_id = request.args.get('user_id', type=int)
-    query = JournalEntry.query.order_by(JournalEntry.date.asc(), JournalEntry.id.asc())
-    if branch and branch != 'all':
-        query = query.filter(JournalEntry.branch_code == branch)
-    if q:
-        query = query.filter(JournalEntry.description.ilike(f"%{q}%"))
-    if sd:
-        try:
-            sdt = datetime.strptime(sd, '%Y-%m-%d').date()
-            query = query.filter(JournalEntry.date >= sdt)
-        except Exception:
-            pass
-    if ed:
-        try:
-            edt = datetime.strptime(ed, '%Y-%m-%d').date()
-            query = query.filter(JournalEntry.date <= edt)
-        except Exception:
-            pass
-    if user_id:
-        query = query.filter((JournalEntry.created_by == user_id) | (JournalEntry.posted_by == user_id) | (JournalEntry.updated_by == user_id))
-    query = _journal_with_lines_options(query)
-    entries = query.limit(2000).all()
-    html = render_template('journal_print_all.html', entries=entries, branch=branch, q=q, sd=sd, ed=ed)
-    headers = {
-        'Content-Disposition': 'attachment; filename=journal_entries.xls'
-    }
-    return Response(html, mimetype='application/vnd.ms-excel', headers=headers)
+        return redirect(url_for('main.dashboard'))
+    return _redirect_accounts_hub()
+
 
 @csrf.exempt
 @bp.route('/rebalance_rounding', methods=['POST','GET'])
@@ -1240,9 +1403,12 @@ def delete_entry(jid):
     try:
         if not _can('journal','edit'):
             flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-            return redirect(url_for('journal.list_entries'))
+            return _redirect_accounts_hub()
     except Exception:
         pass
+    ok, err = can_mutate_journal(je)
+    if not ok:
+        abort(403, err or 'الفترة المالية مغلقة')
     try:
         delete_journal_entry_and_linked_invoice(je)
         db.session.commit()
@@ -1254,7 +1420,7 @@ def delete_entry(jid):
             pass
         msg = str(e) if str(e) else 'تعذر حذف القيد'
         flash(msg, 'danger')
-    return redirect(url_for('journal.list_entries'))
+    return _redirect_accounts_hub()
 
 @bp.route('/<int:jid>/detail', methods=['GET'])
 @login_required
@@ -1333,30 +1499,31 @@ def entry_detail_json(jid):
 
 
 @csrf.exempt
-@bp.route('/new', methods=['GET','POST'])
+@bp.route('/new', methods=['GET', 'POST'])
 @login_required
 def new_entry():
-    if not _can('journal','add'):
+    """لا شاشة قيد جديد مستقلة — GET يوجّه للحسابات المتكاملة؛ POST يُعالج ثم توجيه (لتوافق الطلبات القديمة)."""
+    if not _can('journal', 'add'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-        return redirect(url_for('journal.list_entries'))
+        return redirect(url_for('main.dashboard'))
+    if request.method == 'GET':
+        return _redirect_accounts_hub()
     _ensure_accounts()
     accounts = []
     employees = []
-    if request.method == 'GET':
-        return render_template('journal_entries.html', mode='new', accounts=accounts, employees=employees, today=get_saudi_now().date())
     date_str = (request.form.get('date') or '').strip()
     branch = (request.form.get('branch') or '').strip() or None
     description = (request.form.get('description') or '').strip()
     if not description:
         flash('يرجى إدخال وصف القيد.', 'danger')
-        return redirect(url_for('journal.new_entry'))
+        return _redirect_accounts_hub()
     try:
         d = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else get_saudi_now().date()
     except Exception:
         d = get_saudi_now().date()
     if d > get_saudi_now().date() and getattr(current_user,'role','')!='admin':
         flash('لا يمكن حفظ قيد بتاريخ مستقبلي.', 'danger')
-        return redirect(url_for('journal.new_entry'))
+        return _redirect_accounts_hub()
     lines = []
     idx = 0
     total_debit = 0.0
@@ -1387,10 +1554,10 @@ def new_entry():
             line_date = d
         if not line_desc:
             flash('يرجى إدخال وصف القيد.', 'danger')
-            return redirect(url_for('journal.new_entry'))
+            return _redirect_accounts_hub()
         if debit and credit:
             flash('لا يسمح بوجود قيمة في المدين والدائن معاً.', 'danger')
-            return redirect(url_for('journal.new_entry'))
+            return _redirect_accounts_hub()
         if (debit <= 0 and credit <= 0):
             idx += 1
             continue
@@ -1400,10 +1567,16 @@ def new_entry():
         except Exception:
             emp_id_val = None
         acc = Account.query.get(acc_id)
-        code = (acc.code or '') if acc else ''
+        if not acc:
+            flash('الحساب غير موجود في شجرة الحسابات.', 'danger')
+            return _redirect_accounts_hub()
+        code = (acc.code or '').strip().upper()
+        if not is_leaf_account(code):
+            flash(f'الحساب "{code}" تجميعي؛ لا يمكن ترحيل أرصدة عليه. استخدم حساباً ورقياً فقط.', 'danger')
+            return _redirect_accounts_hub()
         if code in {'1151','2121','5310'} and not emp_id_val:
             flash('اختر الموظف عند استخدام حساب السلف أو الرواتب.', 'danger')
-            return redirect(url_for('journal.new_entry'))
+            return _redirect_accounts_hub()
         f = request.files.get(f'lines-{idx}-attachment')
         attachment_path = None
         if f and getattr(f, 'filename', ''):
@@ -1421,7 +1594,14 @@ def new_entry():
         idx += 1
     if round(total_debit,2) != round(total_credit,2) or total_debit <= 0:
         flash('لا يمكن حفظ القيد لأن مجموع المدين لا يساوي مجموع الدائن.', 'danger')
-        return redirect(url_for('journal.new_entry'))
+        return _redirect_accounts_hub()
+    ok, period_err = is_period_open_for_date(d)
+    if not ok:
+        abort(403, period_err or 'الفترة المالية مغلقة')
+    gate_errors = validate_journal_gates(d, lines)
+    if gate_errors:
+        flash('؛ '.join(gate_errors[:3]) + (' ...' if len(gate_errors) > 3 else ''), 'danger')
+        return _redirect_accounts_hub()
     je = JournalEntry(entry_number=_gen_number(), date=d, branch_code=branch, description=description, status='draft', total_debit=total_debit, total_credit=total_credit, created_by=getattr(current_user,'id',None))
     db.session.add(je)
     db.session.flush()
@@ -1430,7 +1610,8 @@ def new_entry():
     db.session.add(JournalAudit(journal_id=je.id, action='create', user_id=getattr(current_user,'id',None), before_json=None, after_json=json.dumps({'id': je.id, 'number': je.entry_number}, ensure_ascii=False)))
     db.session.commit()
     flash('تم إضافة القيد', 'success')
-    return redirect(url_for('journal.edit_entry', jid=je.id))
+    return _redirect_accounts_hub()
+
 
 @csrf.exempt
 @bp.route('/employees', methods=['GET'])
@@ -1475,46 +1656,51 @@ def accounts_api():
         return jsonify([{'id': rid, 'code': code, 'name': get_account_display_name(code, name)} for (rid, code, name) in rows])
 
 @csrf.exempt
-@bp.route('/<int:jid>', methods=['GET','POST'])
+@bp.route('/<int:jid>', methods=['GET', 'POST'])
 @login_required
 def edit_entry(jid):
+    """لا شاشة تعديل قيد مستقلة — GET يوجّه للحسابات المتكاملة؛ POST يُعالج ثم توجيه (لتوافق الطلبات)."""
     je = _journal_with_lines_options(JournalEntry.query).filter_by(id=jid).first_or_404()
     if request.method == 'GET':
-        if not _can('journal','view'):
+        if not _can('journal', 'view'):
             flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-            return redirect(url_for('journal.list_entries'))
-        accounts = Account.query.order_by(Account.code.asc()).all()
-        employees = Employee.query.order_by(Employee.full_name.asc()).all()
-        return render_template('journal_entries.html', mode='edit', entry=je, accounts=accounts, employees=employees)
+            return redirect(url_for('main.dashboard'))
+        return _redirect_accounts_hub()
+    ok, err = can_mutate_journal(je)
+    if not ok:
+        abort(403, err or 'الفترة المالية مغلقة')
     if je.status == 'posted' and getattr(current_user,'role','')!='admin':
         flash("لا يمكنك تعديل قيد مرحل بدون صلاحية 'Modify Posted'.", 'danger')
-        return redirect(url_for('journal.edit_entry', jid=je.id))
+        return _redirect_accounts_hub()
     if not _can('journal','edit'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-        return redirect(url_for('journal.edit_entry', jid=je.id))
+        return _redirect_accounts_hub()
     before = {'desc': je.description, 'date': str(je.date), 'total_debit': float(je.total_debit or 0), 'total_credit': float(je.total_credit or 0)}
     description = (request.form.get('description') or '').strip()
     if not description:
         flash('يرجى إدخال وصف القيد.', 'danger')
-        return redirect(url_for('journal.edit_entry', jid=je.id))
+        return _redirect_accounts_hub()
     je.description = description
     je.updated_by = getattr(current_user,'id',None)
     db.session.add(JournalAudit(journal_id=je.id, action='edit', user_id=getattr(current_user,'id',None), before_json=json.dumps(before, ensure_ascii=False), after_json=json.dumps({'desc': je.description}, ensure_ascii=False)))
     db.session.commit()
     flash('تم حفظ التعديل', 'success')
-    return redirect(url_for('journal.edit_entry', jid=je.id))
+    return _redirect_accounts_hub()
 
 @csrf.exempt
 @bp.route('/<int:jid>/post', methods=['POST'])
 @login_required
 def post_entry(jid):
     je = _journal_with_lines_options(JournalEntry.query).filter_by(id=jid).first_or_404()
+    ok, err = can_mutate_journal(je)
+    if not ok:
+        abort(403, err or 'الفترة المالية مغلقة')
     if not _can('journal','edit'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-        return redirect(url_for('journal.edit_entry', jid=je.id))
+        return _redirect_accounts_hub()
     if je.status == 'posted':
         flash('القيد مرحل مسبقاً', 'warning')
-        return redirect(url_for('journal.edit_entry', jid=je.id))
+        return _redirect_accounts_hub()
     total_debit = 0.0
     total_credit = 0.0
     for ln in je.lines:
@@ -1522,7 +1708,7 @@ def post_entry(jid):
         total_credit += float(ln.credit or 0)
     if round(total_debit,2) != round(total_credit,2) or total_debit <= 0:
         flash('لا يمكن ترحيل القيد لأن مجموع المدين لا يساوي مجموع الدائن.', 'danger')
-        return redirect(url_for('journal.edit_entry', jid=je.id))
+        return _redirect_accounts_hub()
     for ln in je.lines:
         acc = ln.account
         if not acc:
@@ -1534,14 +1720,14 @@ def post_entry(jid):
     db.session.add(JournalAudit(journal_id=je.id, action='post', user_id=getattr(current_user,'id',None), before_json=None, after_json=json.dumps({'status': 'posted'}, ensure_ascii=False)))
     db.session.commit()
     flash('تم ترحيل القيد', 'success')
-    return redirect(url_for('journal.edit_entry', jid=je.id))
+    return _redirect_accounts_hub()
 
 @bp.route('/<int:jid>/print', methods=['GET'])
 @login_required
 def print_entry(jid):
     if not _can('journal','print'):
         flash('You do not have permission / لا تملك صلاحية الوصول', 'danger')
-        return redirect(url_for('journal.list_entries'))
+        return _redirect_accounts_hub()
     je = _journal_with_lines_options(JournalEntry.query).filter_by(id=jid).first_or_404()
     db.session.add(JournalAudit(journal_id=je.id, action='print', user_id=getattr(current_user,'id',None), before_json=None, after_json=None))
     db.session.commit()
@@ -1603,7 +1789,7 @@ def create_capital_entry():
     db.session.add(JournalLine(journal_id=je.id, line_no=2, account_id=cap_acc.id, description='Owner Capital', line_date=je.date, debit=0.0, credit=amt))
     db.session.commit()
     flash('تم إنشاء قيد رأس المال', 'success')
-    return redirect(url_for('journal.list_entries'))
+    return _redirect_accounts_hub()
 
 @bp.route('/close_period', methods=['POST','GET'])
 @login_required
@@ -1652,7 +1838,7 @@ def close_period():
         ln_no += 1
     db.session.commit()
     flash('تم إنشاء قيد إقفال الفترة', 'success')
-    return redirect(url_for('journal.list_entries'))
+    return _redirect_accounts_hub()
 @bp.route('/api/journals', methods=['GET'])
 def api_journals():
     try:
@@ -1887,6 +2073,9 @@ def api_journals_delete():
         je = JournalEntry.query.filter(JournalEntry.entry_number == entry_no).first()
         if not je:
             return jsonify({'ok': False, 'error': 'not_found'}), 404
+        ok, err = can_mutate_journal(je)
+        if not ok:
+            return jsonify({'ok': False, 'error': 'period_closed', 'message': err or 'الفترة مغلقة؛ لا يمكن حذف القيد.'}), 403
         # القاعدة: حذف القيد = حذف الفاتورة/العملية المرتبطة. إذا القيد مرتبط بفاتورة/عملية يُسمح بحذفه حتى لو منشور.
         has_linked = (getattr(je, 'invoice_id', None) is not None and (getattr(je, 'invoice_type', None) or '').strip()) or getattr(je, 'salary_id', None) is not None
         if not has_linked and (getattr(je, 'status', None) or '').strip().lower() == 'posted':
@@ -1917,6 +2106,9 @@ def api_journals_revert():
             return jsonify({'ok': False, 'error': 'not_found'}), 404
         if (getattr(je, 'status', None) or '').strip().lower() != 'posted':
             return jsonify({'ok': False, 'error': 'not_posted', 'message': 'القيد مسودة بالفعل.'}), 400
+        ok, err = can_mutate_journal(je)
+        if not ok:
+            return jsonify({'ok': False, 'error': 'period_closed', 'message': err or 'الفترة المالية مغلقة'}), 403
         je.status = 'draft'
         je.updated_by = getattr(current_user, 'id', None)
         try:
@@ -1948,6 +2140,9 @@ def api_journals_repost():
             return jsonify({'ok': False, 'error': 'not_found'}), 404
         if (getattr(je, 'status', None) or '').strip().lower() == 'posted':
             return jsonify({'ok': False, 'error': 'already_posted', 'message': 'القيد منشور مسبقاً.'}), 400
+        ok, err = can_mutate_journal(je)
+        if not ok:
+            return jsonify({'ok': False, 'error': 'period_closed', 'message': err or 'الفترة المالية مغلقة'}), 403
         total_debit = sum(float(getattr(ln, 'debit', 0) or 0) for ln in (getattr(je, 'lines', []) or []))
         total_credit = sum(float(getattr(ln, 'credit', 0) or 0) for ln in (getattr(je, 'lines', []) or []))
         if round(total_debit, 2) != round(total_credit, 2) or total_debit <= 0:
@@ -1988,6 +2183,9 @@ def api_journals_reverse():
         rev_num = f"JE-REV-{je.entry_number}"
         if JournalEntry.query.filter(JournalEntry.entry_number == rev_num).first():
             return jsonify({'ok': False, 'error': 'reversal_exists', 'message': 'يوجد قيد معكوس لهذا القيد مسبقاً.'}), 400
+        ok, err = can_mutate_journal(je)
+        if not ok:
+            return jsonify({'ok': False, 'error': 'period_closed', 'message': err or 'الفترة المالية مغلقة'}), 403
         total_dr = sum(float(getattr(ln, 'debit', 0) or 0) for ln in (getattr(je, 'lines', []) or []))
         total_cr = sum(float(getattr(ln, 'credit', 0) or 0) for ln in (getattr(je, 'lines', []) or []))
         rev = JournalEntry(entry_number=rev_num, date=je.date, branch_code=je.branch_code, description=f'عكس قيد {je.entry_number}', status='posted', total_debit=total_cr, total_credit=total_dr, created_by=getattr(current_user, 'id', None), posted_by=getattr(current_user, 'id', None))
